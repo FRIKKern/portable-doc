@@ -1,0 +1,149 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderInk — snapshots > incident fixture at width 60 wraps narrower 1`] = `
+"Database failover detected
+
+╭─ ✗ Active incident
+│ Primary DB became unreachable at 14:32 UTC. Failover 
+│ succeeded at 14:33.
+╰─
+
+The primary database stopped responding to health checks at 
+14:32 UTC. The replica was promoted automatically and the 
+API resumed serving traffic at 14:33 UTC. Investigate root 
+cause before failing back.
+
+1. Confirm the replica is healthy and accepting writes.
+2. Page the on-call DBA to inspect the former primary.
+3. Postpone non-critical migrations until failback is complete.
+
+\`$ kubectl rollout status deploy/api\`
+\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
+\`$ tail -f /var/log/incident.log\`
+\`$ curl -s https://status.example.com/health\`
+
+[ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
+
+[image: DB CPU graph showing failover spike]
+
+Metric      │ Threshold │ Actual
+────────────┼───────────┼───────
+Primary CPU │ 80%       │ 99%   
+Replica lag │ 5s        │ 0.4s  "
+`;
+
+exports[`renderInk — snapshots > incident fixture mono mode contains no ANSI escapes 1`] = `
+"Database failover detected
+
+╭─ ✗ Active incident
+│ Primary DB became unreachable at 14:32 UTC. Failover succeeded at 14:33.
+╰─
+
+The primary database stopped responding to health checks at 14:32 UTC. The 
+replica was promoted automatically and the API resumed serving traffic at 14:33 
+UTC. Investigate root cause before failing back.
+
+1. Confirm the replica is healthy and accepting writes.
+2. Page the on-call DBA to inspect the former primary.
+3. Postpone non-critical migrations until failback is complete.
+
+\`$ kubectl rollout status deploy/api\`
+\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
+\`$ tail -f /var/log/incident.log\`
+\`$ curl -s https://status.example.com/health\`
+
+[ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
+
+[image: DB CPU graph showing failover spike]
+
+Metric      │ Threshold │ Actual
+────────────┼───────────┼───────
+Primary CPU │ 80%       │ 99%   
+Replica lag │ 5s        │ 0.4s  "
+`;
+
+exports[`renderInk — snapshots > incident fixture without hyperlinks falls back to plaintext 1`] = `
+"Database failover detected
+
+╭─ ✗ Active incident
+│ Primary DB became unreachable at 14:32 UTC. Failover succeeded at 14:33.
+╰─
+
+The primary database stopped responding to health checks at 14:32 UTC. The 
+replica was promoted automatically and the API resumed serving traffic at 14:33 
+UTC. Investigate root cause before failing back.
+
+1. Confirm the replica is healthy and accepting writes.
+2. Page the on-call DBA to inspect the former primary.
+3. Postpone non-critical migrations until failback is complete.
+
+\`$ kubectl rollout status deploy/api\`
+\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
+\`$ tail -f /var/log/incident.log\`
+\`$ curl -s https://status.example.com/health\`
+
+[ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
+
+[image: DB CPU graph showing failover spike]
+
+Metric      │ Threshold │ Actual
+────────────┼───────────┼───────
+Primary CPU │ 80%       │ 99%   
+Replica lag │ 5s        │ 0.4s  "
+`;
+
+exports[`renderInk — snapshots > incident fixture, default options (mono) 1`] = `
+"Database failover detected
+
+╭─ ✗ Active incident
+│ Primary DB became unreachable at 14:32 UTC. Failover succeeded at 14:33.
+╰─
+
+The primary database stopped responding to health checks at 14:32 UTC. The 
+replica was promoted automatically and the API resumed serving traffic at 14:33 
+UTC. Investigate root cause before failing back.
+
+1. Confirm the replica is healthy and accepting writes.
+2. Page the on-call DBA to inspect the former primary.
+3. Postpone non-critical migrations until failback is complete.
+
+\`$ kubectl rollout status deploy/api\`
+\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
+\`$ tail -f /var/log/incident.log\`
+\`$ curl -s https://status.example.com/health\`
+
+[ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
+
+[image: DB CPU graph showing failover spike]
+
+Metric      │ Threshold │ Actual
+────────────┼───────────┼───────
+Primary CPU │ 80%       │ 99%   
+Replica lag │ 5s        │ 0.4s  "
+`;
+
+exports[`renderInk — snapshots > welcome fixture, default options (mono for stable snapshots) 1`] = `
+"Welcome to Atlas
+
+Your workspace is ready. Atlas keeps documents, decisions, and people in one 
+place — across web, native, email, terminal, and plain text.
+
+╭─ ✓ Setup complete
+│ Setup complete. You can now invite your team.
+╰─
+
+• Invite your team
+• Create your first project
+• Customize your workspace
+
+[ Open workspace ](https://example.com/workspace)
+
+────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────
+What's next
+Browse the documentation to learn how Atlas adapts the same document to every 
+surface — without losing fidelity.
+[ Read the docs ](https://example.com/docs)
+────────────────────────────────────────────────────────────────────────────────"
+`;
