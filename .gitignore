@@ -1,5 +1,16 @@
-
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
 .beads-credential-key
+
+# Node / build artefacts
+node_modules/
+dist/
+coverage/
+.turbo/
+.vite/
+*.tsbuildinfo
+
+# OS / logs
+.DS_Store
+*.log
