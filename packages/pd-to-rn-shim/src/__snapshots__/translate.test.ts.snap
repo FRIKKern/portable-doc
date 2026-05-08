@@ -1,0 +1,455 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`toRn — end-to-end composeDocument > translates the welcome fixture through the shim 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        "Welcome to Atlas",
+      ],
+      "component": "Text",
+      "style": {
+        "fontWeight": "bold",
+      },
+    },
+    {
+      "children": [
+        "Your workspace is ready. Atlas keeps documents, decisions, and people in one place — across web, native, email, terminal, and plain text.",
+      ],
+      "component": "Text",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            "Setup complete",
+          ],
+          "component": "Text",
+          "style": {
+            "color": "#047857",
+            "fontWeight": "bold",
+          },
+        },
+        {
+          "children": [
+            "Setup complete. You can now invite your team.",
+          ],
+          "component": "Text",
+        },
+      ],
+      "component": "View",
+      "style": {
+        "backgroundColor": "#ecfdf5",
+        "borderColor": "#047857",
+        "borderLeftWidth": 4,
+        "padding": 16,
+      },
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                "• ",
+              ],
+              "component": "Text",
+            },
+            {
+              "children": [
+                "Invite your team",
+              ],
+              "component": "Text",
+            },
+          ],
+          "component": "View",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "• ",
+              ],
+              "component": "Text",
+            },
+            {
+              "children": [
+                "Create your first project",
+              ],
+              "component": "Text",
+            },
+          ],
+          "component": "View",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "• ",
+              ],
+              "component": "Text",
+            },
+            {
+              "children": [
+                "Customize your workspace",
+              ],
+              "component": "Text",
+            },
+          ],
+          "component": "View",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+      ],
+      "component": "View",
+      "style": {
+        "flexDirection": "column",
+      },
+    },
+    {
+      "accessibilityRole": "button",
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                "Open workspace",
+              ],
+              "component": "Text",
+              "style": {
+                "color": "#ffffff",
+                "fontWeight": "bold",
+              },
+            },
+          ],
+          "component": "View",
+          "style": {
+            "alignItems": "center",
+            "backgroundColor": "#4f46e5",
+            "padding": 8,
+          },
+        },
+      ],
+      "component": "Pressable",
+      "href": "https://example.com/workspace",
+    },
+    {
+      "children": [],
+      "component": "View",
+      "style": {
+        "backgroundColor": "#e5e7eb",
+        "height": 1,
+        "margin": 8,
+      },
+    },
+    {
+      "children": [
+        {
+          "children": [],
+          "component": "View",
+          "style": {
+            "backgroundColor": "#e5e7eb",
+            "height": 1,
+            "margin": 8,
+          },
+        },
+        {
+          "children": [
+            "What's next",
+          ],
+          "component": "Text",
+          "style": {
+            "fontWeight": "bold",
+          },
+        },
+        {
+          "children": [
+            "Browse the documentation to learn how Atlas adapts the same document to every surface — without losing fidelity.",
+          ],
+          "component": "Text",
+        },
+        {
+          "accessibilityRole": "button",
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    "Read the docs",
+                  ],
+                  "component": "Text",
+                  "style": {
+                    "color": "#111827",
+                  },
+                },
+              ],
+              "component": "View",
+              "style": {
+                "alignItems": "center",
+                "borderColor": "#e5e7eb",
+                "borderStyle": "solid",
+                "borderWidth": 1,
+                "padding": 8,
+              },
+            },
+          ],
+          "component": "Pressable",
+          "href": "https://example.com/docs",
+        },
+        {
+          "children": [],
+          "component": "View",
+          "style": {
+            "backgroundColor": "#e5e7eb",
+            "height": 1,
+            "margin": 8,
+          },
+        },
+      ],
+      "component": "View",
+      "style": {
+        "flexDirection": "column",
+      },
+    },
+  ],
+  "component": "View",
+  "style": {
+    "alignItems": "center",
+    "padding": 16,
+    "width": 600,
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdBox → RnView with mapped style 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        "hi",
+      ],
+      "component": "Text",
+    },
+  ],
+  "component": "View",
+  "style": {
+    "alignItems": "center",
+    "borderColor": "#000",
+    "borderStyle": "solid",
+    "borderWidth": 2,
+    "flexDirection": "row",
+    "padding": 8,
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdButton primary → RnPressable with branded inner View 1`] = `
+{
+  "accessibilityRole": "button",
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            "Go",
+          ],
+          "component": "Text",
+          "style": {
+            "color": "#ffffff",
+            "fontWeight": "bold",
+          },
+        },
+      ],
+      "component": "View",
+      "style": {
+        "alignItems": "center",
+        "backgroundColor": "#4f46e5",
+        "padding": 8,
+      },
+    },
+  ],
+  "component": "Pressable",
+  "href": "https://example.com/a",
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdCallout → RnView with tone-coloured borderLeft 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        "Done",
+      ],
+      "component": "Text",
+      "style": {
+        "color": "#047857",
+        "fontWeight": "bold",
+      },
+    },
+    {
+      "children": [
+        "ok",
+      ],
+      "component": "Text",
+    },
+  ],
+  "component": "View",
+  "style": {
+    "backgroundColor": "#ecfdf5",
+    "borderColor": "#047857",
+    "borderLeftWidth": 4,
+    "padding": 16,
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdContainer → RnView with width + center alignment 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        "body",
+      ],
+      "component": "Text",
+    },
+  ],
+  "component": "View",
+  "style": {
+    "alignItems": "center",
+    "padding": 16,
+    "width": 480,
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdHr → thin RnView 1`] = `
+{
+  "children": [],
+  "component": "View",
+  "style": {
+    "backgroundColor": "#e5e7eb",
+    "height": 2,
+    "margin": 8,
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdImage → RnImage with source uri + accessibilityLabel 1`] = `
+{
+  "accessibilityLabel": "logo",
+  "component": "Image",
+  "source": {
+    "uri": "https://example.com/img.png",
+  },
+  "style": {
+    "height": 40,
+    "width": 120,
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdInlineCode → RnText with monospace fontFamily 1`] = `
+{
+  "children": [
+    "x",
+  ],
+  "component": "Text",
+  "style": {
+    "backgroundColor": "#f3f4f6",
+    "fontFamily": "ui-monospace, "SF Mono", Menlo, monospace",
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdLink → RnPressable wrapping RnText 1`] = `
+{
+  "accessibilityRole": "link",
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            "docs",
+          ],
+          "component": "Text",
+        },
+      ],
+      "component": "Text",
+      "style": {
+        "textDecorationLine": "underline",
+      },
+    },
+  ],
+  "component": "Pressable",
+  "href": "https://example.com",
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdTable → RnView columns of row Views of cell Views 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                "a",
+              ],
+              "component": "Text",
+            },
+          ],
+          "component": "View",
+          "style": {
+            "padding": 4,
+          },
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "b",
+              ],
+              "component": "Text",
+            },
+          ],
+          "component": "View",
+          "style": {
+            "padding": 4,
+          },
+        },
+      ],
+      "component": "View",
+      "style": {
+        "flexDirection": "row",
+      },
+    },
+  ],
+  "component": "View",
+  "style": {
+    "flexDirection": "column",
+  },
+}
+`;
+
+exports[`toRn — per-primitive snapshots > PdText → RnText with weight/italic/underline/strike 1`] = `
+{
+  "children": [
+    "hello",
+  ],
+  "component": "Text",
+  "style": {
+    "color": "#111",
+    "fontStyle": "italic",
+    "fontWeight": "bold",
+    "textDecorationLine": "underline line-through",
+  },
+}
+`;
