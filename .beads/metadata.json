@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "portable_doc_mvp",
+  "project_id": "a253e2e8-3530-46a5-a7aa-130e46fc9766"
+}
