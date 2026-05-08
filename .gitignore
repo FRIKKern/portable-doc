@@ -14,3 +14,6 @@ coverage/
 # OS / logs
 .DS_Store
 *.log
+
+# Visual-goldens artifacts (regenerable via `pnpm visual-goldens`)
+goldens/

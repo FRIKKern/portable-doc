@@ -29,3 +29,19 @@ apps/
   editor/               authoring app
 fixtures/               sample documents
 ```
+
+## Testing
+
+Three layers, per the architecture spec §10:
+
+| Layer                                                         | Frequency               | Command                                       |
+| ------------------------------------------------------------- | ----------------------- | --------------------------------------------- |
+| Structural snapshots (kernel primitive-tree + Ink + Email + RE HTML) | every commit (CI)       | `pnpm test`                                   |
+| Per-adapter unit specs (escaping, allowlist, determinism, …)  | every commit (CI)       | `pnpm test`                                   |
+| Visual goldens (Ink TUI, Email HTML, Web HTML)                | on demand               | `pnpm visual-goldens` then eyeball `goldens/` |
+
+CI also runs `pnpm typecheck` (per-package `tsc --noEmit`).
+A dedicated `pnpm snapshots:ci` alias runs the structural snapshot suite and is wired into the GitHub Actions workflow at `.github/workflows/ci.yml`.
+
+Web-editor (RNW) and Native (RN) adapter snapshots are deferred to v2 — they
+inherit from the kernel + adapter layers per the architecture spec.
