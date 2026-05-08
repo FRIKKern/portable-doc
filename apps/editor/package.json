@@ -1,0 +1,36 @@
+{
+  "name": "editor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@portable-doc/backend-email": "workspace:*",
+    "@portable-doc/backend-ink": "workspace:*",
+    "@portable-doc/backend-native": "workspace:*",
+    "@portable-doc/backend-web-editor": "workspace:*",
+    "@portable-doc/backend-web-server": "workspace:*",
+    "@portable-doc/core": "workspace:*",
+    "@portable-doc/fixtures": "workspace:*",
+    "@portable-doc/primitives": "workspace:*",
+    "nanoid": "^3.3.12",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "happy-dom": "^15.11.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11",
+    "vitest": "^4.1.5"
+  }
+}
