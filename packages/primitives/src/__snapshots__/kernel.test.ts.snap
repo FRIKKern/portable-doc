@@ -1,0 +1,395 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`composeDocument — fixtures snapshot > matches incident fixture snapshot 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        "Database failover detected",
+      ],
+      "kind": "PdText",
+      "weight": "bold",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            "Primary DB became unreachable at 14:32 UTC. Failover succeeded at 14:33.",
+          ],
+          "kind": "PdText",
+        },
+      ],
+      "kind": "PdCallout",
+      "title": "Active incident",
+      "tone": "danger",
+    },
+    {
+      "children": [
+        "The primary database stopped responding to health checks at 14:32 UTC. The replica was promoted automatically and the API resumed serving traffic at 14:33 UTC. Investigate root cause before failing back.",
+      ],
+      "kind": "PdText",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                "1. ",
+              ],
+              "kind": "PdText",
+            },
+            {
+              "children": [
+                "Confirm the replica is healthy and accepting writes.",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          "kind": "PdBox",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "2. ",
+              ],
+              "kind": "PdText",
+            },
+            {
+              "children": [
+                "Page the on-call DBA to inspect the former primary.",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          "kind": "PdBox",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "3. ",
+              ],
+              "kind": "PdText",
+            },
+            {
+              "children": [
+                "Postpone non-critical migrations until failback is complete.",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          "kind": "PdBox",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+      ],
+      "kind": "PdBox",
+      "style": {
+        "flexDirection": "column",
+      },
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "kind": "PdInlineCode",
+              "value": "$ kubectl rollout status deploy/api",
+            },
+          ],
+          "kind": "PdText",
+        },
+        {
+          "children": [
+            {
+              "kind": "PdInlineCode",
+              "value": "$ pgcli -h db-replica.svc -c "SELECT 1"",
+            },
+          ],
+          "kind": "PdText",
+        },
+        {
+          "children": [
+            {
+              "kind": "PdInlineCode",
+              "value": "$ tail -f /var/log/incident.log",
+            },
+          ],
+          "kind": "PdText",
+        },
+        {
+          "children": [
+            {
+              "kind": "PdInlineCode",
+              "value": "$ curl -s https://status.example.com/health",
+            },
+          ],
+          "kind": "PdText",
+        },
+      ],
+      "kind": "PdBox",
+      "style": {
+        "flexDirection": "column",
+      },
+    },
+    {
+      "href": "https://status.example.com/incidents/2026-05-08",
+      "kind": "PdButton",
+      "label": "View incident dashboard",
+      "priority": "secondary",
+    },
+    {
+      "alt": "DB CPU graph showing failover spike",
+      "kind": "PdImage",
+      "src": "https://example.com/img/db-cpu.png",
+      "surfaces": [
+        "web",
+        "native",
+      ],
+    },
+    {
+      "kind": "PdTable",
+      "rows": [
+        [
+          [
+            {
+              "children": [
+                "Metric",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          [
+            {
+              "children": [
+                "Threshold",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          [
+            {
+              "children": [
+                "Actual",
+              ],
+              "kind": "PdText",
+            },
+          ],
+        ],
+        [
+          [
+            {
+              "children": [
+                "Primary CPU",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          [
+            {
+              "children": [
+                "80%",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          [
+            {
+              "children": [
+                "99%",
+              ],
+              "kind": "PdText",
+            },
+          ],
+        ],
+        [
+          [
+            {
+              "children": [
+                "Replica lag",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          [
+            {
+              "children": [
+                "5s",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          [
+            {
+              "children": [
+                "0.4s",
+              ],
+              "kind": "PdText",
+            },
+          ],
+        ],
+      ],
+      "surfaces": [
+        "web",
+        "native",
+      ],
+    },
+  ],
+  "kind": "PdContainer",
+  "maxWidth": 600,
+}
+`;
+
+exports[`composeDocument — fixtures snapshot > matches welcome fixture snapshot 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        "Welcome to Atlas",
+      ],
+      "kind": "PdText",
+      "weight": "bold",
+    },
+    {
+      "children": [
+        "Your workspace is ready. Atlas keeps documents, decisions, and people in one place — across web, native, email, terminal, and plain text.",
+      ],
+      "kind": "PdText",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            "Setup complete. You can now invite your team.",
+          ],
+          "kind": "PdText",
+        },
+      ],
+      "kind": "PdCallout",
+      "title": "Setup complete",
+      "tone": "success",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                "• ",
+              ],
+              "kind": "PdText",
+            },
+            {
+              "children": [
+                "Invite your team",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          "kind": "PdBox",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "• ",
+              ],
+              "kind": "PdText",
+            },
+            {
+              "children": [
+                "Create your first project",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          "kind": "PdBox",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "• ",
+              ],
+              "kind": "PdText",
+            },
+            {
+              "children": [
+                "Customize your workspace",
+              ],
+              "kind": "PdText",
+            },
+          ],
+          "kind": "PdBox",
+          "style": {
+            "flexDirection": "row",
+          },
+        },
+      ],
+      "kind": "PdBox",
+      "style": {
+        "flexDirection": "column",
+      },
+    },
+    {
+      "href": "https://example.com/workspace",
+      "kind": "PdButton",
+      "label": "Open workspace",
+      "priority": "primary",
+    },
+    {
+      "kind": "PdHr",
+    },
+    {
+      "children": [
+        {
+          "kind": "PdHr",
+        },
+        {
+          "children": [
+            "What's next",
+          ],
+          "kind": "PdText",
+          "weight": "bold",
+        },
+        {
+          "children": [
+            "Browse the documentation to learn how Atlas adapts the same document to every surface — without losing fidelity.",
+          ],
+          "kind": "PdText",
+        },
+        {
+          "href": "https://example.com/docs",
+          "kind": "PdButton",
+          "label": "Read the docs",
+          "priority": "secondary",
+        },
+        {
+          "kind": "PdHr",
+        },
+      ],
+      "kind": "PdBox",
+      "style": {
+        "flexDirection": "column",
+      },
+    },
+  ],
+  "kind": "PdContainer",
+  "maxWidth": 600,
+}
+`;
