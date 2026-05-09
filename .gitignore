@@ -17,3 +17,6 @@ coverage/
 
 # Visual-goldens artifacts (regenerable via `pnpm visual-goldens`)
 goldens/
+
+# paperflow workflow state (per-instance pointers, not for distribution)
+.paperflow/
