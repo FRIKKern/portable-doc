@@ -14,6 +14,16 @@ export default defineConfig({
   resolve: {
     alias: [{ find: /^react-native$/, replacement: 'react-native-web' }],
   },
+  build: {
+    rollupOptions: {
+      // terminal-image is a Node-only dep (uses jimp's Node bundle) consumed
+      // exclusively by backend-ink's renderInkAsync. The editor only calls
+      // sync renderInk, so the dynamic import in backend-ink never fires here.
+      // Marking external keeps jimp's browser bundle (which is missing the
+      // Jimp/intToRGBA exports terminal-image expects) out of the graph.
+      external: ['terminal-image'],
+    },
+  },
   test: {
     globals: true,
     environment: 'happy-dom',

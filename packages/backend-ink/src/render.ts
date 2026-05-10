@@ -34,7 +34,9 @@ import { highlight } from 'cli-highlight';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 import supportsColor from 'supports-color';
-import terminalImage from 'terminal-image';
+// terminal-image is dynamically imported inside renderImageAsync so that
+// bundlers (Vite for the editor app) don't pull its `jimp` browser bundle
+// into static graphs that never actually call the async path. See v0.2.1.E.
 import {
   codes,
   osc8,
@@ -455,6 +457,7 @@ async function renderImageAsync(src: string, alt: string, _c: Ctx): Promise<stri
   try {
     const bytes = readImageBytes(src);
     if (!bytes) return fallback;
+    const { default: terminalImage } = await import('terminal-image');
     const out = await terminalImage.buffer(bytes);
     // The lib returns a non-empty string on success. Defensive: empty
     // output → fallback so we never emit a silent zero-width image slot.
