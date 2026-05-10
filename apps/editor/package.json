@@ -17,6 +17,10 @@
     "@portable-doc/core": "workspace:*",
     "@portable-doc/primitives": "workspace:*",
     "@portable-doc/variants": "workspace:*",
+    "@tiptap/core": "^3",
+    "@tiptap/extension-bubble-menu": "^3",
+    "@tiptap/react": "^3",
+    "@tiptap/starter-kit": "^3",
     "nanoid": "^3.3.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
