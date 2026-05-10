@@ -12,6 +12,10 @@
   },
   "dependencies": {
     "@portable-doc/core": "workspace:*",
+    "@portable-doc/primitives": "workspace:*",
+    "@portable-doc/backend-web": "workspace:*",
+    "@portable-doc/backend-email": "workspace:*",
+    "@portable-doc/backend-ink": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

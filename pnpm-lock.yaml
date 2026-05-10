@@ -123,9 +123,21 @@ importers:
 
   apps/playground:
     dependencies:
+      '@portable-doc/backend-email':
+        specifier: workspace:*
+        version: link:../../packages/backend-email
+      '@portable-doc/backend-ink':
+        specifier: workspace:*
+        version: link:../../packages/backend-ink
+      '@portable-doc/backend-web':
+        specifier: workspace:*
+        version: link:../../packages/backend-web
       '@portable-doc/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@portable-doc/primitives':
+        specifier: workspace:*
+        version: link:../../packages/primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1

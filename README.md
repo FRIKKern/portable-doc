@@ -35,7 +35,7 @@ flowchart LR
 
 ```bash
 pnpm install
-pnpm test                              # 282 specs across 15 files
+pnpm test                              # 445 specs across 36 files
 pnpm --filter editor dev               # http://localhost:5173
 pnpm --filter @portable-doc/mcp-server start   # stdio MCP server
 pnpm dev:full                          # editor on :5173 + MCP HTTP on :6123
@@ -141,11 +141,11 @@ Three layers:
 | Per-adapter unit specs (escaping, allowlist, determinism, …)         | every commit (CI) | `pnpm test`                                   |
 | Visual goldens (Ink TUI, Email HTML, Web HTML)                       | on demand         | `pnpm visual-goldens` then eyeball `goldens/` |
 
-282 specs across 15 files at the time of release. CI also runs `pnpm typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the structural snapshot suite and is wired into `.github/workflows/ci.yml`. Web-editor (RNW) and Native (RN) adapter snapshots are deferred — they inherit from the kernel + adapter layers.
+445 specs across 36 files at the time of release. CI also runs `pnpm typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the structural snapshot suite and is wired into `.github/workflows/ci.yml`. Web-editor (RNW) and Native (RN) adapter snapshots are deferred — they inherit from the kernel + adapter layers.
 
 ## Status
 
-**v0.3 (in flight) — MCP-routed editor previews.** The editor now talks to a local MCP HTTP server (`@portable-doc/mcp-server --http --port 6123`) for `doc_render` instead of importing backends directly. `pnpm dev:full` boots editor + MCP together. Graceful fallback to in-process backends when the server is unreachable; a retry banner nudges without blocking. `VITE_PORTABLE_DOC_MCP_URL` overrides the default URL.
+**v0.3 — Premium editor, public playground, MCP HTTP dogfood.** The editor gains TipTap rich-text on text-bearing blocks, block-shaped tiles with dnd-kit reorder, a slash-command popover, a visual variant grid hybrid, block-level inline diagnostics, a preview-thumbnail strip in place of tabs, and a Cmd+Shift+J JSON edit mode. The public playground at `https://frikkern.github.io/portable-doc/` is live: paste JSON, validate, render across all 5 surfaces, copy per-surface output, share-via-URL. The editor probes the local MCP HTTP server for `doc_render` and falls back to direct backend imports with a retry banner when unreachable; `pnpm dev:full` boots editor + MCP together. 445 specs across 36 files. Position lock: Tailwind/Tamagui = inspiration only. PortableDoc owns its variant catalog, token objects, color-depth interface.
 
 **v0.2.1 — Cleanup release.** Strong color-depth interface in `backend-ink` (`resolveColor(hex, depth)` centralizes degradation across backends). Package collapses: `backend-web-server` + `backend-web-editor` → `backend-web` with `static`/`rnw` subpath exports; `backend-native` inlined into `pd-to-rn-shim`; `fixtures` package → `examples/*.json`. Documentation distilled into the `docs/` tree. 8 packages. 282 specs.
 
@@ -164,7 +164,7 @@ Deferred to v0.3: premium editor (Notion/Linear-style authoring), playground sit
 
 ## Documentation
 
-- [**Playground**](https://frikkern.github.io/portable-doc/) — paste a JSON document, see it render across all 5 surfaces (v0.3 in flight; placeholder for now).
+- [**Playground**](https://frikkern.github.io/portable-doc/) — paste a JSON document, see it render across all 5 surfaces, copy per-surface output, share via URL.
 - [`docs/design-philosophy.md`](./docs/design-philosophy.md) — why PortableDoc exists, and how to think about it (convex-hull framing, the two-question test, what's IN vs OUT of the AST, comparison to Portable Text).
 - [`docs/architecture.md`](./docs/architecture.md) — the technical spec: validator, kernel, primitives, all five backends, the MCP server, the editor, the test harness.
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — setup, project layout, how to add a backend, how to file an issue.
