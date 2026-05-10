@@ -444,7 +444,7 @@ describe('renderInk — inline images', () => {
     expect(out).not.toMatch(/\x1b\]1337;File=/);
   });
 
-  it('emits OSC-1337 inline image when iTerm2 is detected and src is a data: URL', () => {
+  it('sync renderInk emits placeholder for data: URL even with iTerm2 detected (async path is renderInkAsync)', () => {
     // 1×1 transparent PNG, base64-encoded, embedded in a data URL.
     const onePxPng =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
@@ -466,21 +466,22 @@ describe('renderInk — inline images', () => {
       colorDepth: 'truecolor',
       env: { TERM_PROGRAM: 'iTerm.app' },
     });
-    expect(out).toMatch(/\x1b\]1337;File=inline=1;preserveAspectRatio=1:[A-Za-z0-9+/=]+\x07/);
-    // No fallback text leaks through when inline rendering succeeded.
-    expect(out).not.toContain('[image: a pixel]');
+    // Sync path is now placeholder-only — terminal-image is async.
+    // No hand-rolled OSC-1337 escape from the sync path.
+    expect(out).not.toMatch(/\x1b\]1337;/);
+    expect(out).toContain('[image: a pixel]');
   });
 
-  it('Kitty-detected env emits the placeholder note (protocol not implemented in v0.2)', () => {
+  it('Kitty-detected env emits placeholder (sync path is alt-text only)', () => {
     const out = renderInk(composeDocument(imgDoc), {
       colorDepth: 'truecolor',
       env: { KITTY_WINDOW_ID: '42' },
     });
-    // HTTP src — falls back regardless of Kitty.
+    // Sync placeholder-only contract — Kitty rendering goes through renderInkAsync.
     expect(out).toContain('[image: a chart]');
   });
 
-  it('Kitty-detected env with data: src emits the placeholder note', () => {
+  it('Kitty-detected env with data: src — sync emits the alt-text placeholder', () => {
     const dataDoc: PortableDoc = {
       version: 1,
       title: 't',
@@ -499,7 +500,10 @@ describe('renderInk — inline images', () => {
       colorDepth: 'truecolor',
       env: { KITTY_WINDOW_ID: '42' },
     });
-    expect(out).toContain('[image: a pixel — Kitty/WezTerm inline supported when src is local]');
+    // Sync renderInk only emits the alt-text placeholder; renderInkAsync
+    // is the path that consumes terminal-image and renders Kitty/iTerm2 inline.
+    expect(out).toContain('[image: a pixel]');
+    expect(out).not.toMatch(/\x1b\]1337;/);
   });
 
   it('mono mode never emits inline image escapes even with iTerm2 detected', () => {

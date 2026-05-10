@@ -9,11 +9,12 @@
  *   - Code blocks pass through cli-highlight (lang-tagged or auto-detected)
  *     with a custom chalk@5 theme so coloring is depth-aware, not stuck at
  *     cli-highlight's auto-detected level.
- *   - Inline images: when iTerm2/Kitty/WezTerm is detected via env vars AND
- *     the src is a local file or data: URL, emit the iTerm2 inline image
- *     OSC-1337 sequence (sync, no fetching). Otherwise fall back to
- *     [image: alt]. HTTP URLs always fall back — no network from inside
- *     this package.
+ *   - Inline images: delegated to the `terminal-image` library, which
+ *     auto-selects iTerm2 OSC-1337 / Kitty graphics protocol / ANSI
+ *     half-block fallback per the active terminal. The lib is async, so
+ *     inline emission lives in `renderInkAsync`. The sync `renderInk`
+ *     always emits `[image: alt]` for images. HTTP URLs always fall back
+ *     — no network from inside this package.
  *   - Variant-aware rendering: when a Pd node carries variant info (forwarded
  *     via the kernel from BlockBase.variant), nudge styling accordingly.
  *     Currently a light touch — emphasis=bold callouts get the bold border
@@ -21,8 +22,8 @@
  *     falls back to the default styling.
  *
  * "Works at 80, ugly under 60" (grill Q4). Width caps to min(opts.width ?? 80, 80).
- * mono mode strips ALL escapes (CSI styles AND OSC-8 hyperlinks AND OSC-1337
- * inline images) so output is clean for redirected pipes.
+ * mono mode strips ALL escapes (CSI styles AND OSC-8 hyperlinks AND any
+ * inline-image escapes) so output is clean for redirected pipes.
  */
 
 import { readFileSync } from 'node:fs';
@@ -33,6 +34,7 @@ import { highlight } from 'cli-highlight';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 import supportsColor from 'supports-color';
+import terminalImage from 'terminal-image';
 import {
   codes,
   osc8,
@@ -59,6 +61,13 @@ interface Ctx {
   hyperlinks: boolean;
   env: Record<string, string | undefined>;
   inlineImages: boolean;
+  /**
+   * Optional hook installed by `renderInkAsync`. When present, the image
+   * branch delegates to it (registering an async task) instead of emitting
+   * the alt-text fallback. Sync `renderInk` leaves it undefined and gets
+   * the alt-text fallback for every image — by design.
+   */
+  asyncImage?: (src: string, alt: string) => string;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,18 +89,65 @@ const TUI_NAMES: ReadonlyArray<TuiColorName> =
   ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'gray'];
 
 export function renderInk(root: PdNode, opts: InkRenderOptions = {}): string {
+  return r(root, buildCtx(root, opts));
+}
+
+/**
+ * Async sibling of `renderInk`. Identical output for everything except images
+ * — when the env signals iTerm2 / Kitty / WezTerm AND the src is a local file
+ * or data: URL, the relevant image nodes are passed to the `terminal-image`
+ * library, which auto-selects iTerm2 OSC-1337 / Kitty graphics protocol /
+ * ANSI half-block fallback. HTTP URLs and unsupported envs fall back to
+ * `[image: alt]`, matching the sync path.
+ *
+ * This split exists because `terminal-image` is asynchronous. Most call sites
+ * (the editor preview's `useMemo`, the goldens script's mono renders, the MCP
+ * server's tool handler) don't actually need inline images — they either run
+ * mono or serialize to text — so making the public sync API async would
+ * ripple through the workspace for marginal benefit. Tools that DO want
+ * inline images (a future TUI app) call `renderInkAsync` directly.
+ */
+export async function renderInkAsync(
+  root: PdNode,
+  opts: InkRenderOptions = {},
+): Promise<string> {
+  const ctx = buildCtx(root, opts);
+  // Walk the tree once to collect image nodes that need async rendering.
+  // For each renderable image, await `terminal-image`, then substitute the
+  // result into the sync render output via a unique sentinel marker. This
+  // keeps the render order deterministic without re-implementing the whole
+  // walker as async.
+  const tasks: Array<{ marker: string; promise: Promise<string> }> = [];
+  let counter = 0;
+  const asyncCtx: Ctx = {
+    ...ctx,
+    asyncImage: (src, alt): string => {
+      const marker = `\x00PD_IMG_${counter++}\x00`;
+      tasks.push({ marker, promise: renderImageAsync(src, alt, ctx) });
+      return marker;
+    },
+  };
+  let out = r(root, asyncCtx);
+  const resolved = await Promise.all(tasks.map((t) => t.promise));
+  for (let i = 0; i < tasks.length; i++) {
+    out = out.replace(tasks[i]!.marker, resolved[i]!);
+  }
+  return out;
+}
+
+function buildCtx(_root: PdNode, opts: InkRenderOptions): Ctx {
   const depth = opts.colorDepth ?? detectDepth();
   const mono = depth === 'mono';
   const env = opts.env ?? (process.env as Record<string, string | undefined>);
   const inlineImages = opts.inlineImages ?? detectInlineImages(env);
-  return r(root, {
+  return {
     width: Math.min(opts.width ?? 80, 80),
     color: !mono,
     depth,
     hyperlinks: !mono && opts.hyperlinks !== false,
     env,
     inlineImages: inlineImages && !mono,
-  });
+  };
 }
 
 function detectDepth(): ColorDepth {
@@ -353,47 +409,62 @@ function renderCodeBlock(lines: string[], lang: string | undefined, c: Ctx): str
 }
 
 // ---------------------------------------------------------------------------
-// Images — env-detected inline rendering, with safe fallback.
+// Images — `terminal-image` for inline rendering (async only), alt-text
+// fallback otherwise.
 // ---------------------------------------------------------------------------
 
 /**
- * Render an image node. Strategy (kept deliberately simple per the v0.2 plan):
- *   1. If mono, hyperlinks off, or inline images disabled: emit `[image: alt]`.
- *   2. If src is an http(s) URL: always fall back to `[image: alt]`. We do
- *      not perform network I/O from inside backend-ink.
- *   3. If env detection saw iTerm2 (TERM_PROGRAM === iTerm.app) AND src is a
- *      local file path or data: URL: emit the iTerm2 inline image OSC-1337
- *      sequence with the file bytes base64-encoded.
- *   4. Kitty/WezTerm get a placeholder note for now — the OSC sequences are
- *      protocol-specific and the v0.2 plan endorses the simpler path.
+ * Sync image rendering. Always emits `[image: alt]` — actual inline emission
+ * requires the `terminal-image` library which is async. Callers that want
+ * inline images use `renderInkAsync`, which installs a `ctx.asyncImage` hook
+ * that captures the src/alt and substitutes the awaited library output back
+ * into the rendered string.
  */
 function image(src: string, alt: string, c: Ctx): string {
-  const fallback = `[image: ${alt}]`;
-  if (!c.inlineImages) return fallback;
-  if (/^https?:/i.test(src)) return fallback;
-
-  // iTerm2 is the only protocol we emit in v0.2.
-  if (c.env.TERM_PROGRAM === 'iTerm.app') {
-    try {
-      const bytes = readImageSync(src);
-      if (!bytes) return fallback;
-      const b64 = bytes.toString('base64');
-      // OSC 1337;File=inline=1:<base64><BEL>
-      return `\x1b]1337;File=inline=1;preserveAspectRatio=1:${b64}\x07`;
-    } catch {
-      return fallback;
-    }
+  if (c.asyncImage && shouldInlineImage(src, c)) {
+    return c.asyncImage(src, alt);
   }
-
-  // Kitty / WezTerm — protocol not implemented in v0.2. Emit a clear
-  // placeholder so downstream tooling can see the intent.
-  if (c.env.KITTY_WINDOW_ID || c.env.WEZTERM_PANE) {
-    return `[image: ${alt} — Kitty/WezTerm inline supported when src is local]`;
-  }
-  return fallback;
+  return `[image: ${alt}]`;
 }
 
-function readImageSync(src: string): Buffer | null {
+/**
+ * Whether a given image src + ctx is a candidate for inline rendering. We
+ * never fetch from the network, so HTTP(S) URLs always fall back. mono mode
+ * and the inlineImages=false override also fall back. Local file paths
+ * (including `file:` URLs) and `data:` URLs are eligible.
+ */
+function shouldInlineImage(src: string, c: Ctx): boolean {
+  if (!c.inlineImages) return false;
+  if (/^https?:/i.test(src)) return false;
+  return true;
+}
+
+/**
+ * Resolve an image src to bytes, then hand it to `terminal-image`.
+ * `terminal-image` auto-detects iTerm2 OSC-1337, Kitty graphics protocol,
+ * or ANSI half-block fallback based on the active terminal. We feed it a
+ * Buffer in every case so the same path covers `data:` URLs, `file:` URIs,
+ * and bare absolute paths — and so we never have to worry about the lib's
+ * file-handling edge cases.
+ *
+ * Errors (unreadable file, invalid data URL, lib throwing) collapse to the
+ * `[image: alt]` fallback. Pure-string output guaranteed.
+ */
+async function renderImageAsync(src: string, alt: string, _c: Ctx): Promise<string> {
+  const fallback = `[image: ${alt}]`;
+  try {
+    const bytes = readImageBytes(src);
+    if (!bytes) return fallback;
+    const out = await terminalImage.buffer(bytes);
+    // The lib returns a non-empty string on success. Defensive: empty
+    // output → fallback so we never emit a silent zero-width image slot.
+    return typeof out === 'string' && out.length > 0 ? out : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readImageBytes(src: string): Buffer | null {
   if (src.startsWith('data:')) {
     const comma = src.indexOf(',');
     if (comma < 0) return null;
