@@ -149,6 +149,7 @@ Deferred to v0.3: premium editor (Notion/Linear-style authoring), playground sit
 
 ## Documentation
 
+- [**Playground**](https://frikkern.github.io/portable-doc/) — paste a JSON document, see it render across all 5 surfaces (v0.3 in flight; placeholder for now).
 - [`docs/design-philosophy.md`](./docs/design-philosophy.md) — why PortableDoc exists, and how to think about it (convex-hull framing, the two-question test, what's IN vs OUT of the AST, comparison to Portable Text).
 - [`docs/architecture.md`](./docs/architecture.md) — the technical spec: validator, kernel, primitives, all five backends, the MCP server, the editor, the test harness.
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — setup, project layout, how to add a backend, how to file an issue.

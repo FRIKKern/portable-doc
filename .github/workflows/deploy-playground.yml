@@ -1,0 +1,73 @@
+name: Deploy playground
+
+# Deploys apps/playground/ to GitHub Pages at https://frikkern.github.io/portable-doc/.
+#
+# Pages enablement is a one-time human step: Settings → Pages → Source: GitHub Actions.
+# Once enabled, every push to master republishes the site.
+#
+# Retry strategy: if the deploy step is flaky (transient Pages API errors),
+# re-run the failed `deploy` job from the Actions UI — the build job is
+# idempotent and its artifact is reused. Workflow-level action retry isn't
+# worth the YAML complexity for a one-shot showcase deploy.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: playground-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      # actions/setup-node@v4 with `cache: pnpm` covers the pnpm store.
+      # Belt-and-braces actions/cache@v4 below caches the pnpm store path
+      # explicitly, keyed on pnpm-lock.yaml for cross-workflow reuse.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter playground build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/playground/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        timeout-minutes: 5
