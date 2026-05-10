@@ -3,9 +3,10 @@
  * eyeball review. NOT a CI gate (per spec §10): structural snapshots run in CI;
  * visuals are on-demand + weekly.
  *
- * 2 fixtures × 3 text surfaces (Ink TUI, Email HTML, Web HTML) = 6 files.
- * Native (RN) and Web-editor (RNW) need a React renderer + DOM, so they're not
- * suitable for "open the file and read it" eyeball review and are skipped here.
+ * 2 fixtures × 4 text surfaces (Ink TUI truecolor, Ink-mono text fallback,
+ * Email HTML, Web HTML) = 8 files. Native (RN) and Web-editor (RNW) need a
+ * React renderer + DOM, so they're not suitable for "open the file and read it"
+ * eyeball review and are skipped here.
  *
  * Run:  pnpm visual-goldens   (or  tsx scripts/visual-goldens.ts)
  */
@@ -26,10 +27,14 @@ type Surface = {
 };
 
 const surfaces: Record<string, Surface> = {
-  // Ink emits ANSI-styled box-drawing text. .txt so terminals render it
-  // when `cat`-ed. The escapes survive the round-trip; if you want a clean
-  // pipe, set colorDepth: 'mono' in opts.
-  tui:   { ext: 'txt',  render: (doc) => renderInk(composeDocument(doc as never)) },
+  // Ink truecolor — pinned to 'truecolor' so the artifact captures the
+  // v0.2 quality jump regardless of whether the script is piped (in which case
+  // supports-color would auto-degrade to mono). The escapes survive the
+  // round-trip and modern terminals render them when `cat`-ed.
+  tui:   { ext: 'txt',  render: (doc) => renderInk(composeDocument(doc as never), { colorDepth: 'truecolor' }) },
+  // Plain-text fallback via Ink-mono — strips all ANSI, emits structural prose.
+  // No separate backend-text package; mono mode is the canonical fallback.
+  text:  { ext: 'txt',  render: (doc) => renderInk(composeDocument(doc as never), { colorDepth: 'mono' }) },
   email: { ext: 'html', render: (doc) => renderEmail(composeDocument(doc as never)) },
   web:   { ext: 'html', render: (doc) => renderHtml(composeDocument(doc as never)) },
 };
