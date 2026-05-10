@@ -13,6 +13,7 @@ import type { Block, InlineNode, Tone } from '@portable-doc/core';
 import { VARIANT_CATALOG, resolveVariant } from '@portable-doc/variants';
 import type { PdStyle } from '@portable-doc/primitives';
 import type { Action } from './store.js';
+import { RichTextField } from './RichTextField.js';
 
 interface Props {
   block: Block;
@@ -20,20 +21,6 @@ interface Props {
 }
 
 const TONES: Tone[] = ['success', 'warning', 'danger', 'info', 'neutral'];
-
-function inlineFromString(s: string): InlineNode[] {
-  return [{ type: 'text', value: s }];
-}
-
-function flattenInline(nodes: InlineNode[]): string {
-  let out = '';
-  for (const n of nodes) {
-    if (n.type === 'text' || n.type === 'code') out += n.value;
-    else if (n.type === 'strong' || n.type === 'em' || n.type === 'link')
-      out += flattenInline(n.children);
-  }
-  return out;
-}
 
 export function BlockForm({ block, dispatch }: Props) {
   const patch = (p: Partial<Block>) =>
@@ -74,16 +61,17 @@ function renderTypeFields(block: Block, patch: (p: Partial<Block>) => void) {
       return (
         <div className="field">
           <label>Text</label>
-          <textarea
-            rows={6}
-            value={flattenInline(block.content)}
-            onChange={(e) => patch({ content: inlineFromString(e.target.value) })}
+          <RichTextField
+            value={block.content}
+            onChange={(content) => patch({ content })}
+            ariaLabel="Paragraph body"
+            dataTestId="paragraph-body"
           />
         </div>
       );
 
     case 'list': {
-      const itemsText = block.items.map((i) => flattenInline(i)).join('\n');
+      const items = block.items;
       return (
         <div>
           <div className="field">
@@ -97,15 +85,29 @@ function renderTypeFields(block: Block, patch: (p: Partial<Block>) => void) {
             </label>
           </div>
           <div className="field">
-            <label>Items (one per line)</label>
-            <textarea
-              rows={6}
-              value={itemsText}
-              onChange={(e) => {
-                const lines = e.target.value.split('\n').filter((l) => l.length > 0);
-                patch({ items: lines.length ? lines.map((l) => inlineFromString(l)) : [[{ type: 'text', value: '' }]] });
-              }}
-            />
+            <label>Items</label>
+            {items.map((item, i) => (
+              <div key={i} style={{ marginBottom: 6 }}>
+                <RichTextField
+                  value={item}
+                  onChange={(next) => {
+                    const updated = items.slice();
+                    updated[i] = next;
+                    patch({ items: updated });
+                  }}
+                  ariaLabel={`List item ${i + 1}`}
+                  dataTestId={`list-item-${i}`}
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                patch({ items: [...items, [{ type: 'text', value: '' }]] })
+              }
+            >
+              + Add item
+            </button>
           </div>
         </div>
       );
@@ -133,10 +135,11 @@ function renderTypeFields(block: Block, patch: (p: Partial<Block>) => void) {
           </div>
           <div className="field">
             <label>Body</label>
-            <textarea
-              rows={4}
-              value={flattenInline(block.content)}
-              onChange={(e) => patch({ content: inlineFromString(e.target.value) })}
+            <RichTextField
+              value={block.content}
+              onChange={(content) => patch({ content })}
+              ariaLabel="Callout body"
+              dataTestId="callout-body"
             />
           </div>
         </div>
