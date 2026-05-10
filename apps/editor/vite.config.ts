@@ -14,14 +14,19 @@ export default defineConfig({
   resolve: {
     alias: [{ find: /^react-native$/, replacement: 'react-native-web' }],
   },
+  // terminal-image is a Node-only dep (uses jimp's Node bundle) consumed
+  // exclusively by backend-ink's renderInkAsync. The editor only calls sync
+  // renderInk, so the dynamic import in backend-ink never fires here.
+  // Marking external keeps jimp's browser bundle (which is missing the
+  // Jimp/intToRGBA exports terminal-image expects) out of the graph at
+  // build time; the matching optimizeDeps.exclude keeps Vite's dev-server
+  // pre-bundler from scanning into it either.
+  optimizeDeps: {
+    exclude: ['terminal-image', 'jimp'],
+  },
   build: {
     rollupOptions: {
-      // terminal-image is a Node-only dep (uses jimp's Node bundle) consumed
-      // exclusively by backend-ink's renderInkAsync. The editor only calls
-      // sync renderInk, so the dynamic import in backend-ink never fires here.
-      // Marking external keeps jimp's browser bundle (which is missing the
-      // Jimp/intToRGBA exports terminal-image expects) out of the graph.
-      external: ['terminal-image'],
+      external: ['terminal-image', 'jimp'],
     },
   },
   test: {
