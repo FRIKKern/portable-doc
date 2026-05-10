@@ -9,7 +9,8 @@
  * selects the block (preserves existing selection contract). Up/↓/× action
  * buttons remain as keyboard fallback for non-DnD users.
  */
-import type { Block, BlockType, Tone } from '@portable-doc/core';
+import { useRef } from 'react';
+import type { Block, BlockType, Tone, ValidationIssue } from '@portable-doc/core';
 import { tonePalette } from '@portable-doc/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -33,25 +34,34 @@ interface BlockTileProps {
   selected: boolean;
   onSelect: () => void;
   dispatch: (a: Action) => void;
+  issues?: ValidationIssue[];
 }
 
-export function BlockTile({ block, selected, onSelect, dispatch }: BlockTileProps) {
+export function BlockTile({ block, selected, onSelect, dispatch, issues }: BlockTileProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: block.id });
+  const tileRef = useRef<HTMLDivElement | null>(null);
 
   const t = blockTone(block);
   const stripeColor = t ? tonePalette[t].fg : null;
+  const hasIssues = issues && issues.length > 0;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
     borderLeft: stripeColor ? `4px solid ${stripeColor}` : '4px solid transparent',
+    position: 'relative',
   };
+
+  function setRefs(el: HTMLDivElement | null) {
+    setNodeRef(el);
+    tileRef.current = el;
+  }
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       className={`block-tile${selected ? ' selected' : ''}`}
       style={style}
       onClick={onSelect}
@@ -105,6 +115,23 @@ export function BlockTile({ block, selected, onSelect, dispatch }: BlockTileProp
           ×
         </button>
       </span>
+      {hasIssues && (
+        <button
+          type="button"
+          className="block-tile-diagnostics-dot"
+          aria-label={`${issues!.length} validation issue${issues!.length === 1 ? '' : 's'}`}
+          data-testid={`diagnostics-dot-${block.id}`}
+          data-count={issues!.length}
+          title={issues!.map((i) => `${i.rule}: ${i.message}`).join('\n')}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+            tileRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }}
+        >
+          {issues!.length > 1 ? issues!.length : ''}
+        </button>
+      )}
     </div>
   );
 }

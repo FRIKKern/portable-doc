@@ -10,11 +10,13 @@
  * a block is selected, insertion lands AFTER that block; otherwise the
  * new block is appended to the end (existing reducer semantics).
  */
-import { useEffect, useState } from 'react';
-import type { Block, BlockType, PortableDoc } from '@portable-doc/core';
+import { useEffect, useMemo, useState } from 'react';
+import type { Block, BlockType, PortableDoc, ValidationIssue } from '@portable-doc/core';
+import { validateDoc } from '@portable-doc/core';
 import type { Action } from './store.js';
 import { BlockForm } from './BlockForm.js';
 import { BlockList } from './BlockList.js';
+import { DocLevelDiagnostics } from './DocLevelDiagnostics.js';
 import { SlashPopover } from './SlashPopover.js';
 import type { SlashCommand } from './lib/slash-filter.js';
 
@@ -56,6 +58,24 @@ export function Editor({ doc, selectedId, onSelect, dispatch }: Props) {
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashAnchor, setSlashAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
   const selected = doc.blocks.find((b) => b.id === selectedId) ?? null;
+
+  // Inline diagnostics (A5): re-validate the doc on every change and split
+  // issues into per-block + doc-level buckets. Block-level only per grill q5.
+  const { byBlock, docLevel } = useMemo(() => {
+    const issues: ValidationIssue[] = validateDoc(doc);
+    const map = new Map<string, ValidationIssue[]>();
+    const dl: ValidationIssue[] = [];
+    for (const issue of issues) {
+      if (issue.blockId) {
+        const arr = map.get(issue.blockId) ?? [];
+        arr.push(issue);
+        map.set(issue.blockId, arr);
+      } else {
+        dl.push(issue);
+      }
+    }
+    return { byBlock: map, docLevel: dl };
+  }, [doc]);
 
   // Listen for "/" press anywhere in the editor surface (including inside
   // TipTap fields). Per the acceptance gate, both in-editor "/" and
@@ -106,6 +126,7 @@ export function Editor({ doc, selectedId, onSelect, dispatch }: Props) {
             </div>
           )}
         </div>
+        <DocLevelDiagnostics issues={docLevel} />
         <div style={{ marginTop: 8 }}>
           <BlockList
             blocks={doc.blocks as Block[]}
@@ -113,6 +134,7 @@ export function Editor({ doc, selectedId, onSelect, dispatch }: Props) {
             onSelect={onSelect}
             onReorder={(next) => dispatch({ kind: 'reorder', blocks: next })}
             dispatch={dispatch}
+            issuesByBlock={byBlock}
           />
         </div>
       </div>

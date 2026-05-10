@@ -21,7 +21,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { Block } from '@portable-doc/core';
+import type { Block, ValidationIssue } from '@portable-doc/core';
 import { BlockTile } from './BlockTile.js';
 import type { Action } from './store.js';
 
@@ -31,6 +31,7 @@ interface BlockListProps {
   onSelect: (id: string) => void;
   onReorder: (next: Block[]) => void;
   dispatch: (a: Action) => void;
+  issuesByBlock?: Map<string, ValidationIssue[]>;
 }
 
 /** Pure drag-end handler — exposed for tests so the reorder math can be
@@ -47,7 +48,14 @@ export function applyDragEnd(
   return arrayMove(blocks, oldIndex, newIndex);
 }
 
-export function BlockList({ blocks, selectedId, onSelect, onReorder, dispatch }: BlockListProps) {
+export function BlockList({
+  blocks,
+  selectedId,
+  onSelect,
+  onReorder,
+  dispatch,
+  issuesByBlock,
+}: BlockListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -69,6 +77,7 @@ export function BlockList({ blocks, selectedId, onSelect, onReorder, dispatch }:
               selected={selectedId === b.id}
               onSelect={() => onSelect(b.id)}
               dispatch={dispatch}
+              issues={issuesByBlock?.get(b.id)}
             />
           ))}
         </div>
