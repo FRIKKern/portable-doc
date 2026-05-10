@@ -14,6 +14,7 @@ import { VARIANT_CATALOG, resolveVariant } from '@portable-doc/variants';
 import type { PdStyle } from '@portable-doc/primitives';
 import type { Action } from './store.js';
 import { RichTextField } from './RichTextField.js';
+import { RichTextLabel } from './RichTextLabel.js';
 
 interface Props {
   block: Block;
@@ -150,7 +151,12 @@ function renderTypeFields(block: Block, patch: (p: Partial<Block>) => void) {
         <div>
           <div className="field">
             <label>Label</label>
-            <input value={block.label} onChange={(e) => patch({ label: e.target.value })} />
+            <RichTextLabel
+              value={block.label}
+              onChange={(label) => patch({ label })}
+              ariaLabel="Action label"
+              dataTestId="action-label"
+            />
           </div>
           <div className="field">
             <label>Href</label>
