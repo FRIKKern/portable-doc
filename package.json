@@ -10,7 +10,8 @@
     "snapshots:ci": "vitest run --passWithNoTests --reporter=default",
     "visual-goldens": "tsx scripts/visual-goldens.ts",
     "typecheck": "pnpm -r typecheck",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "dev:full": "concurrently -n editor,mcp -c blue,green \"pnpm --filter editor dev\" \"pnpm --filter @portable-doc/mcp-server start --http --port 6123\""
   },
   "engines": {
     "node": ">=20",
@@ -22,6 +23,7 @@
     "@portable-doc/backend-web": "workspace:*",
     "@portable-doc/primitives": "workspace:*",
     "@types/node": "^25.6.2",
+    "concurrently": "^9.2.1",
     "prettier": "^3.8.3",
     "tsx": "^4.20.6",
     "typescript": "^6.0.3",

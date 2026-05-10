@@ -38,6 +38,7 @@ pnpm install
 pnpm test                              # 282 specs across 15 files
 pnpm --filter editor dev               # http://localhost:5173
 pnpm --filter @portable-doc/mcp-server start   # stdio MCP server
+pnpm dev:full                          # editor on :5173 + MCP HTTP on :6123
 pnpm visual-goldens                    # writes goldens/{welcome,incident}-{tui,email,web,text}.{txt,html}
 ```
 
@@ -54,6 +55,18 @@ Tab order:
 3. Web
 4. Native
 5. JSON
+
+### Local dev with MCP HTTP
+
+`pnpm dev:full` boots the editor's Vite dev server and the MCP HTTP server side-by-side via `concurrently`. Editor on `http://localhost:5173`, MCP on `http://127.0.0.1:6123/mcp`. Ctrl-C tears both down.
+
+The editor probes the MCP server on mount. Override the URL with `VITE_PORTABLE_DOC_MCP_URL`:
+
+```bash
+VITE_PORTABLE_DOC_MCP_URL=http://localhost:7000/mcp pnpm --filter editor dev
+```
+
+If the MCP server isn't running, the editor falls back to direct backend imports and surfaces a banner with a Retry button. Click it after starting the server to switch back to MCP routing — no reload needed.
 
 ## The MCP server
 
@@ -131,6 +144,8 @@ Three layers:
 282 specs across 15 files at the time of release. CI also runs `pnpm typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the structural snapshot suite and is wired into `.github/workflows/ci.yml`. Web-editor (RNW) and Native (RN) adapter snapshots are deferred — they inherit from the kernel + adapter layers.
 
 ## Status
+
+**v0.3 (in flight) — MCP-routed editor previews.** The editor now talks to a local MCP HTTP server (`@portable-doc/mcp-server --http --port 6123`) for `doc_render` instead of importing backends directly. `pnpm dev:full` boots editor + MCP together. Graceful fallback to in-process backends when the server is unreachable; a retry banner nudges without blocking. `VITE_PORTABLE_DOC_MCP_URL` overrides the default URL.
 
 **v0.2.1 — Cleanup release.** Strong color-depth interface in `backend-ink` (`resolveColor(hex, depth)` centralizes degradation across backends). Package collapses: `backend-web-server` + `backend-web-editor` → `backend-web` with `static`/`rnw` subpath exports; `backend-native` inlined into `pd-to-rn-shim`; `fixtures` package → `examples/*.json`. Documentation distilled into the `docs/` tree. 8 packages. 282 specs.
 
