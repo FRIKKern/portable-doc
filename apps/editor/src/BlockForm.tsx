@@ -1,8 +1,17 @@
 /**
  * Per-block edit form. Each field dispatches an `update` patch on change so
  * the validation panel re-runs every keystroke (live-feedback per spec §11).
+ *
+ * Variant section (T4): for blocks whose type appears in VARIANT_CATALOG
+ * (callout / action / section / code), render per-axis dropdowns under the
+ * existing fields plus a small swatch preview that calls resolveVariant().
+ * Blocks without a catalog entry (heading / paragraph / list / divider /
+ * image / table) hide the variant UI entirely.
  */
+import type { CSSProperties } from 'react';
 import type { Block, InlineNode, Tone } from '@portable-doc/core';
+import { VARIANT_CATALOG, resolveVariant } from '@portable-doc/variants';
+import type { PdStyle } from '@portable-doc/primitives';
 import type { Action } from './store.js';
 
 interface Props {
@@ -30,6 +39,15 @@ export function BlockForm({ block, dispatch }: Props) {
   const patch = (p: Partial<Block>) =>
     dispatch({ kind: 'update', blockId: block.id, patch: p });
 
+  return (
+    <>
+      {renderTypeFields(block, patch)}
+      <VariantSection block={block} dispatch={dispatch} />
+    </>
+  );
+}
+
+function renderTypeFields(block: Block, patch: (p: Partial<Block>) => void) {
   switch (block.type) {
     case 'heading':
       return (
@@ -232,4 +250,103 @@ export function BlockForm({ block, dispatch }: Props) {
       );
     }
   }
+}
+
+/* ------------------------------------------------------------------- variants */
+
+interface VariantProps {
+  block: Block;
+  dispatch: (a: Action) => void;
+}
+
+/**
+ * Renders per-axis dropdowns for any block type whose VARIANT_CATALOG entry
+ * is defined, plus a small swatch preview derived from resolveVariant(). For
+ * blocks without a catalog entry the component returns null so the surrounding
+ * form is unchanged.
+ *
+ * Defaulting policy (per plan §T4): when an axis is absent from
+ * `block.variant`, the dropdown shows the FIRST allowed value but does NOT
+ * silently dispatch — the user must explicitly pick to land it in the AST.
+ * The swatch falls back to a placeholder until every axis is set.
+ */
+function VariantSection({ block, dispatch }: VariantProps) {
+  const schema = VARIANT_CATALOG[block.type];
+  if (schema === undefined) return null;
+
+  const current: Record<string, string> = block.variant ?? {};
+  const axisNames = Object.keys(schema.axes);
+
+  const change = (axisName: string, value: string) => {
+    const merged = { ...current, [axisName]: value };
+    dispatch({
+      kind: 'update',
+      blockId: block.id,
+      patch: { variant: merged } as Partial<Block>,
+    });
+  };
+
+  let swatch: PdStyle | null = null;
+  let swatchError = false;
+  try {
+    swatch = resolveVariant(block.type, current);
+  } catch {
+    swatchError = true;
+  }
+
+  return (
+    <details className="variant-section" data-testid="variant-section" open>
+      <summary>Variant</summary>
+      {axisNames.map((axisName) => {
+        const allowed = schema.axes[axisName] ?? [];
+        const value = current[axisName] ?? allowed[0] ?? '';
+        return (
+          <div className="field" key={axisName}>
+            <label>{axisName}</label>
+            <select
+              data-testid={`variant-${axisName}`}
+              value={value}
+              onChange={(e) => change(axisName, e.target.value)}
+            >
+              {allowed.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })}
+      {swatch && !swatchError ? (
+        <div
+          data-testid="variant-swatch"
+          style={swatchStyle(swatch)}
+          aria-label="variant preview swatch"
+        >
+          preview
+        </div>
+      ) : (
+        <p data-testid="variant-swatch-placeholder" style={{ color: '#888', fontSize: 12 }}>
+          Pick all axes to preview
+        </p>
+      )}
+    </details>
+  );
+}
+
+/** Maps a resolved PdStyle to a small inline-style preview swatch. */
+function swatchStyle(s: PdStyle): CSSProperties {
+  return {
+    display: 'inline-block',
+    minWidth: 80,
+    minHeight: 24,
+    marginTop: 6,
+    fontSize: 12,
+    color: '#333',
+    borderStyle: s.borderWidth ? 'solid' : undefined,
+    borderWidth: s.borderWidth,
+    borderColor: s.borderColor,
+    backgroundColor: s.backgroundColor,
+    padding: s.padding,
+  };
 }
