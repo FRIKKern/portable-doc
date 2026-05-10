@@ -14,8 +14,17 @@ import { Editor } from './Editor.js';
 import { PreviewStrip } from './PreviewStrip.js';
 import { ValidationPanel } from './ValidationPanel.js';
 import { JsonEditMode } from './JsonEditMode.js';
+import { McpProvider } from './McpProvider.js';
 
 export function App() {
+  return (
+    <McpProvider>
+      <AppShell />
+    </McpProvider>
+  );
+}
+
+function AppShell() {
   const [doc, dispatch] = useDoc(welcome);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [jsonModeOpen, setJsonModeOpen] = useState(false);

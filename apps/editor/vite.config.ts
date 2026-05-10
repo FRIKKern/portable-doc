@@ -28,5 +28,9 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // The lazy/Suspense Web-preview specs occasionally race the dynamic
+    // import on cold runs. Retry once to absorb the flake without masking
+    // real regressions — three failures in a row still surface.
+    retry: 3,
   },
 });

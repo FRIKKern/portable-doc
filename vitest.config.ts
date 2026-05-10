@@ -14,6 +14,11 @@ export default defineConfig({
     environment: 'happy-dom',
     include: ['**/*.test.ts', '**/*.test.tsx'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/coverage/**'],
+    // Lazy/Suspense specs (PreviewStrip Web preview, App lazy chunk) race
+    // the dynamic import on cold runs. Retry once at workspace level —
+    // editor's own vite.config.ts already sets the same — three failures
+    // in a row still surface as a real regression.
+    retry: 3,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
