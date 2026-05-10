@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { validateDoc, type PortableDoc, type ValidationIssue } from '@portable-doc/core';
 import welcomeJson from '../../../examples/welcome.json';
@@ -9,6 +9,13 @@ import {
   DEFAULT_SURFACE,
   type Surface,
 } from './SurfacePreview.js';
+import { CopyButton } from './CopyButton.js';
+import {
+  buildShareUrl,
+  decodeDoc,
+  encodeDoc,
+  URL_WARN_THRESHOLD,
+} from './lib/url-state.js';
 
 /**
  * Public-playground app.
@@ -42,6 +49,23 @@ export default function App() {
     return issues.length === 0 ? { kind: 'ok' } : { kind: 'issues', issues };
   });
   const [surface, setSurface] = useState<Surface>(DEFAULT_SURFACE);
+  const [shareUrl, setShareUrl] = useState<string>('');
+  const [urlTooLong, setUrlTooLong] = useState<boolean>(false);
+  const skipNextSerialize = useRef<boolean>(false);
+
+  // On mount, decode `?doc=` if present and replace the draft. Falls back to
+  // the welcome fixture on decode failure (the welcome fixture is what the
+  // initial state was already seeded with — no swap needed).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get('doc');
+    if (!encoded) return;
+    skipNextSerialize.current = true;
+    decodeDoc(encoded).then((json) => {
+      if (json !== null) setDraft(json);
+    });
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -49,6 +73,37 @@ export default function App() {
     }, DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [draft]);
+
+  // Serialize draft → ?doc=… on every change, debounced. `history.replaceState`
+  // keeps the address-bar live without polluting the back-stack. The 2000-char
+  // warning is checked against the full origin+path+query URL (per grill q7:
+  // email-paste safety, non-blocking).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (skipNextSerialize.current) {
+      skipNextSerialize.current = false;
+    }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      encodeDoc(draft)
+        .then((encoded) => {
+          if (cancelled) return;
+          const url = buildShareUrl(encoded);
+          setShareUrl(url);
+          setUrlTooLong(url.length > URL_WARN_THRESHOLD);
+          window.history.replaceState(null, '', url);
+        })
+        .catch(() => {
+          /* encoding never throws in practice — swallow defensively */
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [draft]);
+
+  const getShareUrl = useCallback(() => shareUrl, [shareUrl]);
 
   // The doc reference used by SurfacePreview is recomputed only when the
   // validation result flips to 'ok' (or 'issues' — both yield a parsed doc).
@@ -96,7 +151,20 @@ export default function App() {
         >
           Incident
         </button>
+        <span style={shareSpacerStyle} />
+        <CopyButton
+          getValue={getShareUrl}
+          label="Copy share URL"
+          testId="copy-share-url"
+        />
       </div>
+      {urlTooLong && (
+        <div role="alert" data-testid="url-too-long" style={warnStyle}>
+          Your share URL is over {URL_WARN_THRESHOLD} chars — works on most
+          platforms (Twitter/Discord/Slack) but may truncate when pasted into
+          email.
+        </div>
+      )}
 
       <textarea
         value={draft}
@@ -296,6 +364,21 @@ const ruleStyle: CSSProperties = {
   padding: '0.05rem 0.35rem',
   borderRadius: 4,
   fontSize: '0.85rem',
+};
+
+const shareSpacerStyle: CSSProperties = {
+  flex: 1,
+};
+
+const warnStyle: CSSProperties = {
+  marginBottom: '0.75rem',
+  padding: '0.55rem 0.85rem',
+  background: '#fffbeb',
+  border: '1px solid #fcd34d',
+  borderRadius: 6,
+  color: '#78350f',
+  fontSize: '0.85rem',
+  lineHeight: 1.5,
 };
 
 const previewPlaceholderStyle: CSSProperties = {

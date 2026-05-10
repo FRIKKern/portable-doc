@@ -7,11 +7,12 @@
  * inline-styled HTML by the hand-rolled `ansiToHtml` parser — no `ansi_up`
  * dep (per grill q6).
  */
-import { Component, Suspense, lazy } from 'react';
+import { Component, Suspense, lazy, useCallback, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { composeDocument } from '@portable-doc/primitives';
 import { renderHtml } from '@portable-doc/backend-web/static';
 import type { PortableDoc } from '@portable-doc/core';
+import { CopyButton } from './CopyButton.js';
 
 // Email and Ink are lazy-loaded per surface — they pull in react-email/render
 // (~70 KB gzip) and cli-highlight/highlight.js (~300 KB gzip) respectively.
@@ -34,16 +35,30 @@ const LABELS: Record<Surface, string> = {
 };
 
 export function SurfacePreview({ doc, surface }: { doc: PortableDoc; surface: Surface }) {
+  // Ref-based capture: each surface can write its current rendered output via
+  // `onValue`; the CopyButton reads from the ref at click time. This keeps the
+  // copy fresh for async surfaces (Email) without re-rendering the button.
+  const valueRef = useRef<string>('');
+  const onValue = useCallback((v: string) => {
+    valueRef.current = v;
+  }, []);
+  const getValue = useCallback(() => valueRef.current, []);
+
   return (
-    <RenderBoundary key={surface}>
-      <Suspense fallback={<LoadingPlaceholder />}>
-        {surface === 'web' && <WebSurface doc={doc} />}
-        {surface === 'email' && <LazyEmail doc={doc} />}
-        {surface === 'tui' && <LazyTui doc={doc} />}
-        {surface === 'native' && <NativeSurface doc={doc} />}
-        {surface === 'text' && <LazyText doc={doc} />}
-      </Suspense>
-    </RenderBoundary>
+    <div data-testid="surface-preview-host">
+      <div style={surfaceToolbarStyle} data-testid="surface-toolbar">
+        <CopyButton getValue={getValue} testId={`copy-${surface}`} />
+      </div>
+      <RenderBoundary key={surface}>
+        <Suspense fallback={<LoadingPlaceholder />}>
+          {surface === 'web' && <WebSurface doc={doc} onValue={onValue} />}
+          {surface === 'email' && <LazyEmail doc={doc} onValue={onValue} />}
+          {surface === 'tui' && <LazyTui doc={doc} onValue={onValue} />}
+          {surface === 'native' && <NativeSurface doc={doc} onValue={onValue} />}
+          {surface === 'text' && <LazyText doc={doc} onValue={onValue} />}
+        </Suspense>
+      </RenderBoundary>
+    </div>
   );
 }
 
@@ -76,8 +91,15 @@ class RenderBoundary extends Component<
   }
 }
 
-function WebSurface({ doc }: { doc: PortableDoc }) {
+function WebSurface({
+  doc,
+  onValue,
+}: {
+  doc: PortableDoc;
+  onValue?: (v: string) => void;
+}) {
   const html = renderHtml(composeDocument(doc));
+  onValue?.(html);
   return (
     <div
       data-testid="preview-web"
@@ -87,11 +109,19 @@ function WebSurface({ doc }: { doc: PortableDoc }) {
   );
 }
 
-function NativeSurface({ doc }: { doc: PortableDoc }) {
+function NativeSurface({
+  doc,
+  onValue,
+}: {
+  doc: PortableDoc;
+  onValue?: (v: string) => void;
+}) {
   const tree = composeDocument(doc);
+  const json = JSON.stringify(tree, null, 2);
+  onValue?.(json);
   return (
     <pre data-testid="preview-native" style={preStyle}>
-      {JSON.stringify(tree, null, 2)}
+      {json}
     </pre>
   );
 }
@@ -129,6 +159,12 @@ export function SurfaceTabs({
 // ---------------------------------------------------------------------------
 // styles
 // ---------------------------------------------------------------------------
+
+const surfaceToolbarStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  margin: '0 0 0.4rem',
+};
 
 const tabBarStyle: CSSProperties = {
   display: 'flex',

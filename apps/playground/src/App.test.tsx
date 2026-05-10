@@ -10,9 +10,22 @@
  *   4. Typing a block with an unknown variant (tone:'rainbow') surfaces a
  *      validation issue tagged with the offending rule name.
  */
-import { afterEach, describe, expect, it } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App.js';
+import { encodeDoc } from './lib/url-state.js';
+
+let writeText: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
+  // Reset the URL between tests so ?doc= from a prior render doesn't leak.
+  window.history.replaceState(null, '', '/');
+});
 
 afterEach(() => {
   cleanup();
@@ -105,5 +118,77 @@ describe('Playground App', () => {
     expect(toneIssue).toBeTruthy();
     expect(toneIssue!.textContent ?? '').toMatch(/rainbow|tone/);
     expect(issues.textContent ?? '').toMatch(/validation issue/);
+  });
+
+  it('loads the doc from ?doc=<encoded> on mount', async () => {
+    const fixture = JSON.stringify(
+      { version: 1, title: 'From URL', blocks: [] },
+      null,
+      2,
+    );
+    const encoded = await encodeDoc(fixture);
+    window.history.replaceState(null, '', `/?doc=${encoded}`);
+    render(<App />);
+    await waitFor(
+      () => {
+        expect(getTextarea().value).toContain('From URL');
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it('shows the over-2000-char warning when the URL is too long', async () => {
+    render(<App />);
+    // 4 KB of high-entropy text resists gzip — the resulting URL clears the
+    // 2000-char threshold easily.
+    const big = {
+      version: 1,
+      title: 'Big',
+      blocks: [
+        {
+          id: 'p',
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              value: Array.from({ length: 4000 }, () =>
+                Math.random().toString(36).slice(2, 4),
+              ).join(''),
+            },
+          ],
+        },
+      ],
+    };
+    fireEvent.change(getTextarea(), {
+      target: { value: JSON.stringify(big) },
+    });
+    await waitFor(
+      () => {
+        expect(screen.queryByTestId('url-too-long')).toBeTruthy();
+      },
+      { timeout: 2000 },
+    );
+    const banner = screen.getByTestId('url-too-long');
+    expect(banner.textContent ?? '').toMatch(/2000 chars/);
+  });
+
+  it('Copy share URL button copies the live share URL', async () => {
+    render(<App />);
+    // Wait for the initial encode → setShareUrl to settle so the button has
+    // something non-empty to copy.
+    await waitFor(
+      () => {
+        expect(window.location.search).toMatch(/^\?doc=/);
+      },
+      { timeout: 2000 },
+    );
+    const btn = screen.getByTestId('copy-share-url');
+    await act(async () => {
+      fireEvent.click(btn);
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const arg = writeText.mock.calls[0]?.[0] as string;
+    expect(arg).toContain('?doc=');
   });
 });

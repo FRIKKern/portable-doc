@@ -8,13 +8,22 @@ import { composeDocument } from '@portable-doc/primitives';
 import { renderEmail } from '@portable-doc/backend-email';
 import type { PortableDoc } from '@portable-doc/core';
 
-export default function EmailSurface({ doc }: { doc: PortableDoc }) {
+export default function EmailSurface({
+  doc,
+  onValue,
+}: {
+  doc: PortableDoc;
+  onValue?: (v: string) => void;
+}) {
   const [html, setHtml] = useState<string>('');
   useEffect(() => {
     let cancelled = false;
     renderEmail(composeDocument(doc))
       .then((out) => {
-        if (!cancelled) setHtml(out);
+        if (!cancelled) {
+          setHtml(out);
+          onValue?.(out);
+        }
       })
       .catch((e: unknown) => {
         if (!cancelled) setHtml(
@@ -24,7 +33,7 @@ export default function EmailSurface({ doc }: { doc: PortableDoc }) {
     return () => {
       cancelled = true;
     };
-  }, [doc]);
+  }, [doc, onValue]);
 
   return (
     <iframe

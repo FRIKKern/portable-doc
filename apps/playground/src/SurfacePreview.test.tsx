@@ -9,18 +9,28 @@
  * `findByTestId` calls below pass `{ timeout: 8000 }` to absorb that latency
  * without flaking. The default 1000 ms is too tight for these chunks.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Lazy-chunk specs need a wider window than vitest's 5 s default — the TUI
 // chunk in particular transforms cli-highlight + highlight.js on cold load.
 const LAZY_TEST_TIMEOUT = 15000;
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PortableDoc } from '@portable-doc/core';
 import welcomeJson from '../../../examples/welcome.json';
 import { SurfacePreview, SURFACES, DEFAULT_SURFACE } from './SurfacePreview.js';
 
 const welcome = welcomeJson as unknown as PortableDoc;
 const LAZY_TIMEOUT = 8000;
+
+let writeText: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -80,6 +90,34 @@ describe('SurfacePreview', () => {
     // mono mode: zero escape bytes, zero <span> markup.
     expect(el.textContent).not.toContain('\x1b');
     expect(el.innerHTML).not.toContain('<span');
+  });
+
+  it('Web surface Copy button fires clipboard.writeText with the rendered HTML', async () => {
+    render(<SurfacePreview doc={welcome} surface="web" />);
+    const el = screen.getByTestId('preview-web');
+    const expectedHtml = el.innerHTML;
+    expect(expectedHtml).toContain('Welcome to Atlas');
+    const btn = screen.getByTestId('copy-web');
+    await act(async () => {
+      fireEvent.click(btn);
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const arg = writeText.mock.calls[0]?.[0] as string;
+    expect(arg).toContain('Welcome to Atlas');
+    expect(arg).toContain('style=');
+  });
+
+  it('Native surface Copy button fires clipboard.writeText with the JSON tree', async () => {
+    render(<SurfacePreview doc={welcome} surface="native" />);
+    const btn = screen.getByTestId('copy-native');
+    await act(async () => {
+      fireEvent.click(btn);
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const arg = writeText.mock.calls[0]?.[0] as string;
+    expect(arg).toContain('"kind": "PdContainer"');
   });
 
   it('switching surfaces swaps the rendered testid (web → native)', async () => {

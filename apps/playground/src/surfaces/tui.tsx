@@ -7,15 +7,25 @@
  *
  * Per grill q6: NO `ansi_up` dep. The parser lives in `../lib/ansi-to-html`.
  */
+import { useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { composeDocument } from '@portable-doc/primitives';
 import { renderInk } from '@portable-doc/backend-ink';
 import type { PortableDoc } from '@portable-doc/core';
 import { ansiToHtml } from '../lib/ansi-to-html.js';
 
-export default function TuiSurface({ doc }: { doc: PortableDoc }) {
+export default function TuiSurface({
+  doc,
+  onValue,
+}: {
+  doc: PortableDoc;
+  onValue?: (v: string) => void;
+}) {
   const ansi = renderInk(composeDocument(doc), { colorDepth: 'truecolor' });
   const html = ansiToHtml(ansi);
+  useEffect(() => {
+    onValue?.(ansi);
+  }, [ansi, onValue]);
   return (
     <pre
       data-testid="preview-tui"
