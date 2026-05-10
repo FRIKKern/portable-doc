@@ -26,7 +26,24 @@
  * inline-image escapes) so output is clean for redirected pipes.
  */
 
-import { readFileSync } from 'node:fs';
+// Lazy node:fs: a static import here is externalised by Vite in browser builds
+// and its property-access proxy throws at module-eval — even though the editor
+// never reaches readImageBytes. Bypass static analysis via eval() and cache the
+// resolution. In the browser, require() is undefined → cached null → readImageBytes
+// returns null for file paths (the editor would never hand it one anyway).
+let _readFileSync: ((p: string) => Buffer) | null | undefined = undefined;
+function getReadFileSync(): ((p: string) => Buffer) | null {
+  if (_readFileSync !== undefined) return _readFileSync;
+  try {
+    const req = (0, eval)('typeof require === "function" ? require : null') as
+      | ((m: string) => { readFileSync: (p: string) => Buffer })
+      | null;
+    _readFileSync = req ? req('node:fs').readFileSync : null;
+  } catch {
+    _readFileSync = null;
+  }
+  return _readFileSync;
+}
 import { tonePalette } from '@portable-doc/core';
 import type { TuiColorName } from '@portable-doc/core';
 import type { PdNode, PdTextNode, PdBoxNode } from '@portable-doc/primitives';
@@ -480,5 +497,7 @@ function readImageBytes(src: string): Buffer | null {
   }
   // Local file path — including `file:` URLs.
   const path = src.startsWith('file:') ? new URL(src).pathname : src;
+  const readFileSync = getReadFileSync();
+  if (!readFileSync) return null;
   return readFileSync(path);
 }
