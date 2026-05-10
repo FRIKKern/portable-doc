@@ -30,6 +30,7 @@ export const inlineNodeSchema: z.ZodType<unknown> = z.lazy(() =>
 const blockBase = {
   id: z.string(),
   surfaces: z.array(surfaceSchema).optional(),
+  variant: z.record(z.string()).optional(),
 };
 
 const headingSchema = z

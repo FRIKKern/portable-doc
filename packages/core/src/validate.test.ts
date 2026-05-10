@@ -377,6 +377,120 @@ describe('rule: url-safety — image.src', () => {
 // End-to-end
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Rule 4 — variant-allowlist
+// ---------------------------------------------------------------------------
+
+describe('rule: variant-allowlist', () => {
+  function variantIssues(d: PortableDoc) {
+    return validateDoc(d).filter((i) => i.rule === 'variant-allowlist');
+  }
+
+  it('accepts a valid callout variant {tone, emphasis}', () => {
+    const c: CalloutBlock = {
+      ...callout('c'),
+      variant: { tone: 'success', emphasis: 'bold' },
+    };
+    expect(variantIssues(doc([c]))).toHaveLength(0);
+  });
+
+  it('accepts a valid action variant {priority, size}', () => {
+    const a: ActionBlock = {
+      ...action('a'),
+      variant: { priority: 'primary', size: 'medium' },
+    };
+    expect(variantIssues(doc([a]))).toHaveLength(0);
+  });
+
+  it('accepts a valid section variant {density}', () => {
+    const s: SectionBlock = {
+      ...section('s', [paragraph('s-p')]),
+      variant: { density: 'compact' },
+    };
+    expect(variantIssues(doc([s]))).toHaveLength(0);
+  });
+
+  it("rejects an unknown axis on callout ({flavor: 'spicy'})", () => {
+    const c: CalloutBlock = {
+      ...callout('c'),
+      variant: { flavor: 'spicy' },
+    };
+    const v = variantIssues(doc([c]));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.message).toMatch(/unknown variant axis 'flavor' on 'callout'/);
+    expect(v[0]!.blockId).toBe('c');
+  });
+
+  it("rejects an unknown value within a known axis on callout (tone: 'rainbow')", () => {
+    // Use a valid tone field on the block itself so content-constraint stays
+    // clean — only the variant.tone value is invalid.
+    const c: CalloutBlock = {
+      ...callout('c', 'info'),
+      variant: { tone: 'rainbow', emphasis: 'bold' },
+    };
+    const v = variantIssues(doc([c]));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.message).toMatch(/unknown variant value 'rainbow' for axis 'tone' on 'callout'/);
+  });
+
+  it('rejects a variant on a no-catalog block (heading)', () => {
+    const h = { ...heading('h'), variant: { level: 'h1' } } as unknown as HeadingBlock;
+    const v = variantIssues(doc([h]));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.message).toMatch(/heading.*does not accept variants/);
+    expect(v[0]!.blockId).toBe('h');
+  });
+
+  it('rejects a variant on a no-catalog block (paragraph)', () => {
+    const p = { ...paragraph('p'), variant: { weight: 'bold' } } as unknown as ParagraphBlock;
+    const v = variantIssues(doc([p]));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.message).toMatch(/paragraph.*does not accept variants/);
+  });
+
+  it('rejects a variant on a no-catalog block (image)', () => {
+    const img = { ...image('i'), variant: { fit: 'cover' } } as unknown as ImageBlock;
+    const v = variantIssues(doc([img]));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.message).toMatch(/image.*does not accept variants/);
+  });
+
+  it('produces 0 variant issues for a block with no variant field', () => {
+    expect(variantIssues(doc([heading('h'), paragraph('p'), callout('c')]))).toHaveLength(0);
+  });
+
+  it('produces 0 variant issues for a block with variant: {} (empty)', () => {
+    const c: CalloutBlock = { ...callout('c'), variant: {} };
+    const h: HeadingBlock = { ...heading('h'), variant: {} };
+    expect(variantIssues(doc([c, h]))).toHaveLength(0);
+  });
+
+  it('flags exactly the one invalid variant in a multi-block doc', () => {
+    const good: CalloutBlock = {
+      ...callout('good'),
+      variant: { tone: 'info', emphasis: 'subtle' },
+    };
+    const bad: ActionBlock = {
+      ...action('bad'),
+      variant: { priority: 'primary', size: 'enormous' },
+    };
+    const v = variantIssues(doc([heading('h'), good, bad, paragraph('p')]));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.blockId).toBe('bad');
+    expect(v[0]!.message).toMatch(/unknown variant value 'enormous' for axis 'size' on 'action'/);
+  });
+
+  it('walks into sections and flags an invalid variant on a nested block', () => {
+    const innerBad: CalloutBlock = {
+      ...callout('inner'),
+      variant: { tone: 'success', emphasis: 'screaming' },
+    };
+    const v = variantIssues(doc([section('sec', [innerBad])]));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.blockId).toBe('inner');
+  });
+});
+
 describe('end-to-end', () => {
   it('returns 0 issues for a valid welcome-shaped doc', () => {
     const d: PortableDoc = doc([

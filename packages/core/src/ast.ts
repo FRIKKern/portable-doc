@@ -38,6 +38,9 @@ export interface BlockBase {
   id: string;
   type: BlockType;
   surfaces?: Surface[];
+  /** Named variant axes per the @portable-doc/variants catalog. Optional —
+   *  blocks without a catalog entry must omit this field (validator enforces). */
+  variant?: Record<string, string>;
 }
 
 export interface HeadingBlock extends BlockBase {

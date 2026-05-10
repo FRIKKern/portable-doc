@@ -1,5 +1,5 @@
 /**
- * Three rule classes per spec §7:
+ * Four rule classes per spec §7 + §T2 (variant catalog):
  *
  *   1. prop-allowlist     — reject any free-form style prop the weakest
  *                            backend can't honor (borderRadius, opacity,
@@ -13,6 +13,10 @@
  *                            image/table surfaces fixed to ['web','native'].
  *   3. url-safety         — every href-bearing field accepts only
  *                            http / https / mailto / tel.
+ *   4. variant-allowlist  — block.variant axes/values must match
+ *                            VARIANT_CATALOG[block.type]; blocks without a
+ *                            catalog entry (heading/paragraph/list/divider/
+ *                            image/table) may not declare variants at all.
  *
  * `validateDoc` never throws. It returns a (possibly empty) array.
  */
@@ -20,8 +24,13 @@
 import type { Block, InlineNode, PortableDoc, Surface } from './ast.js';
 import { toneNames } from './tokens.js';
 import { portableDocSchema } from './schemas.js';
+import { VARIANT_CATALOG } from '@portable-doc/variants';
 
-export type RuleId = 'prop-allowlist' | 'content-constraint' | 'url-safety';
+export type RuleId =
+  | 'prop-allowlist'
+  | 'content-constraint'
+  | 'url-safety'
+  | 'variant-allowlist';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -139,16 +148,16 @@ function checkAllowedProp(prop: string, value: unknown): PropCheck {
  * a leaked free-form style prop and run through the prop allowlist.
  */
 const KNOWN_BLOCK_KEYS: Record<string, ReadonlySet<string>> = {
-  heading: new Set(['id', 'type', 'surfaces', 'level', 'text']),
-  paragraph: new Set(['id', 'type', 'surfaces', 'content']),
-  list: new Set(['id', 'type', 'surfaces', 'ordered', 'items']),
-  callout: new Set(['id', 'type', 'surfaces', 'tone', 'title', 'content']),
-  action: new Set(['id', 'type', 'surfaces', 'label', 'href', 'priority']),
-  section: new Set(['id', 'type', 'surfaces', 'title', 'blocks']),
-  divider: new Set(['id', 'type', 'surfaces']),
-  code: new Set(['id', 'type', 'surfaces', 'lang', 'value']),
-  image: new Set(['id', 'type', 'surfaces', 'src', 'alt', 'width', 'height']),
-  table: new Set(['id', 'type', 'surfaces', 'rows']),
+  heading: new Set(['id', 'type', 'surfaces', 'variant', 'level', 'text']),
+  paragraph: new Set(['id', 'type', 'surfaces', 'variant', 'content']),
+  list: new Set(['id', 'type', 'surfaces', 'variant', 'ordered', 'items']),
+  callout: new Set(['id', 'type', 'surfaces', 'variant', 'tone', 'title', 'content']),
+  action: new Set(['id', 'type', 'surfaces', 'variant', 'label', 'href', 'priority']),
+  section: new Set(['id', 'type', 'surfaces', 'variant', 'title', 'blocks']),
+  divider: new Set(['id', 'type', 'surfaces', 'variant']),
+  code: new Set(['id', 'type', 'surfaces', 'variant', 'lang', 'value']),
+  image: new Set(['id', 'type', 'surfaces', 'variant', 'src', 'alt', 'width', 'height']),
+  table: new Set(['id', 'type', 'surfaces', 'variant', 'rows']),
 };
 
 function walkBlockForPropLeaks(block: Block, issues: ValidationIssue[]): void {
@@ -394,6 +403,56 @@ function walkBlockForUrls(block: Block, issues: ValidationIssue[]): void {
 }
 
 // ---------------------------------------------------------------------------
+// Rule 4: variant allowlist
+// ---------------------------------------------------------------------------
+
+function checkVariants(block: Block, issues: ValidationIssue[]): void {
+  const variant = block.variant;
+  // Recurse into sections regardless — children may carry their own variants.
+  if (block.type === 'section') {
+    for (const child of block.blocks) checkVariants(child, issues);
+  }
+  if (variant === undefined) return;
+  if (typeof variant !== 'object' || variant === null) return;
+
+  const keys = Object.keys(variant);
+  if (keys.length === 0) return; // empty {} — no axes asserted, nothing to check.
+
+  const schema = VARIANT_CATALOG[block.type];
+  if (schema === undefined) {
+    issues.push({
+      severity: 'error',
+      blockId: block.id,
+      rule: 'variant-allowlist',
+      message: `block type '${block.type}' does not accept variants`,
+    });
+    return;
+  }
+
+  for (const axis of keys) {
+    const allowed = schema.axes[axis];
+    if (allowed === undefined) {
+      issues.push({
+        severity: 'error',
+        blockId: block.id,
+        rule: 'variant-allowlist',
+        message: `unknown variant axis '${axis}' on '${block.type}'`,
+      });
+      continue;
+    }
+    const value = variant[axis];
+    if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
+      issues.push({
+        severity: 'error',
+        blockId: block.id,
+        rule: 'variant-allowlist',
+        message: `unknown variant value '${String(value)}' for axis '${axis}' on '${block.type}'`,
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Unique-id pass
 // ---------------------------------------------------------------------------
 
@@ -444,6 +503,7 @@ export function validateDoc(doc: unknown): ValidationIssue[] {
     walkBlockForPropLeaks(block, issues);
     checkBlockContent(block, issues);
     walkBlockForUrls(block, issues);
+    checkVariants(block, issues);
   }
 
   return issues;
