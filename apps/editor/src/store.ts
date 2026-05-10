@@ -15,7 +15,8 @@ export type Action =
   | { kind: 'add'; blockType: BlockType; afterId?: string }
   | { kind: 'update'; blockId: string; patch: Partial<Block> }
   | { kind: 'delete'; blockId: string }
-  | { kind: 'move'; blockId: string; direction: 'up' | 'down' };
+  | { kind: 'move'; blockId: string; direction: 'up' | 'down' }
+  | { kind: 'reorder'; blocks: Block[] };
 
 export function defaultBlock(type: BlockType): Block {
   const id = `b-${nanoid(8)}`;
@@ -104,6 +105,8 @@ export function reducer(state: PortableDoc, action: Action): PortableDoc {
       if (next === state.blocks) return state;
       return { ...state, blocks: next };
     }
+    case 'reorder':
+      return { ...state, blocks: action.blocks };
   }
 }
 

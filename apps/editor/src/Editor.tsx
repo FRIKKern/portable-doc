@@ -1,10 +1,15 @@
 /**
- * Block list (left) + edit form (center). Click selects; +/↑/↓/× mutate.
+ * Block list (left) + edit form (center).
+ *
+ * After A2: the left panel renders block-shaped tiles with type icons,
+ * content previews, and tone color stripes. Tiles are draggable via
+ * @dnd-kit/sortable; up/↓/× action buttons remain as keyboard fallback.
  */
 import { useState } from 'react';
 import type { Block, BlockType, PortableDoc } from '@portable-doc/core';
 import type { Action } from './store.js';
 import { BlockForm } from './BlockForm.js';
+import { BlockList } from './BlockList.js';
 
 const ALL_TYPES: BlockType[] = [
   'heading',
@@ -31,40 +36,6 @@ const TYPE_GLYPH: Record<BlockType, string> = {
   image: 'img',
   table: '⊞',
 };
-
-function summarize(b: Block): string {
-  switch (b.type) {
-    case 'heading':
-      return `H${b.level} ${b.text}`;
-    case 'paragraph':
-      return flatten(b.content);
-    case 'list':
-      return `${b.items.length} items: ${flatten(b.items[0] ?? [])}`;
-    case 'callout':
-      return `${b.tone}: ${b.title ?? flatten(b.content)}`;
-    case 'action':
-      return `${b.priority} → ${b.label}`;
-    case 'section':
-      return `§ ${b.title ?? '(untitled)'} (${b.blocks.length})`;
-    case 'divider':
-      return '— divider —';
-    case 'code':
-      return `code (${b.lang ?? 'plain'})`;
-    case 'image':
-      return `img: ${b.alt}`;
-    case 'table':
-      return `table ${b.rows.length}×${b.rows[0]?.length ?? 0}`;
-  }
-}
-
-function flatten(nodes: ReadonlyArray<{ type: string; value?: string; children?: unknown }>): string {
-  let out = '';
-  for (const n of nodes) {
-    if ('value' in n && typeof n.value === 'string') out += n.value;
-    else if (Array.isArray(n.children)) out += flatten(n.children as Array<{ type: string; value?: string }>);
-  }
-  return out.length > 30 ? out.slice(0, 30) + '…' : out;
-}
 
 interface Props {
   doc: PortableDoc;
@@ -101,48 +72,13 @@ export function Editor({ doc, selectedId, onSelect, dispatch }: Props) {
           )}
         </div>
         <div style={{ marginTop: 8 }}>
-          {doc.blocks.map((b) => (
-            <div
-              key={b.id}
-              className={`block-row${selectedId === b.id ? ' selected' : ''}`}
-              onClick={() => onSelect(b.id)}
-              data-block-id={b.id}
-            >
-              <span style={{ width: 22, fontFamily: 'monospace', fontSize: 11 }}>
-                {TYPE_GLYPH[b.type]}
-              </span>
-              <span className="summary">{summarize(b)}</span>
-              <span className="actions">
-                <button
-                  aria-label={`Move ${b.id} up`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    dispatch({ kind: 'move', blockId: b.id, direction: 'up' });
-                  }}
-                >
-                  ↑
-                </button>
-                <button
-                  aria-label={`Move ${b.id} down`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    dispatch({ kind: 'move', blockId: b.id, direction: 'down' });
-                  }}
-                >
-                  ↓
-                </button>
-                <button
-                  aria-label={`Delete ${b.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    dispatch({ kind: 'delete', blockId: b.id });
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            </div>
-          ))}
+          <BlockList
+            blocks={doc.blocks as Block[]}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            onReorder={(next) => dispatch({ kind: 'reorder', blocks: next })}
+            dispatch={dispatch}
+          />
         </div>
       </div>
       <div className="col" data-testid="block-form">

@@ -58,6 +58,47 @@ body {
   background: #fafafa; border: 1px solid #ccc; border-radius: 3px;
   cursor: pointer;
 }
+
+/* Block-shaped tiles (A2). Tone stripe is on the left edge via inline style. */
+.block-tile {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; margin-bottom: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb; border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+.block-tile:hover { background: #f7f7f7; }
+.block-tile.selected { background: #e8f0ff; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6 inset; }
+.block-tile-icon {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #f3f4f6; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px;
+  color: #374151;
+  flex-shrink: 0;
+}
+.block-tile-content { flex: 1; min-width: 0; }
+.block-tile-type {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #6b7280; font-weight: 600;
+}
+.block-tile-preview {
+  font-size: 12px; color: #1a1a1a;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.block-tile-handle {
+  font: inherit; font-size: 11px; padding: 0 4px;
+  background: transparent; border: none; color: #9ca3af;
+  cursor: grab;
+}
+.block-tile-handle:active { cursor: grabbing; }
+.block-tile .actions { display: flex; gap: 2px; }
+.block-tile .actions button {
+  font: inherit; font-size: 11px; padding: 0 5px;
+  background: #fafafa; border: 1px solid #ccc; border-radius: 3px;
+  cursor: pointer;
+}
 .add-popover { position: relative; }
 .add-popover-menu {
   position: absolute; top: 100%; left: 0; z-index: 10;

@@ -77,6 +77,17 @@ describe('store reducer', () => {
     expect(next).toBe(tinyDoc);
   });
 
+  it('reorder: replaces the blocks array (drag-and-drop hook)', () => {
+    const reordered: Block[] = [
+      tinyDoc.blocks[2] as Block,
+      tinyDoc.blocks[0] as Block,
+      tinyDoc.blocks[1] as Block,
+    ];
+    const next = reducer(tinyDoc, { kind: 'reorder', blocks: reordered });
+    expect(next.blocks.map((b) => b.id)).toEqual(['c', 'a', 'b']);
+    expect(next.version).toBe(tinyDoc.version);
+  });
+
   it('defaultBlock: every block type has a sensible default', () => {
     const types: Block['type'][] = [
       'heading',
