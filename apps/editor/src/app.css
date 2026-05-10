@@ -77,6 +77,154 @@ body {
   border: none; border-bottom: 2px solid transparent; cursor: pointer;
 }
 .tabs button.active { border-bottom-color: #3b82f6; font-weight: 600; }
+
+/* Preview thumbnail strip — replaces the 5 text tabs (A6 / grill q12) */
+.preview-strip {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 8px;
+  align-items: flex-end;
+  background: #fafafa;
+}
+.preview-thumb {
+  font: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  border-radius: 6px;
+  transition: transform 0.12s ease;
+}
+.preview-thumb:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+.preview-thumb-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 64px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  overflow: hidden;
+  position: relative;
+}
+.preview-thumb.active .preview-thumb-frame {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+  background: #f0f7ff;
+}
+.preview-thumb.active {
+  transform: translateY(-1px);
+}
+.preview-thumb-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+}
+.preview-thumb.active .preview-thumb-label {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+/* TUI thumb — monospace ASCII box */
+.thumb-ascii {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 7px;
+  line-height: 1.1;
+  color: #444;
+  display: flex;
+  flex-direction: column;
+}
+.thumb-ascii-line { white-space: pre; }
+
+/* Email/Web thumb — boxed heading card */
+.thumb-boxed {
+  display: flex;
+  flex-direction: column;
+  width: 78%;
+  height: 78%;
+  background: #fff;
+  border: 1px solid #d4d4d4;
+  border-top: 3px solid;
+  border-radius: 2px;
+  padding: 4px 5px;
+  gap: 3px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+.thumb-boxed-heading {
+  font-size: 8px;
+  font-weight: 700;
+  color: #222;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thumb-boxed-rule {
+  height: 2px;
+  background: #d4d4d4;
+  width: 100%;
+  border-radius: 1px;
+}
+.thumb-boxed-rule.short { width: 60%; }
+
+/* Native thumb — column bars (RN-ish) */
+.thumb-dots {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 70%;
+}
+.thumb-dots-bar {
+  width: 5px;
+  background: linear-gradient(180deg, #6366f1, #4338ca);
+  border-radius: 1px;
+}
+
+/* JSON thumb — stylized braces */
+.thumb-braces {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: #4b5563;
+}
+.thumb-braces-brace {
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  color: #6b7280;
+}
+.thumb-braces-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: stretch;
+  width: 22px;
+}
+.thumb-braces-row {
+  height: 2px;
+  background: #cbd5e1;
+  border-radius: 1px;
+}
+.thumb-braces-row:first-child { width: 80%; }
+.thumb-braces-row:last-child { width: 55%; }
+.thumb-braces-count {
+  font-size: 7px;
+  color: #94a3b8;
+  text-align: center;
+}
 .preview-pane { padding: 8px; }
 .preview-pre {
   font-family: ui-monospace, SFMono-Regular, monospace;

@@ -25,25 +25,30 @@ describe('App', () => {
     // welcome by default — first block summary shows H1 Welcome to Atlas
     expect(screen.getAllByText(/Welcome to Atlas/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText('Load incident'));
-    expect(screen.queryByText(/Welcome to Atlas/)).toBeNull();
+    // After Load incident, the editor block list (live doc) no longer
+    // contains "Welcome to Atlas". Preview thumbnails are debounced 500 ms
+    // and may briefly hold the old heading — scope the assertion to the
+    // block list, which tracks the live doc reference.
+    const blockList = screen.getByTestId('block-list');
+    expect(blockList.textContent ?? '').not.toMatch(/Welcome to Atlas/);
     // incident has its own first heading
-    expect(document.body.textContent ?? '').toMatch(/incident|Incident/);
+    expect(blockList.textContent ?? '').toMatch(/incident|Incident/);
   });
 
-  it('switching tabs unmounts the previous preview and mounts the next', () => {
+  it('switching surfaces unmounts the previous preview and mounts the next', () => {
     render(<App />);
     expect(screen.getByTestId('preview-tui')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('tab-json'));
+    fireEvent.click(screen.getByTestId('thumb-json'));
     expect(screen.queryByTestId('preview-tui')).toBeNull();
     expect(screen.getByTestId('preview-json')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('tab-native'));
+    fireEvent.click(screen.getByTestId('thumb-native'));
     expect(screen.queryByTestId('preview-json')).toBeNull();
     expect(screen.getByTestId('preview-native')).toBeTruthy();
   });
 
-  it('Web tab is React.lazy — Suspense fallback shows while the chunk resolves', async () => {
+  it('Web surface is React.lazy — Suspense fallback shows while the chunk resolves', async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId('tab-web'));
+    fireEvent.click(screen.getByTestId('thumb-web'));
     // Either the fallback is visible synchronously, or the chunk has already
     // resolved and the preview is mounted. Both prove lazy/Suspense wiring.
     const fallback = screen.queryByTestId('web-lazy-fallback');

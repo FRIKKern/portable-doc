@@ -11,15 +11,13 @@ import { useDoc } from './store.js';
 const welcome = welcomeJson as PortableDoc;
 const incident = incidentJson as PortableDoc;
 import { Editor } from './Editor.js';
-import { PreviewTabs, DEFAULT_TAB } from './PreviewTabs.js';
-import type { TabId } from './PreviewTabs.js';
+import { PreviewStrip } from './PreviewStrip.js';
 import { ValidationPanel } from './ValidationPanel.js';
 import { JsonEditMode } from './JsonEditMode.js';
 
 export function App() {
   const [doc, dispatch] = useDoc(welcome);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>(DEFAULT_TAB);
   const [jsonModeOpen, setJsonModeOpen] = useState(false);
 
   // Hidden Cmd+Shift+J / Ctrl+Shift+J shortcut toggles the JSON-edit-mode
@@ -59,7 +57,7 @@ export function App() {
           onSelect={setSelectedId}
           dispatch={dispatch}
         />
-        <PreviewTabs doc={doc} active={activeTab} onChange={setActiveTab} />
+        <PreviewStrip doc={doc} />
       </div>
       <ValidationPanel doc={doc} />
       <JsonEditMode
