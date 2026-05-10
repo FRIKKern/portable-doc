@@ -1,5 +1,5 @@
 /**
- * @portable-doc/backend-web-editor — public API.
+ * @portable-doc/backend-web/rnw — public API.
  *
  * Thin React component that mounts a Pd-tree as actual `react-native-web`
  * primitives (View / Text / Pressable / Image). Editor-only; lazy-loaded.

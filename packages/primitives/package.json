@@ -21,7 +21,6 @@
     "@portable-doc/core": "workspace:*"
   },
   "devDependencies": {
-    "@portable-doc/fixtures": "workspace:*",
     "vitest": "^4.1.5",
     "typescript": "^6.0.3"
   }

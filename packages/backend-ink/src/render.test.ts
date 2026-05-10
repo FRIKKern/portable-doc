@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import stringWidth from 'string-width';
 import { composeDocument } from '@portable-doc/primitives';
-import { incident, welcome } from '@portable-doc/fixtures';
 import type { PortableDoc } from '@portable-doc/core';
 import { highlightCode, renderInk } from './render.js';
 import type { InkRenderOptions } from './render.js';
 import { resolveColorFg, resolveColorBg } from './ansi.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '../../..');
+const welcome = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'welcome.json'), 'utf8'),
+) as PortableDoc;
+const incident = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'incident.json'), 'utf8'),
+) as PortableDoc;
 
 const MONO: InkRenderOptions = { colorDepth: 'mono' };
 const NO_LINKS: InkRenderOptions = { colorDepth: 'mono', hyperlinks: false };

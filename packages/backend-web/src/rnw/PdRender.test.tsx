@@ -2,12 +2,23 @@
  * @vitest-environment happy-dom
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { render } from '@testing-library/react';
 import { composeDocument } from '@portable-doc/primitives';
 import type { PortableDoc } from '@portable-doc/core';
-import { incident, welcome } from '@portable-doc/fixtures';
 import { PdRender } from './PdRender.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '../../../..');
+const welcome = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'welcome.json'), 'utf8'),
+) as PortableDoc;
+const incident = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'incident.json'), 'utf8'),
+) as PortableDoc;
 
 describe('PdRender — smoke', () => {
   it('renders the welcome fixture without throwing', () => {

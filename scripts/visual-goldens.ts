@@ -13,11 +13,20 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import type { PortableDoc } from '@portable-doc/core';
 import { composeDocument } from '@portable-doc/primitives';
-import { welcome, incident } from '@portable-doc/fixtures';
 import { renderInk } from '@portable-doc/backend-ink';
-import { renderHtml } from '@portable-doc/backend-web-server';
+import { renderHtml } from '@portable-doc/backend-web/static';
 import { renderEmail } from '@portable-doc/backend-email';
+
+const examplesDir = path.resolve('examples');
+const welcome = JSON.parse(
+  readFileSync(path.join(examplesDir, 'welcome.json'), 'utf8'),
+) as PortableDoc;
+const incident = JSON.parse(
+  readFileSync(path.join(examplesDir, 'incident.json'), 'utf8'),
+) as PortableDoc;
 
 const fixtures = { welcome, incident } as const;
 

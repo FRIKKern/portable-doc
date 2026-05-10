@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { composeDocument } from '@portable-doc/primitives';
-import { incident, welcome } from '@portable-doc/fixtures';
 import { tonePalette } from '@portable-doc/core';
+import type { PortableDoc } from '@portable-doc/core';
 import type { PdLinkNode, PdNode } from '@portable-doc/primitives';
 import { renderHtml } from './render.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+// packages/backend-web/src/static/ → repo root is ../../../..
+const repoRoot = resolve(here, '../../../..');
+const welcome = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'welcome.json'), 'utf8'),
+) as PortableDoc;
+const incident = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'incident.json'), 'utf8'),
+) as PortableDoc;
 
 // ---------------------------------------------------------------------------
 // 1–3. Snapshots

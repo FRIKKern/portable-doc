@@ -14,12 +14,9 @@ importers:
       '@portable-doc/backend-ink':
         specifier: workspace:*
         version: link:packages/backend-ink
-      '@portable-doc/backend-web-server':
+      '@portable-doc/backend-web':
         specifier: workspace:*
-        version: link:packages/backend-web-server
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:fixtures
+        version: link:packages/backend-web
       '@portable-doc/primitives':
         specifier: workspace:*
         version: link:packages/primitives
@@ -47,21 +44,12 @@ importers:
       '@portable-doc/backend-ink':
         specifier: workspace:*
         version: link:../../packages/backend-ink
-      '@portable-doc/backend-native':
+      '@portable-doc/backend-web':
         specifier: workspace:*
-        version: link:../../packages/backend-native
-      '@portable-doc/backend-web-editor':
-        specifier: workspace:*
-        version: link:../../packages/backend-web-editor
-      '@portable-doc/backend-web-server':
-        specifier: workspace:*
-        version: link:../../packages/backend-web-server
+        version: link:../../packages/backend-web
       '@portable-doc/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
       '@portable-doc/primitives':
         specifier: workspace:*
         version: link:../../packages/primitives
@@ -103,19 +91,6 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.2)(happy-dom@15.11.7)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.4))
 
-  fixtures:
-    dependencies:
-      '@portable-doc/core':
-        specifier: workspace:*
-        version: link:../packages/core
-    devDependencies:
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.5
-        version: 4.1.5(@types/node@25.6.2)(happy-dom@15.11.7)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.4))
-
   packages/backend-email:
     dependencies:
       '@portable-doc/core':
@@ -137,9 +112,6 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.28
@@ -180,9 +152,6 @@ importers:
         specifier: ^9.0.2
         version: 9.0.2
     devDependencies:
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -190,50 +159,7 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.2)(happy-dom@15.11.7)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.4))
 
-  packages/backend-native:
-    dependencies:
-      '@portable-doc/core':
-        specifier: workspace:*
-        version: link:../core
-      '@portable-doc/pd-to-rn-shim':
-        specifier: workspace:*
-        version: link:../pd-to-rn-shim
-      '@portable-doc/primitives':
-        specifier: workspace:*
-        version: link:../primitives
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      react-native:
-        specifier: ^0.74.0
-        version: 0.74.7(@babel/core@7.29.0)(@babel/preset-env@7.29.5(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1)
-    devDependencies:
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
-      '@types/react':
-        specifier: ^18.3.12
-        version: 18.3.28
-      '@types/react-test-renderer':
-        specifier: ^18.3.0
-        version: 18.3.1
-      happy-dom:
-        specifier: ^15.11.7
-        version: 15.11.7
-      react-native-web:
-        specifier: ^0.19.13
-        version: 0.19.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      react-test-renderer:
-        specifier: ^18.3.1
-        version: 18.3.1(react@18.3.1)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.5
-        version: 4.1.5(@types/node@25.6.2)(happy-dom@15.11.7)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.4))
-
-  packages/backend-web-editor:
+  packages/backend-web:
     dependencies:
       '@portable-doc/core':
         specifier: workspace:*
@@ -254,9 +180,6 @@ importers:
         specifier: ^0.19.13
         version: 0.19.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     devDependencies:
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
       '@testing-library/react':
         specifier: ^16.1.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -269,25 +192,6 @@ importers:
       happy-dom:
         specifier: ^15.11.7
         version: 15.11.7
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.5
-        version: 4.1.5(@types/node@25.6.2)(happy-dom@15.11.7)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.4))
-
-  packages/backend-web-server:
-    dependencies:
-      '@portable-doc/core':
-        specifier: workspace:*
-        version: link:../core
-      '@portable-doc/primitives':
-        specifier: workspace:*
-        version: link:../primitives
-    devDependencies:
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -322,15 +226,12 @@ importers:
       '@portable-doc/backend-ink':
         specifier: workspace:*
         version: link:../backend-ink
-      '@portable-doc/backend-web-server':
+      '@portable-doc/backend-web':
         specifier: workspace:*
-        version: link:../backend-web-server
+        version: link:../backend-web
       '@portable-doc/core':
         specifier: workspace:*
         version: link:../core
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
       '@portable-doc/primitives':
         specifier: workspace:*
         version: link:../primitives
@@ -359,10 +260,28 @@ importers:
       '@portable-doc/primitives':
         specifier: workspace:*
         version: link:../primitives
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-native:
+        specifier: ^0.74.0
+        version: 0.74.7(@babel/core@7.29.0)(@babel/preset-env@7.29.5(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1)
     devDependencies:
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
+      '@types/react':
+        specifier: ^18.3.12
+        version: 18.3.28
+      '@types/react-test-renderer':
+        specifier: ^18.3.0
+        version: 18.3.1
+      happy-dom:
+        specifier: ^15.11.7
+        version: 15.11.7
+      react-native-web:
+        specifier: ^0.19.13
+        version: 0.19.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react-test-renderer:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -376,9 +295,6 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@portable-doc/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1914,9 +1830,6 @@ packages:
 
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
-
-  '@types/node@25.6.0':
-    resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
 
   '@types/node@25.6.2':
     resolution: {integrity: sha512-sokuT28dxf9JT5Kady1fsXOvI4HVpjZa95NKT5y9PNTIrs2AsobR4GFAA90ZG8M+nxVRLysCXsVj6eGC7Vbrlw==}
@@ -5361,14 +5274,14 @@ snapshots:
     dependencies:
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       jest-mock: 29.7.0
 
   '@jest/fake-timers@29.7.0':
     dependencies:
       '@jest/types': 29.6.3
       '@sinonjs/fake-timers': 10.3.0
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       jest-message-util: 29.7.0
       jest-mock: 29.7.0
       jest-util: 29.7.0
@@ -5381,7 +5294,7 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       '@types/yargs': 15.0.20
       chalk: 4.1.2
 
@@ -5390,7 +5303,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -6260,17 +6173,13 @@ snapshots:
 
   '@types/node-forge@1.3.14':
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
 
   '@types/node@16.9.1': {}
 
   '@types/node@18.19.130':
     dependencies:
       undici-types: 5.26.5
-
-  '@types/node@25.6.0':
-    dependencies:
-      undici-types: 7.19.2
 
   '@types/node@25.6.2':
     dependencies:
@@ -6589,7 +6498,7 @@ snapshots:
 
   chrome-launcher@0.15.2:
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
       lighthouse-logger: 1.4.2
@@ -7289,7 +7198,7 @@ snapshots:
       '@jest/environment': 29.7.0
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       jest-mock: 29.7.0
       jest-util: 29.7.0
 
@@ -7310,13 +7219,13 @@ snapshots:
   jest-mock@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       jest-util: 29.7.0
 
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -7333,7 +7242,7 @@ snapshots:
 
   jest-worker@29.7.0:
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
       jest-util: 29.7.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
@@ -8161,7 +8070,7 @@ snapshots:
     dependencies:
       object-assign: 4.1.1
       react: 18.3.1
-      react-is: 17.0.2
+      react-is: 18.3.1
 
   react-test-renderer@18.3.1(react@18.3.1):
     dependencies:

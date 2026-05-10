@@ -1,7 +1,7 @@
 /**
  * HTML + URL escaping helpers for the email backend — defense-in-depth against
  * XSS even if the validator misses one (spec §7 / grill Q10). Mirrors the
- * allowlist in `@portable-doc/backend-web-server/src/escape.ts`.
+ * allowlist in `@portable-doc/backend-web/src/static/escape.ts`.
  *
  * `safeUrl` is a scheme allowlist: only `http | https | mailto | tel` survive.
  * Anything else (`javascript:`, `data:`, `file:`, fragments, weird whitespace)

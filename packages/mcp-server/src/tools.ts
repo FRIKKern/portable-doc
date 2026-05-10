@@ -62,7 +62,7 @@ export async function docRender(input: DocRenderInput): Promise<DocRenderResult>
 
   switch (input.surface) {
     case 'web': {
-      const { renderHtml } = await import('@portable-doc/backend-web-server');
+      const { renderHtml } = await import('@portable-doc/backend-web/static');
       return { surface: 'web', output: renderHtml(tree) };
     }
     case 'email': {

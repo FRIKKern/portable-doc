@@ -13,11 +13,8 @@
   "dependencies": {
     "@portable-doc/backend-email": "workspace:*",
     "@portable-doc/backend-ink": "workspace:*",
-    "@portable-doc/backend-native": "workspace:*",
-    "@portable-doc/backend-web-editor": "workspace:*",
-    "@portable-doc/backend-web-server": "workspace:*",
+    "@portable-doc/backend-web": "workspace:*",
     "@portable-doc/core": "workspace:*",
-    "@portable-doc/fixtures": "workspace:*",
     "@portable-doc/primitives": "workspace:*",
     "@portable-doc/variants": "workspace:*",
     "nanoid": "^3.3.12",

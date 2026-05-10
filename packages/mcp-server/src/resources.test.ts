@@ -3,8 +3,20 @@
  * JSON payload with the expected top-level shape.
  */
 import { describe, expect, it } from 'vitest';
-import { incident, welcome } from '@portable-doc/fixtures';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { PortableDoc } from '@portable-doc/core';
 import { RESOURCE_LIST, RESOURCE_URIS, readResource } from './resources.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '../../..');
+const welcome = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'welcome.json'), 'utf8'),
+) as PortableDoc;
+const incident = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'incident.json'), 'utf8'),
+) as PortableDoc;
 
 describe('resources', () => {
   it('lists exactly the five spec-mandated URIs in the right order', () => {

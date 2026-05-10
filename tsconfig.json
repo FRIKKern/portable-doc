@@ -4,7 +4,6 @@
     "scripts/**/*.ts",
     "scripts/**/*.tsx",
     "packages/*/src/**/*.ts",
-    "packages/*/src/**/*.tsx",
-    "fixtures/**/*.ts"
+    "packages/*/src/**/*.tsx"
   ]
 }

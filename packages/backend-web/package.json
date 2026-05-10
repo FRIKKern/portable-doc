@@ -1,16 +1,19 @@
 {
-  "name": "@portable-doc/backend-web-editor",
+  "name": "@portable-doc/backend-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+    "./static": {
+      "types": "./src/static/index.ts",
+      "import": "./src/static/index.ts",
+      "default": "./src/static/index.ts"
+    },
+    "./rnw": {
+      "types": "./src/rnw/index.ts",
+      "import": "./src/rnw/index.ts",
+      "default": "./src/rnw/index.ts"
     }
   },
   "scripts": {
@@ -26,7 +29,6 @@
     "react-native-web": "^0.19.13"
   },
   "devDependencies": {
-    "@portable-doc/fixtures": "workspace:*",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

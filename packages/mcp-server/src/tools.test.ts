@@ -6,14 +6,25 @@
  * same string clients would receive over the wire.
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { PortableDoc } from '@portable-doc/core';
-import { incident, welcome } from '@portable-doc/fixtures';
 import {
   docExplainBlock,
   docRender,
   docSuggestFixes,
   docValidate,
 } from './tools.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '../../..');
+const welcome = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'welcome.json'), 'utf8'),
+) as PortableDoc;
+const incident = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'incident.json'), 'utf8'),
+) as PortableDoc;
 
 const ANSI_CSI = /\[[0-9;]*m/;
 
@@ -61,11 +72,11 @@ describe('doc_validate', () => {
 // ---------------------------------------------------------------------------
 
 describe('doc_render', () => {
-  it('renders web via backend-web-server (slim HTML, no react-native-web)', async () => {
+  it('renders web via backend-web/static (slim HTML, no react-native-web)', async () => {
     const out = await docRender({ document: welcome, surface: 'web' });
     expect(out.surface).toBe('web');
     expect(out.output.startsWith('<!doctype html>')).toBe(true);
-    // backend-web-server emits inline-styled markup with no <style> blocks.
+    // backend-web/static emits inline-styled markup with no <style> blocks.
     expect(out.output).toContain('<body');
     // RNW would have left a `data-reactroot` or similar marker — must not be present.
     expect(out.output).not.toContain('data-reactroot');

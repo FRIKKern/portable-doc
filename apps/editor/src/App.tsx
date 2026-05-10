@@ -3,8 +3,13 @@
  * Initial doc is the welcome fixture per the brief.
  */
 import { useState } from 'react';
-import { welcome, incident } from '@portable-doc/fixtures';
+import type { PortableDoc } from '@portable-doc/core';
+import welcomeJson from '../../../examples/welcome.json';
+import incidentJson from '../../../examples/incident.json';
 import { useDoc } from './store.js';
+
+const welcome = welcomeJson as PortableDoc;
+const incident = incidentJson as PortableDoc;
 import { Editor } from './Editor.js';
 import { PreviewTabs, DEFAULT_TAB } from './PreviewTabs.js';
 import type { TabId } from './PreviewTabs.js';

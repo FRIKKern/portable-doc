@@ -25,9 +25,8 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@portable-doc/backend-email": "workspace:*",
     "@portable-doc/backend-ink": "workspace:*",
-    "@portable-doc/backend-web-server": "workspace:*",
+    "@portable-doc/backend-web": "workspace:*",
     "@portable-doc/core": "workspace:*",
-    "@portable-doc/fixtures": "workspace:*",
     "@portable-doc/primitives": "workspace:*",
     "zod": "^3.23.8"
   },

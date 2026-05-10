@@ -6,9 +6,23 @@
  *
  * Read-only — these are informational artifacts the client uses to learn the
  * AST shape, surface support matrix, default tokens, and canonical examples.
+ *
+ * Examples are loaded from `examples/*.json` at the repo root (the canonical
+ * data location after the v0.2.1 fixtures-package collapse). The files are
+ * resolved relative to this source so the MCP binary works from any cwd.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { blockContracts, defaultTokens } from '@portable-doc/core';
-import { incident, welcome } from '@portable-doc/fixtures';
+
+const here = dirname(fileURLToPath(import.meta.url));
+// packages/mcp-server/src/resources.ts → repo root is ../../..
+const repoRoot = resolve(here, '../../..');
+
+function loadExampleJson(name: 'welcome' | 'incident'): string {
+  return readFileSync(resolve(repoRoot, 'examples', `${name}.json`), 'utf8');
+}
 
 export const RESOURCE_URIS = [
   'portable-doc://schema/v1',
@@ -131,9 +145,9 @@ function resourceJsonByUri(uri: string): string {
     case 'portable-doc://tokens/default':
       return JSON.stringify(defaultTokens, null, 2);
     case 'portable-doc://examples/welcome':
-      return JSON.stringify(welcome, null, 2);
+      return JSON.stringify(JSON.parse(loadExampleJson('welcome')), null, 2);
     case 'portable-doc://examples/incident':
-      return JSON.stringify(incident, null, 2);
+      return JSON.stringify(JSON.parse(loadExampleJson('incident')), null, 2);
     default:
       throw new Error(`Unknown resource URI: ${uri}`);
   }

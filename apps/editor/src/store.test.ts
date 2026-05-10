@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Block, PortableDoc } from '@portable-doc/core';
-import { welcome, incident } from '@portable-doc/fixtures';
+import welcomeJson from '../../../examples/welcome.json';
+import incidentJson from '../../../examples/incident.json';
 import { defaultBlock, reducer } from './store.js';
+
+const welcome = welcomeJson as PortableDoc;
+const incident = incidentJson as PortableDoc;
 
 const tinyDoc: PortableDoc = {
   version: 1,

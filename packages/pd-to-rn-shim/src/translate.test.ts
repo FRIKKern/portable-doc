@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defaultTokens } from '@portable-doc/core';
+import type { PortableDoc } from '@portable-doc/core';
 import { composeDocument } from '@portable-doc/primitives';
 import type {
   PdBoxNode,
@@ -14,9 +18,14 @@ import type {
   PdTableNode,
   PdTextNode,
 } from '@portable-doc/primitives';
-import { welcome } from '@portable-doc/fixtures';
 import { toRn } from './translate.js';
 import type { RnNode, RnPressable, RnText, RnView } from './shape.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '../../..');
+const welcome = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'welcome.json'), 'utf8'),
+) as PortableDoc;
 
 // ---------------------------------------------------------------------------
 // 1. Per-Pd-primitive snapshot tests

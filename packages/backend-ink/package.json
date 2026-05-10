@@ -28,7 +28,6 @@
     "wrap-ansi": "^9.0.2"
   },
   "devDependencies": {
-    "@portable-doc/fixtures": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   }

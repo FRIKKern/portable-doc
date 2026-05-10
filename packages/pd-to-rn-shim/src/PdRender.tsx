@@ -1,11 +1,14 @@
 /**
  * PdRender — react-native wrapper. Native consumers (Expo / Metro).
  *
- * Walks an `RnNode` (produced by `@portable-doc/pd-to-rn-shim`) and
- * materialises it as actual React components from `react-native`. Mirror of
- * `@portable-doc/backend-web-editor`; duplicated intentionally because the
- * `react-native` vs `react-native-web` import differs in production runtime
- * even when the primitive surface matches.
+ * Walks an `RnNode` (produced by `toRn`) and materialises it as actual React
+ * components from `react-native`. Mirror of `@portable-doc/backend-web/rnw`;
+ * duplicated intentionally because the `react-native` vs `react-native-web`
+ * import differs in production runtime even when the primitive surface matches.
+ *
+ * Lives next to the shim for v0.2.1 — the shim is the translation seam, the
+ * RN-component re-export is the consumer-facing render shim. One package, two
+ * tiny modules.
  */
 
 import * as React from 'react';
@@ -13,8 +16,8 @@ import * as React from 'react';
 // @ts-ignore — react-native ships its own types, but TS may not resolve them
 // in this pure-data toolchain. Real consumers (Expo / Metro) get the types.
 import { Image, Linking, Pressable, Text, View } from 'react-native';
-import { toRn } from '@portable-doc/pd-to-rn-shim';
-import type { RnNode } from '@portable-doc/pd-to-rn-shim';
+import { toRn } from './translate.js';
+import type { RnNode } from './shape.js';
 import type { PdNode } from '@portable-doc/primitives';
 
 export interface PdRenderProps {

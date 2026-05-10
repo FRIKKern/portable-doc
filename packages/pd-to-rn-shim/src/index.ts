@@ -2,9 +2,9 @@
  * @portable-doc/pd-to-rn-shim — public API.
  *
  * Pure-data translation from the paperflow-owned Pd-tree to React Native's
- * primitive prop shape. The shim is the translation seam (Note 3 §6 / grill
- * Q1) — not a runtime renderer. Backends (native + web-editor) walk the
- * returned `RnNode` and instantiate real components.
+ * primitive prop shape (the shim itself), plus a tiny React-component
+ * re-export `PdRender` for native consumers (Expo / Metro). The web RNW twin
+ * lives at `@portable-doc/backend-web/rnw`.
  */
 
 export { toRn } from './translate.js';
@@ -18,3 +18,5 @@ export type {
   RnTextStyle,
   RnView,
 } from './shape.js';
+export { PdRender } from './PdRender.js';
+export type { PdRenderProps } from './PdRender.js';

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type {
   ActionBlock,
   Block,
@@ -12,8 +15,16 @@ import type {
   PortableDoc,
   SectionBlock,
 } from '@portable-doc/core';
-import { incident, welcome } from '@portable-doc/fixtures';
 import { composeDocument } from './kernel.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '../../..');
+const welcome = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'welcome.json'), 'utf8'),
+) as PortableDoc;
+const incident = JSON.parse(
+  readFileSync(resolve(repoRoot, 'examples', 'incident.json'), 'utf8'),
+) as PortableDoc;
 import type {
   PdBoxNode,
   PdButtonNode,
