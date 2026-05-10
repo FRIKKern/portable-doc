@@ -35,10 +35,10 @@ flowchart LR
 
 ```bash
 pnpm install
-pnpm test                              # 199 specs across 13 files
+pnpm test                              # 272 specs across 15 files
 pnpm --filter editor dev               # http://localhost:5173
 pnpm --filter @portable-doc/mcp-server start   # stdio MCP server
-pnpm visual-goldens                    # writes goldens/{welcome,incident}-{tui,email,web}.{txt,html}
+pnpm visual-goldens                    # writes goldens/{welcome,incident}-{tui,email,web,text}.{txt,html}
 ```
 
 **Requires:** Node ≥ 20, pnpm ≥ 9.
@@ -128,11 +128,15 @@ Three layers:
 | Per-adapter unit specs (escaping, allowlist, determinism, …)         | every commit (CI) | `pnpm test`                                   |
 | Visual goldens (Ink TUI, Email HTML, Web HTML)                       | on demand         | `pnpm visual-goldens` then eyeball `goldens/` |
 
-199 specs across 13 files at the time of release. CI also runs `pnpm typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the structural snapshot suite and is wired into `.github/workflows/ci.yml`. Web-editor (RNW) and Native (RN) adapter snapshots are deferred — they inherit from the kernel + adapter layers.
+272 specs across 15 files at the time of release. CI also runs `pnpm typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the structural snapshot suite and is wired into `.github/workflows/ci.yml`. Web-editor (RNW) and Native (RN) adapter snapshots are deferred — they inherit from the kernel + adapter layers.
 
 ## Status
 
-v0.1.0 — first release. The architecture is locked: validator, kernel, all five backends, the MCP server, and the editor ship working. 199 specs across 13 files pass; the React Email adapter sits at ~637 LOC and every other package is within its per-task budget. Next up: richer inline editing, footnotes, and an Expo native demo app.
+**v0.2.0 — Sweet-Spot Architecture.** v0.1 shipped the foundation; v0.2 layers the cross-surface component kit on top. New: `@portable-doc/variants` with 21 named variants across 4 block catalogs (callout 5×2, action 2×2, section 3, code 2×2); a 4th validator rule class (`variant-allowlist`); `backend-ink` v0.2 with truecolor + Lipgloss-equivalent borders + cli-highlight syntax-coloring + iTerm2 inline images; editor variant UI with per-axis dropdowns and live swatch preview; sweet-spot reframing in the architecture spec.
+
+272 specs across 15 files pass. Deferred to v0.3: utility-shorthand bridge (Tailwind-style `className` desugar), premium editor (Notion/Linear-style authoring), playground site, theme contexts.
+
+**v0.1.0** — first release. The architecture is locked: validator, kernel, all five backends, the MCP server, and the editor ship working.
 
 ## Inspirations
 
