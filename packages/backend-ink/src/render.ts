@@ -29,7 +29,6 @@ import { readFileSync } from 'node:fs';
 import { tonePalette } from '@portable-doc/core';
 import type { TuiColorName } from '@portable-doc/core';
 import type { PdNode, PdTextNode, PdBoxNode } from '@portable-doc/primitives';
-import { Chalk } from 'chalk';
 import { highlight } from 'cli-highlight';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
@@ -37,8 +36,7 @@ import supportsColor from 'supports-color';
 import {
   codes,
   osc8,
-  paintFg,
-  parseHex,
+  resolveColorFg,
   wrapColor,
   wrapStyle,
   type ColorDepth,
@@ -213,16 +211,21 @@ function callout(
   source: PdNode,
 ): string {
   const pal = tonePalette[tone];
-  const rgb = parseHex(pal.fg);
   const variant = readVariant(source);
   const borderKey: 'single' | 'bold' = variant?.emphasis === 'bold' ? 'bold' : 'single';
   const b = BORDER_STYLES[borderKey];
 
+  // Single color path: tone fg (hex) → resolveColorFg(depth) → ANSI prefix.
+  // Same interface used by the syntax-highlighting theme below. The named
+  // fallback (`pal.tuiFg`) anchors the 16-color path semantically — keeps
+  // "success → green" green at depth 16 even if pure RGB-nearest disagrees.
+  const fgPrefix = c.color ? resolveColorFg(pal.fg, c.depth, pal.tuiFg) : '';
+  const paint = (s: string): string => (fgPrefix ? `${fgPrefix}${s}${codes.reset}` : s);
+
   const head = `${TONE_GLYPH[tone]}${title ? ` ${title}` : ''}`;
-  const headColored = c.color ? paintFg(rgb, pal.tuiFg, c.depth, head) : head;
-  const titleLine = `${b.tl}${b.h} ${headColored}`;
+  const titleLine = `${b.tl}${b.h} ${paint(head)}`;
   const inner: Ctx = { ...c, width: Math.max(1, c.width - 2) };
-  const rule = c.color ? paintFg(rgb, pal.tuiFg, c.depth, b.v) : b.v;
+  const rule = paint(b.v);
   const body = kids.map((k) => r(k, inner)).join('\n').split('\n').map((l) => `${rule} ${l}`);
   return [titleLine, ...body, `${b.bl}${b.h}`].join('\n');
 }
@@ -259,46 +262,68 @@ function detectCodeBlock(box: PdBoxNode): CodeBlockShape | null {
   return { lines, lang };
 }
 
-/** Build a depth-aware highlight theme. Truecolor uses richer palette. */
+/**
+ * Syntax-token → hex map. Every cli-highlight class we want to color lives
+ * here as an explicit hex. The theme builder funnels each through
+ * `resolveColorFg(hex, depth)` so coloring stays depth-aware (truecolor →
+ * 256 → 16 → mono) without ever falling through to chalk's accidental
+ * named-token escapes.
+ *
+ * Hex picks lean on Tailwind v3 stops we already use elsewhere — keeps the
+ * palette coherent across surfaces. `default` is the fallback for any
+ * highlight.js class not enumerated below (cli-highlight passes through any
+ * function-valued key).
+ */
+const SYNTAX_HEX: Record<string, string> = {
+  keyword:        '#0891b2',  // cyan-600
+  'selector-tag': '#0891b2',
+  literal:        '#2563eb',  // blue-600
+  number:         '#a16207',  // yellow-700
+  built_in:       '#9333ea',  // purple-600
+  type:           '#0891b2',
+  string:         '#16a34a',  // green-600
+  'meta string':  '#16a34a',
+  regexp:         '#dc2626',  // red-600
+  symbol:         '#a16207',
+  bullet:         '#a16207',
+  function:       '#2563eb',  // blue-600
+  title:          '#0891b2',
+  section:        '#0891b2',
+  comment:        '#6b7280',  // gray-500
+  quote:          '#6b7280',
+  deletion:       '#dc2626',
+  addition:       '#16a34a',
+  variable:       '#9333ea',
+  'meta-keyword': '#9333ea',
+  'template-tag': '#9333ea',
+  attr:           '#a16207',
+  'attr-value':   '#16a34a',
+  name:           '#0891b2',
+  'tag.name':     '#0891b2',
+  meta:           '#6b7280',
+  'class .title': '#0891b2',
+  params:         '#a16207',
+  default:        '#374151',  // gray-700
+};
+
+/**
+ * Build a depth-aware cli-highlight theme. Each token class wraps text in
+ * the resolved ANSI prefix for its hex (or returns the text unchanged in
+ * mono mode / when the depth/hex resolves to no prefix).
+ */
 function buildTheme(depth: ColorDepth): Record<string, (s: string) => string> {
   if (depth === 'mono') {
     const id = (s: string): string => s;
     return new Proxy({}, { get: () => id });
   }
-  const level: 0 | 1 | 2 | 3 = depth === 'truecolor' ? 3 : depth === '256' ? 2 : 1;
-  const ck = new Chalk({ level });
-  // Map highlight.js token classes to chalk colors. cli-highlight's theme
-  // accepts any function (str) => str — we pass chalk's chainable functions.
-  return {
-    keyword: ck.cyan,
-    'selector-tag': ck.cyan,
-    literal: ck.blue,
-    number: ck.yellow,
-    built_in: ck.magenta,
-    type: ck.cyan,
-    string: ck.green,
-    'meta string': ck.green,
-    regexp: ck.red,
-    symbol: ck.yellow,
-    bullet: ck.yellow,
-    function: ck.cyan,
-    title: ck.cyan,
-    section: ck.cyan,
-    comment: ck.gray,
-    quote: ck.gray,
-    deletion: ck.red,
-    addition: ck.green,
-    variable: ck.magenta,
-    'meta-keyword': ck.magenta,
-    'template-tag': ck.magenta,
-    attr: ck.yellow,
-    'attr-value': ck.green,
-    name: ck.cyan,
-    'tag.name': ck.cyan,
-    meta: ck.gray,
-    'class .title': ck.cyan,
-    params: ck.yellow,
-  };
+  const theme: Record<string, (s: string) => string> = {};
+  for (const [cls, hex] of Object.entries(SYNTAX_HEX)) {
+    const prefix = resolveColorFg(hex, depth);
+    theme[cls] = prefix
+      ? (s: string): string => `${prefix}${s}${codes.reset}`
+      : (s: string): string => s;
+  }
+  return theme;
 }
 
 /**

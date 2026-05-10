@@ -160,3 +160,183 @@ export function paintBg(
   if (depth === '256' && rgb) return wrap256Bg(rgb, text);
   return wrapBg(fallbackName, text);
 }
+
+// ---------------------------------------------------------------------------
+// Color-depth interface (v0.2.1)
+// ---------------------------------------------------------------------------
+//
+// `resolveColorFg(hex, depth)` returns ONLY the ANSI prefix, no wrapping. The
+// caller appends `${text}${codes.reset}`. This is the deliberate, paperflow-
+// owned single path for every color emission in backend-ink — both syntax-
+// highlighting and tone resolution funnel through here so we never accidentally
+// drop into a 16-color named-token theme on a truecolor terminal.
+//
+//   truecolor → \x1b[38;2;R;G;Bm
+//   256       → \x1b[38;5;Nm  (6×6×6 cube + greyscale ramp via rgbTo256)
+//   16        → \x1b[3Xm or \x1b[9Xm  (nearest of 16 named ANSI colors)
+//   mono      → ''  (caller falls back to plain text)
+
+/**
+ * The 16 standard ANSI colors with their canonical RGB values and FG codes.
+ * Used by the 16-color depth fallback to pick the nearest match for an
+ * arbitrary hex via Euclidean distance in RGB space.
+ *
+ * Bright variants intentionally included so e.g. `#ff0000` snaps to bright red
+ * (91) rather than dim red (31), matching what users expect from "true red".
+ */
+const ANSI_16: ReadonlyArray<{ fg: number; bg: number; r: number; g: number; b: number }> = [
+  { fg: 30, bg: 40, r: 0, g: 0, b: 0 },         // black
+  { fg: 31, bg: 41, r: 170, g: 0, b: 0 },       // red
+  { fg: 32, bg: 42, r: 0, g: 170, b: 0 },       // green
+  { fg: 33, bg: 43, r: 170, g: 85, b: 0 },      // yellow (dim is brownish)
+  { fg: 34, bg: 44, r: 0, g: 0, b: 170 },       // blue
+  { fg: 35, bg: 45, r: 170, g: 0, b: 170 },     // magenta
+  { fg: 36, bg: 46, r: 0, g: 170, b: 170 },     // cyan
+  { fg: 37, bg: 47, r: 170, g: 170, b: 170 },   // white
+  { fg: 90, bg: 100, r: 85, g: 85, b: 85 },     // bright black / gray
+  { fg: 91, bg: 101, r: 255, g: 85, b: 85 },    // bright red
+  { fg: 92, bg: 102, r: 85, g: 255, b: 85 },    // bright green
+  { fg: 93, bg: 103, r: 255, g: 255, b: 85 },   // bright yellow
+  { fg: 94, bg: 104, r: 85, g: 85, b: 255 },    // bright blue
+  { fg: 95, bg: 105, r: 255, g: 85, b: 255 },   // bright magenta
+  { fg: 96, bg: 106, r: 85, g: 255, b: 255 },   // bright cyan
+  { fg: 97, bg: 107, r: 255, g: 255, b: 255 },  // bright white
+];
+
+/**
+ * Indices of the 4 grayscale ANSI entries in `ANSI_16` (black, white, bright
+ * black/gray, bright white). When the input hex is chromatic — i.e. max-min
+ * channel ≥ 32 — we exclude these candidates so a saturated dark tone like
+ * `#047857` doesn't snap to gray on RGB-distance grounds alone.
+ */
+const GRAYSCALE_INDICES = new Set([0, 7, 8, 15]);
+
+/**
+ * RGB → HSV. Hue in degrees [0, 360), saturation/value in [0, 1].
+ * Used by the 16-color matcher so a deep teal-green like `#047857` lands on
+ * green by hue rather than on cyan (which is a closer RGB neighbour but the
+ * wrong perceptual call).
+ */
+function rgbToHsv(rgb: RGB): { h: number; s: number; v: number } {
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : d / max;
+  const v = max;
+  return { h, s, v };
+}
+
+/**
+ * Hue distance on the [0, 360) circle, normalised to [0, 1].
+ */
+function hueDist(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return (d > 180 ? 360 - d : d) / 180;
+}
+
+/**
+ * Pick the entry in ANSI_16 closest to `rgb`.
+ *
+ * - For grayscale inputs (chroma < 32): pure Euclidean RGB distance, all 16
+ *   candidates allowed.
+ * - For chromatic inputs: composite distance that weights hue heavily, then
+ *   adjusts for saturation × value. Grayscale candidates are excluded so
+ *   chromatic targets never snap to gray. This is what keeps tone resolution
+ *   semantically aligned with the source hex when degraded to 16 colors.
+ */
+function nearest16(rgb: RGB): (typeof ANSI_16)[number] {
+  const chroma = Math.max(rgb.r, rgb.g, rgb.b) - Math.min(rgb.r, rgb.g, rgb.b);
+  if (chroma < 32) {
+    // Grayscale-ish input — RGB distance suffices.
+    let best = ANSI_16[0]!;
+    let bestDist = Infinity;
+    for (const c of ANSI_16) {
+      const dr = rgb.r - c.r;
+      const dg = rgb.g - c.g;
+      const db = rgb.b - c.b;
+      const d = dr * dr + dg * dg + db * db;
+      if (d < bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+  // Chromatic input — hue-first composite distance.
+  const targetHsv = rgbToHsv(rgb);
+  let best = ANSI_16[1]!;  // default to red rather than black if loop short-circuits
+  let bestScore = Infinity;
+  for (let i = 0; i < ANSI_16.length; i++) {
+    if (GRAYSCALE_INDICES.has(i)) continue;
+    const c = ANSI_16[i]!;
+    const candHsv = rgbToHsv({ r: c.r, g: c.g, b: c.b });
+    // Weighted: hue dominates (×4), saturation diff (×1), value diff (×1).
+    const hd = hueDist(targetHsv.h, candHsv.h);
+    const sd = Math.abs(targetHsv.s - candHsv.s);
+    const vd = Math.abs(targetHsv.v - candHsv.v);
+    const score = hd * 4 + sd + vd;
+    if (score < bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
+}
+
+/**
+ * Resolve a hex color (e.g. `'#047857'`) to an ANSI **foreground** escape
+ * prefix appropriate for the active color depth. The caller appends the text
+ * content and the reset escape (`\x1b[0m`).
+ *
+ *   truecolor → \x1b[38;2;R;G;Bm
+ *   256       → \x1b[38;5;Nm  (6×6×6 cube + greyscale ramp via rgbTo256)
+ *   16        → \x1b[3Xm or \x1b[9Xm  (nearest of 16 named ANSI colors,
+ *               or `namedFallback` if provided — semantically anchored)
+ *   mono      → ''  (caller falls back to plain text)
+ *
+ * `namedFallback` is the optional semantic 16-color anchor for callers that
+ * have one (tonePalette[tone].tuiFg). It bypasses RGB-distance matching at
+ * depth 16 — perception-aware enough that "success → green" stays green even
+ * when the hex (`#047857`, a deep teal) is closer to cyan in pure RGB space.
+ * Higher-depth paths ignore it. For mono, or for an unparseable hex, returns
+ * the empty string; the caller MUST treat that as "no color, plain text".
+ */
+export function resolveColorFg(
+  hex: string,
+  depth: ColorDepth,
+  namedFallback?: TuiColorName,
+): string {
+  if (depth === 'mono') return '';
+  const rgb = parseHex(hex);
+  if (!rgb) return '';
+  if (depth === 'truecolor') return `${ESC}38;2;${rgb.r};${rgb.g};${rgb.b}m`;
+  if (depth === '256') return `${ESC}38;5;${rgbTo256(rgb)}m`;
+  if (namedFallback) return `${ESC}${FG[namedFallback]}m`;
+  return `${ESC}${nearest16(rgb).fg}m`;
+}
+
+/** Background variant — same logic, swap `38` → `48`. */
+export function resolveColorBg(
+  hex: string,
+  depth: ColorDepth,
+  namedFallback?: TuiColorName,
+): string {
+  if (depth === 'mono') return '';
+  const rgb = parseHex(hex);
+  if (!rgb) return '';
+  if (depth === 'truecolor') return `${ESC}48;2;${rgb.r};${rgb.g};${rgb.b}m`;
+  if (depth === '256') return `${ESC}48;5;${rgbTo256(rgb)}m`;
+  if (namedFallback) return `${ESC}${BG[namedFallback]}m`;
+  return `${ESC}${nearest16(rgb).bg}m`;
+}

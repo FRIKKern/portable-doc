@@ -5,6 +5,7 @@ import { incident, welcome } from '@portable-doc/fixtures';
 import type { PortableDoc } from '@portable-doc/core';
 import { highlightCode, renderInk } from './render.js';
 import type { InkRenderOptions } from './render.js';
+import { resolveColorFg, resolveColorBg } from './ansi.js';
 
 const MONO: InkRenderOptions = { colorDepth: 'mono' };
 const NO_LINKS: InkRenderOptions = { colorDepth: 'mono', hyperlinks: false };
@@ -539,5 +540,98 @@ describe('renderInk — variant-aware rendering', () => {
     const lines = out.split('\n');
     expect(lines.some((l) => l.startsWith('╭'))).toBe(true);
     expect(lines.some((l) => l.startsWith('╰'))).toBe(true);
+  });
+});
+
+// ===========================================================================
+// 21. v0.2.1 — color-depth interface (resolveColorFg / resolveColorBg)
+//
+// Single deliberate path for every color emission in backend-ink. Replaces
+// chalk's accidental named-token theme (cli-highlight pre-v0.2.1 went through
+// `chalk.cyan`/`chalk.yellow`, which always degraded to 16-color escapes
+// regardless of depth). Both syntax-highlighting and tone resolution funnel
+// through this interface so we never silently drop into 16-color escapes on a
+// truecolor terminal.
+// ===========================================================================
+
+describe('resolveColorFg / resolveColorBg — color-depth interface', () => {
+  it('truecolor depth → \\x1b[38;2;R;G;Bm prefix', () => {
+    // #047857 = (4, 120, 87) — tonePalette.success.fg
+    expect(resolveColorFg('#047857', 'truecolor')).toBe('\x1b[38;2;4;120;87m');
+  });
+
+  it('256 depth → \\x1b[38;5;Nm prefix (6×6×6 cube index)', () => {
+    const out = resolveColorFg('#047857', '256');
+    expect(out).toMatch(/^\x1b\[38;5;\d+m$/);
+    // No truecolor escape leaks through.
+    expect(out).not.toMatch(/38;2;/);
+  });
+
+  it('16 depth → mapped to nearest named ANSI for chromatic input', () => {
+    // #ff0000 (255, 0, 0) → bright red (91) by HSV-aware nearest match.
+    expect(resolveColorFg('#ff0000', '16')).toBe('\x1b[91m');
+    // No higher-depth escape leaks through.
+    expect(resolveColorFg('#ff0000', '16')).not.toMatch(/38;2;|38;5;/);
+  });
+
+  it('mono depth → empty string (caller falls back to plain text)', () => {
+    expect(resolveColorFg('#047857', 'mono')).toBe('');
+    expect(resolveColorFg('#ffffff', 'mono')).toBe('');
+    expect(resolveColorBg('#047857', 'mono')).toBe('');
+  });
+
+  it('resolveColorBg mirrors fg with 48; instead of 38;', () => {
+    expect(resolveColorBg('#047857', 'truecolor')).toBe('\x1b[48;2;4;120;87m');
+    expect(resolveColorBg('#047857', '256')).toMatch(/^\x1b\[48;5;\d+m$/);
+    // 16 mode emits 4Xm or 10Xm — same family as 3Xm/9Xm but +10.
+    expect(resolveColorBg('#ff0000', '16')).toBe('\x1b[101m');
+  });
+
+  it('unparseable hex returns empty string at every depth', () => {
+    expect(resolveColorFg('not-a-hex', 'truecolor')).toBe('');
+    expect(resolveColorFg('#xyz', '256')).toBe('');
+    expect(resolveColorFg('', '16')).toBe('');
+  });
+
+  it('namedFallback (semantic anchor) overrides RGB-nearest at depth 16', () => {
+    // Without the anchor, #047857 would land on cyan (closer hue at 163°).
+    // With `green` as the semantic fallback, depth 16 emits green (32).
+    expect(resolveColorFg('#047857', '16')).not.toBe('\x1b[32m');
+    expect(resolveColorFg('#047857', '16', 'green')).toBe('\x1b[32m');
+    // The fallback only applies at depth 16 — truecolor still emits the RGB.
+    expect(resolveColorFg('#047857', 'truecolor', 'green')).toBe('\x1b[38;2;4;120;87m');
+  });
+});
+
+describe('renderInk — color-depth interface end-to-end', () => {
+  it('truecolor incident render emits 24-bit escapes for syntax tokens (was 16-color before v0.2.1)', () => {
+    const colored = renderInk(composeDocument(incident), { colorDepth: 'truecolor' });
+    // Syntax tokens MUST emit truecolor escapes now that buildTheme funnels
+    // through resolveColorFg. Pre-v0.2.1, cli-highlight's chalk.cyan-style
+    // theme could only emit 16-color escapes (\x1b[36m) regardless of depth.
+    const truecolorEscapes = colored.match(/\x1b\[38;2;\d+;\d+;\d+m/g) ?? [];
+    expect(truecolorEscapes.length).toBeGreaterThan(0);
+    // And specifically NOT 16-color escapes for syntax tokens (the bug).
+    // Tone resolution may still use 16-color via namedFallback only at depth
+    // 16, but at truecolor depth nothing should drop to \x1b[3Xm.
+    const sixteenColorEscapes = colored.match(/\x1b\[3[1-7]m/g) ?? [];
+    expect(sixteenColorEscapes.length).toBe(0);
+  });
+
+  it('16-depth incident render: syntax tokens emit \\x1b[3Xm or \\x1b[9Xm, no truecolor', () => {
+    const colored = renderInk(composeDocument(incident), { colorDepth: '16' });
+    // No truecolor leaks at depth 16.
+    expect(colored).not.toMatch(/\x1b\[38;2;/);
+    expect(colored).not.toMatch(/\x1b\[38;5;/);
+    // Lines covering the bash code block carry color escapes.
+    const codeLines = colored.split('\n').filter((l) => l.includes('kubectl') || l.includes('pgcli'));
+    expect(codeLines.length).toBeGreaterThan(0);
+    expect(codeLines.some((l) => /\x1b\[(3[0-7]|9[0-7])m/.test(l))).toBe(true);
+  });
+
+  it('256-depth incident render: tone + syntax tokens both emit \\x1b[38;5;Nm', () => {
+    const colored = renderInk(composeDocument(incident), { colorDepth: '256' });
+    expect(colored).toMatch(/\x1b\[38;5;\d+m/);
+    expect(colored).not.toMatch(/\x1b\[38;2;/);
   });
 });
