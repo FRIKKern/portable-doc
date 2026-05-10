@@ -2,7 +2,7 @@
  * Top-level shell. Owns: doc state, selected block id, active preview tab.
  * Initial doc is the welcome fixture per the brief.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
 import welcomeJson from '../../../examples/welcome.json';
 import incidentJson from '../../../examples/incident.json';
@@ -14,11 +14,26 @@ import { Editor } from './Editor.js';
 import { PreviewTabs, DEFAULT_TAB } from './PreviewTabs.js';
 import type { TabId } from './PreviewTabs.js';
 import { ValidationPanel } from './ValidationPanel.js';
+import { JsonEditMode } from './JsonEditMode.js';
 
 export function App() {
   const [doc, dispatch] = useDoc(welcome);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>(DEFAULT_TAB);
+  const [jsonModeOpen, setJsonModeOpen] = useState(false);
+
+  // Hidden Cmd+Shift+J / Ctrl+Shift+J shortcut toggles the JSON-edit-mode
+  // overlay. Power-user escape hatch per A7 / build-phase grill q9.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'j' || e.key === 'J')) {
+        e.preventDefault();
+        setJsonModeOpen((v) => !v);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const copyJson = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -47,6 +62,15 @@ export function App() {
         <PreviewTabs doc={doc} active={activeTab} onChange={setActiveTab} />
       </div>
       <ValidationPanel doc={doc} />
+      <JsonEditMode
+        doc={doc}
+        open={jsonModeOpen}
+        onClose={() => setJsonModeOpen(false)}
+        onSave={(next) => {
+          dispatch({ kind: 'load', doc: next });
+          setJsonModeOpen(false);
+        }}
+      />
     </div>
   );
 }
