@@ -371,6 +371,22 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.2)(happy-dom@15.11.7)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.4))
 
+  packages/variants:
+    dependencies:
+      '@portable-doc/core':
+        specifier: workspace:*
+        version: link:../core
+      '@portable-doc/primitives':
+        specifier: workspace:*
+        version: link:../primitives
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@types/node@25.6.2)(happy-dom@15.11.7)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.4))
+
 packages:
 
   '@babel/code-frame@7.29.0':
