@@ -149,11 +149,13 @@ describe('PreviewStrip', () => {
     const fallback = screen.queryByTestId('web-lazy-fallback');
     const preview = screen.queryByTestId('preview-web');
     expect(fallback !== null || preview !== null).toBe(true);
-    await waitFor(() => expect(screen.queryByTestId('preview-web')).toBeTruthy());
+    // Await the lazy chunk so the next click swaps from a settled state,
+    // not mid-Suspense — otherwise the unmount-then-mount can race.
+    await screen.findByTestId('preview-web');
 
     // Click Email thumb — Web preview unmounts again, only Email is alive.
     fireEvent.click(screen.getByTestId('thumb-email'));
+    expect(await screen.findByTestId('preview-email')).toBeTruthy();
     expect(screen.queryByTestId('preview-web')).toBeNull();
-    expect(screen.queryByTestId('preview-email')).toBeTruthy();
   });
 });

@@ -54,7 +54,9 @@ describe('App', () => {
     const fallback = screen.queryByTestId('web-lazy-fallback');
     const preview = screen.queryByTestId('preview-web');
     expect(fallback !== null || preview !== null).toBe(true);
-    await waitFor(() => expect(screen.queryByTestId('preview-web')).toBeTruthy());
+    // findBy retries through the Suspense resolution — robust against the
+    // microtask ordering race that surfaced after cli-highlight grew the chunk.
+    expect(await screen.findByTestId('preview-web')).toBeTruthy();
   });
 
   it('validation panel reports 0 issues for the welcome fixture', () => {
