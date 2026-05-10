@@ -5,5 +5,5 @@
  * deterministic string of box-drawing chars + ANSI escapes + OSC-8 hyperlinks.
  */
 
-export { renderInk } from './render.js';
+export { renderInk, highlightCode } from './render.js';
 export type { InkRenderOptions } from './render.js';

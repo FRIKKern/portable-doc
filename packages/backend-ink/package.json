@@ -20,8 +20,11 @@
   "dependencies": {
     "@portable-doc/core": "workspace:*",
     "@portable-doc/primitives": "workspace:*",
+    "chalk": "^5.6.2",
+    "cli-highlight": "^2.1.11",
     "string-width": "^7.2.0",
     "supports-color": "^10.2.2",
+    "terminal-image": "^4.3.0",
     "wrap-ansi": "^9.0.2"
   },
   "devDependencies": {

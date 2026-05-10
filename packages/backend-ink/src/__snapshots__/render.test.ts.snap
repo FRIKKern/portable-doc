@@ -17,10 +17,10 @@ cause before failing back.
 2. Page the on-call DBA to inspect the former primary.
 3. Postpone non-critical migrations until failback is complete.
 
-\`$ kubectl rollout status deploy/api\`
-\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
-\`$ tail -f /var/log/incident.log\`
-\`$ curl -s https://status.example.com/health\`
+$ kubectl rollout status deploy/api
+$ pgcli -h db-replica.svc -c "SELECT 1"
+$ tail -f /var/log/incident.log
+$ curl -s https://status.example.com/health
 
 [ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
 
@@ -47,10 +47,10 @@ UTC. Investigate root cause before failing back.
 2. Page the on-call DBA to inspect the former primary.
 3. Postpone non-critical migrations until failback is complete.
 
-\`$ kubectl rollout status deploy/api\`
-\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
-\`$ tail -f /var/log/incident.log\`
-\`$ curl -s https://status.example.com/health\`
+$ kubectl rollout status deploy/api
+$ pgcli -h db-replica.svc -c "SELECT 1"
+$ tail -f /var/log/incident.log
+$ curl -s https://status.example.com/health
 
 [ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
 
@@ -77,10 +77,10 @@ UTC. Investigate root cause before failing back.
 2. Page the on-call DBA to inspect the former primary.
 3. Postpone non-critical migrations until failback is complete.
 
-\`$ kubectl rollout status deploy/api\`
-\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
-\`$ tail -f /var/log/incident.log\`
-\`$ curl -s https://status.example.com/health\`
+$ kubectl rollout status deploy/api
+$ pgcli -h db-replica.svc -c "SELECT 1"
+$ tail -f /var/log/incident.log
+$ curl -s https://status.example.com/health
 
 [ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
 
@@ -107,10 +107,10 @@ UTC. Investigate root cause before failing back.
 2. Page the on-call DBA to inspect the former primary.
 3. Postpone non-critical migrations until failback is complete.
 
-\`$ kubectl rollout status deploy/api\`
-\`$ pgcli -h db-replica.svc -c "SELECT 1"\`
-\`$ tail -f /var/log/incident.log\`
-\`$ curl -s https://status.example.com/health\`
+$ kubectl rollout status deploy/api
+$ pgcli -h db-replica.svc -c "SELECT 1"
+$ tail -f /var/log/incident.log
+$ curl -s https://status.example.com/health
 
 [ View incident dashboard ](https://status.example.com/incidents/2026-05-08)
 

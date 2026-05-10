@@ -3,7 +3,7 @@ import stringWidth from 'string-width';
 import { composeDocument } from '@portable-doc/primitives';
 import { incident, welcome } from '@portable-doc/fixtures';
 import type { PortableDoc } from '@portable-doc/core';
-import { renderInk } from './render.js';
+import { highlightCode, renderInk } from './render.js';
 import type { InkRenderOptions } from './render.js';
 
 const MONO: InkRenderOptions = { colorDepth: 'mono' };
@@ -259,5 +259,285 @@ describe('renderInk — color is purely decorative', () => {
       expect(stripAnsi(colored)).toContain(phrase);
       expect(mono).toContain(phrase);
     }
+  });
+});
+
+// ===========================================================================
+// v0.2 — new behaviors. Truecolor degradation, Lipgloss borders, syntax
+// highlighting, inline images via env detection, image alt-text fallback.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// 16. Truecolor depth degradation
+// ---------------------------------------------------------------------------
+
+describe('renderInk — truecolor depth degradation', () => {
+  it('truecolor mode emits 24-bit fg escape \\x1b[38;2;R;G;Bm for callout tone', () => {
+    // tonePalette.danger.fg = '#b91c1c' → 185;28;28
+    const out = renderInk(composeDocument(incident), { colorDepth: 'truecolor' });
+    expect(out).toMatch(/\x1b\[38;2;185;28;28m/);
+  });
+
+  it('256 mode emits 8-bit fg escape \\x1b[38;5;Nm for callout tone', () => {
+    const out = renderInk(composeDocument(incident), { colorDepth: '256' });
+    expect(out).toMatch(/\x1b\[38;5;\d+m/);
+    // Should NOT contain a truecolor sequence at this depth.
+    expect(out).not.toMatch(/\x1b\[38;2;\d+;\d+;\d+m/);
+  });
+
+  it('16 mode falls back to named-ANSI fg escape (\\x1b[31m for danger)', () => {
+    const out = renderInk(composeDocument(incident), { colorDepth: '16' });
+    expect(out).toMatch(/\x1b\[31m/);
+    expect(out).not.toMatch(/\x1b\[38;2;/);
+    expect(out).not.toMatch(/\x1b\[38;5;/);
+  });
+
+  it('mono mode strips all color escapes regardless of depth degradation', () => {
+    const out = renderInk(composeDocument(incident), MONO);
+    expect(out).not.toMatch(/\x1b\[[0-9;]*m/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. Lipgloss-equivalent border styles
+// ---------------------------------------------------------------------------
+
+describe('renderInk — border styles', () => {
+  it('single-border PdBox renders rounded corners ╭─╮│╰╯', () => {
+    const doc: PortableDoc = {
+      version: 1,
+      title: 't',
+      preview: 'p',
+      blocks: [
+        {
+          id: 's',
+          type: 'section',
+          title: 'A section',
+          blocks: [{ id: 'p', type: 'paragraph', content: [{ type: 'text', value: 'hi' }] }],
+        },
+      ],
+    };
+    // The kernel renders sections with horizontal rules above/below — stable
+    // path. Construct a PdBox-with-border directly via the renderer to test
+    // the BorderStyleRenderer map without coupling to kernel section style.
+    const out = renderInk(
+      {
+        kind: 'PdBox',
+        style: { borderStyle: 'single' },
+        children: [{ kind: 'PdText', children: ['hello'] }],
+      },
+      MONO,
+    );
+    expect(out.split('\n')[0]).toMatch(/^╭[─]+╮$/);
+    expect(out.split('\n').at(-1)).toMatch(/^╰[─]+╯$/);
+    // Side rails use │
+    expect(out).toMatch(/│hello\s*│/);
+    void doc; // silence unused
+  });
+
+  it('double-border PdBox renders ╔═╗║╚╝', () => {
+    const out = renderInk(
+      {
+        kind: 'PdBox',
+        style: { borderStyle: 'double' },
+        children: [{ kind: 'PdText', children: ['hello'] }],
+      },
+      MONO,
+    );
+    expect(out.split('\n')[0]).toMatch(/^╔[═]+╗$/);
+    expect(out.split('\n').at(-1)).toMatch(/^╚[═]+╝$/);
+    expect(out).toMatch(/║hello\s*║/);
+  });
+
+  it('bold-border PdBox renders ┏━┓┃┗┛', () => {
+    const out = renderInk(
+      {
+        kind: 'PdBox',
+        style: { borderStyle: 'bold' },
+        children: [{ kind: 'PdText', children: ['hello'] }],
+      },
+      MONO,
+    );
+    expect(out.split('\n')[0]).toMatch(/^┏[━]+┓$/);
+    expect(out.split('\n').at(-1)).toMatch(/^┗[━]+┛$/);
+    expect(out).toMatch(/┃hello\s*┃/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 18. Code-block syntax highlighting
+// ---------------------------------------------------------------------------
+
+describe('renderInk — code block syntax highlighting', () => {
+  it('highlightCode emits ANSI escapes for known languages in colored modes', () => {
+    const out = highlightCode('const x = 42;', 'javascript', 'truecolor');
+    expect(/\x1b\[/.test(out)).toBe(true);
+    // The number literal "42" should be wrapped in some color escape.
+    expect(out).toContain('42');
+  });
+
+  it('highlightCode is a no-op in mono mode', () => {
+    const src = 'const x = 42;';
+    expect(highlightCode(src, 'javascript', 'mono')).toBe(src);
+  });
+
+  it('highlightCode falls back to plain text on unknown language', () => {
+    const src = 'foo bar baz';
+    const out = highlightCode(src, 'this-language-does-not-exist', 'truecolor');
+    // Either highlight skipped (returned src verbatim) or auto-detect ran;
+    // either way the original tokens must survive.
+    expect(out).toContain('foo');
+    expect(out).toContain('bar');
+    expect(out).toContain('baz');
+  });
+
+  it('rendering the incident fixture in colored mode highlights the code block', () => {
+    // The incident fixture has a bash code block. With cli-highlight + a
+    // depth-aware theme, the block should contain at least one ANSI escape
+    // beyond the existing callout escapes.
+    const colored = renderInk(composeDocument(incident), { colorDepth: 'truecolor' });
+    // Strings like "SELECT 1" or "/var/log/incident.log" become highlighted.
+    // Look for an escape sequence in proximity to the code-block content.
+    const lines = colored.split('\n').filter((l) => l.includes('kubectl') || l.includes('pgcli'));
+    expect(lines.length).toBeGreaterThan(0);
+    // At least one of the code-block lines must carry an ANSI escape.
+    expect(lines.some((l) => /\x1b\[/.test(l))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. Inline images — env-driven detection + safe fallback
+// ---------------------------------------------------------------------------
+
+describe('renderInk — inline images', () => {
+  const imgDoc: PortableDoc = {
+    version: 1,
+    title: 't',
+    preview: 'p',
+    blocks: [
+      {
+        id: 'img',
+        type: 'image',
+        src: 'https://example.com/pic.png',
+        alt: 'a chart',
+        surfaces: ['web', 'native'],
+      },
+    ],
+  };
+
+  it('falls back to "[image: alt]" when no inline-graphics env detected', () => {
+    const out = renderInk(composeDocument(imgDoc), {
+      colorDepth: 'truecolor',
+      env: {},
+    });
+    expect(out).toContain('[image: a chart]');
+  });
+
+  it('falls back to "[image: alt]" for HTTP(S) sources even with iTerm2 detected', () => {
+    const out = renderInk(composeDocument(imgDoc), {
+      colorDepth: 'truecolor',
+      env: { TERM_PROGRAM: 'iTerm.app' },
+    });
+    expect(out).toContain('[image: a chart]');
+    // No OSC-1337 sequence — HTTP fetching is not done from here.
+    expect(out).not.toMatch(/\x1b\]1337;File=/);
+  });
+
+  it('emits OSC-1337 inline image when iTerm2 is detected and src is a data: URL', () => {
+    // 1×1 transparent PNG, base64-encoded, embedded in a data URL.
+    const onePxPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+    const doc: PortableDoc = {
+      version: 1,
+      title: 't',
+      preview: 'p',
+      blocks: [
+        {
+          id: 'img',
+          type: 'image',
+          src: onePxPng,
+          alt: 'a pixel',
+          surfaces: ['web', 'native'],
+        },
+      ],
+    };
+    const out = renderInk(composeDocument(doc), {
+      colorDepth: 'truecolor',
+      env: { TERM_PROGRAM: 'iTerm.app' },
+    });
+    expect(out).toMatch(/\x1b\]1337;File=inline=1;preserveAspectRatio=1:[A-Za-z0-9+/=]+\x07/);
+    // No fallback text leaks through when inline rendering succeeded.
+    expect(out).not.toContain('[image: a pixel]');
+  });
+
+  it('Kitty-detected env emits the placeholder note (protocol not implemented in v0.2)', () => {
+    const out = renderInk(composeDocument(imgDoc), {
+      colorDepth: 'truecolor',
+      env: { KITTY_WINDOW_ID: '42' },
+    });
+    // HTTP src — falls back regardless of Kitty.
+    expect(out).toContain('[image: a chart]');
+  });
+
+  it('Kitty-detected env with data: src emits the placeholder note', () => {
+    const dataDoc: PortableDoc = {
+      version: 1,
+      title: 't',
+      preview: 'p',
+      blocks: [
+        {
+          id: 'img',
+          type: 'image',
+          src: 'data:image/png;base64,AAAA',
+          alt: 'a pixel',
+          surfaces: ['web', 'native'],
+        },
+      ],
+    };
+    const out = renderInk(composeDocument(dataDoc), {
+      colorDepth: 'truecolor',
+      env: { KITTY_WINDOW_ID: '42' },
+    });
+    expect(out).toContain('[image: a pixel — Kitty/WezTerm inline supported when src is local]');
+  });
+
+  it('mono mode never emits inline image escapes even with iTerm2 detected', () => {
+    const out = renderInk(composeDocument(imgDoc), {
+      colorDepth: 'mono',
+      env: { TERM_PROGRAM: 'iTerm.app' },
+    });
+    expect(out).not.toMatch(/\x1b\]1337;/);
+    expect(out).toContain('[image: a chart]');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 20. Variant-aware rendering — light touch
+// ---------------------------------------------------------------------------
+
+describe('renderInk — variant-aware rendering', () => {
+  it('callout with variant.emphasis === "bold" uses bold border glyphs', () => {
+    // Construct a PdCallout directly with a duck-typed variant attached. The
+    // renderer reads it via duck-type so it works whether or not the kernel
+    // forwards variant info today.
+    const node = {
+      kind: 'PdCallout' as const,
+      tone: 'info' as const,
+      title: 'Heads up',
+      children: [{ kind: 'PdText' as const, children: ['body'] }],
+      variant: { emphasis: 'bold' },
+    };
+    const out = renderInk(node, MONO);
+    // Bold border uses ┏ for top-left, ┗ for bottom-left.
+    expect(out.split('\n')[0]?.startsWith('┏')).toBe(true);
+    expect(out.split('\n').at(-1)?.startsWith('┗')).toBe(true);
+  });
+
+  it('callout without variant info uses default rounded border glyphs', () => {
+    const out = renderInk(composeDocument(incident), MONO);
+    // Default callout uses ╭ / ╰ as before.
+    const lines = out.split('\n');
+    expect(lines.some((l) => l.startsWith('╭'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('╰'))).toBe(true);
   });
 });
