@@ -1,15 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { validateDoc, type PortableDoc, type ValidationIssue } from '@portable-doc/core';
 import welcomeJson from '../../../examples/welcome.json';
 import incidentJson from '../../../examples/incident.json';
+import {
+  SurfacePreview,
+  SurfaceTabs,
+  DEFAULT_SURFACE,
+  type Surface,
+} from './SurfacePreview.js';
 
 /**
  * Public-playground app.
  *
- * Kernel-direct: imports `validateDoc` from `@portable-doc/core` — no MCP, no
- * network, no local-server dependency. v0.3 B1 milestone: JSON paste box,
- * 300ms-debounced live validation, fixture loaders.
+ * Kernel-direct: imports `validateDoc` from `@portable-doc/core` and renders
+ * directly through the backend packages — no MCP, no network, no local-server
+ * dependency. B1 shipped JSON paste box + 300 ms-debounced live validation +
+ * fixture loaders. B2 layers the 5-surface render layout below: Web → Email →
+ * TUI → Native → Text. Email + Ink are lazy-loaded per tab to keep the
+ * initial bundle under ~70 KB gzip.
  */
 
 const FIXTURES = {
@@ -32,12 +41,25 @@ export default function App() {
     const issues = validateDoc(FIXTURES.welcome);
     return issues.length === 0 ? { kind: 'ok' } : { kind: 'issues', issues };
   });
+  const [surface, setSurface] = useState<Surface>(DEFAULT_SURFACE);
 
   useEffect(() => {
     const t = setTimeout(() => {
       setValidation(runValidation(draft));
     }, DEBOUNCE_MS);
     return () => clearTimeout(t);
+  }, [draft]);
+
+  // The doc reference used by SurfacePreview is recomputed only when the
+  // validation result flips to 'ok' (or 'issues' — both yield a parsed doc).
+  // On 'parse-error' we hold the previous doc so the preview doesn't flicker
+  // mid-edit. New doc id only when parse succeeds.
+  const previewDoc = useMemo<PortableDoc | null>(() => {
+    try {
+      return JSON.parse(draft) as PortableDoc;
+    } catch {
+      return null;
+    }
   }, [draft]);
 
   function loadFixture(name: keyof typeof FIXTURES): void {
@@ -50,8 +72,9 @@ export default function App() {
         <p style={kickerStyle}>Public playground · portable-doc</p>
         <h1 style={titleStyle}>PortableDoc Playground</h1>
         <p style={subtitleStyle}>
-          Paste a PortableDoc JSON, see it validated live. v0.3 will add the
-          5-surface preview directly below.
+          Paste a PortableDoc JSON, see it validated live, then preview it
+          across Web, Email, TUI, Native, and Text — all rendered by the same
+          kernel.
         </p>
       </header>
 
@@ -85,6 +108,15 @@ export default function App() {
       />
 
       <ValidationDisplay validation={validation} />
+
+      <SurfaceTabs active={surface} onChange={setSurface} />
+      {previewDoc ? (
+        <SurfacePreview doc={previewDoc} surface={surface} />
+      ) : (
+        <div style={previewPlaceholderStyle} data-testid="preview-placeholder">
+          Fix the JSON above to see surface previews.
+        </div>
+      )}
     </main>
   );
 }
@@ -264,4 +296,14 @@ const ruleStyle: CSSProperties = {
   padding: '0.05rem 0.35rem',
   borderRadius: 4,
   fontSize: '0.85rem',
+};
+
+const previewPlaceholderStyle: CSSProperties = {
+  marginTop: '0.5rem',
+  padding: '2rem 1rem',
+  border: '1px dashed #d1d5db',
+  borderRadius: 6,
+  textAlign: 'center',
+  color: '#6b7280',
+  fontSize: '0.9rem',
 };

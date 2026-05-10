@@ -15,4 +15,14 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: '/portable-doc/',
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      // terminal-image is a Node-only dep (uses jimp's Node bundle) consumed
+      // only by backend-ink's async renderInkAsync path. The playground only
+      // calls sync renderInk, so the dynamic import never fires here. Marking
+      // external keeps jimp's browser bundle (which is missing the Jimp /
+      // intToRGBA exports terminal-image expects) out of the build graph.
+      external: ['terminal-image'],
+    },
+  },
 });
