@@ -21,12 +21,12 @@ flowchart LR
   V --> K["composeDocument (kernel)"]
   K --> B1["backend-ink"]
   K --> B2["backend-email"]
-  K --> B3["backend-web-server"]
-  K --> B4["backend-web-editor"]
-  K --> B5["backend-native"]
-  B1 --> O1["terminal text"]
+  K --> B3["backend-web/static"]
+  K --> B4["backend-web/rnw"]
+  K --> B5["pd-to-rn-shim"]
+  B1 --> O1["terminal text + plain-text"]
   B2 --> O2["email HTML (Outlook-safe)"]
-  B3 --> O3["web HTML"]
+  B3 --> O3["server HTML"]
   B4 --> O4["RNW DOM (browser)"]
   B5 --> O5["RN tree (iOS / Android)"]
 ```
@@ -35,7 +35,7 @@ flowchart LR
 
 ```bash
 pnpm install
-pnpm test                              # 272 specs across 15 files
+pnpm test                              # 282 specs across 15 files
 pnpm --filter editor dev               # http://localhost:5173
 pnpm --filter @portable-doc/mcp-server start   # stdio MCP server
 pnpm visual-goldens                    # writes goldens/{welcome,incident}-{tui,email,web,text}.{txt,html}
@@ -103,18 +103,18 @@ Three rule classes:
 
 ```
 packages/
-  core/                 AST + tokens + validateDoc
-  primitives/           Pd* shape + composeDocument kernel
-  pd-to-rn-shim/        Pd → RN-shaped data translation
-  backend-ink/          terminal text adapter
-  backend-email/        React Email adapter (Outlook VML, dark mode, a11y)
-  backend-web-server/   hand-written HTML adapter (used by MCP)
-  backend-web-editor/   react-native-web wrapper (editor preview only)
-  backend-native/       react-native re-export through the shim
-  mcp-server/           MCP server: 5 resources + 4 tools
+  core/              AST + tokens + validateDoc
+  primitives/        Pd* shape + composeDocument kernel
+  variants/          Variant catalog (21 variants × 4 block types)
+  pd-to-rn-shim/     Pd → RN translation; doubles as the Native surface
+  backend-ink/       Terminal text adapter (also: plain-text fallback)
+  backend-email/     React Email adapter (Outlook VML, dark mode, a11y)
+  backend-web/       Web adapter — /static (MCP) + /rnw (editor)
+  mcp-server/        MCP server: 5 resources + 4 tools
 apps/
-  editor/               Vite + React editor (5 preview tabs, TUI default)
-fixtures/               welcome + incident reference docs
+  editor/            Vite + React editor (5 preview tabs, TUI default)
+examples/            welcome.json + incident.json reference docs
+goldens/             Per-fixture per-surface artifact files
 scripts/visual-goldens.ts  emit per-fixture per-surface artifact files
 ```
 
@@ -128,13 +128,15 @@ Three layers:
 | Per-adapter unit specs (escaping, allowlist, determinism, …)         | every commit (CI) | `pnpm test`                                   |
 | Visual goldens (Ink TUI, Email HTML, Web HTML)                       | on demand         | `pnpm visual-goldens` then eyeball `goldens/` |
 
-272 specs across 15 files at the time of release. CI also runs `pnpm typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the structural snapshot suite and is wired into `.github/workflows/ci.yml`. Web-editor (RNW) and Native (RN) adapter snapshots are deferred — they inherit from the kernel + adapter layers.
+282 specs across 15 files at the time of release. CI also runs `pnpm typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the structural snapshot suite and is wired into `.github/workflows/ci.yml`. Web-editor (RNW) and Native (RN) adapter snapshots are deferred — they inherit from the kernel + adapter layers.
 
 ## Status
 
+**v0.2.1 — Cleanup release.** Strong color-depth interface in `backend-ink` (`resolveColor(hex, depth)` centralizes degradation across backends). Package collapses: `backend-web-server` + `backend-web-editor` → `backend-web` with `static`/`rnw` subpath exports; `backend-native` inlined into `pd-to-rn-shim`; `fixtures` package → `examples/*.json`. Documentation distilled into the `docs/` tree. 8 packages. 282 specs.
+
 **v0.2.0 — Sweet-Spot Architecture.** v0.1 shipped the foundation; v0.2 layers the cross-surface component kit on top. New: `@portable-doc/variants` with 21 named variants across 4 block catalogs (callout 5×2, action 2×2, section 3, code 2×2); a 4th validator rule class (`variant-allowlist`); `backend-ink` v0.2 with truecolor + Lipgloss-equivalent borders + cli-highlight syntax-coloring + iTerm2 inline images; editor variant UI with per-axis dropdowns and live swatch preview; sweet-spot reframing in the architecture spec.
 
-272 specs across 15 files pass. Deferred to v0.3: utility-shorthand bridge (Tailwind-style `className` desugar), premium editor (Notion/Linear-style authoring), playground site, theme contexts.
+Deferred to v0.3: premium editor (Notion/Linear-style authoring), playground site, MCP dogfood. The utility-shorthand bridge (Tailwind-style `className` desugar) is removed from the roadmap entirely — the variant catalog plus typed token objects are paperflow's utility surface.
 
 **v0.1.0** — first release. The architecture is locked: validator, kernel, all five backends, the MCP server, and the editor ship working.
 
@@ -144,6 +146,12 @@ Three layers:
 - **React Email** — email-client-safe component primitives.
 - **Ink** — finite, named primitives for terminal output.
 - **Tamagui** — token-driven, surface-aware rendering.
+
+## Documentation
+
+- [`docs/design-philosophy.md`](./docs/design-philosophy.md) — why PortableDoc exists, and how to think about it (convex-hull framing, the two-question test, what's IN vs OUT of the AST, comparison to Portable Text).
+- [`docs/architecture.md`](./docs/architecture.md) — the technical spec: validator, kernel, primitives, all five backends, the MCP server, the editor, the test harness.
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — setup, project layout, how to add a backend, how to file an issue.
 
 ## License
 
