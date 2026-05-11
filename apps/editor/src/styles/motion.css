@@ -1,0 +1,35 @@
+/**
+ * v0.4 Paper — animation timings as CSS custom properties.
+ * Used in paper.css and component-scoped CSS rules.
+ *
+ * Mirrors apps/editor/src/styles/motion.ts. When updating, update both.
+ */
+
+:root {
+  --motion-chrome-fade-in: 150ms;
+  --motion-chrome-fade-out: 300ms;
+  --motion-slash-menu-open: 120ms;
+  --motion-bubble-menu-open: 80ms;
+  --motion-drop-indicator: 100ms;
+  --motion-variant-chip-expand: 150ms;
+  --motion-outline-slide: 200ms;
+  --motion-preview-overlay-open: 180ms;
+  --motion-preview-overlay-close: 140ms;
+  --motion-footer-sheet-slide: 220ms;
+  --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-chrome-fade-in: 0ms;
+    --motion-chrome-fade-out: 0ms;
+    --motion-slash-menu-open: 0ms;
+    --motion-bubble-menu-open: 0ms;
+    --motion-drop-indicator: 0ms;
+    --motion-variant-chip-expand: 0ms;
+    --motion-outline-slide: 0ms;
+    --motion-preview-overlay-open: 0ms;
+    --motion-preview-overlay-close: 0ms;
+    --motion-footer-sheet-slide: 0ms;
+  }
+}
