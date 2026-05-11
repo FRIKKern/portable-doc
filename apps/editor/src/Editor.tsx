@@ -43,12 +43,14 @@ import { BulletList, OrderedList } from '@tiptap/extension-list';
 import Blockquote from '@tiptap/extension-blockquote';
 import CodeBlock from '@tiptap/extension-code-block';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
-import { useEffect, useRef } from 'react';
-import type { PortableDoc } from '@portable-doc/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
+import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
 import { SlashCommand } from './extensions/SlashCommand.js';
 import { FormatBubble } from './FormatBubble.js';
+import { MarginDiagnostics } from './MarginDiagnostics.js';
 
 interface EditorProps {
   /** Initial PortableDoc rendered into the editor on mount. */
@@ -61,6 +63,11 @@ interface EditorProps {
   dataTestId?: string;
 }
 
+/** Debounce window between doc-prop changes and the next validateDoc call
+ *  (grill Q9 — calm, not chatty). Matches FooterStatus's 500ms cadence
+ *  philosophy at a tighter beat so the margin notes feel responsive. */
+const VALIDATE_DEBOUNCE_MS = 300;
+
 export function Editor({
   doc,
   onChange,
@@ -71,6 +78,24 @@ export function Editor({
   // re-create the editor (TipTap remounts are expensive + lose selection).
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // A10 — track the TipTap editor instance locally so MarginDiagnostics can
+  // read the editor's DOM (top-level block elements) for note positioning.
+  // We do NOT replace onEditorReady — that contract is preserved for App.
+  const [editorInstance, setEditorInstance] = useState<TipTapEditor | null>(null);
+
+  // A10 — debounced validation. Runs validateDoc 300ms after the last doc
+  // prop change so rapid edits (Cmd+Shift+J save-spam, future TipTap →
+  // PortableDoc roundtrips) don't re-validate on every keystroke.
+  const [debouncedDoc, setDebouncedDoc] = useState<PortableDoc>(doc);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedDoc(doc), VALIDATE_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [doc]);
+  const issues: ValidationIssue[] = useMemo(
+    () => validateDoc(debouncedDoc),
+    [debouncedDoc],
+  );
 
   const editor = useEditor({
     extensions: [
@@ -128,7 +153,9 @@ export function Editor({
   // Surface the editor instance once it's ready. A2 / A3 / A4 will read this
   // to attach NodeView decorators, slash extensions, and BubbleMenu plugins.
   useEffect(() => {
-    if (editor && onEditorReady) onEditorReady(editor);
+    if (!editor) return;
+    setEditorInstance(editor);
+    if (onEditorReady) onEditorReady(editor);
   }, [editor, onEditorReady]);
 
   return (
@@ -142,6 +169,11 @@ export function Editor({
           <FormatBubble editor={editor} />
         </BubbleMenu>
       ) : null}
+      {/* A10 — soft margin notes in the right gutter (≥768px) or inline
+       *  below the block (<768px). Block-level only per grill Q7; doc-level
+       *  issues are filtered inside MarginDiagnostics and surface in the
+       *  footer count (A8). */}
+      <MarginDiagnostics issues={issues} doc={doc} editor={editorInstance} />
     </div>
   );
 }

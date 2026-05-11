@@ -1426,6 +1426,112 @@
 }
 
 /* ===========================================================================
+ * Margin diagnostics (A10) — calm margin notes in the right gutter.
+ *
+ * Replaces v0.3's red-dot inline diagnostics with soft notes positioned
+ * absolutely to the right of the paper column. Block-level only (grill Q7);
+ * doc-level issues route to the FooterStatus count (A8). Tone is calm —
+ * `--paper-text-muted` and `--paper-text-subtle` (aliased onto the existing
+ * ink-soft / ink-faint palette so we don't introduce a new variable axis).
+ * No red, no alarm color. Below 768px the gutter disappears and notes flip
+ * to an inline layout below each affected block.
+ * =========================================================================== */
+
+:root {
+  --paper-margin-diagnostics-offset: 280px;
+  --paper-margin-diagnostics-width: 240px;
+  /* Text tokens — alias onto the existing ink palette so palette changes
+   * propagate without a separate axis. */
+  --paper-text-muted: var(--paper-ink-soft);
+  --paper-text-subtle: var(--paper-ink-faint);
+}
+
+.paper-margin-diagnostics {
+  position: absolute;
+  top: 0;
+  right: calc(-1 * var(--paper-margin-diagnostics-offset));
+  width: var(--paper-margin-diagnostics-width);
+  /* Container is transparent to pointer events; the buttons inside
+   * re-enable them so empty gutter space stays click-through. */
+  pointer-events: none;
+}
+
+.paper-margin-diagnostics__note {
+  /* Each note is a focusable button — Tab/Enter/Space + click. */
+  pointer-events: auto;
+  background: transparent;
+  border: 0;
+  padding: 6px 10px 6px 12px;
+  margin: 0;
+  font-family: var(--paper-font-sans);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 2px solid var(--paper-rule);
+  border-radius: 0 3px 3px 0;
+  transition:
+    border-color 160ms ease-out,
+    background 160ms ease-out;
+  max-width: var(--paper-margin-diagnostics-width);
+}
+.paper-margin-diagnostics__note:hover {
+  border-left-color: var(--paper-text-muted);
+  background: var(--paper-rule-soft);
+}
+.paper-margin-diagnostics__note:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+.paper-margin-diagnostics__rule {
+  /* Small caps + neutral gray — rule code reads as metadata, not alarm. */
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-text-muted);
+  font-weight: 600;
+}
+
+.paper-margin-diagnostics__message {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--paper-text-subtle);
+}
+
+/* Narrow-viewport (<768px) — JS flips the `--inline` modifier when
+ * matchMedia reports the breakpoint; the @media block below is the
+ * belt-and-braces fallback for pages that resize through the breakpoint
+ * without re-running the JS query. */
+.paper-margin-diagnostics.paper-margin-diagnostics--inline {
+  position: static;
+  width: auto;
+  right: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 16px;
+  pointer-events: auto;
+}
+
+@media (max-width: 767px) {
+  .paper-margin-diagnostics {
+    position: static;
+    width: auto;
+    right: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0 16px;
+    pointer-events: auto;
+  }
+  .paper-margin-diagnostics__note {
+    max-width: 100%;
+  }
+}
+
+/* ===========================================================================
  * Global a11y — prefers-reduced-motion collapses every motion token.
  * motion.css already declares its own block; we add one here so the paper
  * stylesheet stays self-contained even if motion.css is bundled separately
