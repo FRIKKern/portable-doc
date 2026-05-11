@@ -32,6 +32,7 @@
     "@tiptap/extension-placeholder": "^3.23.1",
     "@tiptap/react": "^3",
     "@tiptap/starter-kit": "^3",
+    "@tiptap/suggestion": "^3",
     "nanoid": "^3.3.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

@@ -9,7 +9,7 @@ apps/editor/src/McpProvider.test.tsx,keep,"State half preserved; banner UI disso
 apps/editor/src/PreviewStrip.test.tsx,rewrite,"A7 ships PreviewOverlay (⌘P modal); rewrite as PreviewOverlay.test.tsx — different trigger + role=dialog"
 apps/editor/src/RichTextField.test.tsx,keep,"Single TipTap instance survives as Editor.tsx (renamed/expanded); specs port with selector tweaks under A1"
 apps/editor/src/RichTextLabel.test.tsx,keep,"Inline-only TipTap field for action labels untouched in v0.4"
-apps/editor/src/SlashPopover.test.tsx,rewrite,"A3 ships extensions/SlashCommand.ts + new SlashPopover; rewrite to test Extension behavior not legacy keydown popover"
+apps/editor/src/SlashPopover.test.tsx,rewritten,"A3 DONE — rewritten as 13 specs against the new forwardRef SlashPopover (10-item catalog, substring + Levenshtein filter, ↑/↓/Enter/Tab/Esc, mousedown commit, items prop short-circuits input, role=listbox/option, aria-selected). Companion extensions/SlashCommand.test.ts adds 16 specs covering extension shape, items wiring, allow() codeBlock predicate (grill Q4), applyInsert chain dispatch per block type."
 apps/editor/src/VariantPicker.test.tsx,rewrite,"A5 ships VariantChip (inline chip replaces grid); rewrite as VariantChip.test.tsx"
 apps/editor/src/__experiments__/richtext-roundtrip.test.tsx,keep,"TipTap v3 inline round-trip across 4 block contexts — unchanged contract"
 apps/editor/src/diagnostics.test.tsx,rewrite,"A10 ships MarginDiagnostics (soft margin notes replace red dots); rewrite as MarginDiagnostics.test.tsx"

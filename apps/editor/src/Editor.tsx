@@ -46,6 +46,7 @@ import { useEffect, useRef } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
+import { SlashCommand } from './extensions/SlashCommand.js';
 
 interface EditorProps {
   /** Initial PortableDoc rendered into the editor on mount. */
@@ -96,6 +97,10 @@ export function Editor({
       withBlockChrome(Blockquote),
       withBlockChrome(CodeBlock),
       withBlockChrome(HorizontalRule),
+      // A3 — slash menu via @tiptap/suggestion. Plugin slots after
+      // the block wraps so its plugin queue sits above the NodeView
+      // -bearing nodes in ProseMirror's plugin chain.
+      SlashCommand,
       Placeholder.configure({
         placeholder: 'Start typing — press "/" for a block menu',
       }),

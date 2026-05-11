@@ -1,119 +1,228 @@
 /**
- * Slash-command popover — opens on "/" press, lists 10 PortableDoc block
- * types with substring + Levenshtein-fallback filtering, navigable with
- * arrow keys, Enter/Tab/click inserts, Esc closes.
+ * A3 — Slash-command popover (paperflow-owned UI).
  *
- * Per A3 / build-phase grill q3: hand-rolled fuzzy match (substring first,
- * Levenshtein dist ≤ 2 fallback). No fuse.js. ~80 LOC.
+ * Mounted two ways:
+ *   1. Standalone (tests + ad-hoc): pass `open`, `items`, `onSelect`, `onClose`.
+ *      The popover renders into the React tree and styles itself absolutely.
+ *   2. From the SlashCommand TipTap extension via `@tiptap/react`
+ *      `ReactRenderer`: the Suggestion plugin calls `onStart` / `onUpdate` /
+ *      `onKeyDown` on the rendered instance. We forward those into a small
+ *      `forwardRef` imperative handle so the plugin owns open/close/filter
+ *      state and we own the DOM + keyboard.
+ *
+ * Filtering still goes through `lib/slash-filter.ts` — substring first,
+ * Levenshtein ≤ 2 fallback. Grill Q3: no fuse.js for a 10-item menu.
+ *
+ * Anchor / positioning: when the consumer passes `anchor: {x, y}` we render
+ * absolutely at that point (cursor caret rect, computed by the Suggestion
+ * plugin's `clientRect()` callback). No tippy.js — that's a transitive dep
+ * we'd rather not bind into. Standalone usage falls back to a default anchor.
+ *
+ * A11y (grill Q12): `role="listbox"` on the outer container, `role="option"`
+ * + `aria-selected` on each row, `aria-label="Filter blocks"` on the input.
+ * The motion CSS at `.paper-slash-popover` uses `--motion-slash-menu-open`,
+ * which `prefers-reduced-motion: reduce` collapses to 0ms.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { filterCommands, type SlashCommand } from './lib/slash-filter.js';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { COMMANDS, filterCommands, type SlashCommand } from './lib/slash-filter.js';
 
-interface SlashPopoverProps {
-  open: boolean;
-  onSelect: (cmd: SlashCommand) => void;
-  onClose: () => void;
+export interface SlashPopoverProps {
+  /** Standalone: whether the popover is visible. Ignored in controlled mode. */
+  open?: boolean;
+  /**
+   * Override the candidate list (Suggestion plugin path). When omitted, the
+   * popover filters the full 10-command catalog by its own `query` state.
+   */
+  items?: readonly SlashCommand[];
+  /** Anchor coordinates in viewport space (caret rect). */
   anchor?: { x: number; y: number };
+  /** Fires when the user picks an item (Enter, Tab, or click). */
+  onSelect: (cmd: SlashCommand) => void;
+  /** Fires when the user presses Escape (or the plugin requests dismissal). */
+  onClose: () => void;
+  /**
+   * Controlled mode: the parent supplies the query string + selection index
+   * and the popover reflects them. Used by the Suggestion plugin so its
+   * `onKeyDown` arrow-nav is the source of truth. Defaults to internal
+   * uncontrolled state for the standalone test harness.
+   */
+  query?: string;
+  activeIdx?: number;
+  onActiveIdxChange?: (idx: number) => void;
+  onQueryChange?: (q: string) => void;
 }
 
-export function SlashPopover({ open, onSelect, onClose, anchor }: SlashPopoverProps) {
-  const [query, setQuery] = useState('');
-  const [activeIdx, setActiveIdx] = useState(0);
-  const filtered = useMemo(() => filterCommands(query), [query]);
-  const inputRef = useRef<HTMLInputElement>(null);
+/**
+ * Imperative handle the SlashCommand extension drives.
+ */
+export interface SlashPopoverHandle {
+  onKeyDown: (event: KeyboardEvent) => boolean;
+}
 
-  useEffect(() => {
-    if (open) {
-      setQuery('');
-      setActiveIdx(0);
-      // Defer focus to next tick so the element is in the DOM.
-      queueMicrotask(() => inputRef.current?.focus());
+export const SlashPopover = forwardRef<SlashPopoverHandle, SlashPopoverProps>(
+  function SlashPopover(props, ref) {
+    const {
+      open = true,
+      items,
+      anchor,
+      onSelect,
+      onClose,
+      query: queryProp,
+      activeIdx: activeIdxProp,
+      onActiveIdxChange,
+      onQueryChange,
+    } = props;
+
+    const [queryState, setQueryState] = useState('');
+    const [activeIdxState, setActiveIdxState] = useState(0);
+
+    const query = queryProp ?? queryState;
+    const activeIdx = activeIdxProp ?? activeIdxState;
+
+    const filtered = useMemo<readonly SlashCommand[]>(() => {
+      if (items) return items;
+      return filterCommands(query);
+    }, [items, query]);
+
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+      if (open && !items) {
+        queueMicrotask(() => inputRef.current?.focus());
+      }
+    }, [open, items]);
+
+    useEffect(() => {
+      if (activeIdx > 0 && activeIdx >= filtered.length) {
+        const next = Math.max(0, filtered.length - 1);
+        if (activeIdxProp == null) setActiveIdxState(next);
+        else onActiveIdxChange?.(next);
+      }
+    }, [filtered.length, activeIdx, activeIdxProp, onActiveIdxChange]);
+
+    function setActiveIdx(next: number): void {
+      if (activeIdxProp == null) setActiveIdxState(next);
+      onActiveIdxChange?.(next);
     }
-  }, [open]);
 
-  // Clamp active index when filter shrinks below current selection.
-  useEffect(() => {
-    if (activeIdx > 0 && activeIdx >= filtered.length) {
-      setActiveIdx(Math.max(0, filtered.length - 1));
+    function setQuery(next: string): void {
+      if (queryProp == null) setQueryState(next);
+      onQueryChange?.(next);
+      if (activeIdxProp == null) setActiveIdxState(0);
     }
-  }, [filtered.length, activeIdx]);
 
-  if (!open) return null;
-
-  function onKey(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') {
-      setActiveIdx((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
-      e.preventDefault();
-    } else if (e.key === 'ArrowUp') {
-      setActiveIdx((i) => Math.max(i - 1, 0));
-      e.preventDefault();
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
+    function commitActive(): void {
       const pick = filtered[activeIdx];
       if (pick) onSelect(pick);
-      e.preventDefault();
-    } else if (e.key === 'Escape') {
-      onClose();
-      e.preventDefault();
     }
-  }
 
-  const style: React.CSSProperties = {
-    position: 'absolute',
-    left: anchor?.x ?? 16,
-    top: anchor?.y ?? 60,
-    background: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: 6,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-    padding: 6,
-    minWidth: 220,
-    zIndex: 1000,
-  };
+    function handleKey(event: { key: string; preventDefault?: () => void }): boolean {
+      if (event.key === 'ArrowDown') {
+        setActiveIdx(Math.min(activeIdx + 1, Math.max(0, filtered.length - 1)));
+        event.preventDefault?.();
+        return true;
+      }
+      if (event.key === 'ArrowUp') {
+        setActiveIdx(Math.max(activeIdx - 1, 0));
+        event.preventDefault?.();
+        return true;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        commitActive();
+        event.preventDefault?.();
+        return true;
+      }
+      if (event.key === 'Escape') {
+        onClose();
+        event.preventDefault?.();
+        return true;
+      }
+      return false;
+    }
 
-  return (
-    <div role="listbox" style={style} data-testid="slash-popover">
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setActiveIdx(0);
-        }}
-        onKeyDown={onKey}
-        placeholder="Filter…"
-        aria-label="Filter block types"
-        data-testid="slash-input"
-        style={{ width: '100%', boxSizing: 'border-box', marginBottom: 4 }}
-      />
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: 240, overflowY: 'auto' }}>
-        {filtered.map((cmd, i) => (
-          <li
-            key={cmd.type}
-            role="option"
-            aria-selected={i === activeIdx}
-            onClick={() => onSelect(cmd)}
-            data-testid={`slash-item-${cmd.type}`}
-            style={{
-              padding: '4px 8px',
-              cursor: 'pointer',
-              borderRadius: 4,
-              background: i === activeIdx ? '#eef' : 'transparent',
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 8,
-            }}
-          >
-            <span style={{ fontWeight: 500 }}>{cmd.label}</span>
-            <span style={{ color: '#888', fontSize: '0.85em' }}>{cmd.hint}</span>
-          </li>
-        ))}
-        {filtered.length === 0 && (
-          <li style={{ padding: '4px 8px', color: '#888' }} data-testid="slash-empty">
-            No matches
-          </li>
+    useImperativeHandle(ref, () => ({
+      onKeyDown: (event: KeyboardEvent) => handleKey(event),
+    }));
+
+    if (!open) return null;
+
+    const style: React.CSSProperties = {
+      position: 'absolute',
+      left: anchor?.x ?? 16,
+      top: anchor?.y ?? 60,
+    };
+
+    return (
+      <div
+        className="paper-slash-popover"
+        role="listbox"
+        aria-label="Insert block"
+        style={style}
+        data-testid="slash-popover"
+      >
+        <div className="paper-slash-popover__head">Insert block</div>
+
+        {!items && (
+          <div className="paper-slash-popover__search">
+            <span aria-hidden="true" className="paper-slash-popover__q">⌕</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => handleKey(e)}
+              placeholder="Filter blocks"
+              aria-label="Filter blocks"
+              data-testid="slash-input"
+            />
+          </div>
         )}
-      </ul>
-    </div>
-  );
-}
+
+        <ul className="paper-slash-popover__list">
+          {filtered.map((cmd, i) => (
+            <li
+              key={cmd.type}
+              role="option"
+              aria-selected={i === activeIdx}
+              className={
+                'paper-slash-popover__row' +
+                (i === activeIdx ? ' is-active' : '')
+              }
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSelect(cmd);
+              }}
+              data-testid={`slash-item-${cmd.type}`}
+            >
+              <span className="paper-slash-popover__name">{cmd.label}</span>
+              <span className="paper-slash-popover__hint">{cmd.hint}</span>
+            </li>
+          ))}
+          {filtered.length === 0 && (
+            <li
+              className="paper-slash-popover__empty"
+              data-testid="slash-empty"
+              role="presentation"
+            >
+              No matches
+            </li>
+          )}
+        </ul>
+
+        <div className="paper-slash-popover__foot" aria-hidden="true">
+          <kbd>↵</kbd> insert · <kbd>↑↓</kbd> navigate · <kbd>esc</kbd> dismiss
+        </div>
+      </div>
+    );
+  },
+);
+
+export { COMMANDS };
+export type { SlashCommand };
