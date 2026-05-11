@@ -49,6 +49,7 @@ import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
 import { SlashCommand } from './extensions/SlashCommand.js';
+import { MoveBlock } from './extensions/MoveBlock.js';
 import { FormatBubble } from './FormatBubble.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
 
@@ -128,6 +129,9 @@ export function Editor({
       // the block wraps so its plugin queue sits above the NodeView
       // -bearing nodes in ProseMirror's plugin chain.
       SlashCommand,
+      // A6 — registers editor.commands.moveBlock + Cmd+Shift+↑/↓ shortcuts.
+      // The drag handle in withBlockChrome dispatches via this command.
+      MoveBlock,
       // A9 — `showOnlyCurrent: true` (grill Q6) limits the hint to the
       // currently-focused empty paragraph. Mid-doc empty spacers stay quiet;
       // the hint reappears when the cursor lands on them and they're empty.
