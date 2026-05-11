@@ -2,7 +2,7 @@ spec_file,disposition,notes
 apps/editor/src/App.test.tsx,rewrite,"A1 ships single-column layout; rewrite for new App.tsx shell with FooterStatus / OutlineRail / PreviewOverlay slots"
 apps/editor/src/BlockForm.test.tsx,delete,"BlockForm.tsx deleted entirely; inline editing replaces form panel — no replacement component"
 apps/editor/src/BlockList.test.tsx,rewrite,"A9 ships OutlineRail (BlockList repurposed); rewrite as OutlineRail.test.tsx covering ⌘\ toggle + slide animation"
-apps/editor/src/BlockTile.test.tsx,rewrite,"A2 ships block-chrome via TipTap NodeView; rewrite as BlockChrome.test.tsx (chrome lives on node DOM now)"
+apps/editor/src/BlockTile.test.tsx,rewritten,"A2 DONE — rewritten as apps/editor/src/extensions/withBlockChrome.test.tsx (16 specs: NodeView factory shape, renderChromeDom DOM, selection-driven .is-selecting toggle, paper.css motion/reduced-motion/z-index, Editor integration delete+insert+hover). Original BlockTile.test.tsx remains passing for v0.3 transitional coverage; A9 retires file+component together."
 apps/editor/src/Editor.test.tsx,rewrite,"A1 lays the single TipTap instance; A3/A4/A5/A6/A10 layer on; rewrite for new layout + extension wiring"
 apps/editor/src/JsonEditMode.test.tsx,keep,"Cmd+Shift+J overlay unchanged in v0.4; selectors may need light touch-up if portal target shifts"
 apps/editor/src/McpProvider.test.tsx,keep,"State half preserved; banner UI dissolves into A8 FooterStatus dot but provider contract is identical"

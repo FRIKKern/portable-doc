@@ -81,6 +81,11 @@
   --paper-chrome-bg: #fefdf9;
   --paper-chrome-border: rgba(31, 26, 20, 0.12);
   --paper-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* Stacking (grill Q3) — block chrome below BubbleMenu so a text
+   * selection's floating toolbar (A4) always wins the visual layer. */
+  --paper-block-chrome-z: 10;
+  --paper-bubble-menu-z: 20;
 }
 
 /* ===========================================================================
@@ -263,6 +268,172 @@
   .paper-footer {
     padding: 0 var(--paper-padding-side-xs);
   }
+}
+
+/* ===========================================================================
+ * Block chrome (A2) — paper-block + paper-block__chrome + paper-block__insert
+ *
+ * The chrome lives inside each TipTap node-view wrapper (see
+ * `extensions/withBlockChrome.ts`). It scrolls with the block because it IS
+ * a child of the block — no overlay, no rect recompute.
+ *
+ * Adapted from `~/docs/paperflow/notes/2026-05-10-paper-vision-prototype.html`
+ * (search `.block-toolbar`, `.block-plus`) with the `.paper-` prefix and
+ * the motion tokens from motion.css.
+ * =========================================================================== */
+
+.paper-block-outer {
+  position: relative;
+  margin: 0 0 22px;
+}
+
+.paper-block {
+  position: relative;
+  padding: 4px 0;
+  outline: 1px solid transparent;
+  outline-offset: 10px;
+  border-radius: 2px;
+  transition: outline-color 220ms ease-out;
+}
+.paper-block:hover,
+.paper-block.is-hovered,
+.paper-block.is-focused {
+  outline-color: rgba(31, 26, 20, 0.10);
+}
+
+/* The chrome toolbar — fades in on hover/focus.
+ * Hidden by default; `.is-hovered` (set by the node-view's mouseenter
+ * handler) flips it on. `.is-selecting` overrides everything to hide
+ * the chrome whenever a text selection is non-empty (grill Q3). */
+.paper-block__chrome {
+  position: absolute;
+  top: -44px;
+  left: -4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 5px;
+  box-shadow: var(--paper-chrome-shadow);
+  font-family: var(--paper-font-sans);
+  font-size: 12px;
+  color: var(--paper-ink-soft);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: var(--paper-block-chrome-z);
+  transition:
+    opacity var(--motion-chrome-fade-out) ease-out,
+    transform var(--motion-chrome-fade-out) ease-out;
+}
+.paper-block:hover > .paper-block__chrome,
+.paper-block.is-hovered > .paper-block__chrome,
+.paper-block.is-focused > .paper-block__chrome {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition:
+    opacity var(--motion-chrome-fade-in) ease-out,
+    transform var(--motion-chrome-fade-in) ease-out;
+}
+.paper-block.is-selecting > .paper-block__chrome {
+  /* While a text selection is active anywhere in the doc, the BubbleMenu
+   * owns the floating-chrome layer — block chrome must disappear. */
+  opacity: 0;
+  pointer-events: none;
+}
+
+.paper-block__label {
+  font-weight: 600;
+  color: var(--paper-ink);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.paper-block__variant-slot {
+  /* A5 paints into this; A2 leaves it empty (no width, no border). */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.paper-block-drag-handle {
+  cursor: grab;
+  background: transparent;
+  border: 0;
+  color: var(--paper-ink-faint);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  user-select: none;
+  font-family: inherit;
+}
+.paper-block-drag-handle:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+.paper-block-delete {
+  background: transparent;
+  border: 0;
+  color: var(--paper-ink-faint);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.paper-block-delete:hover {
+  color: var(--paper-accent-warm-rust);
+}
+.paper-block-delete:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+/* The "+" between-blocks button — sibling of .paper-block, faint at rest. */
+.paper-block__insert {
+  position: absolute;
+  left: 50%;
+  bottom: -13px;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-chrome-border);
+  color: var(--paper-ink-soft);
+  font-family: var(--paper-font-sans);
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.25;
+  cursor: pointer;
+  z-index: var(--paper-block-chrome-z);
+  transition:
+    opacity var(--motion-chrome-fade-out) ease-out,
+    color 160ms ease-out,
+    transform 160ms ease-out;
+}
+.paper-block__insert:hover {
+  opacity: 1;
+  color: var(--paper-accent-warm-rust);
+  transform: translateX(-50%) scale(1.08);
+}
+.paper-block-outer:hover .paper-block__insert {
+  opacity: 0.85;
+  color: var(--paper-ink);
+  transition: opacity var(--motion-chrome-fade-in) ease-out;
+}
+.paper-block__insert:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+  opacity: 1;
 }
 
 /* ===========================================================================

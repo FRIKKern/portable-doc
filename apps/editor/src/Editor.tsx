@@ -17,22 +17,35 @@
  * as the on-disk format; we render it INTO TipTap via `welcomeToTipTapHtml`
  * on mount, and (in later tasks) reflect TipTap edits back into the AST.
  *
- * Extensions in A1
- * ----------------
- * StarterKit       — heading, paragraph, list, blockquote, code, hr, marks
- * Placeholder      — empty-doc hint text
- * Link             — StarterKit already includes link, but we re-configure
- *                    it so href values survive serialization round-trips.
+ * Extensions in A1 + A2
+ * ---------------------
+ * StarterKit (trimmed) — marks + history + Document + Text + ListItem etc.;
+ *                        the seven top-level block nodes (Paragraph, Heading,
+ *                        BulletList, OrderedList, Blockquote, CodeBlock,
+ *                        HorizontalRule) are disabled here so A2 can re-add
+ *                        them with paperflow-owned chrome.
+ * withBlockChrome(Base) — A2 wraps each base block Node in an `addNodeView`
+ *                        that injects `.paper-block` chrome. The seven
+ *                        wrapped Nodes plug into the editor alongside the
+ *                        trimmed StarterKit.
+ * Placeholder           — empty-doc hint text.
  *
- * Block chrome / slash / bubble / variant chip / drag / margin notes are
- * intentionally NOT here — A2–A10 layer them on.
+ * Slash menu / BubbleMenu / variant chip / drag / margin notes are
+ * intentionally NOT here — A3–A10 layer them on.
  */
 import { useEditor, EditorContent, type Editor as TipTapEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Paragraph from '@tiptap/extension-paragraph';
+import Heading from '@tiptap/extension-heading';
+import { BulletList, OrderedList } from '@tiptap/extension-list';
+import Blockquote from '@tiptap/extension-blockquote';
+import CodeBlock from '@tiptap/extension-code-block';
+import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import { useEffect, useRef } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
+import { withBlockChrome } from './extensions/withBlockChrome.js';
 
 interface EditorProps {
   /** Initial PortableDoc rendered into the editor on mount. */
@@ -59,12 +72,30 @@ export function Editor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        // Drop the seven block nodes — A2 re-adds them with chrome below.
+        paragraph: false,
+        heading: false,
+        bulletList: false,
+        orderedList: false,
+        blockquote: false,
+        codeBlock: false,
+        horizontalRule: false,
         // Keep StarterKit's link mark on; we just want predictable defaults.
         link: {
           openOnClick: false,
           HTMLAttributes: { rel: 'noopener noreferrer nofollow' },
         },
       }),
+      // A2 — each block-type Node wrapped with paperflow chrome. The order
+      // matches the order ProseMirror saw them in StarterKit so schema
+      // priorities stay identical.
+      withBlockChrome(Paragraph),
+      withBlockChrome(Heading.configure({ levels: [1, 2, 3] })),
+      withBlockChrome(BulletList),
+      withBlockChrome(OrderedList),
+      withBlockChrome(Blockquote),
+      withBlockChrome(CodeBlock),
+      withBlockChrome(HorizontalRule),
       Placeholder.configure({
         placeholder: 'Start typing — press "/" for a block menu',
       }),

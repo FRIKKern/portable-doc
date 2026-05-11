@@ -139,10 +139,16 @@ describe('Editor — single document-level TipTap instance (A1)', () => {
     const empty: PortableDoc = { version: 1, blocks: [] };
     render(<Editor doc={empty} />);
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
-    // TipTap Placeholder writes the hint string into a data-placeholder attr
-    // on the empty paragraph; the CSS rule projects it via ::before.
-    const emptyP = surface?.querySelector('p.is-editor-empty');
-    expect(emptyP?.getAttribute('data-placeholder')).toMatch(/Start typing/);
+    // TipTap Placeholder writes the hint string into a `data-placeholder`
+    // attribute on the empty node's DOM element. Under A1 that landed on
+    // the `<p>` directly; under A2's NodeView the same decoration lands on
+    // the `.paper-block` wrapper (the `dom` we return from `addNodeView`).
+    // Either is acceptable — we accept the union to keep the contract
+    // stable across the block-chrome integration.
+    const emptyNode =
+      surface?.querySelector('p.is-editor-empty') ??
+      surface?.querySelector('.is-editor-empty');
+    expect(emptyNode?.getAttribute('data-placeholder')).toMatch(/Start typing/);
   });
 
   it('does NOT mount A2–A6 surfaces — no block chrome, no slash menu, no bubble menu', () => {
