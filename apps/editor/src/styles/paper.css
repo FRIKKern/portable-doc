@@ -1037,6 +1037,216 @@
 }
 
 /* ===========================================================================
+ * Empty-state placeholder (A9) — TipTap Placeholder is configured with
+ * `showOnlyCurrent: true` per grill Q6, so the `.is-empty` class lands on
+ * every empty paragraph and the hint renders only on the focused one. The
+ * `:first-child` filter from the A1 rule is dropped; italic style applied
+ * per the prototype.
+ * =========================================================================== */
+
+.paper-editor .ProseMirror p.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--paper-ink-faint);
+  font-style: italic;
+  float: left;
+  pointer-events: none;
+  height: 0;
+}
+
+/* ===========================================================================
+ * Outline rail (A9) — `paper-outline-rail` + entries + narrow variant.
+ *
+ * Two viewports (grill Q8):
+ *   ≥768px : 240px slide-in left rail, overlay-style (position: fixed; does
+ *            NOT push the column to the right — sits on top of the canvas).
+ *            Slide animation via `--motion-outline-slide`.
+ *   <768px : Top bar with a ≡ button; entries collapse into a dropdown
+ *            below the bar when expanded.
+ *
+ * Stacking: above the column, below the BubbleMenu / preview overlay.
+ * The rail is mounted by App.tsx; OutlineRail.tsx renders the markup.
+ * =========================================================================== */
+
+.paper-outline-rail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: var(--paper-footer-height);
+  width: var(--paper-outline-rail-width);
+  background: var(--paper-chrome-bg);
+  border-right: 1px solid var(--paper-chrome-border);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.05);
+  font-family: var(--paper-font-sans);
+  font-size: 13px;
+  color: var(--paper-ink);
+  z-index: 30;
+  overflow-y: auto;
+  animation: paper-outline-rail-slide var(--motion-outline-slide) ease-out;
+}
+
+@keyframes paper-outline-rail-slide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+.paper-outline-rail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--paper-rule-soft);
+}
+.paper-outline-rail__title {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+  font-weight: 600;
+}
+.paper-outline-rail__close {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--paper-chrome-border);
+  color: var(--paper-ink-faint);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.paper-outline-rail__close:hover {
+  color: var(--paper-accent-warm-rust);
+  border-color: var(--paper-accent-warm-rust);
+}
+.paper-outline-rail__close:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+.paper-outline-rail__entries {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px 12px;
+}
+.paper-outline-rail__entries li {
+  margin: 0;
+}
+.paper-outline-rail__empty {
+  padding: 12px 8px;
+  color: var(--paper-ink-faint);
+  font-style: italic;
+  font-size: 12.5px;
+}
+
+.paper-outline-rail__entry {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--paper-ink);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.3;
+}
+.paper-outline-rail__entry:hover {
+  background: var(--paper-accent-soft);
+}
+.paper-outline-rail__entry:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 1px;
+}
+.paper-outline-rail__entry-icon {
+  flex: 0 0 28px;
+  font-family: var(--paper-font-mono);
+  font-size: 11px;
+  color: var(--paper-ink-faint);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+.paper-outline-rail__entry-preview {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.paper-outline-rail__entry[data-block-type='heading']
+  .paper-outline-rail__entry-preview {
+  font-weight: 600;
+}
+
+/* Narrow viewport (grill Q8) — top bar + collapsing dropdown. Slides DOWN
+ * instead of in-from-the-left; the same `--motion-outline-slide` token
+ * drives both so prefers-reduced-motion collapses everything at once. */
+.paper-outline-rail--narrow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: auto;
+  border-right: 0;
+  border-bottom: 1px solid var(--paper-chrome-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: visible;
+  animation: paper-outline-rail-slide-down var(--motion-outline-slide) ease-out;
+}
+@keyframes paper-outline-rail-slide-down {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+.paper-outline-rail__top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  gap: 8px;
+}
+.paper-outline-rail__expand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--paper-ink);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.paper-outline-rail__expand:hover {
+  background: var(--paper-bg-deep);
+}
+.paper-outline-rail__expand:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+.paper-outline-rail__expand-label {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+  font-weight: 600;
+}
+.paper-outline-rail__dropdown {
+  background: var(--paper-chrome-bg);
+  border-top: 1px solid var(--paper-rule-soft);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* ===========================================================================
  * Global a11y — prefers-reduced-motion collapses every motion token.
  * motion.css already declares its own block; we add one here so the paper
  * stylesheet stays self-contained even if motion.css is bundled separately

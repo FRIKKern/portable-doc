@@ -103,8 +103,14 @@ export function Editor({
       // the block wraps so its plugin queue sits above the NodeView
       // -bearing nodes in ProseMirror's plugin chain.
       SlashCommand,
+      // A9 — `showOnlyCurrent: true` (grill Q6) limits the hint to the
+      // currently-focused empty paragraph. Mid-doc empty spacers stay quiet;
+      // the hint reappears when the cursor lands on them and they're empty.
+      // `showOnlyWhenEditable: true` keeps the hint out of read-only renders.
       Placeholder.configure({
-        placeholder: 'Start typing — press "/" for a block menu',
+        placeholder: 'Start typing, or press / for blocks.',
+        showOnlyCurrent: true,
+        showOnlyWhenEditable: true,
       }),
     ],
     content: portableDocToTipTapHtml(doc),

@@ -19,13 +19,15 @@
  *   - JsonEditMode (Cmd+Shift+J power-user overlay) — kept verbatim per
  *     T4 disposition `keep`.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
+import type { Editor as TipTapEditor } from '@tiptap/react';
 import welcomeJson from '../../../examples/welcome.json';
 import { Editor } from './Editor.js';
 import { FooterStatus } from './FooterStatus.js';
 import { JsonEditMode } from './JsonEditMode.js';
 import { McpProvider } from './McpProvider.js';
+import { OutlineRail } from './OutlineRail.js';
 import { PreviewOverlay } from './PreviewOverlay.js';
 import './styles/paper.css';
 
@@ -43,6 +45,10 @@ function AppShell(): JSX.Element {
   const [doc, setDoc] = useState<PortableDoc>(welcome);
   const [jsonModeOpen, setJsonModeOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // A9 — outline rail toggle + editor instance handed up from Editor.tsx
+  // so the rail can read top-level blocks + drive scroll/focus.
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [editor, setEditor] = useState<TipTapEditor | null>(null);
 
   // Hidden Cmd+Shift+J / Ctrl+Shift+J shortcut toggles the JSON-edit-mode
   // overlay. Power-user escape hatch carried over from v0.3.
@@ -78,11 +84,43 @@ function AppShell(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, [previewOpen]);
 
+  // A9 — ⌘\ / Ctrl+\ toggles the OutlineRail. Esc closes the rail, but only
+  // if the ⌘P preview overlay isn't open (overlay's Esc handler takes
+  // precedence — A7 contract preserved). Kept in a separate useEffect from
+  // the ⌘P listener: different concern, different dependency set.
+  //
+  // The previewOpen reads through a ref because the A7 handler and the A9
+  // handler both register window keydown listeners — when Esc fires with
+  // both open, both callbacks run. The ref reads the latest state at the
+  // moment of the keystroke, so the rail respects the overlay's claim.
+  const previewOpenRef = useRef(previewOpen);
+  previewOpenRef.current = previewOpen;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === '\\') {
+        e.preventDefault();
+        setOutlineOpen((v) => !v);
+        return;
+      }
+      if (e.key === 'Escape' && outlineOpen && !previewOpenRef.current) {
+        e.preventDefault();
+        setOutlineOpen(false);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [outlineOpen]);
+
   return (
     <div className="paper-app" data-testid="paper-app">
       <main className="paper-column" data-testid="paper-column">
-        <Editor doc={doc} />
+        <Editor doc={doc} onEditorReady={setEditor} />
       </main>
+      <OutlineRail
+        editor={editor}
+        open={outlineOpen}
+        onClose={() => setOutlineOpen(false)}
+      />
       <FooterStatus doc={doc} />
       <JsonEditMode
         doc={doc}
