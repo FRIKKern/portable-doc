@@ -34,6 +34,7 @@
  * intentionally NOT here — A3–A10 layer them on.
  */
 import { useEditor, EditorContent, type Editor as TipTapEditor } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Paragraph from '@tiptap/extension-paragraph';
@@ -47,6 +48,7 @@ import type { PortableDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
 import { SlashCommand } from './extensions/SlashCommand.js';
+import { FormatBubble } from './FormatBubble.js';
 
 interface EditorProps {
   /** Initial PortableDoc rendered into the editor on mount. */
@@ -126,6 +128,14 @@ export function Editor({
   return (
     <div className="paper-editor" data-testid="paper-editor">
       <EditorContent editor={editor} />
+      {editor ? (
+        // A4 — inline format BubbleMenu. The @tiptap/react substrate owns
+        // floating-element positioning and show/hide; FormatBubble owns the
+        // toolbar UI (B/I/code/link + inline URL input).
+        <BubbleMenu editor={editor}>
+          <FormatBubble editor={editor} />
+        </BubbleMenu>
+      ) : null}
     </div>
   );
 }

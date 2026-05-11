@@ -151,11 +151,13 @@ describe('Editor — single document-level TipTap instance (A1)', () => {
     expect(emptyNode?.getAttribute('data-placeholder')).toMatch(/Start typing/);
   });
 
-  it('does NOT mount A2–A6 surfaces — no block chrome, no slash menu, no bubble menu', () => {
+  it('does NOT mount A5–A6 surfaces yet — no variant chip', () => {
+    // A2 mounts block-chrome, A3 mounts the slash-command extension, A4
+    // mounts the BubbleMenu (FormatBubble lives inside it but is hidden by
+    // the floating substrate until selection is non-empty — so it may or
+    // may not be present in the DOM during this test). The remaining A5–A6
+    // surfaces — variant chip — are still gated off.
     render(<Editor doc={welcomeFixture} />);
-    expect(screen.queryByTestId('slash-popover')).toBeNull();
-    expect(screen.queryByTestId('bubble-menu')).toBeNull();
-    expect(screen.queryByTestId('block-chrome')).toBeNull();
     expect(screen.queryByTestId('variant-chip')).toBeNull();
   });
 });
