@@ -1,11 +1,11 @@
 /**
- * A2 — block-chrome DOM helpers; A5 — VariantChip mount bridge.
+ * A2 — block-chrome DOM helpers; A5 — VariantChip mount bridge;
+ * A6 — native HTML5 drag wiring + drop indicator.
  *
  * The chrome (drag handle, type label, delete, "+" between-blocks) is plain
  * DOM that lives inside the TipTap node-view wrapper. We do NOT use React
  * here: the node-view runs outside React's reconciler, so any reconciliation
- * cost would be wasted. Four exported helpers keep `withBlockChrome.ts`
- * legible:
+ * cost would be wasted. Helpers:
  *
  *   renderChromeDom(blockType)
  *     -> builds the toolbar element (drag · label · delete) and the "+"
@@ -30,8 +30,14 @@
  *        block types whose PortableDoc name is callout/action/section/code
  *        (TipTap names are translated by `pdBlockTypeFor`).
  *
- * Drag binding is deferred to A6; the handle is a button with the right
- * a11y + visual treatment only. Slash menu trigger is A3.
+ *   bindDragHandlers(parts, wrapper, editor, getBlockIdx)
+ *     -> A6. Wires the drag handle to native HTML5 drag-and-drop. The
+ *        handle gets `draggable="true"` + `dragstart` (which writes the
+ *        source idx into `DataTransfer`); the wrapper gets `dragover`
+ *        (which paints the drop indicator above/below itself based on
+ *        the pointer's vertical position relative to the wrapper rect)
+ *        and `drop` (which calls `editor.commands.moveBlock(from, to)`).
+ *        Slash menu trigger is A3.
  */
 import type { Editor } from '@tiptap/core';
 import { createElement } from 'react';
@@ -63,7 +69,7 @@ export function humanLabelFor(blockType: string): string {
 export interface ChromeParts {
   /** The toolbar that sits above the block. */
   toolbar: HTMLDivElement;
-  /** The drag handle button (no actual drag in A2 — A6 wires dnd-kit). */
+  /** The drag handle button (A6 wires native HTML5 drag onto it). */
   dragBtn: HTMLButtonElement;
   /** The block-type label span. */
   labelEl: HTMLSpanElement;
@@ -93,6 +99,14 @@ export function renderChromeDom(blockType: string): ChromeParts {
   dragBtn.className = 'paper-block-drag-handle';
   dragBtn.setAttribute('aria-label', `Drag ${lower}`);
   dragBtn.setAttribute('data-block-type', blockType);
+  // A6 — native HTML5 drag opt-in. The wrapper's dragstart handler reads
+  // the source block index from `data-block-idx` (set in withBlockChrome's
+  // NodeView `update`); the handle's title surfaces the keyboard fallback.
+  dragBtn.setAttribute('draggable', 'true');
+  dragBtn.setAttribute(
+    'title',
+    `Drag to reorder · Cmd+Shift+↑↓ from any cursor in the ${lower}`,
+  );
   dragBtn.textContent = '⋮⋮'; // ⋮⋮
 
   const labelEl = document.createElement('span');
@@ -271,6 +285,150 @@ export function mountVariantChip(
     },
     unmount() {
       root.unmount();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// A6 — native HTML5 drag wiring + drop indicator
+// ---------------------------------------------------------------------------
+
+/** Data-transfer MIME the drag pipeline uses to carry the source idx.
+ *  Plain `text/plain` would collide with anything else the page drops
+ *  into the editor (URLs, copied text); a custom MIME keeps the channel
+ *  unambiguous. */
+const DRAG_MIME = 'application/x-paper-block-idx';
+
+/** Returned by `bindDragHandlers` so the NodeView can detach all
+ *  listeners on `destroy` without re-deriving handler identity. */
+export interface DragHandle {
+  destroy(): void;
+}
+
+/**
+ * Wire native HTML5 drag-and-drop onto a block's chrome.
+ *
+ * The handle (the `⋮⋮` button) gets `dragstart` — it writes the source
+ * index into the `DataTransfer` payload. The wrapper itself listens for
+ * `dragover` (paint the drop-indicator above or below depending on which
+ * half of the wrapper the pointer is over) and `drop` (read the source
+ * idx out of the payload, compute the slot-style `toIdx`, and call
+ * `editor.commands.moveBlock(fromIdx, toIdx)`).
+ *
+ * `getBlockIdx` returns this block's current top-level index — re-read
+ * lazily on every event so inserts/deletes above don't stale the value.
+ */
+export function bindDragHandlers(
+  parts: ChromeParts,
+  wrapper: HTMLElement,
+  editor: Editor,
+  getBlockIdx: () => number | undefined,
+): DragHandle {
+  const { dragBtn } = parts;
+
+  // The drop indicator is a singleton per-wrapper: one absolutely-
+  // positioned rule that we move between the wrapper's top edge and
+  // bottom edge on hover. Building it lazily keeps the rest-state
+  // DOM identical to A5 (the existing chrome specs count children).
+  let indicator: HTMLDivElement | null = null;
+  const ensureIndicator = (): HTMLDivElement => {
+    if (indicator) return indicator;
+    const el = document.createElement('div');
+    el.className = 'paper-drop-indicator';
+    el.setAttribute('aria-hidden', 'true');
+    indicator = el;
+    return el;
+  };
+  const hideIndicator = (): void => {
+    if (indicator && indicator.parentNode === wrapper) {
+      wrapper.removeChild(indicator);
+    }
+  };
+  const showIndicator = (side: 'above' | 'below'): void => {
+    const el = ensureIndicator();
+    el.dataset.side = side;
+    if (el.parentNode !== wrapper) wrapper.appendChild(el);
+  };
+
+  // ---- dragstart on the handle ----
+  // Writes the source block idx into `DataTransfer` so the drop target
+  // (any other block's wrapper) can read it back. `effectAllowed=move`
+  // keeps macOS from showing the "+" copy cursor.
+  const onDragStart = (e: DragEvent): void => {
+    const idx = getBlockIdx();
+    if (idx == null) return;
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    dt.setData(DRAG_MIME, String(idx));
+    dt.effectAllowed = 'move';
+    wrapper.classList.add('is-dragging');
+  };
+  const onDragEnd = (): void => {
+    wrapper.classList.remove('is-dragging');
+    hideIndicator();
+  };
+  dragBtn.addEventListener('dragstart', onDragStart);
+  dragBtn.addEventListener('dragend', onDragEnd);
+
+  // ---- dragover on the wrapper ----
+  // Calling `preventDefault` is what tells the browser this element is
+  // a valid drop target; without it the `drop` event never fires.
+  // We compute the side (above / below) from the pointer's y relative
+  // to the wrapper's midline.
+  const onDragOver = (e: DragEvent): void => {
+    // Only react to in-editor block drags — text selection drags etc.
+    // shouldn't paint the indicator.
+    const dt = e.dataTransfer;
+    if (!dt || !Array.from(dt.types).includes(DRAG_MIME)) return;
+    e.preventDefault();
+    dt.dropEffect = 'move';
+    const rect = wrapper.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    showIndicator(e.clientY < mid ? 'above' : 'below');
+  };
+  const onDragLeave = (e: DragEvent): void => {
+    // `dragleave` fires when the pointer crosses any descendant
+    // boundary, so we check the relatedTarget — if it's still inside
+    // the wrapper, ignore.
+    const next = e.relatedTarget as Node | null;
+    if (next && wrapper.contains(next)) return;
+    hideIndicator();
+  };
+  const onDrop = (e: DragEvent): void => {
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const raw = dt.getData(DRAG_MIME);
+    if (!raw) return;
+    e.preventDefault();
+    const fromIdx = Number(raw);
+    const targetIdx = getBlockIdx();
+    if (!Number.isFinite(fromIdx) || targetIdx == null) {
+      hideIndicator();
+      return;
+    }
+    // Slot semantics: dropping ABOVE block N goes to slot N; dropping
+    // BELOW block N goes to slot N+1.
+    const rect = wrapper.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    const toIdx = e.clientY < mid ? targetIdx : targetIdx + 1;
+    hideIndicator();
+    wrapper.classList.remove('is-dragging');
+    // Bail on the no-op cases without dispatching a transaction.
+    if (toIdx === fromIdx || toIdx === fromIdx + 1) return;
+    editor.commands.moveBlock(fromIdx, toIdx);
+  };
+  wrapper.addEventListener('dragover', onDragOver);
+  wrapper.addEventListener('dragleave', onDragLeave);
+  wrapper.addEventListener('drop', onDrop);
+
+  return {
+    destroy() {
+      dragBtn.removeEventListener('dragstart', onDragStart);
+      dragBtn.removeEventListener('dragend', onDragEnd);
+      wrapper.removeEventListener('dragover', onDragOver);
+      wrapper.removeEventListener('dragleave', onDragLeave);
+      wrapper.removeEventListener('drop', onDrop);
+      hideIndicator();
     },
   };
 }

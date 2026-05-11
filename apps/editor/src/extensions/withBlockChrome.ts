@@ -43,11 +43,13 @@
 import type { Node } from '@tiptap/core';
 import {
   bindChromeHandlers,
+  bindDragHandlers,
   mountVariantChip,
   pdBlockTypeFor,
   renderChromeDom,
   updateChromeForSelection,
   type ChromeParts,
+  type DragHandle,
   type VariantChipHandle,
 } from '../BlockChrome.js';
 
@@ -159,6 +161,27 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
         wrapper.className = isTopLevel ? 'paper-block' : 'paper-block-nested';
         wrapper.setAttribute('data-block-type', blockType);
 
+        // A6 — `data-block-idx` exposes this block's current top-level
+        // child index for the native drag handlers (so the dragover
+        // target can read its own idx out of the attribute instead of
+        // having to walk the parent chain on every event). Re-computed
+        // in `update` whenever the node-view rebuilds.
+        const computeTopLevelIdx = (): number | undefined => {
+          try {
+            const pos = getPos?.();
+            if (typeof pos !== 'number') return undefined;
+            return editor.state.doc.resolve(pos).index(0);
+          } catch {
+            return undefined;
+          }
+        };
+        if (isTopLevel) {
+          const idx0 = computeTopLevelIdx();
+          if (idx0 !== undefined) {
+            wrapper.setAttribute('data-block-idx', String(idx0));
+          }
+        }
+
         if (isTopLevel) {
           const parts: ChromeParts = renderChromeDom(blockType);
           wrapper.appendChild(parts.toolbar);
@@ -198,6 +221,8 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
         // the chip on attribute changes and destroy() can tear the React root
         // down cleanly. `null` when the block type has no variants.
         let chipHandle: VariantChipHandle | null = null;
+        // ---- A6 drag handle (HTML5 native; reads top-level idx) ----
+        let dragHandle: DragHandle | null = null;
 
         if (isTopLevel) {
           const parts = (wrapper as unknown as { __chromeParts: ChromeParts })
@@ -209,6 +234,11 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
             const pos = getPos?.();
             return typeof pos === 'number' ? pos : undefined;
           });
+
+          // ---- A6: bind native HTML5 drag to the chrome's handle.
+          // `getBlockIdx` re-reads on every event so inserts/deletes
+          // above this block don't stale the source idx.
+          dragHandle = bindDragHandlers(parts, wrapper, editor, computeTopLevelIdx);
 
           // ---- A5: mount React VariantChip into the chrome's slot ----
           if (pdType !== null) {
@@ -277,12 +307,21 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
             // A5 — push fresh attrs into the React chip so the closed-state
             // summary stays in sync when the user picks a variant.
             if (chipHandle !== null) chipHandle.update(newNode.attrs ?? {});
+            // A6 — re-stamp `data-block-idx` after any insert/delete/move
+            // higher in the doc shifted this block's slot.
+            if (isTopLevel) {
+              const idxNow = computeTopLevelIdx();
+              if (idxNow !== undefined) {
+                wrapper.setAttribute('data-block-idx', String(idxNow));
+              }
+            }
             return true;
           },
           destroy: () => {
             wrapper.removeEventListener('mouseenter', onEnter);
             wrapper.removeEventListener('mouseleave', onLeave);
             if (chipHandle !== null) chipHandle.unmount();
+            if (dragHandle !== null) dragHandle.destroy();
             editor.off('selectionUpdate', onSelection);
           },
         };

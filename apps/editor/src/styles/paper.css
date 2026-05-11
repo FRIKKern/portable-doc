@@ -602,6 +602,45 @@
 }
 
 /* ===========================================================================
+ * Drag + drop indicator (A6) — paper-drop-indicator + .paper-block.is-dragging
+ *
+ * `.paper-drop-indicator` is a 2px warm-rust rule that BlockChrome appends
+ * to the hovered wrapper during HTML5 `dragover`. `data-side="above|below"`
+ * controls whether it sits at the top edge or bottom edge — absolute
+ * positioning keeps it from displacing the surrounding flow. Fade-in uses
+ * `--motion-drop-indicator` so prefers-reduced-motion collapses it.
+ *
+ * `.paper-block.is-dragging` dims the source block to ~50% opacity while
+ * a drag is in flight so the user can see "this is the one in motion".
+ * =========================================================================== */
+
+.paper-drop-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--paper-accent-warm-rust);
+  opacity: 0;
+  pointer-events: none;
+  z-index: var(--paper-block-chrome-z);
+  animation: paper-drop-indicator-fade var(--motion-drop-indicator) ease-out forwards;
+}
+.paper-drop-indicator[data-side='above'] {
+  top: -2px;
+}
+.paper-drop-indicator[data-side='below'] {
+  bottom: -2px;
+}
+@keyframes paper-drop-indicator-fade {
+  from { opacity: 0; }
+  to   { opacity: 0.7; }
+}
+
+.paper-block.is-dragging {
+  opacity: 0.5;
+}
+
+/* ===========================================================================
  * Slash popover (A3) — paper-slash-popover + __head / __search / __list / __row
  *
  * Adapted from prototype `.slash-menu` / `.slash-row` (search the prototype
