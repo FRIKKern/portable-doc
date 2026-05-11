@@ -62,12 +62,17 @@ describe('App — v0.4 single-column shell (A1)', () => {
     expect(cols[0]?.querySelector('[data-testid="paper-editor"]')).toBeTruthy();
   });
 
-  it('mounts the fixed 36px footer placeholder (A8 fills the content)', () => {
+  it('mounts the fixed footer status row (A8 fills the A1 placeholder)', () => {
     render(<App />);
     const footer = screen.getByTestId('paper-footer');
     expect(footer.tagName.toLowerCase()).toBe('footer');
-    // A1 ships an empty placeholder; A8 fills it.
-    expect(footer.textContent ?? '').toBe('');
+    // A8 filled the placeholder — FooterStatus renders the validation, MCP,
+    // saved, and word-count chips. The fine-grained UX lives in
+    // FooterStatus.test.tsx; here we just confirm A8 mounted onto A1's slot.
+    expect(footer.querySelector('[data-testid="footer-validation"]')).toBeTruthy();
+    expect(footer.querySelector('[data-testid="footer-mcp"]')).toBeTruthy();
+    expect(footer.querySelector('[data-testid="footer-saved"]')).toBeTruthy();
+    expect(footer.querySelector('[data-testid="footer-words"]')).toBeTruthy();
   });
 
   it('mounts exactly ONE TipTap editor surface (single doc model)', () => {

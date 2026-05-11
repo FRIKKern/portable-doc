@@ -227,8 +227,10 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Footer — fixed 36px placeholder strip. A8 fills the content (validation
- * pill, MCP dot, save indicator). For A1 we just hold the space + the rule.
+ * Footer — fixed 36px strip. A1 shipped the empty placeholder; A8 fills it
+ * with FooterStatus (validation pill, MCP dot + click-to-expand, save
+ * indicator, word count). Geometry stays the same; the .paper-footer-status
+ * additions only describe what lives INSIDE the strip.
  * --------------------------------------------------------------------------- */
 
 .paper-footer {
@@ -246,6 +248,165 @@
   align-items: center;
   padding: 0 var(--paper-padding-side-md);
   z-index: 5;
+}
+
+/* A8 — chips, dots, inline popover, bottom sheet. Adapted from
+ * `~/docs/paperflow/notes/2026-05-10-paper-vision-prototype.html` (search
+ * `.footer-status`) with the `.paper-` prefix and motion tokens. */
+.paper-footer-status {
+  gap: 14px;
+}
+.paper-footer-status__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: 0.005em;
+}
+.paper-footer-status__chip--button {
+  cursor: pointer;
+}
+.paper-footer-status__chip--button:hover {
+  color: var(--paper-ink-soft);
+}
+.paper-footer-status__chip--button:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.paper-footer-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--paper-tone-neutral);
+  box-shadow: 0 0 0 2px rgba(111, 106, 98, 0.15);
+}
+.paper-footer-status__dot[data-tone='success'] {
+  background: var(--paper-tone-success);
+  box-shadow: 0 0 0 2px rgba(74, 122, 77, 0.15);
+}
+.paper-footer-status__dot[data-tone='warning'] {
+  background: var(--paper-tone-warning);
+  box-shadow: 0 0 0 2px rgba(179, 131, 48, 0.15);
+}
+.paper-footer-status__dot[data-tone='danger'] {
+  background: var(--paper-tone-danger);
+  box-shadow: 0 0 0 2px rgba(162, 57, 37, 0.15);
+}
+.paper-footer-status__dot[data-tone='neutral'] {
+  background: var(--paper-tone-neutral);
+  box-shadow: 0 0 0 2px rgba(111, 106, 98, 0.15);
+}
+.paper-footer-status__sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--paper-rule);
+}
+.paper-footer-status__grow {
+  margin-left: auto;
+}
+
+/* Inline popover (≥768px) — anchored above the footer strip, near the
+ * MCP chip. Cards into the chrome surface, fades in fast. */
+.paper-footer-status__popover {
+  position: fixed;
+  bottom: calc(var(--paper-footer-height) + 8px);
+  left: var(--paper-padding-side-md);
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 6px;
+  box-shadow: var(--paper-chrome-shadow);
+  padding: 10px 14px;
+  font-family: var(--paper-font-sans);
+  font-size: 12px;
+  color: var(--paper-ink-soft);
+  z-index: 6;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.paper-footer-status__detail {
+  margin: 0;
+  line-height: 1.5;
+}
+.paper-footer-status__detail code {
+  font-family: var(--paper-font-mono);
+  font-size: 0.92em;
+  background: rgba(0, 0, 0, 0.045);
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+}
+.paper-footer-status__retry,
+.paper-footer-status__close {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font: inherit;
+  font-family: var(--paper-font-sans);
+  font-size: 12px;
+  color: var(--paper-ink);
+  cursor: pointer;
+}
+.paper-footer-status__retry:hover,
+.paper-footer-status__close:hover {
+  background: var(--paper-bg-deep);
+}
+.paper-footer-status__retry:focus-visible,
+.paper-footer-status__close:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+/* Bottom sheet (<768px) — full width above the footer strip. Slides up
+ * using --motion-footer-sheet-slide (0ms under prefers-reduced-motion). */
+.paper-footer-status__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 26, 20, 0.20);
+  z-index: 6;
+}
+.paper-footer-status__sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--paper-footer-height);
+  max-height: 50vh;
+  background: var(--paper-chrome-bg);
+  border-top: 1px solid var(--paper-chrome-border);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
+  padding: 18px var(--paper-padding-side-sm) 22px;
+  font-family: var(--paper-font-sans);
+  font-size: 13px;
+  color: var(--paper-ink-soft);
+  z-index: 7;
+  overflow-y: auto;
+  animation: paper-footer-status-sheet-in var(--motion-footer-sheet-slide) ease-out;
+}
+.paper-footer-status__sheet-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+}
+
+@keyframes paper-footer-status-sheet-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0.5;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 /* ===========================================================================
@@ -434,6 +595,140 @@
   outline: 2px solid var(--paper-accent-warm-rust);
   outline-offset: 2px;
   opacity: 1;
+}
+
+/* ===========================================================================
+ * Slash popover (A3) — paper-slash-popover + __head / __search / __list / __row
+ *
+ * Adapted from prototype `.slash-menu` / `.slash-row` (search the prototype
+ * HTML for `.slash-menu`). All classes get the `.paper-` prefix. Open
+ * animation uses `--motion-slash-menu-open` so reduced-motion collapses it.
+ * =========================================================================== */
+
+.paper-slash-popover {
+  position: absolute;
+  width: var(--paper-slash-popover-width);
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  font-family: var(--paper-font-sans);
+  padding: 6px 0 4px;
+  z-index: calc(var(--paper-block-chrome-z) + 5);
+  animation: paper-slash-fade var(--motion-slash-menu-open) ease-out;
+}
+@keyframes paper-slash-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.paper-slash-popover__head {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+  padding: 6px 14px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paper-slash-popover__search {
+  display: flex;
+  margin: 4px 10px 6px;
+  padding: 6px 10px;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 4px;
+  font-family: var(--paper-font-serif);
+  font-size: 13.5px;
+  color: var(--paper-ink);
+  align-items: center;
+  gap: 6px;
+}
+.paper-slash-popover__q {
+  color: var(--paper-ink-faint);
+  font-family: var(--paper-font-sans);
+  font-size: 12px;
+  margin-right: 4px;
+}
+.paper-slash-popover__search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: var(--paper-font-serif);
+  font-size: 13.5px;
+  color: var(--paper-ink);
+  padding: 0;
+  letter-spacing: 0.01em;
+}
+.paper-slash-popover__search input:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+.paper-slash-popover__list {
+  display: block;
+  list-style: none;
+  margin: 0;
+  padding: 2px 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.paper-slash-popover__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--paper-ink);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.paper-slash-popover__row.is-active,
+.paper-slash-popover__row:hover {
+  background: var(--paper-accent-soft);
+}
+.paper-slash-popover__row[aria-selected='true'] {
+  background: var(--paper-accent-soft);
+}
+.paper-slash-popover__name {
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+.paper-slash-popover__hint {
+  margin-left: auto;
+  color: var(--paper-ink-faint);
+  font-size: 12px;
+  letter-spacing: 0.005em;
+}
+.paper-slash-popover__empty {
+  padding: 8px 10px;
+  color: var(--paper-ink-faint);
+  font-size: 12.5px;
+  font-style: italic;
+}
+.paper-slash-popover__foot {
+  display: block;
+  border-top: 1px solid var(--paper-rule-soft);
+  margin-top: 4px;
+  padding: 8px 14px 4px;
+  font-size: 10.5px;
+  color: var(--paper-ink-faint);
+  letter-spacing: 0.04em;
+}
+.paper-slash-popover__foot kbd {
+  font-family: var(--paper-font-mono);
+  font-size: 10px;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--paper-ink-soft);
+  margin: 0 2px;
 }
 
 /* ===========================================================================

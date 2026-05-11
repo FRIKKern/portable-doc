@@ -2,20 +2,20 @@
  * v0.4 — single centered column on warm cream paper.
  *
  * Replaces v0.3's three-panel grid (BlockList sidebar | center | PreviewStrip
- * sidebar) with one column, one editor, one footer placeholder. Block chrome,
- * slash menu, BubbleMenu, variant chip, drag-and-drop, ⌘P overlay, outline
- * rail, and diagnostics ALL land in A2–A10 — A1 is the paper foundation.
+ * sidebar) with one column, one editor, one footer. Block chrome, slash menu,
+ * BubbleMenu, variant chip, drag-and-drop, ⌘P overlay, outline rail, and
+ * diagnostics ALL land in A2–A10.
  *
  * Layout primitives:
- *   <div class="paper-app">            // full-height warm cream surface
- *     <main class="paper-column">      // 680px centered column
- *       <Editor />                     // ONE TipTap instance
+ *   <div class="paper-app">                // full-height warm cream surface
+ *     <main class="paper-column">          // 680px centered column
+ *       <Editor />                         // ONE TipTap instance
  *     </main>
- *     <footer class="paper-footer" />  // 36px fixed placeholder (A8 fills)
+ *     <FooterStatus />                     // 36px fixed status strip (A8)
  *
  * Carryovers from v0.3:
- *   - McpProvider — state contract identical (A8 dissolves the banner UI
- *     into the footer status dot, but the provider stays).
+ *   - McpProvider — state contract identical (A8 dissolved the v0.3 banner
+ *     UI into the FooterStatus dot; the provider stays a pure state source).
  *   - JsonEditMode (Cmd+Shift+J power-user overlay) — kept verbatim per
  *     T4 disposition `keep`.
  */
@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
 import welcomeJson from '../../../examples/welcome.json';
 import { Editor } from './Editor.js';
+import { FooterStatus } from './FooterStatus.js';
 import { JsonEditMode } from './JsonEditMode.js';
 import { McpProvider } from './McpProvider.js';
 import './styles/paper.css';
@@ -59,7 +60,7 @@ function AppShell(): JSX.Element {
       <main className="paper-column" data-testid="paper-column">
         <Editor doc={doc} />
       </main>
-      <footer className="paper-footer" data-testid="paper-footer" />
+      <FooterStatus doc={doc} />
       <JsonEditMode
         doc={doc}
         open={jsonModeOpen}

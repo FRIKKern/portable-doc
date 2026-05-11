@@ -1,12 +1,19 @@
 /**
- * McpProvider — owns MCP reachability state for the editor.
+ * McpProvider — pure state provider for MCP reachability.
  *
- * On mount, probes the MCP HTTP server (`probeMcp`). Surfaces a banner with
- * a "Retry" button when unreachable. Children read state via `useMcp()`.
+ * Probes the MCP HTTP server on mount and re-probes on `retry()`. Children
+ * read `{ reachable, retry }` via `useMcp()` and decide their own UI:
  *
- * Per grill q8: graceful degradation. When `reachable === null` (initial)
- * or `false` (probe failed), preview surfaces fall back to direct backend
- * imports — the banner only nudges, never blocks.
+ *   - v0.4 FooterStatus consumes `reachable` for the footer dot color and
+ *     calls `retry` from the inline popover / bottom sheet's Retry button.
+ *   - Preview surfaces (`useRenderedContent`) read `reachable` to decide
+ *     whether to route through the MCP server or fall back to direct
+ *     backend imports.
+ *
+ * Per grill q8: graceful degradation. `reachable === null` (probing) or
+ * `false` (probe failed) both surface the direct-backend path — MCP nudges,
+ * never blocks. The v0.3 inline yellow banner was lifted into the
+ * FooterStatus dot in A8; the provider itself returns NO UI.
  */
 import {
   createContext,
@@ -21,7 +28,7 @@ import { probeMcp } from './lib/mcp-client.js';
 export interface McpContextValue {
   /** null = probing, true = reachable (route via MCP), false = fall back. */
   reachable: boolean | null;
-  /** Re-run the probe; banner clears on success. */
+  /** Re-run the probe; reachable flips back to null while in-flight. */
   retry: () => Promise<void>;
 }
 
@@ -47,36 +54,6 @@ export function McpProvider({ children }: { children: ReactNode }) {
 
   return (
     <McpContext.Provider value={{ reachable, retry }}>
-      {reachable === false && (
-        <div
-          role="alert"
-          data-testid="mcp-banner"
-          style={{
-            padding: '8px 12px',
-            background: '#fef3c7',
-            color: '#78350f',
-            borderBottom: '1px solid #f59e0b',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <span>
-            MCP server not running — start with <code>pnpm dev:full</code>, then click
-            retry. Editor running on direct backends until then.
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              void retry();
-            }}
-            data-testid="mcp-retry"
-          >
-            Retry
-          </button>
-        </div>
-      )}
       {children}
     </McpContext.Provider>
   );
