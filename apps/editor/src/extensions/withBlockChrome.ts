@@ -43,9 +43,12 @@
 import type { Node } from '@tiptap/core';
 import {
   bindChromeHandlers,
+  mountVariantChip,
+  pdBlockTypeFor,
   renderChromeDom,
   updateChromeForSelection,
   type ChromeParts,
+  type VariantChipHandle,
 } from '../BlockChrome.js';
 
 // ---------------------------------------------------------------------------
@@ -96,8 +99,40 @@ function contentTagFor(
  */
 export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode {
   const blockType = baseExtension.name;
+  const pdType = pdBlockTypeFor(blockType);
+  const hasVariants = pdType !== null;
 
   return baseExtension.extend({
+    // A5 — declare a `variant` attribute on nodes that have a variant
+    // catalog entry. Stored as a plain JSON object on the node. Rendered
+    // into the DOM as `data-variant` (read-only — TipTap parses on input
+    // but the visual is owned by the variant chip + paper.css). No render
+    // hook for nodes without variants — keeps the schema diff minimal.
+    addAttributes() {
+      // Preserve any attributes the base extension declares.
+      const base = (this.parent?.() ?? {}) as Record<string, unknown>;
+      if (!hasVariants) return base;
+      return {
+        ...base,
+        variant: {
+          default: null,
+          parseHTML: (el: HTMLElement) => {
+            const raw = el.getAttribute('data-variant');
+            if (!raw) return null;
+            try {
+              return JSON.parse(raw) as Record<string, string>;
+            } catch {
+              return null;
+            }
+          },
+          renderHTML: (attrs: Record<string, unknown>) => {
+            const v = attrs.variant as Record<string, string> | null | undefined;
+            if (!v || Object.keys(v).length === 0) return {};
+            return { 'data-variant': JSON.stringify(v) };
+          },
+        },
+      };
+    },
     addNodeView() {
       return ({ editor, getPos, node }) => {
         const contentTag = contentTagFor(blockType, node.attrs ?? {});
@@ -158,6 +193,12 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
         outer.className = 'paper-block-outer';
         outer.appendChild(wrapper);
 
+        // ---- A5 variant chip (mounts inside parts.variantSlot) ----
+        // `chipHandle` lives in the node-view closure so update() can re-render
+        // the chip on attribute changes and destroy() can tear the React root
+        // down cleanly. `null` when the block type has no variants.
+        let chipHandle: VariantChipHandle | null = null;
+
         if (isTopLevel) {
           const parts = (wrapper as unknown as { __chromeParts: ChromeParts })
             .__chromeParts;
@@ -168,6 +209,37 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
             const pos = getPos?.();
             return typeof pos === 'number' ? pos : undefined;
           });
+
+          // ---- A5: mount React VariantChip into the chrome's slot ----
+          if (pdType !== null) {
+            chipHandle = mountVariantChip(
+              parts.variantSlot,
+              pdType,
+              node.attrs ?? {},
+              (next) => {
+                // Merge new axes into the block's `variant` attribute via the
+                // TipTap command. We target the focused block at this node's
+                // position so multiple chips don't fight over a single
+                // updateAttributes call.
+                const pos = getPos?.();
+                if (typeof pos !== 'number') return;
+                const liveNode = editor.state.doc.nodeAt(pos);
+                if (!liveNode) return;
+                const prev = (liveNode.attrs?.variant as Record<string, string> | null) ?? {};
+                const merged = { ...prev, ...next };
+                editor
+                  .chain()
+                  .command(({ tr }) => {
+                    tr.setNodeMarkup(pos, undefined, {
+                      ...liveNode.attrs,
+                      variant: merged,
+                    });
+                    return true;
+                  })
+                  .run();
+              },
+            );
+          }
         }
 
         // ---- Hover state ----
@@ -202,11 +274,15 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
               if (contentTag !== newTag) return false;
             }
             updateChromeForSelection(wrapper, editor.state.selection.empty);
+            // A5 — push fresh attrs into the React chip so the closed-state
+            // summary stays in sync when the user picks a variant.
+            if (chipHandle !== null) chipHandle.update(newNode.attrs ?? {});
             return true;
           },
           destroy: () => {
             wrapper.removeEventListener('mouseenter', onEnter);
             wrapper.removeEventListener('mouseleave', onLeave);
+            if (chipHandle !== null) chipHandle.unmount();
             editor.off('selectionUpdate', onSelection);
           },
         };

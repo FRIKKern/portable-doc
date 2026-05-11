@@ -1,10 +1,10 @@
 /**
- * A2 — block-chrome DOM helpers.
+ * A2 — block-chrome DOM helpers; A5 — VariantChip mount bridge.
  *
  * The chrome (drag handle, type label, delete, "+" between-blocks) is plain
  * DOM that lives inside the TipTap node-view wrapper. We do NOT use React
  * here: the node-view runs outside React's reconciler, so any reconciliation
- * cost would be wasted. Three exported helpers keep `withBlockChrome.ts`
+ * cost would be wasted. Four exported helpers keep `withBlockChrome.ts`
  * legible:
  *
  *   renderChromeDom(blockType)
@@ -22,11 +22,21 @@
  *        in paper.css then collapses the chrome opacity to 0 while a
  *        text selection is active (grill Q3 — BubbleMenu wins z-stack).
  *
+ *   mountVariantChip(slot, blockType, attrs, onChange) -> handle
+ *     -> A5 bridge. Mounts the React VariantChip component into the
+ *        plain-DOM `paper-block__variant-slot` element via
+ *        `ReactDOM.createRoot`. The returned handle exposes `update(attrs)`
+ *        and `unmount()` for the NodeView's lifecycle. Only fires for
+ *        block types whose PortableDoc name is callout/action/section/code
+ *        (TipTap names are translated by `pdBlockTypeFor`).
+ *
  * Drag binding is deferred to A6; the handle is a button with the right
- * a11y + visual treatment only. Slash menu trigger is A3. Variant chip
- * paint is A5 — the slot exists here, empty.
+ * a11y + visual treatment only. Slash menu trigger is A3.
  */
 import type { Editor } from '@tiptap/core';
+import { createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { VariantChip } from './VariantChip.js';
 
 // ---------------------------------------------------------------------------
 // Block-type → human label (for `aria-label` strings + the toolbar label)
@@ -187,4 +197,80 @@ export function updateChromeForSelection(
   } else {
     blockEl.classList.add('is-selecting');
   }
+}
+
+// ---------------------------------------------------------------------------
+// A5 — VariantChip mount bridge (React → plain-DOM slot)
+// ---------------------------------------------------------------------------
+
+/** Map a TipTap node-name to its PortableDoc block type (the name the
+ *  variant catalog keys on). Returns `null` for nodes without variants
+ *  (paragraph, heading, list, divider). */
+export function pdBlockTypeFor(tiptapName: string): string | null {
+  switch (tiptapName) {
+    case 'blockquote':
+      return 'callout';
+    case 'codeBlock':
+      return 'code';
+    // A5 wires only the two TipTap-native variant types. action + section
+    // are first-class PortableDoc types but ship as their own TipTap nodes
+    // in a later task; VariantChip itself supports them via direct
+    // blockType prop, so unit tests cover all four.
+    default:
+      return null;
+  }
+}
+
+export interface VariantChipHandle {
+  /** Re-render with a fresh attrs object. */
+  update(attrs: Record<string, unknown>): void;
+  /** Tear down the React root and detach. */
+  unmount(): void;
+}
+
+/**
+ * Mount the React VariantChip into a chrome's variant slot.
+ *
+ * Returns a handle the NodeView holds onto for re-renders on attribute
+ * changes and for cleanup on `destroy`. Returns `null` when the block type
+ * has no variants (caller can skip without branching here).
+ *
+ * The bridge isolates the React side: the NodeView stays plain-DOM, the
+ * chip stays React. `createRoot` is called exactly once per slot.
+ */
+export function mountVariantChip(
+  slot: HTMLElement,
+  pdBlockType: string,
+  initialAttrs: Record<string, unknown>,
+  onChange: (next: Record<string, string>) => void,
+): VariantChipHandle | null {
+  // Guardrail: only the four PortableDoc variant types render anything.
+  // VariantChip itself returns null for non-variant types, but checking
+  // here avoids an unnecessary createRoot allocation.
+  const VARIANT_TYPES = new Set(['callout', 'action', 'section', 'code']);
+  if (!VARIANT_TYPES.has(pdBlockType)) return null;
+
+  const root: Root = createRoot(slot);
+  let currentAttrs = initialAttrs;
+
+  const renderNow = (): void => {
+    root.render(
+      createElement(VariantChip, {
+        blockType: pdBlockType,
+        attrs: currentAttrs,
+        onChange,
+      }),
+    );
+  };
+  renderNow();
+
+  return {
+    update(attrs: Record<string, unknown>) {
+      currentAttrs = attrs;
+      renderNow();
+    },
+    unmount() {
+      root.unmount();
+    },
+  };
 }

@@ -83,8 +83,12 @@
   --paper-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 
   /* Stacking (grill Q3) — block chrome below BubbleMenu so a text
-   * selection's floating toolbar (A4) always wins the visual layer. */
+   * selection's floating toolbar (A4) always wins the visual layer.
+   * A5 variant-chip palette sits between chrome (10) and BubbleMenu (20)
+   * so the palette can hover above its sibling chrome without ever
+   * overlapping a live text-selection toolbar. */
   --paper-block-chrome-z: 10;
+  --paper-variant-palette-z: 15;
   --paper-bubble-menu-z: 20;
 }
 
@@ -1244,6 +1248,142 @@
   border-top: 1px solid var(--paper-rule-soft);
   max-height: 60vh;
   overflow-y: auto;
+}
+
+/* ===========================================================================
+ * Variant chip (A5) — `.paper-variant-chip` mounted inside each block's
+ * `.paper-block__variant-slot` for blocks with a variant catalog entry
+ * (callout / action / section / code). The chip itself is React; the
+ * mount-point is plain-DOM. CSS lifts the prototype's `.tb-chip-row` /
+ * tone-dot / emph-pill treatment with the `.paper-` prefix.
+ *
+ * The closed state shows a single tone-dot + label (callout) or a short
+ * label (action / section / code). Click toggles `.paper-variant-chip__palette`
+ * — a hovering panel at z=15 (between chrome=10 and BubbleMenu=20+) listing
+ * every option as a small preview card.
+ *
+ * The expand transition reads `--motion-variant-chip-expand`. The token
+ * collapses to 0ms under `prefers-reduced-motion` per the global block.
+ * =========================================================================== */
+
+.paper-variant-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--paper-font-sans);
+}
+
+.paper-variant-chip__current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 11px;
+  background: var(--paper-chrome-bg);
+  color: var(--paper-ink-soft);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  transition:
+    color 120ms ease-out,
+    border-color 120ms ease-out,
+    background var(--motion-variant-chip-expand) ease-out;
+}
+.paper-variant-chip__current:hover {
+  color: var(--paper-ink);
+  border-color: var(--paper-rule);
+}
+.paper-variant-chip__current:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+.paper-variant-chip__current[aria-expanded='true'] {
+  border-color: var(--paper-accent-warm-rust);
+  color: var(--paper-ink);
+}
+
+.paper-variant-chip__tone-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.paper-variant-chip__summary-label {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.paper-variant-chip__palette {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: var(--paper-variant-palette-z, 15);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 220px;
+  padding: 8px;
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.10);
+  animation: paper-variant-chip-fade var(--motion-variant-chip-expand) ease-out;
+}
+@keyframes paper-variant-chip-fade {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Callout has 10 variants (5 tones × 2 emphases); a 5-col grid keeps
+ * the palette compact even at the wide end. */
+.paper-variant-chip[data-testid$='-callout'] .paper-variant-chip__palette {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-width: 280px;
+}
+
+.paper-variant-chip__option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule-soft);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--paper-ink);
+  font-family: inherit;
+  font-size: 10px;
+  transition:
+    border-color 120ms ease-out,
+    background 120ms ease-out;
+}
+.paper-variant-chip__option:hover {
+  border-color: var(--paper-accent-warm-rust);
+}
+.paper-variant-chip__option:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 1px;
+}
+.paper-variant-chip__option--active {
+  border-color: var(--paper-accent-warm-rust);
+  background: var(--paper-accent-soft);
+}
+
+.paper-variant-chip__option-label {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--paper-ink-soft);
+}
+
+.paper-variant-chip__preview {
+  min-height: 24px;
 }
 
 /* ===========================================================================
