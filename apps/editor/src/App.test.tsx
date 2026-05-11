@@ -109,4 +109,40 @@ describe('App — v0.4 single-column shell (A1)', () => {
     });
     expect(screen.getByRole('dialog', { name: 'JSON edit mode' })).toBeTruthy();
   });
+
+  it('Cmd+P toggles the A7 preview overlay (open then close)', () => {
+    render(<App />);
+    expect(screen.queryByTestId('preview-overlay')).toBeNull();
+    // Open with ⌘P.
+    act(() => {
+      fireEvent.keyDown(window, { key: 'p', metaKey: true });
+    });
+    expect(screen.getByTestId('preview-overlay')).toBeTruthy();
+    // Close with ⌘P again (toggle).
+    act(() => {
+      fireEvent.keyDown(window, { key: 'p', metaKey: true });
+    });
+    expect(screen.queryByTestId('preview-overlay')).toBeNull();
+  });
+
+  it('Ctrl+P also opens the A7 preview overlay (Linux/Windows)', () => {
+    render(<App />);
+    expect(screen.queryByTestId('preview-overlay')).toBeNull();
+    act(() => {
+      fireEvent.keyDown(window, { key: 'p', ctrlKey: true });
+    });
+    expect(screen.getByTestId('preview-overlay')).toBeTruthy();
+  });
+
+  it('Esc closes the A7 preview overlay (global handler)', () => {
+    render(<App />);
+    act(() => {
+      fireEvent.keyDown(window, { key: 'p', metaKey: true });
+    });
+    expect(screen.getByTestId('preview-overlay')).toBeTruthy();
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    expect(screen.queryByTestId('preview-overlay')).toBeNull();
+  });
 });

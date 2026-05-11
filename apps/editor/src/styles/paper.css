@@ -732,6 +732,311 @@
 }
 
 /* ===========================================================================
+ * Preview overlay (A7) — ⌘P modal portal'd to document.body.
+ *
+ * Stacks 5 surface previews (Web, Email, TUI, Native, JSON) inside a
+ * backdrop-shaded modal. Backdrop click and Esc dismiss. Inset cascade
+ * follows T3 layout: 64px at md, 24px at sm, full-bleed at xs.
+ *
+ * Adapted from prototype `.preview-frame` / `.preview-modal` (search the
+ * prototype HTML for `.preview-frame`). Prefix replaced with `.paper-`;
+ * fades driven by --motion-preview-overlay-open / --close so
+ * prefers-reduced-motion collapses to 0ms via the rule at the bottom of
+ * this file.
+ * =========================================================================== */
+
+.paper-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: block;
+  animation: paper-preview-overlay-fade var(--motion-preview-overlay-open) ease-out;
+}
+@keyframes paper-preview-overlay-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.paper-preview-overlay__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 26, 20, 0.55);
+  z-index: 0;
+}
+
+.paper-preview-overlay__modal {
+  position: fixed;
+  inset: var(--paper-overlay-inset-md);
+  background: var(--paper-bg);
+  border-radius: 6px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  padding: 28px 32px 32px;
+  overflow-y: auto;
+  z-index: 1;
+}
+
+.paper-preview-overlay__title {
+  /* Visually-hidden — present for aria-labelledby, not for sighted users
+   * (the close button + per-surface labels carry the visible meaning). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.paper-preview-overlay__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--paper-chrome-border);
+  color: var(--paper-ink-faint);
+  font-family: var(--paper-font-sans);
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+}
+.paper-preview-overlay__close:hover {
+  color: var(--paper-accent-warm-rust);
+  border-color: var(--paper-accent-warm-rust);
+}
+.paper-preview-overlay__close:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+.paper-preview-overlay__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  margin-top: 8px;
+}
+@media (min-width: 1024px) {
+  .paper-preview-overlay__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.paper-preview-overlay__surface {
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 4px;
+  padding: 18px 20px 20px;
+  min-height: 220px;
+  position: relative;
+}
+.paper-preview-overlay__surface-label {
+  font-family: var(--paper-font-sans);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+  margin: 0 0 12px;
+}
+
+/* T3 inset cascade — modal hugs the viewport more tightly at narrower widths. */
+@media (max-width: 767px) {
+  .paper-preview-overlay__modal {
+    inset: var(--paper-overlay-inset-sm);
+    padding: 22px 24px 24px;
+  }
+}
+@media (max-width: 479px) {
+  .paper-preview-overlay__modal {
+    inset: var(--paper-overlay-inset-xs);
+    border-radius: 0;
+    padding: 18px 16px 20px;
+  }
+}
+
+/* ===========================================================================
+ * Format bubble (A4) — paper-format-bubble + __btn + __sep + __link-row /
+ * __link-input / __link-remove
+ *
+ * Adapted from the prototype's `.inline-toolbar` / `.inline-btn` / `.tt-bubble`
+ * rules (search `~/docs/paperflow/notes/2026-05-10-paper-vision-prototype.html`
+ * for `.inline-toolbar`) with the `.paper-` prefix and motion tokens. Lives
+ * INSIDE @tiptap/react's BubbleMenu substrate, which owns positioning — we
+ * only own the toolbar shape.
+ *
+ * Stacking (grill Q3): the bubble lands at `--paper-bubble-menu-z` (= 20),
+ * above `--paper-block-chrome-z` (= 10). Belt-and-suspenders via the
+ * `.paper-block.is-selecting` rule earlier in this file that already hides
+ * chrome whenever the selection is non-empty.
+ *
+ * Touch sizing (grill Q8): at `<768px`, buttons grow to
+ * `var(--paper-bubble-menu-touch, 44px)` square so a thumb can land them.
+ * Desktop keeps the prototype's compact 28x24px shape.
+ * =========================================================================== */
+
+.paper-format-bubble {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 4px;
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10);
+  font-family: var(--paper-font-sans);
+  z-index: var(--paper-bubble-menu-z, 20);
+  animation: paper-format-bubble-fade var(--motion-bubble-menu-open) ease-out;
+}
+@keyframes paper-format-bubble-fade {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.paper-format-bubble__btn {
+  width: 28px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  border-radius: 3px;
+  color: var(--paper-ink);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  padding: 0;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+.paper-format-bubble__btn:hover {
+  background: var(--paper-bg-deep);
+}
+.paper-format-bubble__btn--active,
+.paper-format-bubble__btn[aria-pressed='true'] {
+  background: var(--paper-accent-soft);
+  color: var(--paper-accent-warm-rust);
+}
+.paper-format-bubble__btn--bold {
+  font-weight: 800;
+  font-family: var(--paper-font-serif);
+}
+.paper-format-bubble__btn--italic {
+  font-style: italic;
+  font-family: var(--paper-font-serif);
+}
+.paper-format-bubble__btn--code {
+  font-family: var(--paper-font-mono);
+  font-size: 11px;
+  letter-spacing: -0.02em;
+}
+.paper-format-bubble__btn:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+.paper-format-bubble__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--paper-rule);
+  margin: 0 2px;
+}
+
+.paper-format-bubble__link-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid var(--paper-rule);
+}
+
+.paper-format-bubble__link-input {
+  width: 180px;
+  height: 22px;
+  border: 1px solid var(--paper-rule);
+  border-radius: 3px;
+  background: var(--paper-bg);
+  padding: 0 6px;
+  font-family: var(--paper-font-sans);
+  font-size: 12px;
+  color: var(--paper-ink);
+  outline: none;
+}
+.paper-format-bubble__link-input:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+.paper-format-bubble__link-remove {
+  height: 22px;
+  border: 1px solid var(--paper-chrome-border);
+  background: transparent;
+  border-radius: 3px;
+  padding: 0 8px;
+  font-family: var(--paper-font-sans);
+  font-size: 11.5px;
+  color: var(--paper-ink-soft);
+  cursor: pointer;
+}
+.paper-format-bubble__link-remove:hover {
+  color: var(--paper-accent-warm-rust);
+  border-color: var(--paper-accent-warm-rust);
+}
+.paper-format-bubble__link-remove:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+/* Narrow viewport (grill Q8) — 44px hit-targets for thumb input. The bubble
+ * itself grows in height to accommodate; the input row sits below the
+ * buttons rather than to their right. */
+@media (max-width: 767px) {
+  .paper-format-bubble {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 4px;
+    gap: 4px;
+  }
+  .paper-format-bubble__btn {
+    width: var(--paper-bubble-menu-touch, 44px);
+    height: var(--paper-bubble-menu-touch, 44px);
+    font-size: 15px;
+  }
+  .paper-format-bubble__btn--code {
+    font-size: 13px;
+  }
+  .paper-format-bubble__sep {
+    height: 22px;
+  }
+  .paper-format-bubble__link-row {
+    flex-basis: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--paper-rule);
+    padding-top: 4px;
+  }
+  .paper-format-bubble__link-input {
+    flex: 1;
+    height: 36px;
+    font-size: 14px;
+  }
+  .paper-format-bubble__link-remove {
+    height: 36px;
+  }
+}
+
+/* ===========================================================================
  * Global a11y — prefers-reduced-motion collapses every motion token.
  * motion.css already declares its own block; we add one here so the paper
  * stylesheet stays self-contained even if motion.css is bundled separately

@@ -26,6 +26,7 @@ import { Editor } from './Editor.js';
 import { FooterStatus } from './FooterStatus.js';
 import { JsonEditMode } from './JsonEditMode.js';
 import { McpProvider } from './McpProvider.js';
+import { PreviewOverlay } from './PreviewOverlay.js';
 import './styles/paper.css';
 
 const welcome = welcomeJson as PortableDoc;
@@ -41,6 +42,7 @@ export function App(): JSX.Element {
 function AppShell(): JSX.Element {
   const [doc, setDoc] = useState<PortableDoc>(welcome);
   const [jsonModeOpen, setJsonModeOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Hidden Cmd+Shift+J / Ctrl+Shift+J shortcut toggles the JSON-edit-mode
   // overlay. Power-user escape hatch carried over from v0.3.
@@ -54,6 +56,27 @@ function AppShell(): JSX.Element {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // A7 — Cmd+P (Mac) / Ctrl+P (Linux/Windows) toggles the all-surfaces
+  // preview overlay. Esc dismisses when open. We e.preventDefault() to
+  // suppress the browser-print dialog.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // Shift+Cmd+P (Cmd+Shift+P) is reserved by browsers / not ours.
+      // Plain ⌘P / Ctrl+P toggles; never fire if shift is held.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        setPreviewOpen((v) => !v);
+        return;
+      }
+      if (e.key === 'Escape' && previewOpen) {
+        e.preventDefault();
+        setPreviewOpen(false);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewOpen]);
 
   return (
     <div className="paper-app" data-testid="paper-app">
@@ -69,6 +92,11 @@ function AppShell(): JSX.Element {
           setDoc(next);
           setJsonModeOpen(false);
         }}
+      />
+      <PreviewOverlay
+        doc={doc}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
       />
     </div>
   );
