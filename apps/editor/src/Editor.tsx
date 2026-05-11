@@ -1,174 +1,95 @@
 /**
- * Block list (left) + edit form (center).
+ * v0.4 — single document-level TipTap instance.
  *
- * After A2: the left panel renders block-shaped tiles with type icons,
- * content previews, and tone color stripes. Tiles are draggable via
- * @dnd-kit/sortable; up/↓/× action buttons remain as keyboard fallback.
+ * Replaces the v0.3 three-panel composite (BlockList + BlockForm + SlashPopover)
+ * with ONE editor that hosts the whole doc. A2 layers block chrome onto this
+ * via NodeView. A3 layers slash-command insertion via an Extension. A4 ships
+ * the BubbleMenu. A5 wires the VariantChip. A6 adds drag-and-drop. A10 paints
+ * the soft margin notes. A1 (this file) is the bare TipTap surface — light
+ * extension set, full document model.
  *
- * After A3: pressing "/" anywhere (including inside the TipTap editor)
- * opens the SlashPopover for fast keyboard-driven block insertion. When
- * a block is selected, insertion lands AFTER that block; otherwise the
- * new block is appended to the end (existing reducer semantics).
+ * Why one instance, not five
+ * --------------------------
+ * v0.3's `RichTextField` mounted a separate TipTap per text-bearing field
+ * (paragraph body, callout body, each list item). The new model lets TipTap
+ * own the structural document — heading, paragraph, list, blockquote, code,
+ * horizontal rule are all ProseMirror nodes. The PortableDoc JSON survives
+ * as the on-disk format; we render it INTO TipTap via `welcomeToTipTapHtml`
+ * on mount, and (in later tasks) reflect TipTap edits back into the AST.
+ *
+ * Extensions in A1
+ * ----------------
+ * StarterKit       — heading, paragraph, list, blockquote, code, hr, marks
+ * Placeholder      — empty-doc hint text
+ * Link             — StarterKit already includes link, but we re-configure
+ *                    it so href values survive serialization round-trips.
+ *
+ * Block chrome / slash / bubble / variant chip / drag / margin notes are
+ * intentionally NOT here — A2–A10 layer them on.
  */
-import { useEffect, useMemo, useState } from 'react';
-import type { Block, BlockType, PortableDoc, ValidationIssue } from '@portable-doc/core';
-import { validateDoc } from '@portable-doc/core';
-import type { Action } from './store.js';
-import { BlockForm } from './BlockForm.js';
-import { BlockList } from './BlockList.js';
-import { DocLevelDiagnostics } from './DocLevelDiagnostics.js';
-import { SlashPopover } from './SlashPopover.js';
-import type { SlashCommand } from './lib/slash-filter.js';
+import { useEditor, EditorContent, type Editor as TipTapEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import { useEffect, useRef } from 'react';
+import type { PortableDoc } from '@portable-doc/core';
+import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
 
-const ALL_TYPES: BlockType[] = [
-  'heading',
-  'paragraph',
-  'list',
-  'callout',
-  'action',
-  'section',
-  'divider',
-  'code',
-  'image',
-  'table',
-];
-
-const TYPE_GLYPH: Record<BlockType, string> = {
-  heading: 'H',
-  paragraph: 'P',
-  list: '•',
-  callout: '!',
-  action: '▶',
-  section: '§',
-  divider: '—',
-  code: '<>',
-  image: 'img',
-  table: '⊞',
-};
-
-interface Props {
+interface EditorProps {
+  /** Initial PortableDoc rendered into the editor on mount. */
   doc: PortableDoc;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  dispatch: (a: Action) => void;
+  /** Fires on every TipTap transaction with the editor's current JSON. */
+  onChange?: (json: ReturnType<TipTapEditor['getJSON']>) => void;
+  /** A2 / A3 / A4 will hand the editor instance back up through this ref. */
+  onEditorReady?: (editor: TipTapEditor) => void;
+  /** Stable test id forwarded to the contenteditable for assertion targeting. */
+  dataTestId?: string;
 }
 
-export function Editor({ doc, selectedId, onSelect, dispatch }: Props) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [slashOpen, setSlashOpen] = useState(false);
-  const [slashAnchor, setSlashAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
-  const selected = doc.blocks.find((b) => b.id === selectedId) ?? null;
+export function Editor({
+  doc,
+  onChange,
+  onEditorReady,
+  dataTestId,
+}: EditorProps): JSX.Element {
+  // Keep the latest onChange in a ref so re-renders of the parent don't
+  // re-create the editor (TipTap remounts are expensive + lose selection).
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  // Inline diagnostics (A5): re-validate the doc on every change and split
-  // issues into per-block + doc-level buckets. Block-level only per grill q5.
-  const { byBlock, docLevel } = useMemo(() => {
-    const issues: ValidationIssue[] = validateDoc(doc);
-    const map = new Map<string, ValidationIssue[]>();
-    const dl: ValidationIssue[] = [];
-    for (const issue of issues) {
-      if (issue.blockId) {
-        const arr = map.get(issue.blockId) ?? [];
-        arr.push(issue);
-        map.set(issue.blockId, arr);
-      } else {
-        dl.push(issue);
-      }
-    }
-    return { byBlock: map, docLevel: dl };
-  }, [doc]);
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        // Keep StarterKit's link mark on; we just want predictable defaults.
+        link: {
+          openOnClick: false,
+          HTMLAttributes: { rel: 'noopener noreferrer nofollow' },
+        },
+      }),
+      Placeholder.configure({
+        placeholder: 'Start typing — press "/" for a block menu',
+      }),
+    ],
+    content: portableDocToTipTapHtml(doc),
+    editorProps: {
+      attributes: {
+        class: 'paper-editor-surface',
+        ...(dataTestId ? { 'data-testid': dataTestId } : {}),
+      },
+    },
+    onUpdate: ({ editor: e }) => {
+      onChangeRef.current?.(e.getJSON());
+    },
+  });
 
-  // Listen for "/" press anywhere in the editor surface (including inside
-  // TipTap fields). Per the acceptance gate, both in-editor "/" and
-  // out-of-editor "/" must open the popover.
+  // Surface the editor instance once it's ready. A2 / A3 / A4 will read this
+  // to attach NodeView decorators, slash extensions, and BubbleMenu plugins.
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== '/') return;
-      // Skip if a modifier is held (real find-shortcuts etc.).
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Skip if the slash popover input itself has focus (typing inside it).
-      const target = e.target as HTMLElement | null;
-      if (target?.dataset?.testid === 'slash-input') return;
-      e.preventDefault();
-      // Anchor: caret position (rough) or a sensible fixed location.
-      const anchor = computeAnchor(target);
-      setSlashAnchor(anchor);
-      setSlashOpen(true);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
-  function handleSlashSelect(cmd: SlashCommand) {
-    dispatch({ kind: 'add', blockType: cmd.type, afterId: selectedId ?? undefined });
-    setSlashOpen(false);
-  }
+    if (editor && onEditorReady) onEditorReady(editor);
+  }, [editor, onEditorReady]);
 
   return (
-    <>
-      <div className="col" data-testid="block-list">
-        <h2>Blocks ({doc.blocks.length})</h2>
-        <div className="add-popover">
-          <button onClick={() => setShowAdd((s) => !s)} aria-label="Add block">+ Add block</button>
-          {showAdd && (
-            <div className="add-popover-menu" role="menu">
-              {ALL_TYPES.map((t) => (
-                <button
-                  key={t}
-                  role="menuitem"
-                  onClick={() => {
-                    dispatch({ kind: 'add', blockType: t });
-                    setShowAdd(false);
-                  }}
-                >
-                  {TYPE_GLYPH[t]} {t}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <DocLevelDiagnostics issues={docLevel} />
-        <div style={{ marginTop: 8 }}>
-          <BlockList
-            blocks={doc.blocks as Block[]}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            onReorder={(next) => dispatch({ kind: 'reorder', blocks: next })}
-            dispatch={dispatch}
-            issuesByBlock={byBlock}
-          />
-        </div>
-      </div>
-      <div className="col" data-testid="block-form">
-        <h2>Edit</h2>
-        {selected ? (
-          <BlockForm block={selected} dispatch={dispatch} />
-        ) : (
-          <p style={{ color: '#888' }}>Select a block to edit.</p>
-        )}
-      </div>
-      <SlashPopover
-        open={slashOpen}
-        onSelect={handleSlashSelect}
-        onClose={() => setSlashOpen(false)}
-        anchor={slashAnchor}
-      />
-    </>
+    <div className="paper-editor" data-testid="paper-editor">
+      <EditorContent editor={editor} />
+    </div>
   );
-}
-
-/**
- * Best-effort anchor for the popover. When the "/" was pressed inside an
- * input/contenteditable, we anchor near that element's bounding rect; when
- * pressed on a non-text target (e.g. a tile), we fall back to a fixed
- * top-left location. Real-world precision is bounded by jsdom test
- * environments — this just needs to land "near enough".
- */
-function computeAnchor(target: HTMLElement | null): { x: number; y: number } {
-  if (target && typeof target.getBoundingClientRect === 'function') {
-    const r = target.getBoundingClientRect();
-    if (r.left || r.top || r.width || r.height) {
-      return { x: Math.round(r.left + 8), y: Math.round(r.top + r.height + 4) };
-    }
-  }
-  return { x: 80, y: 100 };
 }

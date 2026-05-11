@@ -1,0 +1,289 @@
+/**
+ * v0.4 Paper — single canonical stylesheet.
+ *
+ * Strategy locked (Q13 of build-phase grill): plain CSS with a `.paper-` prefix
+ * — no CSS Modules, no toolchain change. Every visual rule for the editor
+ * lives in this file (imports `./motion.css` for the animation tokens).
+ *
+ * Variables under :root are the verbatim values from
+ *  - T1 typography decision  (~/docs/paperflow/notes/2026-05-12-v0-4-typography.html)
+ *  - T3 layout decision      (~/docs/paperflow/notes/2026-05-12-v0-4-layout.html)
+ *  - prototype palette       (~/docs/paperflow/notes/2026-05-10-paper-vision-prototype.html)
+ *
+ * Editing rule: do NOT improvise values. If a value needs to change, update the
+ * decision doc first, then propagate here. The `@media (prefers-reduced-motion:
+ * reduce)` rule at the bottom is the global a11y kill-switch — every motion
+ * variable collapses to 0ms there.
+ *
+ * Class names: every class in this file starts with `paper-`. Component code
+ * references classes by string (`className="paper-column"`) — React inline
+ * style is reserved for dynamically computed positions (margin-note tops,
+ * chrome anchors), not static rules.
+ */
+
+@import './motion.css';
+
+/* ===========================================================================
+ * :root — the locked variable set (T1 + T3 + prototype palette)
+ * =========================================================================== */
+
+:root {
+  /* ---------------------- T1 typography (12 vars) ---------------------- */
+  --paper-font-serif: 'Iowan Old Style', 'Constantia', 'Charter', Georgia, serif;
+  --paper-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --paper-font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --paper-font-size-body: 18px;
+  --paper-font-size-h1: 32px;
+  --paper-font-size-h2: 24px;
+  --paper-font-size-h3: 20px;
+  --paper-font-size-small: 14px;
+  --paper-line-height-body: 1.7;
+  --paper-line-height-heading: 1.3;
+  --paper-letter-spacing-body: 0.005em;
+
+  /* ---------------------- T3 layout (16 vars) -------------------------- */
+  --paper-column-max: 680px;
+  --paper-padding-side-md: 32px;
+  --paper-padding-side-sm: 24px;
+  --paper-padding-side-xs: 16px;
+  --paper-padding-top-md: 80px;
+  --paper-padding-top-sm: 48px;
+  --paper-padding-top-xs: 32px;
+  --paper-footer-height: 36px;
+  --paper-overlay-inset-md: 64px;
+  --paper-overlay-inset-sm: 24px;
+  --paper-overlay-inset-xs: 0;
+  --paper-outline-rail-width: 240px;
+  --paper-slash-popover-width: 280px;
+  --paper-bubble-menu-touch: 44px;
+  --paper-breakpoint-sm: 480px;
+  --paper-breakpoint-md: 768px;
+
+  /* ---------------------- Prototype palette (verbatim) ----------------- */
+  --paper-bg: #fbfaf6;
+  --paper-bg-deep: #f5f2e9;
+  --paper-ink: #1f1a14;
+  --paper-ink-soft: #5b524a;
+  --paper-ink-faint: #8a8278;
+  --paper-rule: rgba(31, 26, 20, 0.08);
+  --paper-rule-soft: rgba(31, 26, 20, 0.04);
+  --paper-accent-warm-rust: #a23925;
+  --paper-accent-soft: rgba(162, 57, 37, 0.10);
+
+  /* tone scale (callouts, status dots) */
+  --paper-tone-neutral: #6f6a62;
+  --paper-tone-info: #3b6e8f;
+  --paper-tone-success: #4a7a4d;
+  --paper-tone-warning: #b38330;
+  --paper-tone-danger: #a23925;
+
+  /* chrome surface (block toolbar, popovers) */
+  --paper-chrome-bg: #fefdf9;
+  --paper-chrome-border: rgba(31, 26, 20, 0.12);
+  --paper-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ===========================================================================
+ * @font-face — non-blocking WOFF2 fallback for the canonical body face
+ * (T1 §"The WOFF2 strategy"). The file lives at apps/editor/public/fonts/
+ * and is wired in by A1 so the path is reproducible; macOS still wins via
+ * the system entry in --paper-font-serif before this ever fetches.
+ * =========================================================================== */
+
+@font-face {
+  font-family: 'Iowan Old Style';
+  src: url('/fonts/iowan-old-style.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: optional;
+}
+
+/* ===========================================================================
+ * Frame — html / body / app shell + the single centered column + footer
+ * =========================================================================== */
+
+.paper-app {
+  min-height: 100vh;
+  background: var(--paper-bg);
+  color: var(--paper-ink);
+  font-family: var(--paper-font-serif);
+  font-size: var(--paper-font-size-body);
+  line-height: var(--paper-line-height-body);
+  letter-spacing: var(--paper-letter-spacing-body);
+  -webkit-font-smoothing: antialiased;
+  /* Reserve room for the fixed footer at the bottom. */
+  padding-bottom: var(--paper-footer-height);
+  box-sizing: border-box;
+}
+
+.paper-column {
+  max-width: var(--paper-column-max);
+  margin: 0 auto;
+  padding: var(--paper-padding-top-md) var(--paper-padding-side-md);
+  font-family: var(--paper-font-serif);
+  font-size: var(--paper-font-size-body);
+  line-height: var(--paper-line-height-body);
+  letter-spacing: var(--paper-letter-spacing-body);
+  color: var(--paper-ink);
+}
+
+/* Doc-level heading rhythm. Headings inherit the serif (T1: body voice,
+ * just heavier — single weight delta marks hierarchy). */
+.paper-column h1,
+.paper-column h2,
+.paper-column h3 {
+  font-family: var(--paper-font-serif);
+  line-height: var(--paper-line-height-heading);
+  font-weight: 600;
+  color: var(--paper-ink);
+}
+.paper-column h1 {
+  font-size: var(--paper-font-size-h1);
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+}
+.paper-column h2 {
+  font-size: var(--paper-font-size-h2);
+  margin: 38px 0 14px;
+}
+.paper-column h3 {
+  font-size: var(--paper-font-size-h3);
+  margin: 28px 0 10px;
+}
+.paper-column p {
+  margin: 0 0 22px;
+}
+.paper-column a {
+  color: var(--paper-accent-warm-rust);
+  text-decoration: none;
+  border-bottom: 1px solid var(--paper-accent-soft);
+}
+.paper-column ul,
+.paper-column ol {
+  margin: 0 0 24px;
+  padding-left: 24px;
+}
+.paper-column li {
+  margin: 0 0 8px;
+}
+.paper-column blockquote {
+  margin: 0 0 24px;
+  padding: 18px 22px;
+  border-left: 4px solid var(--paper-tone-info);
+  background: rgba(59, 110, 143, 0.07);
+  border-radius: 2px;
+  font-style: normal;
+}
+.paper-column code {
+  font-family: var(--paper-font-mono);
+  font-size: 0.92em;
+  background: rgba(0, 0, 0, 0.045);
+  padding: 0.08em 0.35em;
+  border-radius: 3px;
+}
+.paper-column pre {
+  font-family: var(--paper-font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--paper-bg-deep);
+  border: 1px solid var(--paper-rule);
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin: 0 0 22px;
+  overflow-x: auto;
+}
+.paper-column hr {
+  border: 0;
+  border-top: 1px solid var(--paper-rule);
+  margin: 28px 0;
+}
+
+/* Editor mount surface — the single TipTap instance sits here. The
+ * .ProseMirror class is the default surface TipTap renders on top of
+ * its EditorContent host node. */
+.paper-editor {
+  outline: none;
+}
+.paper-editor .ProseMirror {
+  outline: none;
+  min-height: 200px;
+}
+.paper-editor .ProseMirror:focus {
+  outline: none;
+}
+/* Placeholder text — TipTap Placeholder extension applies the
+ * `.is-editor-empty` class to the first empty node and reads the
+ * placeholder string from a data attribute. */
+.paper-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--paper-ink-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Footer — fixed 36px placeholder strip. A8 fills the content (validation
+ * pill, MCP dot, save indicator). For A1 we just hold the space + the rule.
+ * --------------------------------------------------------------------------- */
+
+.paper-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--paper-footer-height);
+  background: var(--paper-bg);
+  border-top: 1px solid var(--paper-rule);
+  font-family: var(--paper-font-sans);
+  font-size: 12px;
+  color: var(--paper-ink-faint);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--paper-padding-side-md);
+  z-index: 5;
+}
+
+/* ===========================================================================
+ * Responsive cascade (T3 Figure 1) — three breakpoints, geometry changes.
+ * =========================================================================== */
+
+@media (max-width: 767px) {
+  .paper-column {
+    padding: var(--paper-padding-top-sm) var(--paper-padding-side-sm);
+  }
+  .paper-footer {
+    padding: 0 var(--paper-padding-side-sm);
+  }
+}
+
+@media (max-width: 479px) {
+  .paper-column {
+    padding: var(--paper-padding-top-xs) var(--paper-padding-side-xs);
+  }
+  .paper-footer {
+    padding: 0 var(--paper-padding-side-xs);
+  }
+}
+
+/* ===========================================================================
+ * Global a11y — prefers-reduced-motion collapses every motion token.
+ * motion.css already declares its own block; we add one here so the paper
+ * stylesheet stays self-contained even if motion.css is bundled separately
+ * in some downstream test fixture. Keep both — duplicates are harmless and
+ * the spec (paper.css §"prefers-reduced-motion") expects it to live here.
+ * =========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-chrome-fade-in: 0ms;
+    --motion-chrome-fade-out: 0ms;
+    --motion-slash-menu-open: 0ms;
+    --motion-bubble-menu-open: 0ms;
+    --motion-drop-indicator: 0ms;
+    --motion-variant-chip-expand: 0ms;
+    --motion-outline-slide: 0ms;
+    --motion-preview-overlay-open: 0ms;
+    --motion-preview-overlay-close: 0ms;
+    --motion-footer-sheet-slide: 0ms;
+  }
+}

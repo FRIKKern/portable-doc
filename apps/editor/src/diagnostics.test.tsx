@@ -1,10 +1,17 @@
 /**
  * @vitest-environment jsdom
  *
- * A5 inline diagnostics — block-level red dots on tiles for validateDoc
- * issues. Per grill q5: block-level only; char-range is v0.4.
+ * v0.3 inline-diagnostics specs — disposition `rewrite` per the v0.4
+ * test-triage CSV (A10 ships MarginDiagnostics in v0.4). The contents below
+ * pin the v0.3 behavior; A10 will replace them with MarginDiagnostics.test.tsx.
+ *
+ * Skipped at the describe.skip layer for A1 — the props they pass to <Editor>
+ * (selectedId / onSelect / dispatch) belong to the v0.3 three-panel composite
+ * that A1 retired. Keeping the file so the historical contract is preserved
+ * in source control until A10 rewrites it.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { FC } from 'react';
 import { useReducer, useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { PortableDoc } from '@portable-doc/core';
@@ -25,9 +32,17 @@ afterEach(() => cleanup());
 function Harness({ initial }: { initial: PortableDoc }) {
   const [doc, dispatch] = useReducer(reducer, initial);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The cast is intentional: this harness uses the v0.3 Editor signature
+  // that A1 retired. A10 will rewrite this file with the v0.4 surface.
+  const LegacyEditor = Editor as unknown as FC<{
+    doc: PortableDoc;
+    selectedId: string | null;
+    onSelect: (id: string) => void;
+    dispatch: typeof dispatch;
+  }>;
   return (
     <>
-      <Editor doc={doc} selectedId={selectedId} onSelect={setSelectedId} dispatch={dispatch} />
+      <LegacyEditor doc={doc} selectedId={selectedId} onSelect={setSelectedId} dispatch={dispatch} />
       <div data-testid="selected-id">{selectedId ?? ''}</div>
     </>
   );
@@ -45,7 +60,7 @@ const docOneIssue: PortableDoc = {
   ],
 };
 
-describe('A5 inline diagnostics', () => {
+describe.skip('A5 inline diagnostics (pinned to v0.3; A10 rewrites)', () => {
   it('renders a red dot only on the offending tile (one issue → one dot)', () => {
     render(<Harness initial={docOneIssue} />);
     expect(screen.getByTestId('diagnostics-dot-c1')).toBeTruthy();

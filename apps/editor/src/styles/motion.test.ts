@@ -110,7 +110,6 @@ describe('SSR safety', () => {
     try {
       expect(duration('outlineSlide')).toBe(motion.outlineSlide);
     } finally {
-      // @ts-expect-error — restore.
       globalThis.window = originalWindow;
     }
   });

@@ -1,112 +1,107 @@
 /**
- * @vitest-environment happy-dom
+ * @vitest-environment jsdom
+ *
+ * A1 — single-column-layout. The App shell renders a centered paper column
+ * with one TipTap editor inside, plus a fixed 36px footer placeholder. The
+ * v0.3 three-panel grid (BlockList | center | PreviewStrip) is gone.
+ *
+ * These specs replace the v0.3 App tests per the T4 test-triage CSV
+ * (apps/editor/src/App.test.tsx — disposition `rewrite`).
+ *
+ * Coverage:
+ *   1. paper-app container renders.
+ *   2. paper-column lands as the only content host.
+ *   3. paper-footer empty placeholder is mounted (A8 fills it).
+ *   4. ONE TipTap editor surface mounts (single document model, not five).
+ *   5. The welcome fixture content is visible in the editor.
+ *   6. v0.3 surfaces are GONE — no preview-tui, no block-list, no add-block btn.
+ *   7. Cmd+Shift+J still opens the JSON-edit-mode overlay (keep-disposition).
  */
-import { describe, expect, it } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { App } from './App.js';
 
-describe('App', () => {
-  it('renders without throwing', () => {
-    const { container } = render(<App />);
-    expect(container.querySelector('h1')?.textContent).toBe('PortableDoc Editor');
+// jsdom doesn't implement Range.getClientRects on text nodes; ProseMirror calls
+// it after every transaction. Stub so TipTap mount doesn't throw on layout.
+beforeAll(() => {
+  if (!('getClientRects' in Range.prototype)) {
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      value: () => {
+        const list = [] as unknown as DOMRectList;
+        Object.defineProperty(list, 'item', { value: () => null });
+        return list;
+      },
+      configurable: true,
+    });
+  }
+  if (!('getBoundingClientRect' in Range.prototype)) {
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      value: () => ({
+        x: 0, y: 0, width: 0, height: 0,
+        top: 0, left: 0, right: 0, bottom: 0,
+        toJSON: () => ({}),
+      }),
+      configurable: true,
+    });
+  }
+});
+
+afterEach(() => cleanup());
+
+describe('App — v0.4 single-column shell (A1)', () => {
+  it('renders the paper-app container', () => {
+    render(<App />);
+    expect(screen.getByTestId('paper-app')).toBeTruthy();
   });
 
-  it('default tab is TUI — TUI preview is mounted, others are not', () => {
+  it('renders the centered paper-column as the only content host', () => {
     render(<App />);
-    expect(screen.getByTestId('preview-tui')).toBeTruthy();
-    expect(screen.queryByTestId('preview-json')).toBeNull();
-    expect(screen.queryByTestId('preview-email')).toBeNull();
-    expect(screen.queryByTestId('preview-web')).toBeNull();
-    expect(screen.queryByTestId('preview-native')).toBeNull();
+    const cols = screen.getAllByTestId('paper-column');
+    expect(cols.length).toBe(1);
+    // The column hosts the single editor.
+    expect(cols[0]?.querySelector('[data-testid="paper-editor"]')).toBeTruthy();
   });
 
-  it('renders both fixtures via the header buttons', () => {
+  it('mounts the fixed 36px footer placeholder (A8 fills the content)', () => {
     render(<App />);
-    // welcome by default — first block summary shows H1 Welcome to Atlas
-    expect(screen.getAllByText(/Welcome to Atlas/).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByText('Load incident'));
-    // After Load incident, the editor block list (live doc) no longer
-    // contains "Welcome to Atlas". Preview thumbnails are debounced 500 ms
-    // and may briefly hold the old heading — scope the assertion to the
-    // block list, which tracks the live doc reference.
-    const blockList = screen.getByTestId('block-list');
-    expect(blockList.textContent ?? '').not.toMatch(/Welcome to Atlas/);
-    // incident has its own first heading
-    expect(blockList.textContent ?? '').toMatch(/incident|Incident/);
+    const footer = screen.getByTestId('paper-footer');
+    expect(footer.tagName.toLowerCase()).toBe('footer');
+    // A1 ships an empty placeholder; A8 fills it.
+    expect(footer.textContent ?? '').toBe('');
   });
 
-  it('switching surfaces unmounts the previous preview and mounts the next', () => {
+  it('mounts exactly ONE TipTap editor surface (single doc model)', () => {
     render(<App />);
-    expect(screen.getByTestId('preview-tui')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('thumb-json'));
+    const editors = screen.getAllByTestId('paper-editor');
+    expect(editors.length).toBe(1);
+    // ProseMirror's contenteditable lives inside the editor mount.
+    const pm = editors[0]?.querySelector('.ProseMirror');
+    expect(pm).toBeTruthy();
+    expect(pm?.getAttribute('contenteditable')).toBe('true');
+  });
+
+  it('renders the welcome fixture content in the editor on mount', () => {
+    render(<App />);
+    const editor = screen.getByTestId('paper-editor');
+    // Welcome fixture has an h1 "Welcome to Atlas" and a paragraph below.
+    expect(editor.textContent ?? '').toMatch(/Welcome to Atlas/);
+  });
+
+  it('does NOT render the v0.3 three-panel surfaces (preview / block list / add button)', () => {
+    render(<App />);
     expect(screen.queryByTestId('preview-tui')).toBeNull();
-    expect(screen.getByTestId('preview-json')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('thumb-native'));
     expect(screen.queryByTestId('preview-json')).toBeNull();
-    expect(screen.getByTestId('preview-native')).toBeTruthy();
+    expect(screen.queryByTestId('block-list')).toBeNull();
+    expect(screen.queryByTestId('block-form')).toBeNull();
+    expect(screen.queryByLabelText('Add block')).toBeNull();
   });
 
-  it('Web surface is React.lazy — Suspense fallback shows while the chunk resolves', async () => {
+  it('Cmd+Shift+J still opens the JSON-edit-mode overlay (keep-disposition)', () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId('thumb-web'));
-    // Either the fallback is visible synchronously, or the chunk has already
-    // resolved and the preview is mounted. Both prove lazy/Suspense wiring.
-    const fallback = screen.queryByTestId('web-lazy-fallback');
-    const preview = screen.queryByTestId('preview-web');
-    expect(fallback !== null || preview !== null).toBe(true);
-    // findBy retries through the Suspense resolution — robust against the
-    // microtask ordering race that surfaced after cli-highlight grew the chunk.
-    expect(await screen.findByTestId('preview-web')).toBeTruthy();
-  });
-
-  it('validation panel reports 0 issues for the welcome fixture', () => {
-    render(<App />);
-    expect(screen.getByTestId('validation-ok').textContent).toMatch(/0 issues/);
-  });
-
-  it('validation panel updates live after a delete', async () => {
-    render(<App />);
-    // Click each delete button to remove every block.
-    const deletes = screen.getAllByLabelText(/Delete /);
-    expect(deletes.length).toBeGreaterThan(0);
-    for (const btn of deletes) {
-      await act(async () => {
-        fireEvent.click(btn);
-      });
-    }
-    // After all deletes the doc has 0 blocks; validator returns [] = "0 issues".
-    const ok = screen.queryByTestId('validation-ok');
-    expect(ok?.textContent ?? '').toMatch(/0 issues/);
-  });
-
-  it('add → click + and pick a block type appends the block', () => {
-    render(<App />);
-    const addBtn = screen.getByLabelText('Add block');
-    fireEvent.click(addBtn);
-    fireEvent.click(screen.getByRole('menuitem', { name: /heading/ }));
-    // Header still shows the title; block count grew by one (welcome has 7 → 8).
-    expect(screen.getByText(/8 blocks/)).toBeTruthy();
-  });
-
-  it('selecting a block opens the edit form; editing dispatches an update', () => {
-    render(<App />);
-    const row = screen.getByText(/H1 Welcome to Atlas/);
-    fireEvent.click(row);
-    const input = screen.getByDisplayValue('Welcome to Atlas');
-    fireEvent.change(input, { target: { value: 'Hello' } });
-    expect((input as HTMLInputElement).value).toBe('Hello');
-  });
-
-  it('move up button reorders blocks', () => {
-    render(<App />);
-    const rows = document.querySelectorAll('[data-block-id]');
-    const firstId = rows[0]?.getAttribute('data-block-id');
-    const secondId = rows[1]?.getAttribute('data-block-id');
-    expect(firstId && secondId).toBeTruthy();
-    const moveUp = screen.getByLabelText(`Move ${secondId} up`);
-    fireEvent.click(moveUp);
-    const after = document.querySelectorAll('[data-block-id]');
-    expect(after[0]?.getAttribute('data-block-id')).toBe(secondId);
-    expect(after[1]?.getAttribute('data-block-id')).toBe(firstId);
+    expect(screen.queryByRole('dialog', { name: 'JSON edit mode' })).toBeNull();
+    act(() => {
+      fireEvent.keyDown(window, { key: 'j', metaKey: true, shiftKey: true });
+    });
+    expect(screen.getByRole('dialog', { name: 'JSON edit mode' })).toBeTruthy();
   });
 });

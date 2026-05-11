@@ -1,22 +1,35 @@
 /**
- * Top-level shell. Owns: doc state, selected block id, active preview tab.
- * Initial doc is the welcome fixture per the brief.
+ * v0.4 — single centered column on warm cream paper.
+ *
+ * Replaces v0.3's three-panel grid (BlockList sidebar | center | PreviewStrip
+ * sidebar) with one column, one editor, one footer placeholder. Block chrome,
+ * slash menu, BubbleMenu, variant chip, drag-and-drop, ⌘P overlay, outline
+ * rail, and diagnostics ALL land in A2–A10 — A1 is the paper foundation.
+ *
+ * Layout primitives:
+ *   <div class="paper-app">            // full-height warm cream surface
+ *     <main class="paper-column">      // 680px centered column
+ *       <Editor />                     // ONE TipTap instance
+ *     </main>
+ *     <footer class="paper-footer" />  // 36px fixed placeholder (A8 fills)
+ *
+ * Carryovers from v0.3:
+ *   - McpProvider — state contract identical (A8 dissolves the banner UI
+ *     into the footer status dot, but the provider stays).
+ *   - JsonEditMode (Cmd+Shift+J power-user overlay) — kept verbatim per
+ *     T4 disposition `keep`.
  */
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
 import welcomeJson from '../../../examples/welcome.json';
-import incidentJson from '../../../examples/incident.json';
-import { useDoc } from './store.js';
-
-const welcome = welcomeJson as PortableDoc;
-const incident = incidentJson as PortableDoc;
 import { Editor } from './Editor.js';
-import { PreviewStrip } from './PreviewStrip.js';
-import { ValidationPanel } from './ValidationPanel.js';
 import { JsonEditMode } from './JsonEditMode.js';
 import { McpProvider } from './McpProvider.js';
+import './styles/paper.css';
 
-export function App() {
+const welcome = welcomeJson as PortableDoc;
+
+export function App(): JSX.Element {
   return (
     <McpProvider>
       <AppShell />
@@ -24,13 +37,12 @@ export function App() {
   );
 }
 
-function AppShell() {
-  const [doc, dispatch] = useDoc(welcome);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+function AppShell(): JSX.Element {
+  const [doc, setDoc] = useState<PortableDoc>(welcome);
   const [jsonModeOpen, setJsonModeOpen] = useState(false);
 
   // Hidden Cmd+Shift+J / Ctrl+Shift+J shortcut toggles the JSON-edit-mode
-  // overlay. Power-user escape hatch per A7 / build-phase grill q9.
+  // overlay. Power-user escape hatch carried over from v0.3.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'j' || e.key === 'J')) {
@@ -42,39 +54,18 @@ function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const copyJson = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(JSON.stringify(doc, null, 2));
-    }
-  };
-
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>PortableDoc Editor</h1>
-        <button onClick={() => dispatch({ kind: 'load', doc: welcome })}>Load welcome</button>
-        <button onClick={() => dispatch({ kind: 'load', doc: incident })}>Load incident</button>
-        <button onClick={copyJson}>Copy JSON</button>
-        <span style={{ marginLeft: 'auto', color: '#888' }}>
-          {doc.title ?? '(untitled)'} · {doc.blocks.length} blocks
-        </span>
-      </header>
-      <div className="app-main">
-        <Editor
-          doc={doc}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          dispatch={dispatch}
-        />
-        <PreviewStrip doc={doc} />
-      </div>
-      <ValidationPanel doc={doc} />
+    <div className="paper-app" data-testid="paper-app">
+      <main className="paper-column" data-testid="paper-column">
+        <Editor doc={doc} />
+      </main>
+      <footer className="paper-footer" data-testid="paper-footer" />
       <JsonEditMode
         doc={doc}
         open={jsonModeOpen}
         onClose={() => setJsonModeOpen(false)}
         onSave={(next) => {
-          dispatch({ kind: 'load', doc: next });
+          setDoc(next);
           setJsonModeOpen(false);
         }}
       />
