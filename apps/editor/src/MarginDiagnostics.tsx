@@ -43,14 +43,24 @@ interface PositionedIssue {
   top: number | null;
 }
 
-/** Walk the editor's DOM and return the top-level `.paper-block` wrappers in
- *  document order. A2's `withBlockChrome` renders `.paper-block` for top-
- *  level blocks and `.paper-block-nested` for ones inside lists/callouts —
- *  the selector here keeps us at the top level on purpose. */
-function topLevelBlockElements(editor: TipTapEditor | null): HTMLElement[] {
+/** Walk the editor's ProseMirror document and return the positions of each
+ *  top-level block in document order. Reading positions from the doc model
+ *  (instead of from a `.paper-block` querySelectorAll) decouples this
+ *  layout from React render timing — even if the NodeView's React tree
+ *  hasn't flushed yet, the positions are correct because they come from
+ *  ProseMirror state, not the DOM.
+ *
+ *  `doc.forEach(callback)` walks immediate children only, which is
+ *  exactly the top-level blocks. `offset` is the position BEFORE each
+ *  child node — adding 1 lands inside the node, which is what `focus()`
+ *  expects. We return the offsets and let callers shift as needed. */
+function topLevelBlockPositions(editor: TipTapEditor | null): number[] {
   if (!editor) return [];
-  const root = editor.view.dom as HTMLElement;
-  return Array.from(root.querySelectorAll<HTMLElement>('.paper-block'));
+  const positions: number[] = [];
+  editor.state.doc.forEach((_node, offset) => {
+    positions.push(offset);
+  });
+  return positions;
 }
 
 /** Read the narrow-viewport flag without crashing in SSR / older jsdom. */
@@ -112,22 +122,34 @@ export function MarginDiagnostics({
     };
   }, []);
 
-  // Compute positions in a layout effect so the first paint already has the
-  // notes in the right places.
+  // Compute positions in a layout effect so the first paint already has
+  // the notes in the right places. We resolve each block's element via
+  // ProseMirror's `view.nodeDOM(pos)` — that walks the doc model directly,
+  // doesn't depend on paperflow's class naming, and never desyncs from
+  // a future render-timing change in the React NodeView. Vertical
+  // placement still reads `getBoundingClientRect()` from the resolved
+  // element (the canonical way to ask the browser where layout actually
+  // put the element; respected by tests via rect mocks too).
   const [positions, setPositions] = useState<PositionedIssue[]>([]);
   useLayoutEffect(() => {
     if (blockIssues.length === 0) {
       setPositions([]);
       return;
     }
-    const blockEls = topLevelBlockElements(editor);
+    const blockPositions = topLevelBlockPositions(editor);
     const containerRect = containerRef.current?.getBoundingClientRect();
     const containerTop = containerRect?.top ?? 0;
 
     const next: PositionedIssue[] = blockIssues.map((issue, i) => {
       const idx = indexByBlockId.get(issue.blockId ?? '');
-      const el = idx != null ? blockEls[idx] : undefined;
-      const top = el ? el.getBoundingClientRect().top - containerTop : null;
+      const pos = idx != null ? blockPositions[idx] : undefined;
+      let top: number | null = null;
+      if (typeof pos === 'number' && editor) {
+        const dom = editor.view.nodeDOM(pos);
+        if (dom instanceof HTMLElement) {
+          top = dom.getBoundingClientRect().top - containerTop;
+        }
+      }
       return {
         key: `${issue.blockId ?? '?'}-${issue.rule}-${i}`,
         issue,
@@ -139,26 +161,23 @@ export function MarginDiagnostics({
 
   if (blockIssues.length === 0) return null;
 
-  // Click handler — focus + scroll the offending block.
+  // Click handler — focus + scroll the offending block. We resolve the
+  // target DOM element through ProseMirror (`view.nodeDOM(pos)`) instead
+  // of via `.paper-block__content` querySelector so this code path is
+  // independent of paperflow's class naming.
   const onNoteClick = (blockId: string | undefined): void => {
     if (!blockId || !editor) return;
     const idx = indexByBlockId.get(blockId);
     if (idx == null) return;
-    const el = topLevelBlockElements(editor)[idx];
-    if (!el) return;
-    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    // Place the cursor inside the offending block so the user lands focused.
-    const contentEl = el.querySelector('.paper-block__content');
-    if (contentEl) {
-      const pos = editor.view.posAtDOM(contentEl, 0);
-      if (typeof pos === 'number' && pos >= 0) {
-        editor.commands.focus(pos);
-      } else {
-        editor.commands.focus();
-      }
-    } else {
-      editor.commands.focus();
+    const pos = topLevelBlockPositions(editor)[idx];
+    if (typeof pos !== 'number') return;
+    const dom = editor.view.nodeDOM(pos);
+    if (dom instanceof HTMLElement) {
+      dom.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
+    // Place the cursor inside the offending block (pos is the position
+    // BEFORE the node; +1 lands the caret at the start of its content).
+    editor.commands.focus(pos + 1);
   };
 
   return (

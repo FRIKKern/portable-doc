@@ -221,8 +221,15 @@ describe('A10 MarginDiagnostics — calm margin notes', () => {
     await act(async () => {
       vi.advanceTimersByTime(500);
     });
-    const blocks = container.querySelectorAll<HTMLElement>('.paper-block');
-    blocks.forEach((el, idx) => {
+    // After the ReactNodeViewRenderer refactor, `editor.view.nodeDOM(pos)`
+    // returns the OUTERMOST `.react-renderer.node-<type>` wrapper TipTap
+    // adds around each top-level node — not the inner `.paper-block`
+    // element. MarginDiagnostics reads `getBoundingClientRect()` on that
+    // outer wrapper, so the rect mocks need to live there.
+    const reactRenderers = container.querySelectorAll<HTMLElement>(
+      '.ProseMirror > .react-renderer',
+    );
+    reactRenderers.forEach((el, idx) => {
       el.getBoundingClientRect = () => ({
         x: 0, y: idx * 120, width: 600, height: 80,
         top: idx * 120, left: 0, right: 600, bottom: idx * 120 + 80,
