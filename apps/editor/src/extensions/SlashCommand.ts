@@ -38,7 +38,10 @@ export function applyInsert(
 
   switch (cmd.type) {
     case 'heading':
-      chain.setNode('heading', { level: 1 }).run();
+      // The catalog now ships per-level entries (`Heading 1` … `Heading 6`).
+      // Default to level 1 if a legacy caller passes the bare `heading`
+      // type without a level.
+      chain.setNode('heading', { level: cmd.level ?? 1 }).run();
       return;
     case 'paragraph':
       chain.setNode('paragraph').run();

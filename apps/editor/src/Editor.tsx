@@ -153,7 +153,7 @@ export function Editor({
         },
       }),
       withBlockChrome(Paragraph),
-      withBlockChrome(Heading.configure({ levels: [1, 2, 3] })),
+      withBlockChrome(Heading.configure({ levels: [1, 2, 3, 4, 5, 6] })),
       withBlockChrome(BulletList),
       withBlockChrome(OrderedList),
       withBlockChrome(Blockquote),

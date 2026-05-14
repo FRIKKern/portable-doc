@@ -45,11 +45,11 @@ function Harness({
 }
 
 describe('SlashPopover — standalone', () => {
-  it('renders 10 commands when open with empty filter', () => {
+  it('renders all 15 commands when open with empty filter (H1..H6 + 9 block types)', () => {
     render(<Harness onSelect={() => {}} />);
     expect(screen.getByTestId('slash-popover')).toBeTruthy();
     const items = screen.getAllByRole('option');
-    expect(items.length).toBe(10);
+    expect(items.length).toBe(15);
   });
 
   it('returns null (not in DOM) when open is false', () => {
@@ -57,13 +57,25 @@ describe('SlashPopover — standalone', () => {
     expect(screen.queryByTestId('slash-popover')).toBeNull();
   });
 
-  it('typing in the input filters by substring', () => {
+  it('typing "head" filters to all 6 heading levels', () => {
     render(<Harness onSelect={() => {}} />);
     const input = screen.getByTestId('slash-input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'head' } });
     const items = screen.getAllByRole('option');
+    expect(items.length).toBe(6);
+    // Each level has its own testid (slash-item-heading-1 … -6).
+    for (let lvl = 1; lvl <= 6; lvl++) {
+      expect(screen.getByTestId(`slash-item-heading-${lvl}`)).toBeTruthy();
+    }
+  });
+
+  it('typing "h2" filters to just Heading 2', () => {
+    render(<Harness onSelect={() => {}} />);
+    const input = screen.getByTestId('slash-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'h2' } });
+    const items = screen.getAllByRole('option');
     expect(items.length).toBe(1);
-    expect(screen.getByTestId('slash-item-heading')).toBeTruthy();
+    expect(screen.getByTestId('slash-item-heading-2')).toBeTruthy();
   });
 
   it('Levenshtein typo "calout" still finds callout (≤ 2 hit)', () => {
@@ -74,13 +86,16 @@ describe('SlashPopover — standalone', () => {
   });
 
   it('ArrowDown moves selection, Enter inserts the active command', () => {
+    // Catalog order: H1, H2, H3, H4, H5, H6, paragraph, …
+    // ArrowDown from initial index 0 (Heading 1) → index 1 (Heading 2).
     const onSelect = vi.fn();
     render(<Harness onSelect={onSelect} />);
     const input = screen.getByTestId('slash-input');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect.mock.calls[0]?.[0]?.type).toBe('paragraph');
+    expect(onSelect.mock.calls[0]?.[0]?.type).toBe('heading');
+    expect(onSelect.mock.calls[0]?.[0]?.level).toBe(2);
   });
 
   it('ArrowUp clamps to 0 (cannot go above the first item)', () => {

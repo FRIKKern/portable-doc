@@ -199,7 +199,13 @@ export const SlashPopover = forwardRef<SlashPopoverHandle, SlashPopoverProps>(
                 e.preventDefault();
                 onSelect(cmd);
               }}
-              data-testid={`slash-item-${cmd.type}`}
+              data-testid={
+                // Headings ship one entry per level (H1..H6) — append the
+                // level so each row has a unique testid for assertions.
+                cmd.type === 'heading' && cmd.level
+                  ? `slash-item-heading-${cmd.level}`
+                  : `slash-item-${cmd.type}`
+              }
             >
               <span className="paper-slash-popover__name">{cmd.label}</span>
               <span className="paper-slash-popover__hint">{cmd.hint}</span>

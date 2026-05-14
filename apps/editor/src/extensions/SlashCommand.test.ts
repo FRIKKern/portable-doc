@@ -50,8 +50,8 @@ describe('SlashCommand — items filter (carries lib/slash-filter behaviour)', (
     return items({ query, editor: {} as never }) as Cmd[];
   }
 
-  it('empty query returns all 10 commands', () => {
-    expect(callItems('').length).toBe(10);
+  it('empty query returns the full catalog (H1..H6 + 9 block types = 15)', () => {
+    expect(callItems('').length).toBe(15);
     expect(callItems('').length).toBe(COMMANDS.length);
   });
 

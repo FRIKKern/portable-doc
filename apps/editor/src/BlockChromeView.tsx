@@ -344,7 +344,16 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
     );
   }
 
-  const label = humanLabelFor(blockType);
+  // For headings, append the level so the chrome label reads
+  // "Heading 1" / "Heading 2" etc. — matches the slash menu entries
+  // and is a clearer affordance than the generic "Heading".
+  const baseLabel = humanLabelFor(blockType);
+  const headingLevel =
+    blockType === 'heading' ? Number(node.attrs?.level ?? 1) : null;
+  const label =
+    headingLevel != null && Number.isFinite(headingLevel)
+      ? `${baseLabel} ${headingLevel}`
+      : baseLabel;
   const lower = label.toLowerCase();
   const isSelecting = !selectionEmpty;
   const wrapperClassName = [

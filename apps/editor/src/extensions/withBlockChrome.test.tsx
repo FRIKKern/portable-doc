@@ -232,7 +232,9 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
       '.paper-block-delete',
     ) as HTMLButtonElement | null;
     expect(firstDelete).toBeTruthy();
-    expect(firstDelete!.getAttribute('aria-label')).toBe('Delete heading');
+    // The welcome fixture's first block is an H1, so the chrome label
+    // appends "1" → "Delete heading 1".
+    expect(firstDelete!.getAttribute('aria-label')).toBe('Delete heading 1');
     firstDelete!.dispatchEvent(
       new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
     );

@@ -136,10 +136,15 @@
 }
 
 /* Doc-level heading rhythm. Headings inherit the serif (T1: body voice,
- * just heavier — single weight delta marks hierarchy). */
+ * just heavier — single weight delta marks hierarchy). H1..H3 use the
+ * locked T1 sizes; H4..H6 step down from H3 in calmer increments so
+ * deeper outlines stay readable without dominating body text. */
 .paper-column h1,
 .paper-column h2,
-.paper-column h3 {
+.paper-column h3,
+.paper-column h4,
+.paper-column h5,
+.paper-column h6 {
   font-family: var(--paper-font-serif);
   line-height: var(--paper-line-height-heading);
   font-weight: 600;
@@ -157,6 +162,23 @@
 .paper-column h3 {
   font-size: var(--paper-font-size-h3);
   margin: 28px 0 10px;
+}
+.paper-column h4 {
+  font-size: 18px;
+  margin: 22px 0 8px;
+}
+.paper-column h5 {
+  font-size: 16px;
+  margin: 18px 0 6px;
+  font-weight: 700;
+}
+.paper-column h6 {
+  font-size: 14px;
+  margin: 14px 0 4px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--paper-ink-soft);
 }
 .paper-column p {
   margin: 0 0 22px;
