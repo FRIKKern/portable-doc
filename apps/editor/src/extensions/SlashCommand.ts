@@ -72,9 +72,23 @@ export function applyInsert(
     case 'code':
       chain.toggleCodeBlock().run();
       return;
-    case 'image':
-      chain.insertContent('<p><em>Image (not yet wired)</em></p>').run();
+    case 'image': {
+      // Prompt for the URL inline — minimal v0.4 UX. v0.5 can swap in a
+      // proper upload picker. The link `validate` rule applies to image
+      // src too: we reject anything that isn't http(s). Empty input or
+      // a rejected URL cancels without modifying the doc.
+      const src = typeof window !== 'undefined' ? window.prompt('Image URL') : null;
+      if (!src) return;
+      if (!/^https?:\/\//i.test(src)) {
+        if (typeof window !== 'undefined') {
+          window.alert('Image URL must start with http(s)://');
+        }
+        return;
+      }
+      const alt = typeof window !== 'undefined' ? (window.prompt('Alt text') ?? '') : '';
+      chain.setImage({ src, alt }).run();
       return;
+    }
     case 'table':
       // 3×3 with a header row is the standard "new table" default for
       // Notion/TipTap/most editors. Cells start empty; Tab/Shift+Tab

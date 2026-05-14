@@ -56,6 +56,7 @@ import {
   TableHeader,
   TableCell,
 } from '@tiptap/extension-table';
+import Image from '@tiptap/extension-image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
@@ -134,10 +135,21 @@ export function Editor({
         blockquote: false,
         codeBlock: false,
         horizontalRule: false,
-        // Keep StarterKit's link mark on; we just want predictable defaults.
+        // Link safety: `validate` runs on every setLink() and on pasted
+        // hrefs. Reject anything that isn't http(s) or mailto so a
+        // malicious paste can't smuggle `javascript:` or `data:` URLs
+        // into the doc (real XSS surface). `rel="noopener noreferrer
+        // nofollow"` is the standard hardening for any outbound link.
+        // `openOnClick: false` matches the editor convention — clicks
+        // place a caret; the FormatBubble's link affordance is what
+        // edits/removes.
         link: {
           openOnClick: false,
+          autolink: true,
+          linkOnPaste: true,
           HTMLAttributes: { rel: 'noopener noreferrer nofollow' },
+          validate: (href: string) =>
+            /^https?:\/\//i.test(href) || /^mailto:/i.test(href),
         },
       }),
       withBlockChrome(Paragraph),
@@ -154,12 +166,40 @@ export function Editor({
       TableRow,
       TableHeader,
       TableCell,
+      // Image (web/native only — PortableDoc's image block surfaces are
+      // narrowed to those two; backends without raster support skip it
+      // at render time). `inline: false` keeps images as block-level
+      // nodes so they sit on their own line like every other block.
+      // `allowBase64: false` blocks data-URLs from being pasted; only
+      // http(s) URLs make it through, matching the link `validate` policy.
+      Image.configure({
+        inline: false,
+        allowBase64: false,
+        HTMLAttributes: { class: 'paper-block__image' },
+      }),
       SlashCommand,
       MoveBlock,
+      // Per-block placeholder text. Empty headings/lists/callouts get
+      // their own hint instead of the generic "Start typing, or press /
+      // for blocks." — quieter and more informative.
       Placeholder.configure({
-        placeholder: 'Start typing, or press / for blocks.',
         showOnlyCurrent: true,
         showOnlyWhenEditable: true,
+        placeholder: ({ node }) => {
+          switch (node.type.name) {
+            case 'heading':
+              return 'Heading';
+            case 'bulletList':
+            case 'orderedList':
+              return 'List item';
+            case 'blockquote':
+              return 'Callout';
+            case 'codeBlock':
+              return 'Code';
+            default:
+              return 'Start typing, or press / for blocks.';
+          }
+        },
       }),
     ],
     [],

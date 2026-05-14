@@ -110,7 +110,15 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
           // prosemirror-tables' selection class (set on the active <th>/<td>
           // by the table plugin). Used by our `.ProseMirror .selectedCell`
           // rule for the cell-focus accent.
-          c !== '.selectedCell',
+          c !== '.selectedCell' &&
+          // `@tiptap/extension-placeholder` sets `.is-empty` on the empty
+          // first-current top-level node. Our placeholder hint rule keys
+          // off this third-party class in the `.ProseMirror` scope.
+          c !== '.is-empty' &&
+          // `@tiptap/react`'s ReactRenderer wraps each NodeView in
+          // `<div class="react-renderer node-<type>">`. Our placeholder
+          // hint targets `.react-renderer.is-empty[data-placeholder]`.
+          c !== '.react-renderer',
       );
 
     for (const cls of userClasses) {

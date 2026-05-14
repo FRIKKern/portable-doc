@@ -244,6 +244,43 @@
   outline-offset: -1px;
 }
 
+/* Image (slash menu → "Image"). The extension renders `<img>` with the
+ * `.paper-block__image` class we configure in Editor.tsx. Scales to the
+ * column width, preserves aspect ratio, gets a faint frame so a misload
+ * still shows where it was. */
+.paper-column .paper-block__image,
+.paper-column img.paper-block__image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 0 22px;
+  border-radius: 3px;
+  border: 1px solid var(--paper-rule);
+  background: var(--paper-bg-deep);
+}
+
+/* Placeholder for empty blocks. `@tiptap/extension-placeholder` adds
+ * decorations with `class: "is-empty"` + `data-placeholder: <text>` to
+ * empty nodes. Under ReactNodeViewRenderer the decoration lands on the
+ * outer `.react-renderer` wrapper TipTap creates per NodeView, NOT on
+ * the inner contentDOM. We position the hint absolutely so it overlays
+ * the `.paper-block__content` text area (the chrome is `top: -44px`
+ * out of flow, so the content starts at the wrapper's natural top
+ * plus its own 4px padding-top — see `.paper-block`). */
+.ProseMirror .react-renderer.is-empty[data-placeholder] {
+  position: relative;
+}
+.ProseMirror .react-renderer.is-empty[data-placeholder]::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  color: var(--paper-ink-faint);
+  pointer-events: none;
+  font-style: italic;
+}
+
 /* Editor mount surface — the single TipTap instance sits here. The
  * .ProseMirror class is the default surface TipTap renders on top of
  * its EditorContent host node. */
