@@ -276,7 +276,27 @@ export function Editor({
         // A4 — inline format BubbleMenu. The @tiptap/react substrate owns
         // floating-element positioning and show/hide; FormatBubble owns the
         // toolbar UI (B/I/code/link + inline URL input).
-        <BubbleMenu editor={editor}>
+        //
+        // `shouldShow` filter: providing a custom callback REPLACES TipTap's
+        // default (which checks selection-empty + editor focus). We add
+        // contextual guards on top:
+        //   - code blocks: no inline marks apply inside; the bubble
+        //     would offer disabled-looking buttons.
+        //   - tables: the bubble overlaps cell text awkwardly and the
+        //     formatting buttons fight cell-selection semantics.
+        // Plus the basic safety checks the default would have made:
+        //   - empty selection (nothing to format)
+        //   - non-editable editor
+        <BubbleMenu
+          editor={editor}
+          shouldShow={({ editor: e, state }) => {
+            if (state.selection.empty) return false;
+            if (!e.isEditable) return false;
+            if (e.isActive('codeBlock')) return false;
+            if (e.isActive('tableCell') || e.isActive('tableHeader')) return false;
+            return true;
+          }}
+        >
           <FormatBubble editor={editor} />
         </BubbleMenu>
       ) : null}
