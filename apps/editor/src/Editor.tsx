@@ -61,6 +61,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
+import { tiptapToPortableDoc } from './lib/tiptap-to-portable-doc.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
 import { SlashCommand } from './extensions/SlashCommand.js';
 import { MoveBlock } from './extensions/MoveBlock.js';
@@ -68,10 +69,13 @@ import { FormatBubble } from './FormatBubble.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
 
 interface EditorProps {
-  /** Initial PortableDoc rendered into the editor on mount. */
+  /** PortableDoc rendered into the editor. Re-syncs via `setContent`
+   *  when the reference changes from outside (e.g. a JsonEditMode save). */
   doc: PortableDoc;
-  /** Fires on every TipTap transaction with the editor's current JSON. */
-  onChange?: (json: ReturnType<TipTapEditor['getJSON']>) => void;
+  /** Fires after every doc-affecting TipTap transaction with the
+   *  converted PortableDoc. The editor handles the TipTap→PortableDoc
+   *  conversion internally so the caller never sees raw TipTap JSON. */
+  onChange?: (doc: PortableDoc) => void;
   /** A2 / A3 / A4 will hand the editor instance back up through this ref. */
   onEditorReady?: (editor: TipTapEditor) => void;
   /** Stable test id forwarded to the contenteditable for assertion targeting. */
@@ -239,19 +243,38 @@ export function Editor({
     // is gone now that we use ReactNodeViewRenderer).
     shouldRerenderOnTransaction: false,
     onUpdate: ({ editor: e }) => {
-      onChangeRef.current?.(e.getJSON());
+      // Convert TipTap state → PortableDoc and emit it. We stash the
+      // produced doc in `lastEmittedDocRef` BEFORE notifying upward so
+      // the doc-sync useEffect below can recognise its own echo when
+      // the parent re-renders with the new doc — preventing the
+      // setContent → onUpdate → setContent loop.
+      const next = tiptapToPortableDoc(
+        e.getJSON() as Parameters<typeof tiptapToPortableDoc>[0],
+        lastEmittedDocRef.current ?? null,
+      );
+      lastEmittedDocRef.current = next;
+      onChangeRef.current?.(next);
     },
   });
 
   // Keep the editor in sync with the `doc` prop without rebuilding the
-  // ProseMirror view. JSON-edit-mode saves change `doc`; we want the
-  // change to land in the editor without losing the writer's cursor.
-  // `emitUpdate: false` prevents the resulting setContent from firing
-  // onUpdate (which would loop back into the parent via onChange).
-  const lastSyncedDocRef = useRef(doc);
+  // ProseMirror view. The sync only fires for EXTERNAL doc changes
+  // (e.g. JsonEditMode save): when the parent's `doc` prop equals what
+  // we last emitted from onUpdate, the change came from US and the
+  // editor is already in sync — we skip setContent to preserve the
+  // writer's cursor and avoid an infinite onUpdate ↔ setContent echo.
+  // `emitUpdate: false` is belt-and-suspenders.
+  const lastSyncedDocRef = useRef<PortableDoc>(doc);
+  const lastEmittedDocRef = useRef<PortableDoc | null>(null);
   useEffect(() => {
     if (!editor) return;
     if (lastSyncedDocRef.current === doc) return;
+    if (lastEmittedDocRef.current === doc) {
+      // This is our own emission round-tripping through the parent —
+      // editor already holds the canonical state, skip.
+      lastSyncedDocRef.current = doc;
+      return;
+    }
     lastSyncedDocRef.current = doc;
     editor.commands.setContent(portableDocToTipTapHtml(doc), { emitUpdate: false });
   }, [editor, doc]);

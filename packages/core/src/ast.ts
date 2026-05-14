@@ -45,7 +45,12 @@ export interface BlockBase {
 
 export interface HeadingBlock extends BlockBase {
   type: 'heading';
-  level: 1 | 2 | 3;
+  /** HTML heading levels — `h1`..`h6`. v0.3 narrowed this to 1..3 because
+   *  early backends only specced three sizes; v0.4 opens to the full HTML
+   *  range so the editor's `/h1`..`/h6` slash entries round-trip without
+   *  losing depth. Each backend chooses its own size mapping (web has
+   *  CSS rules for all six; email/ink fall back gracefully on h4..h6). */
+  level: 1 | 2 | 3 | 4 | 5 | 6;
   text: string;
 }
 

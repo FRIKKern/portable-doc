@@ -50,6 +50,13 @@ function AppShell(): JSX.Element {
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [editor, setEditor] = useState<TipTapEditor | null>(null);
 
+  // Reverse pipeline: the Editor converts TipTap state → PortableDoc on
+  // every doc-affecting transaction and hands the AST to us via
+  // `onChange`. We stash it in `doc` so the backends
+  // (FooterStatus / PreviewOverlay / JsonEditMode) all see live edits.
+  // Editor.tsx tracks its own emissions to avoid the setContent ↔
+  // onUpdate loop — no debouncing needed at this layer.
+
   // Hidden Cmd+Shift+J / Ctrl+Shift+J shortcut toggles the JSON-edit-mode
   // overlay. Power-user escape hatch carried over from v0.3.
   useEffect(() => {
@@ -114,7 +121,7 @@ function AppShell(): JSX.Element {
   return (
     <div className="paper-app" data-testid="paper-app">
       <main className="paper-column" data-testid="paper-column">
-        <Editor doc={doc} onEditorReady={setEditor} />
+        <Editor doc={doc} onEditorReady={setEditor} onChange={setDoc} />
       </main>
       <OutlineRail
         editor={editor}
