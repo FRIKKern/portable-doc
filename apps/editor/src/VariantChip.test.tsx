@@ -22,7 +22,7 @@ vi.mock('@portable-doc/backend-web/static', () => ({
 }));
 
 import { VariantChip } from './VariantChip.js';
-import { mountVariantChip, pdBlockTypeFor } from './BlockChrome.js';
+import { pdBlockTypeFor } from './BlockChrome.js';
 
 afterEach(() => cleanup());
 
@@ -186,60 +186,14 @@ describe('VariantChip — hybrid render (callout vs action)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Slot integration — mountVariantChip paints into a chrome slot.
+// 8. pdBlockTypeFor — pure mapping from TipTap node name to PortableDoc
+// variant type. (The legacy `mountVariantChip` integration tests have been
+// removed — the chip is now a direct child of `BlockChromeView.tsx` and
+// covered end-to-end by the React NodeView integration tests.)
 // ---------------------------------------------------------------------------
 
-describe('VariantChip — slot integration (mountVariantChip)', () => {
-  it('mounts the chip into a plain-DOM slot for callout', async () => {
-    const slot = document.createElement('div');
-    slot.className = 'paper-block__variant-slot';
-    slot.setAttribute('data-block-type', 'blockquote');
-    document.body.appendChild(slot);
-
-    let lastChange: Record<string, string> | null = null;
-    let handle: ReturnType<typeof mountVariantChip> = null;
-    await act(async () => {
-      handle = mountVariantChip(slot, 'callout', {}, (next) => {
-        lastChange = next;
-      });
-    });
-    expect(handle).not.toBeNull();
-    // The React root rendered the chip's button into the slot.
-    expect(slot.querySelector('[data-testid="variant-chip-current-callout"]')).toBeTruthy();
-    // Clicking through the chip dispatches a merged-axes object via onChange.
-    const btn = slot.querySelector(
-      '[data-testid="variant-chip-current-callout"]',
-    ) as HTMLButtonElement;
-    await act(async () => {
-      btn.click();
-    });
-    const opt = slot.querySelector(
-      '[data-testid="variant-chip-option-callout-info-bold"]',
-    ) as HTMLButtonElement;
-    expect(opt).toBeTruthy();
-    await act(async () => {
-      opt.click();
-    });
-    expect(lastChange).toEqual({ tone: 'info', emphasis: 'bold' });
-
-    // Cleanup: unmount tears the React root down without leaving the DOM in a
-    // half-mounted state.
-    await act(async () => {
-      handle?.unmount();
-    });
-    document.body.removeChild(slot);
-  });
-
-  it('mountVariantChip returns null for non-variant block types', async () => {
-    const slot = document.createElement('div');
-    let handle: ReturnType<typeof mountVariantChip> = null;
-    await act(async () => {
-      handle = mountVariantChip(slot, 'paragraph', {}, () => {});
-    });
-    expect(handle).toBeNull();
-  });
-
-  it('pdBlockTypeFor translates TipTap names to PortableDoc variant types', () => {
+describe('pdBlockTypeFor', () => {
+  it('translates TipTap names to PortableDoc variant types', () => {
     expect(pdBlockTypeFor('blockquote')).toBe('callout');
     expect(pdBlockTypeFor('codeBlock')).toBe('code');
     expect(pdBlockTypeFor('paragraph')).toBeNull();

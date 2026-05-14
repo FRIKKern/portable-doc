@@ -56,14 +56,8 @@ import {
   TableHeader,
   TableCell,
 } from '@tiptap/extension-table';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
-import { VariantChip } from './VariantChip.js';
-import {
-  subscribeSlots,
-  getSnapshot as getVariantSlotsSnapshot,
-} from './lib/variant-slot-registry.js';
 import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
@@ -192,15 +186,17 @@ export function Editor({
     extensions,
     content: initialContent.current,
     editorProps,
-    // TipTap 3 best-practice flags for React 18 StrictMode + concurrent
-    // rendering. Default `immediatelyRender: true` builds the editor
-    // synchronously inside useState's lazy initializer, which clashes
-    // with StrictMode's double-mount cycle. `false` defers the build to
-    // a useEffect so the mount is idempotent. `shouldRerenderOnTransaction:
-    // false` opts out of the legacy "re-render parent component on every
-    // ProseMirror transaction" behavior (TipTap docs flag it for removal);
-    // subscribers that need TX state use `useEditorState` with a selector.
-    immediatelyRender: false,
+    // `shouldRerenderOnTransaction: false` opts out of the legacy
+    // "re-render parent component on every ProseMirror transaction"
+    // path that TipTap docs flag for removal. Subscribers that need
+    // TX-derived state use `useEditorState` with a selector (see
+    // FormatBubble.tsx + BlockChromeView.tsx).
+    //
+    // `immediatelyRender` left at its default (`true`) — defers-to-
+    // useEffect only matters for SSR; here it would delay editor mount
+    // by one tick and break synchronous test assertions for no benefit
+    // (the createRoot-in-NodeView pattern that needed StrictMode safety
+    // is gone now that we use ReactNodeViewRenderer).
     shouldRerenderOnTransaction: false,
     onUpdate: ({ editor: e }) => {
       onChangeRef.current?.(e.getJSON());
@@ -228,16 +224,10 @@ export function Editor({
     if (onEditorReady) onEditorReady(editor);
   }, [editor, onEditorReady]);
 
-  // A5 — subscribe to the variant-slot registry. NodeViews push themselves
-  // in via `registerSlot` (see `withBlockChrome.ts`); this component
-  // portals a `<VariantChip>` React element into each one. The chip's
-  // React root lives in *this* tree, not inside a NodeView, so a NodeView
-  // swap doesn't churn its lifecycle.
-  const variantSlots = useSyncExternalStore(
-    subscribeSlots,
-    getVariantSlotsSnapshot,
-    getVariantSlotsSnapshot,
-  );
+  // A5 — variant chips are rendered as a direct child of the React
+  // NodeView (see `BlockChromeView.tsx`). The previous registry+portal
+  // bridge is no longer needed because `ReactNodeViewRenderer` owns the
+  // chip's React lifecycle from this editor's stable React tree.
 
   return (
     <div className="paper-editor" data-testid="paper-editor">
@@ -250,17 +240,6 @@ export function Editor({
           <FormatBubble editor={editor} />
         </BubbleMenu>
       ) : null}
-      {variantSlots.map((entry) =>
-        createPortal(
-          <VariantChip
-            blockType={entry.props.blockType}
-            attrs={entry.props.attrs}
-            onChange={entry.props.onChange}
-          />,
-          entry.slot,
-          entry.id,
-        ),
-      )}
       {/* A10 — soft margin notes in the right gutter (≥768px) or inline
        *  below the block (<768px). Block-level only per grill Q7; doc-level
        *  issues are filtered inside MarginDiagnostics and surface in the

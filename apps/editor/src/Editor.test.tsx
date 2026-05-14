@@ -91,8 +91,11 @@ describe('Editor — single document-level TipTap instance (A1)', () => {
     expect(pms?.[0]?.getAttribute('contenteditable')).toBe('true');
   });
 
-  it('seeds the welcome fixture as TipTap nodes — heading + paragraph + callout + list', () => {
+  it('seeds the welcome fixture as TipTap nodes — heading + paragraph + callout + list', async () => {
     render(<Editor doc={welcomeFixture} />);
+    // React NodeView renders are queued via queueMicrotask until
+    // EditorContent reports content-initialized — wait one tick.
+    await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
     expect(surface).toBeTruthy();
 

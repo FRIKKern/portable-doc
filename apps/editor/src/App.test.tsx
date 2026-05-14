@@ -85,8 +85,13 @@ describe('App — v0.4 single-column shell (A1)', () => {
     expect(pm?.getAttribute('contenteditable')).toBe('true');
   });
 
-  it('renders the welcome fixture content in the editor on mount', () => {
+  it('renders the welcome fixture content in the editor on mount', async () => {
     render(<App />);
+    // `@tiptap/react`'s ReactRenderer queues each NodeView's React render
+    // via queueMicrotask until the EditorContent component reports
+    // `isEditorContentInitialized`. Wait one macrotask so the queued
+    // renders flush before we read content.
+    await new Promise<void>((r) => setTimeout(r, 0));
     const editor = screen.getByTestId('paper-editor');
     // Welcome fixture has an h1 "Welcome to Atlas" and a paragraph below.
     expect(editor.textContent ?? '').toMatch(/Welcome to Atlas/);

@@ -26,11 +26,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { PortableDoc } from '@portable-doc/core';
-import {
-  humanLabelFor,
-  renderChromeDom,
-  updateChromeForSelection,
-} from '../BlockChrome.js';
+import { humanLabelFor } from '../BlockChrome.js';
 import { withBlockChrome } from './withBlockChrome.js';
 import Paragraph from '@tiptap/extension-paragraph';
 import Heading from '@tiptap/extension-heading';
@@ -91,57 +87,16 @@ describe('withBlockChrome — factory shape', () => {
 // 2. renderChromeDom + humanLabelFor
 // ---------------------------------------------------------------------------
 
-describe('renderChromeDom — DOM scaffold', () => {
-  it('builds drag handle + label + variant slot + delete + insert (paragraph)', () => {
-    const parts = renderChromeDom('paragraph');
-    expect(parts.toolbar.classList.contains('paper-block__chrome')).toBe(true);
-    expect(parts.dragBtn.textContent).toBe('⋮⋮');
-    expect(parts.labelEl.textContent).toBe('Paragraph');
-    expect(parts.deleteBtn.textContent).toBe('×');
-    expect(parts.variantSlot.classList.contains('paper-block__variant-slot')).toBe(true);
-    expect(parts.insertBtn.classList.contains('paper-block__insert')).toBe(true);
-    expect(parts.insertBtn.textContent).toBe('+');
-  });
-
-  // (8) drag-handle aria-label parametrized
-  it.each([
-    ['paragraph', 'Paragraph', 'Drag paragraph'],
-    ['heading', 'Heading', 'Drag heading'],
-    ['bulletList', 'List', 'Drag list'],
-    ['blockquote', 'Callout', 'Drag callout'],
-    ['codeBlock', 'Code', 'Drag code'],
-  ])('drag handle for %s has aria-label "%s"', (blockType, label, ariaDrag) => {
-    const parts = renderChromeDom(blockType);
-    expect(humanLabelFor(blockType)).toBe(label);
-    expect(parts.dragBtn.getAttribute('aria-label')).toBe(ariaDrag);
-    expect(parts.deleteBtn.getAttribute('aria-label')).toBe(`Delete ${label.toLowerCase()}`);
-  });
-
-  it('insert button carries the correct aria-label', () => {
-    const parts = renderChromeDom('paragraph');
-    expect(parts.insertBtn.getAttribute('aria-label')).toBe('Insert block below');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. Selection-driven visibility
-// ---------------------------------------------------------------------------
-
-describe('updateChromeForSelection — .is-selecting toggle', () => {
-  it('adds .is-selecting when selection is non-empty', () => {
-    const el = document.createElement('div');
-    el.className = 'paper-block';
-    updateChromeForSelection(el, /* selectionEmpty */ false);
-    expect(el.classList.contains('is-selecting')).toBe(true);
-  });
-
-  it('removes .is-selecting when selection is empty', () => {
-    const el = document.createElement('div');
-    el.className = 'paper-block is-selecting';
-    updateChromeForSelection(el, /* selectionEmpty */ true);
-    expect(el.classList.contains('is-selecting')).toBe(false);
-  });
-});
+// `renderChromeDom` and `updateChromeForSelection` unit tests removed —
+// those helpers no longer exist post-ReactNodeViewRenderer refactor. The
+// chrome DOM is now rendered by `BlockChromeView.tsx` and the
+// `.is-selecting` class is computed reactively via `useEditorState`. The
+// integration tests at the bottom of this file (section 6) cover the
+// same surface end-to-end through real React rendering.
+//
+// `humanLabelFor` is still exported and used by the React view; the
+// parametrized aria-label check survives under the integration tests
+// below where each block's drag/delete button is asserted.
 
 // ---------------------------------------------------------------------------
 // 4 + 5. Motion / reduced-motion via paper.css
@@ -220,8 +175,12 @@ const welcomeFixture: PortableDoc = {
 };
 
 describe('Editor integration — paper-block chrome on every top-level node', () => {
-  it('renders one .paper-block per top-level block in the welcome doc', () => {
+  // Each render-then-assert here waits one macrotask so the React
+  // NodeView renderers (queued via queueMicrotask in @tiptap/react) flush
+  // before we count `.paper-block` elements.
+  it('renders one .paper-block per top-level block in the welcome doc', async () => {
     render(<Editor doc={welcomeFixture} />);
+    await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
     expect(surface).toBeTruthy();
     const blocks = surface!.querySelectorAll('.paper-block');
@@ -229,8 +188,9 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
     expect(blocks.length).toBe(4);
   });
 
-  it('every paper-block carries a drag handle, label, and delete button', () => {
+  it('every paper-block carries a drag handle, label, and delete button', async () => {
     render(<Editor doc={welcomeFixture} />);
+    await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
     const blocks = surface!.querySelectorAll('.paper-block');
     for (const b of Array.from(blocks)) {
@@ -240,8 +200,9 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
     }
   });
 
-  it('every paper-block-outer carries a .paper-block__insert button', () => {
+  it('every paper-block-outer carries a .paper-block__insert button', async () => {
     render(<Editor doc={welcomeFixture} />);
+    await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
     const inserts = surface!.querySelectorAll('.paper-block__insert');
     // welcome doc: 4 top-level blocks → 4 insert buttons.

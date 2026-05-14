@@ -26,7 +26,26 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { MoveBlock, currentBlockIdx } from './MoveBlock.js';
-import { bindDragHandlers, renderChromeDom } from '../BlockChrome.js';
+import { bindDragHandlers, type ChromeParts } from '../BlockChrome.js';
+
+// Post-refactor: chrome DOM is built by `BlockChromeView.tsx` (React) and
+// `renderChromeDom` no longer exists. These drag-binding tests only need
+// a minimum `ChromeParts`-shaped object — specifically a `dragBtn`
+// element with `draggable="true"` and a `Cmd+Shift+↑↓` title hint
+// (carried over from the original chrome contract for keyboard users).
+function makeChromeShim(): ChromeParts {
+  const dragBtn = document.createElement('button');
+  dragBtn.type = 'button';
+  dragBtn.className = 'paper-block-drag-handle';
+  dragBtn.setAttribute('draggable', 'true');
+  dragBtn.setAttribute('title', 'Drag to reorder. Cmd+Shift+↑↓ to move with keyboard.');
+  dragBtn.textContent = '⋮⋮';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'paper-block__chrome';
+  toolbar.appendChild(dragBtn);
+  return { dragBtn, toolbar };
+}
+const renderChromeDom = (_blockType: string): ChromeParts => makeChromeShim();
 
 // ---------------------------------------------------------------------------
 // Headless TipTap helper — three paragraphs labelled A / B / C so getJSON
