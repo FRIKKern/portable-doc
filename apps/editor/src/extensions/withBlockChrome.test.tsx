@@ -314,10 +314,16 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
     // intro paragraph — heading at index 0, NEW paragraph at index 1.
     expect(afterTypes[0]).toBe('heading');
     expect(afterTypes[1]).toBe('paragraph');
-    // The original intro paragraph has been displaced by one index — and
-    // the new paragraph is empty whereas the intro held inline text.
+    // The original intro paragraph is now at index 2 — confirms insertion.
+    expect(afterTypes[2]).toBe('paragraph');
+    // The new paragraph starts with the slash-menu trigger character `/`
+    // pre-typed: clicking `+` is meant to immediately open the same picker
+    // the writer gets by typing `/`, so they can choose the block type
+    // (heading, list, callout, code, …) instead of being stuck on plain
+    // paragraph. The caret lands after the `/`, ready for filter typing
+    // or arrow-key selection.
     const inserted = editor.getJSON().content?.[1];
-    expect(inserted?.content ?? []).toEqual([]);
+    expect(inserted?.content ?? []).toEqual([{ type: 'text', text: '/' }]);
   });
 
   it('non-empty selection adds .is-selecting to every paper-block (grill Q3)', async () => {

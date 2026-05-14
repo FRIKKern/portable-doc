@@ -103,7 +103,15 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
       .filter((c) => c.length > 0)
       // ProseMirror's own class names appear in nested rules; those are
       // TipTap's namespace, not ours — allowlist them.
-      .filter((c) => c !== '.ProseMirror' && c !== '.is-editor-empty');
+      .filter(
+        (c) =>
+          c !== '.ProseMirror' &&
+          c !== '.is-editor-empty' &&
+          // prosemirror-tables' selection class (set on the active <th>/<td>
+          // by the table plugin). Used by our `.ProseMirror .selectedCell`
+          // rule for the cell-focus accent.
+          c !== '.selectedCell',
+      );
 
     for (const cls of userClasses) {
       expect(cls.startsWith('.paper-')).toBe(true);

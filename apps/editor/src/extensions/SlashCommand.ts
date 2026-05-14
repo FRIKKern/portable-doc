@@ -76,7 +76,10 @@ export function applyInsert(
       chain.insertContent('<p><em>Image (not yet wired)</em></p>').run();
       return;
     case 'table':
-      chain.insertContent('<p><em>Table (not yet wired)</em></p>').run();
+      // 3×3 with a header row is the standard "new table" default for
+      // Notion/TipTap/most editors. Cells start empty; Tab/Shift+Tab
+      // cycles through them. Column resize is deferred to v0.5.
+      chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
       return;
     default:
       return;

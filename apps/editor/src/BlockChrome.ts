@@ -174,9 +174,12 @@ export function bindChromeHandlers(
     if (e.key === 'Enter' || e.key === ' ') deleteThisBlock(e);
   });
 
-  // Insert a paragraph after this block. `insertContentAt` accepts a JSON
-  // node; we pass an explicit empty paragraph so the schema doesn't try to
-  // wrap our content into a fragment of multiple nodes.
+  // Insert an empty paragraph after this block, drop the caret into it,
+  // and type `/` so the slash menu (A3) opens immediately. The writer
+  // gets the same block vocabulary they'd see by typing `/` in any
+  // empty paragraph — heading, list, callout, code, etc. — instead of
+  // the old behavior of always inserting a paragraph and forcing them
+  // to retype `/` themselves.
   const insertBelow = (e: Event): void => {
     e.preventDefault();
     e.stopPropagation();
@@ -185,7 +188,19 @@ export function bindChromeHandlers(
     const node = editor.state.doc.nodeAt(pos);
     if (!node) return;
     const after = pos + node.nodeSize;
-    editor.commands.insertContentAt(after, { type: 'paragraph' });
+    // Chain the three operations into one TipTap pipeline so the
+    // slash-trigger sees the editor in the post-insert state (with the
+    // caret already inside the new paragraph). `insertContentAt` adds
+    // the paragraph; `setTextSelection(after + 1)` lands the caret at
+    // the start of that paragraph's content; `insertContent('/')`
+    // writes the trigger character that opens the slash menu.
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(after, { type: 'paragraph' })
+      .setTextSelection(after + 1)
+      .insertContent('/')
+      .run();
   };
   insertBtn.addEventListener('mousedown', insertBelow);
   insertBtn.addEventListener('keydown', (e) => {
@@ -266,8 +281,20 @@ export function mountVariantChip(
 
   const root: Root = createRoot(slot);
   let currentAttrs = initialAttrs;
+  let pendingRender = false;
+  let unmounted = false;
 
-  const renderNow = (): void => {
+  // Defer renders to a microtask so root.render() is never called during
+  // ProseMirror's NodeView update cycle (which can itself be inside a
+  // React render via @tiptap/react's hooks). A synchronous render in
+  // that window fires DOM events during reconciliation that re-trigger
+  // ProseMirror transactions → another NodeView.update → another
+  // chipHandle.update → … 4000+ slot churn events per click on the
+  // editor. Coalesce: multiple update() calls in the same tick only
+  // produce one render with the latest attrs.
+  const flushRender = (): void => {
+    pendingRender = false;
+    if (unmounted) return;
     root.render(
       createElement(VariantChip, {
         blockType: pdBlockType,
@@ -276,15 +303,23 @@ export function mountVariantChip(
       }),
     );
   };
-  renderNow();
+  const scheduleRender = (): void => {
+    if (pendingRender) return;
+    pendingRender = true;
+    queueMicrotask(flushRender);
+  };
+  scheduleRender();
 
   return {
     update(attrs: Record<string, unknown>) {
       currentAttrs = attrs;
-      renderNow();
+      scheduleRender();
     },
     unmount() {
-      root.unmount();
+      // Defer unmount for the same reason — NodeView.destroy() can fire
+      // mid-render. queueMicrotask gets us safely out of the React frame.
+      unmounted = true;
+      queueMicrotask(() => root.unmount());
     },
   };
 }

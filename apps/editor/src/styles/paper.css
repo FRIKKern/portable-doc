@@ -206,6 +206,44 @@
   margin: 28px 0;
 }
 
+/* Table (minimum scope — slash menu inserts a 3×3 with header row).
+ * Notion/TipTap-style: thin rule between cells, header row gets a
+ * faint deep-paper background to mark it apart, comfortable cell
+ * padding. The .selectedCell class is set by prosemirror-tables on
+ * the currently selected cell — accent border so the writer can see
+ * where the caret is in a dense grid. */
+.paper-column table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 24px;
+  font-family: var(--paper-font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.paper-column th,
+.paper-column td {
+  border: 1px solid var(--paper-rule);
+  padding: 8px 12px;
+  vertical-align: top;
+  text-align: left;
+  min-width: 80px;
+  position: relative;
+}
+.paper-column th {
+  background: var(--paper-bg-deep);
+  font-weight: 600;
+  color: var(--paper-ink);
+}
+.paper-column td p,
+.paper-column th p {
+  margin: 0;
+}
+.ProseMirror .selectedCell {
+  background: var(--paper-accent-soft);
+  outline: 1px solid var(--paper-accent-warm-rust);
+  outline-offset: -1px;
+}
+
 /* Editor mount surface — the single TipTap instance sits here. The
  * .ProseMirror class is the default surface TipTap renders on top of
  * its EditorContent host node. */

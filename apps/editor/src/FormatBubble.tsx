@@ -45,6 +45,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
+import { useEditorState } from '@tiptap/react';
 
 export interface FormatBubbleProps {
   /** The TipTap editor instance to issue commands against. */
@@ -68,22 +69,22 @@ export function FormatBubble({ editor }: FormatBubbleProps): JSX.Element {
   const [linkValue, setLinkValue] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // `editor.isActive(…)` reads from the editor's state — but React doesn't
-  // know to re-render when that state changes unless we subscribe. The
-  // simplest hook here is the editor's `transaction` event; every selection
-  // / mark change fires it. Bumping a counter triggers a re-render.
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const handler = () => setTick((n) => n + 1);
-    editor.on('transaction', handler);
-    editor.on('selectionUpdate', handler);
-    return () => {
-      editor.off('transaction', handler);
-      editor.off('selectionUpdate', handler);
-    };
-  }, [editor]);
-
-  const hasLink = editor.isActive('link');
+  // `editor.isActive(…)` reads ProseMirror state — to make React re-render
+  // when that state changes we use `useEditorState`, the canonical TipTap 3
+  // subscription hook. It runs the selector on each TX, shallow-compares the
+  // result, and only re-renders this component when the selector output
+  // changes. That's much cheaper than the previous "tick on every TX"
+  // pattern, which thrashed the bubble's render cycle.
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: e }) => ({
+      bold: e.isActive('bold'),
+      italic: e.isActive('italic'),
+      code: e.isActive('code'),
+      link: e.isActive('link'),
+    }),
+  });
+  const hasLink = state.link;
 
   // When entering link-mode, focus the input and pre-fill it with any
   // existing href so the writer can edit instead of retype.
@@ -138,10 +139,10 @@ export function FormatBubble({ editor }: FormatBubbleProps): JSX.Element {
         type="button"
         className={
           'paper-format-bubble__btn paper-format-bubble__btn--bold' +
-          (editor.isActive('bold') ? ' paper-format-bubble__btn--active' : '')
+          (state.bold ? ' paper-format-bubble__btn--active' : '')
         }
         aria-label="Bold"
-        aria-pressed={editor.isActive('bold')}
+        aria-pressed={state.bold}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => editor.chain().focus().toggleBold().run()}
       >
@@ -151,10 +152,10 @@ export function FormatBubble({ editor }: FormatBubbleProps): JSX.Element {
         type="button"
         className={
           'paper-format-bubble__btn paper-format-bubble__btn--italic' +
-          (editor.isActive('italic') ? ' paper-format-bubble__btn--active' : '')
+          (state.italic ? ' paper-format-bubble__btn--active' : '')
         }
         aria-label="Italic"
-        aria-pressed={editor.isActive('italic')}
+        aria-pressed={state.italic}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => editor.chain().focus().toggleItalic().run()}
       >
@@ -165,10 +166,10 @@ export function FormatBubble({ editor }: FormatBubbleProps): JSX.Element {
         type="button"
         className={
           'paper-format-bubble__btn paper-format-bubble__btn--code' +
-          (editor.isActive('code') ? ' paper-format-bubble__btn--active' : '')
+          (state.code ? ' paper-format-bubble__btn--active' : '')
         }
         aria-label="Inline code"
-        aria-pressed={editor.isActive('code')}
+        aria-pressed={state.code}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => editor.chain().focus().toggleCode().run()}
       >

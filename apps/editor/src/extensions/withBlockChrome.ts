@@ -41,17 +41,87 @@
  * selection visibility) lives in `../BlockChrome.ts`.
  */
 import type { Node } from '@tiptap/core';
+import { VARIANT_CATALOG } from '@portable-doc/variants';
+import type { BlockType } from '@portable-doc/core';
 import {
   bindChromeHandlers,
   bindDragHandlers,
-  mountVariantChip,
   pdBlockTypeFor,
   renderChromeDom,
   updateChromeForSelection,
   type ChromeParts,
   type DragHandle,
-  type VariantChipHandle,
 } from '../BlockChrome.js';
+import {
+  registerSlot,
+  unregisterSlot,
+} from '../lib/variant-slot-registry.js';
+
+/**
+ * Translate the resolved `PdStyle` from `VARIANT_CATALOG[blockType].resolve(axes)`
+ * into inline CSS on the contentDOM. The same axes feed every backend (web,
+ * email, ink) via the catalog — applying them here makes the editor a
+ * live preview of the variant choice.
+ *
+ * `prevApplied` tracks the keys we last wrote so a later transition (e.g.
+ * to a variant that no longer carries `borderColor`) can clear stale
+ * inline values without resetting unrelated style the writer added.
+ */
+const VARIANT_STYLE_KEYS = [
+  'borderColor',
+  'borderWidth',
+  'borderStyle',
+  'borderLeftColor',
+  'borderLeftWidth',
+  'borderLeftStyle',
+  'backgroundColor',
+  'padding',
+  'margin',
+] as const;
+
+function applyVariantStyle(
+  contentEl: HTMLElement | null,
+  blockType: string,
+  attrs: Record<string, unknown>,
+): void {
+  if (!contentEl) return;
+  const schema = VARIANT_CATALOG[blockType as BlockType];
+  if (!schema) return;
+  const variant = attrs.variant as Record<string, string> | null | undefined;
+  if (!variant) {
+    for (const k of VARIANT_STYLE_KEYS) contentEl.style[k] = '';
+    return;
+  }
+  // Fill missing axes with the catalog's first option so resolve() never
+  // crashes on a partial selection (chip may emit one axis at a time).
+  const axes: Record<string, string> = {};
+  for (const [axisName, options] of Object.entries(schema.axes)) {
+    axes[axisName] = variant[axisName] ?? (options as readonly string[])[0]!;
+  }
+  let style: ReturnType<typeof schema.resolve>;
+  try {
+    style = schema.resolve(axes);
+  } catch {
+    return;
+  }
+  // Clear before re-applying so axes that no longer produce a value reset.
+  for (const k of VARIANT_STYLE_KEYS) contentEl.style[k] = '';
+  if (style.backgroundColor) contentEl.style.backgroundColor = style.backgroundColor;
+  if (style.borderColor) {
+    // Callout uses a left-rail accent in the editor view, not a full border.
+    contentEl.style.borderLeftColor = style.borderColor;
+    contentEl.style.borderLeftStyle = 'solid';
+  }
+  if (typeof style.borderWidth === 'number') {
+    contentEl.style.borderLeftWidth = `${style.borderWidth}px`;
+  }
+  if (typeof style.padding === 'number') {
+    contentEl.style.padding = `${style.padding}px`;
+  }
+  if (typeof style.margin === 'number') {
+    contentEl.style.margin = `0 0 ${style.margin}px`;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Per-node-type contentDOM tag — needs to match the schema's `toDOM` shape so
@@ -216,13 +286,40 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
         outer.className = 'paper-block-outer';
         outer.appendChild(wrapper);
 
-        // ---- A5 variant chip (mounts inside parts.variantSlot) ----
-        // `chipHandle` lives in the node-view closure so update() can re-render
-        // the chip on attribute changes and destroy() can tear the React root
-        // down cleanly. `null` when the block type has no variants.
-        let chipHandle: VariantChipHandle | null = null;
         // ---- A6 drag handle (HTML5 native; reads top-level idx) ----
         let dragHandle: DragHandle | null = null;
+        // ---- A5: variant-slot registry handle ----
+        // Track which slot this NodeView registered so destroy() can
+        // unregister it. `null` for non-variant block types. The
+        // `onChange` handler is hoisted out of the register call so
+        // both the initial register and subsequent re-registers (from
+        // the NodeView's `update()`) can pass the SAME function ref —
+        // otherwise the registry's "bail when props unchanged" check
+        // fails, every TX notifies subscribers, Editor re-renders, and
+        // we're back in a render loop.
+        let registeredSlot: HTMLElement | null = null;
+        const onVariantChange =
+          pdType === null
+            ? null
+            : (next: Record<string, string>): void => {
+                const pos = getPos?.();
+                if (typeof pos !== 'number') return;
+                const liveNode = editor.state.doc.nodeAt(pos);
+                if (!liveNode) return;
+                const prev =
+                  (liveNode.attrs?.variant as Record<string, string> | null) ?? {};
+                const merged = { ...prev, ...next };
+                editor
+                  .chain()
+                  .command(({ tr }) => {
+                    tr.setNodeMarkup(pos, undefined, {
+                      ...liveNode.attrs,
+                      variant: merged,
+                    });
+                    return true;
+                  })
+                  .run();
+              };
 
         if (isTopLevel) {
           const parts = (wrapper as unknown as { __chromeParts: ChromeParts })
@@ -240,41 +337,52 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
           // above this block don't stale the source idx.
           dragHandle = bindDragHandlers(parts, wrapper, editor, computeTopLevelIdx);
 
-          // ---- A5: mount React VariantChip into the chrome's slot ----
-          if (pdType !== null) {
-            chipHandle = mountVariantChip(
-              parts.variantSlot,
+          // ---- A5: register variant-chip slot with the registry.
+          // Editor.tsx subscribes to the registry and portals a
+          // `<VariantChip>` React element into this slot. We don't mount
+          // a React root in here — see `lib/variant-slot-registry.ts`
+          // for why (the createRoot-inside-NodeView pattern fights
+          // ProseMirror's MutationObserver and produces a tight
+          // destroy/recreate loop on the first interaction).
+          if (pdType !== null && onVariantChange !== null) {
+            registerSlot(parts.variantSlot, {
+              blockType: pdType,
+              attrs: node.attrs ?? {},
+              onChange: onVariantChange,
+            });
+            registeredSlot = parts.variantSlot;
+            // Paint the initial variant style on the content element so a
+            // doc seeded with a `variant` attr renders correctly on mount.
+            applyVariantStyle(
+              contentDOM as HTMLElement | null,
               pdType,
               node.attrs ?? {},
-              (next) => {
-                // Merge new axes into the block's `variant` attribute via the
-                // TipTap command. We target the focused block at this node's
-                // position so multiple chips don't fight over a single
-                // updateAttributes call.
-                const pos = getPos?.();
-                if (typeof pos !== 'number') return;
-                const liveNode = editor.state.doc.nodeAt(pos);
-                if (!liveNode) return;
-                const prev = (liveNode.attrs?.variant as Record<string, string> | null) ?? {};
-                const merged = { ...prev, ...next };
-                editor
-                  .chain()
-                  .command(({ tr }) => {
-                    tr.setNodeMarkup(pos, undefined, {
-                      ...liveNode.attrs,
-                      variant: merged,
-                    });
-                    return true;
-                  })
-                  .run();
-              },
             );
           }
         }
 
         // ---- Hover state ----
-        const onEnter = (): void => wrapper.classList.add('is-hovered');
-        const onLeave = (): void => wrapper.classList.remove('is-hovered');
+        // 300ms hide hysteresis: mouseenter cancels any pending hide;
+        // mouseleave schedules removal of `.is-hovered` 300ms later. If
+        // the cursor re-enters (or reaches the chrome through the gap
+        // above the block) within that window, the timer is cleared and
+        // the chrome never visibly hides. CSS `:hover` is still on the
+        // selector, so the show side stays instant via CSS alone.
+        let hideTimer: number | undefined;
+        const onEnter = (): void => {
+          if (hideTimer !== undefined) {
+            window.clearTimeout(hideTimer);
+            hideTimer = undefined;
+          }
+          wrapper.classList.add('is-hovered');
+        };
+        const onLeave = (): void => {
+          if (hideTimer !== undefined) window.clearTimeout(hideTimer);
+          hideTimer = window.setTimeout(() => {
+            wrapper.classList.remove('is-hovered');
+            hideTimer = undefined;
+          }, 300);
+        };
         wrapper.addEventListener('mouseenter', onEnter);
         wrapper.addEventListener('mouseleave', onLeave);
 
@@ -287,9 +395,63 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
         // immediately after mount (matters for tests + re-mounts).
         onSelection();
 
+        // Locate the chrome toolbar in the outer subtree once — used by
+        // ignoreMutation to decide whether a mutation came from inside
+        // the chrome (which paperflow owns) or from contentDOM (which
+        // ProseMirror owns).
+        const chromeToolbar = isTopLevel
+          ? ((wrapper as unknown as { __chromeParts?: ChromeParts }).__chromeParts
+              ?.toolbar ?? null)
+          : null;
+        const insertBtnEl = isTopLevel
+          ? ((wrapper as unknown as { __chromeParts?: ChromeParts }).__chromeParts
+              ?.insertBtn ?? null)
+          : null;
+
         return {
           dom: outer,
           contentDOM,
+          // Tell ProseMirror to ignore DOM mutations inside the chrome
+          // (drag handle, type label, variant chip slot, delete button)
+          // and the "+" insert button. These are paperflow-owned DOM —
+          // React portals chip content into `parts.variantSlot`, the
+          // hover-driven `.is-hovered` class flips on `wrapper`, etc.
+          // Without this, ProseMirror's MutationObserver sees those
+          // changes as "unexpected mutations to my view DOM" and
+          // destroys + recreates the NodeView to "fix" them, taking
+          // the portaled React tree (or React root) with it and
+          // producing a tight rebuild loop on first interaction.
+          ignoreMutation: (mutation) => {
+            // `mutation` is ProseMirror's `ViewMutationRecord` (a
+            // structural superset of MutationRecord). `.target` is a DOM
+            // Node — cast for the contains() check.
+            const target = mutation.target as unknown as globalThis.Node;
+            if (
+              chromeToolbar &&
+              (target === chromeToolbar ||
+                chromeToolbar.contains(target as globalThis.Node))
+            ) {
+              return true;
+            }
+            if (
+              insertBtnEl &&
+              (target === insertBtnEl ||
+                insertBtnEl.contains(target as globalThis.Node))
+            ) {
+              return true;
+            }
+            // Class/style toggles on the wrapper itself (e.g. `.is-hovered`,
+            // `.is-selecting`) are also paperflow chrome state — ignore.
+            if (
+              mutation.type === 'attributes' &&
+              target === (wrapper as unknown as globalThis.Node) &&
+              ((mutation as MutationRecord).attributeName === 'class' ||
+                (mutation as MutationRecord).attributeName === 'data-block-idx')
+            ) {
+              return true;
+            }
+            return false;
+          },
           // Re-check selection state on every node-view update; cheap and
           // keeps the class in sync when ProseMirror re-renders the chrome
           // root after a transaction that didn't fire selectionUpdate.
@@ -304,9 +466,29 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
               if (contentTag !== newTag) return false;
             }
             updateChromeForSelection(wrapper, editor.state.selection.empty);
-            // A5 — push fresh attrs into the React chip so the closed-state
-            // summary stays in sync when the user picks a variant.
-            if (chipHandle !== null) chipHandle.update(newNode.attrs ?? {});
+            // A5 — push fresh attrs into the registry so the portaled chip
+            // re-renders when the user picks a variant. Pass the SAME
+            // hoisted `onVariantChange` reference so the registry's
+            // shallow-equality bail can detect "nothing changed" and
+            // skip the notify (otherwise every TX would re-render Editor).
+            if (
+              registeredSlot !== null &&
+              pdType !== null &&
+              onVariantChange !== null
+            ) {
+              registerSlot(registeredSlot, {
+                blockType: pdType,
+                attrs: newNode.attrs ?? {},
+                onChange: onVariantChange,
+              });
+              // Live-repaint variant styles on the content element so the
+              // editor view reflects the writer's choice immediately.
+              applyVariantStyle(
+                contentDOM as HTMLElement | null,
+                pdType,
+                newNode.attrs ?? {},
+              );
+            }
             // A6 — re-stamp `data-block-idx` after any insert/delete/move
             // higher in the doc shifted this block's slot.
             if (isTopLevel) {
@@ -318,9 +500,10 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
             return true;
           },
           destroy: () => {
+            if (hideTimer !== undefined) window.clearTimeout(hideTimer);
             wrapper.removeEventListener('mouseenter', onEnter);
             wrapper.removeEventListener('mouseleave', onLeave);
-            if (chipHandle !== null) chipHandle.unmount();
+            if (registeredSlot !== null) unregisterSlot(registeredSlot);
             if (dragHandle !== null) dragHandle.destroy();
             editor.off('selectionUpdate', onSelection);
           },

@@ -43,8 +43,27 @@ import { BulletList, OrderedList } from '@tiptap/extension-list';
 import Blockquote from '@tiptap/extension-blockquote';
 import CodeBlock from '@tiptap/extension-code-block';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
-import { useEffect, useMemo, useRef, useState } from 'react';
+// Minimum table support: TipTap delegates to prosemirror-tables. Cells are
+// editable, Tab cycles to the next cell, Shift+Tab walks back. We don't
+// wrap with withBlockChrome — the chrome was tuned for paragraph/heading
+// outer shapes and adding it to <table> needs its own pass.
+// `@tiptap/extension-table` re-exports all four nodes from the main entry,
+// so one import suffices. The per-node sub-packages exist for treeshaking
+// but reference the same classes.
+import {
+  Table,
+  TableRow,
+  TableHeader,
+  TableCell,
+} from '@tiptap/extension-table';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
+import { VariantChip } from './VariantChip.js';
+import {
+  subscribeSlots,
+  getSnapshot as getVariantSlotsSnapshot,
+} from './lib/variant-slot-registry.js';
 import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
@@ -98,8 +117,20 @@ export function Editor({
     [debouncedDoc],
   );
 
-  const editor = useEditor({
-    extensions: [
+  // Memoize extensions + editorProps + initial content. `useEditor` runs
+  // an internal `compareOptions` check on every render and, when any
+  // option's reference has changed, calls `editor.setOptions()` — which
+  // tears down and rebuilds the ProseMirror EditorView, destroying every
+  // NodeView (and the React roots inside them via `chipHandle.unmount()`).
+  // With fresh array/object literals each render, that loops forever:
+  // the rebuild triggers a state update inside TipTap, which re-renders
+  // Editor, which produces fresh literals again, which fails the compare,
+  // which rebuilds, … 19k+ DOM mutations per second of "idle" time.
+  //
+  // The extensions and editor props don't depend on any state that can
+  // change at runtime, so `[]` deps are correct here.
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         // Drop the seven block nodes — A2 re-adds them with chrome below.
         paragraph: false,
@@ -115,9 +146,6 @@ export function Editor({
           HTMLAttributes: { rel: 'noopener noreferrer nofollow' },
         },
       }),
-      // A2 — each block-type Node wrapped with paperflow chrome. The order
-      // matches the order ProseMirror saw them in StarterKit so schema
-      // priorities stay identical.
       withBlockChrome(Paragraph),
       withBlockChrome(Heading.configure({ levels: [1, 2, 3] })),
       withBlockChrome(BulletList),
@@ -125,34 +153,72 @@ export function Editor({
       withBlockChrome(Blockquote),
       withBlockChrome(CodeBlock),
       withBlockChrome(HorizontalRule),
-      // A3 — slash menu via @tiptap/suggestion. Plugin slots after
-      // the block wraps so its plugin queue sits above the NodeView
-      // -bearing nodes in ProseMirror's plugin chain.
+      // Table needs all four nodes registered together — Table contains
+      // TableRow, which contains TableCell/TableHeader. `resizable: false`
+      // keeps v0.4 minimum scope — column resize is v0.5.
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
       SlashCommand,
-      // A6 — registers editor.commands.moveBlock + Cmd+Shift+↑/↓ shortcuts.
-      // The drag handle in withBlockChrome dispatches via this command.
       MoveBlock,
-      // A9 — `showOnlyCurrent: true` (grill Q6) limits the hint to the
-      // currently-focused empty paragraph. Mid-doc empty spacers stay quiet;
-      // the hint reappears when the cursor lands on them and they're empty.
-      // `showOnlyWhenEditable: true` keeps the hint out of read-only renders.
       Placeholder.configure({
         placeholder: 'Start typing, or press / for blocks.',
         showOnlyCurrent: true,
         showOnlyWhenEditable: true,
       }),
     ],
-    content: portableDocToTipTapHtml(doc),
-    editorProps: {
+    [],
+  );
+
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         class: 'paper-editor-surface',
         ...(dataTestId ? { 'data-testid': dataTestId } : {}),
       },
-    },
+    }),
+    [dataTestId],
+  );
+
+  // Initial content snapshot — captured at the FIRST render only. We use
+  // a ref instead of recomputing `portableDocToTipTapHtml(doc)` in the
+  // useEditor options so a later `doc` prop change does NOT rebuild the
+  // whole editor (which would lose cursor/selection). The doc-sync
+  // useEffect below handles in-flight changes via `setContent`.
+  const initialContent = useRef(portableDocToTipTapHtml(doc));
+
+  const editor = useEditor({
+    extensions,
+    content: initialContent.current,
+    editorProps,
+    // TipTap 3 best-practice flags for React 18 StrictMode + concurrent
+    // rendering. Default `immediatelyRender: true` builds the editor
+    // synchronously inside useState's lazy initializer, which clashes
+    // with StrictMode's double-mount cycle. `false` defers the build to
+    // a useEffect so the mount is idempotent. `shouldRerenderOnTransaction:
+    // false` opts out of the legacy "re-render parent component on every
+    // ProseMirror transaction" behavior (TipTap docs flag it for removal);
+    // subscribers that need TX state use `useEditorState` with a selector.
+    immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
     onUpdate: ({ editor: e }) => {
       onChangeRef.current?.(e.getJSON());
     },
   });
+
+  // Keep the editor in sync with the `doc` prop without rebuilding the
+  // ProseMirror view. JSON-edit-mode saves change `doc`; we want the
+  // change to land in the editor without losing the writer's cursor.
+  // `emitUpdate: false` prevents the resulting setContent from firing
+  // onUpdate (which would loop back into the parent via onChange).
+  const lastSyncedDocRef = useRef(doc);
+  useEffect(() => {
+    if (!editor) return;
+    if (lastSyncedDocRef.current === doc) return;
+    lastSyncedDocRef.current = doc;
+    editor.commands.setContent(portableDocToTipTapHtml(doc), { emitUpdate: false });
+  }, [editor, doc]);
 
   // Surface the editor instance once it's ready. A2 / A3 / A4 will read this
   // to attach NodeView decorators, slash extensions, and BubbleMenu plugins.
@@ -161,6 +227,17 @@ export function Editor({
     setEditorInstance(editor);
     if (onEditorReady) onEditorReady(editor);
   }, [editor, onEditorReady]);
+
+  // A5 — subscribe to the variant-slot registry. NodeViews push themselves
+  // in via `registerSlot` (see `withBlockChrome.ts`); this component
+  // portals a `<VariantChip>` React element into each one. The chip's
+  // React root lives in *this* tree, not inside a NodeView, so a NodeView
+  // swap doesn't churn its lifecycle.
+  const variantSlots = useSyncExternalStore(
+    subscribeSlots,
+    getVariantSlotsSnapshot,
+    getVariantSlotsSnapshot,
+  );
 
   return (
     <div className="paper-editor" data-testid="paper-editor">
@@ -173,6 +250,17 @@ export function Editor({
           <FormatBubble editor={editor} />
         </BubbleMenu>
       ) : null}
+      {variantSlots.map((entry) =>
+        createPortal(
+          <VariantChip
+            blockType={entry.props.blockType}
+            attrs={entry.props.attrs}
+            onChange={entry.props.onChange}
+          />,
+          entry.slot,
+          entry.id,
+        ),
+      )}
       {/* A10 — soft margin notes in the right gutter (≥768px) or inline
        *  below the block (<768px). Block-level only per grill Q7; doc-level
        *  issues are filtered inside MarginDiagnostics and surface in the
