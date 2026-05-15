@@ -381,6 +381,16 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
           className="paper-block__chrome"
           role="toolbar"
           aria-label={`${label} block toolbar`}
+          // `contentEditable={false}` is the canonical TipTap NodeView
+          // pattern for chrome inside ProseMirror's contenteditable
+          // surface. Without it, the browser treats mousedowns in the
+          // chrome as text-selection intents and HTML5 drag never
+          // starts — the user can grab the `⋮⋮` handle but no drag
+          // event fires, so block reordering looks "impossible".
+          contentEditable={false}
+          // Some browsers still want explicit suppress on the user-
+          // select side; redundant but harmless.
+          suppressContentEditableWarning
         >
           <button
             ref={dragBtnRef}
@@ -438,6 +448,11 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
         className="paper-block__insert"
         aria-label="Insert block below"
         data-block-type={blockType}
+        // Same rationale as the chrome wrapper above — keep this button
+        // out of ProseMirror's contenteditable click handling so the
+        // mousedown reliably reaches our onMouseDown handler.
+        contentEditable={false}
+        suppressContentEditableWarning
         onMouseDown={handleInsertBelow}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') handleInsertBelow(e);
