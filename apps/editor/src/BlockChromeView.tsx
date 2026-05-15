@@ -61,10 +61,8 @@ import { VARIANT_CATALOG } from '@portable-doc/variants';
 import type { BlockType } from '@portable-doc/core';
 import { VariantChip } from './VariantChip.js';
 import {
-  bindDragHandlers,
   humanLabelFor,
   pdBlockTypeFor,
-  type ChromeParts,
 } from './BlockChrome.js';
 
 /** Tag union we route block types into. Narrowing this lets
@@ -251,29 +249,17 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
     [pdType, node.attrs],
   );
 
-  // Drag handlers. The existing bindDragHandlers is well-tested; we adapt
-  // it via a useEffect that fires once per mount and tears down on unmount.
-  // It reads the current top-level idx lazily via the getter so re-orderings
-  // are always consistent.
+  // Drag: canonical TipTap-native flow. The block's schema is marked
+  // `draggable: true` in `withBlockChrome.ts`; the `⋮⋮` button below
+  // carries `data-drag-handle`. On mousedown, TipTap's NodeView base
+  // class detects the handle, sets a NodeSelection at this node's
+  // position, and on dragstart hands a clone of the node DOM to the OS
+  // as the drag image. PM's built-in node-drag drop logic moves the
+  // node to the drop position; `prosemirror-dropcursor` (registered via
+  // StarterKit) paints the drop indicator. No hand-rolled HTML5
+  // handlers needed — we only need a ref to the button so React can
+  // attach `data-drag-handle` to the right element.
   const dragBtnRef = useRef<HTMLButtonElement | null>(null);
-  const idxRef = useRef<number | undefined>(topLevelIdx);
-  idxRef.current = topLevelIdx;
-  useEffect(() => {
-    if (!isTopLevel) return undefined;
-    if (!wrapperElRef.current || !dragBtnRef.current) return undefined;
-    // bindDragHandlers expects a ChromeParts object; only `dragBtn` is
-    // actually read inside, so we cast a minimal subset.
-    // bindDragHandlers reads dragBtn for dragstart/dragend; toolbar is
-    // declared on ChromeParts but unused in the function body. Provide a
-    // stub div so the interface is satisfied without leaking React-owned
-    // DOM out of the component.
-    const parts: ChromeParts = {
-      dragBtn: dragBtnRef.current,
-      toolbar: document.createElement('div'),
-    };
-    const handle = bindDragHandlers(parts, wrapperElRef.current, editor, () => idxRef.current);
-    return () => handle.destroy();
-  }, [editor, isTopLevel]);
 
   // Chrome handlers.
   const handleDelete = (e: React.MouseEvent | React.KeyboardEvent): void => {
@@ -398,10 +384,21 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
             className="paper-block-drag-handle"
             aria-label={`Drag ${lower}`}
             data-block-type={blockType}
+            // The canonical TipTap node-drag pattern needs BOTH:
+            //   1. `draggable=true` HTML attribute — makes the browser
+            //      fire `dragstart` when the user grabs the button.
+            //      Without this no drag event is ever dispatched and
+            //      TipTap's onDragStart never gets a chance to react.
+            //   2. `data-drag-handle` — the attribute TipTap's
+            //      NodeView base class scans for in the click chain.
+            //      With it, TipTap sets a NodeSelection at the node's
+            //      position, hands a drag-image clone to the OS, and
+            //      PM's drop machinery moves the node. Combined with
+            //      the node's schema `draggable: true` (set in
+            //      `withBlockChrome.ts`), that's the full canonical
+            //      block-reorder flow.
             draggable
-            // Prevent ProseMirror from treating the handle as a text
-            // node when the writer mousedowns on it before dragging.
-            onMouseDown={(e) => e.stopPropagation()}
+            data-drag-handle=""
             // The button is purely a drag affordance — clicking it
             // shouldn't dispatch a command.
             onClick={(e) => e.preventDefault()}

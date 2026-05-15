@@ -41,6 +41,17 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
   const hasVariants = pdType !== null;
 
   return baseExtension.extend({
+    // `draggable: true` is the canonical ProseMirror/TipTap signal that
+    // the whole node can be dragged as a unit. Combined with the
+    // `data-drag-handle` attribute on the chrome's `⋮⋮` button (set in
+    // BlockChromeView), TipTap's NodeView.onDragStart picks up the
+    // mousedown, sets a NodeSelection at this node's position, hands a
+    // drag image to the OS, and lets PM's standard drop machinery
+    // handle the reorder. `prosemirror-dropcursor` (registered via
+    // StarterKit by default) paints the drop indicator at the target
+    // position — replaces our hand-rolled `.paper-drop-indicator`
+    // painted from HTML5 dragover handlers.
+    draggable: true,
     addAttributes() {
       // Preserve any attributes the base extension declares.
       const base = (this.parent?.() ?? {}) as Record<string, unknown>;
