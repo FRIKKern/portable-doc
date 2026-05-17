@@ -33,10 +33,18 @@ import {
 } from 'react';
 import type { Block, InlineNode, PortableDoc } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
+import type { Editor as TipTapEditor } from '@tiptap/react';
+import { useEditorState } from '@tiptap/react';
 import { useMcp } from './McpProvider.js';
 
 interface Props {
   doc: PortableDoc;
+  /** Optional editor instance — when present, the word count comes
+   *  from `@tiptap/extension-character-count`'s incremental storage
+   *  (`editor.storage.characterCount.words()`) instead of walking the
+   *  PortableDoc. Falls back to `countWords(doc)` when the prop is
+   *  omitted (early renders / tests without an editor). */
+  editor?: TipTapEditor | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,13 +163,33 @@ function useIsWide(): boolean {
 // Component
 // ---------------------------------------------------------------------------
 
-export function FooterStatus({ doc }: Props): JSX.Element {
+export function FooterStatus({ doc, editor }: Props): JSX.Element {
   const { reachable, retry } = useMcp();
 
-  // Debounce validation + word count to once per 500ms.
+  // Debounce validation to once per 500ms.
   const debouncedDoc = useDebounced(doc, 500);
   const issues = useMemo(() => validateDoc(debouncedDoc), [debouncedDoc]);
-  const wordCount = useMemo(() => countWords(debouncedDoc), [debouncedDoc]);
+
+  // Word count — when an editor is mounted, read it from
+  // `@tiptap/extension-character-count`'s incremental storage via
+  // `useEditorState` (only re-renders when the count actually flips).
+  // Fall back to `countWords(doc)` for early renders / consumers that
+  // don't pass an editor (tests, snapshots).
+  const editorWordCount = useEditorState({
+    editor: editor ?? null,
+    selector: ({ editor: e }) => {
+      if (!e) return null;
+      const store = e.storage.characterCount as
+        | { words?: () => number }
+        | undefined;
+      return store?.words?.() ?? null;
+    },
+  });
+  const fallbackWordCount = useMemo(
+    () => countWords(debouncedDoc),
+    [debouncedDoc],
+  );
+  const wordCount = editorWordCount ?? fallbackWordCount;
 
   // "saved Ns ago" — savedAt advances each time the doc reference changes
   // (Editor.tsx's onUpdate plumbs new docs up). Stored in state so the

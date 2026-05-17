@@ -33,6 +33,7 @@ import {
 } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import Typography from '@tiptap/extension-typography';
+import { CharacterCount } from '@tiptap/extension-character-count';
 import GlobalDragHandle from 'tiptap-extension-global-drag-handle';
 import AutoJoiner from 'tiptap-extension-auto-joiner';
 import { withBlockChrome } from './withBlockChrome.js';
@@ -130,6 +131,13 @@ export function buildExtensions(
     // straight quotes become curly, `--` collapses to em-dash, `...`
     // to a horizontal ellipsis. Stateless, no config needed.
     Typography,
+    // Canonical incremental character + word counter. Replaces the
+    // hand-rolled `countWords(doc)` walk that FooterStatus used to
+    // do — TipTap tracks the count on the editor instance and we
+    // read it via `editor.storage.characterCount.words()`. Default
+    // `textCounter` whitespace-splits the doc text, which matches
+    // the previous behavior.
+    CharacterCount,
     // Per-block placeholder text. Empty headings/lists/callouts get
     // their own hint instead of the generic "Start typing, or press /
     // for blocks."

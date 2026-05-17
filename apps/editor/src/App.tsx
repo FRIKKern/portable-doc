@@ -144,7 +144,7 @@ function AppShell(): JSX.Element {
         open={outlineOpen}
         onClose={() => setOutlineOpen(false)}
       />
-      <FooterStatus doc={doc} />
+      <FooterStatus doc={doc} editor={editor} />
       <JsonEditMode
         doc={doc}
         open={jsonModeOpen}

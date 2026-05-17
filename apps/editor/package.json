@@ -24,6 +24,7 @@
     "@tiptap/core": "^3",
     "@tiptap/extension-blockquote": "^3",
     "@tiptap/extension-bubble-menu": "^3",
+    "@tiptap/extension-character-count": "^3.23.4",
     "@tiptap/extension-code-block": "^3",
     "@tiptap/extension-heading": "^3",
     "@tiptap/extension-horizontal-rule": "^3",
