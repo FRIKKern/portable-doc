@@ -175,8 +175,8 @@ export function OutlineRail({ editor, open, onClose }: OutlineRailProps): JSX.El
     // 2. Find the DOM node-view wrapper for that position and scroll it.
     //    nodeDOM returns null for missing positions; guard accordingly.
     const dom = editor.view.nodeDOM(entry.pos) as HTMLElement | null;
-    // The node-view wraps `.paper-block` inside `.paper-block-outer`; the
-    // returned node IS that outer wrapper, which is a perfect scroll target.
+    // The node-view returns the `.paper-block` wrapper element, which
+    // is a perfect scroll target (post-CW5 there's no outer flow wrapper).
     dom?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     // 3. Narrow-viewport: collapse the dropdown after navigation.
     if (narrow) setExpanded(false);

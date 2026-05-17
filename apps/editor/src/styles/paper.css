@@ -307,9 +307,10 @@
  * empty nodes. Under ReactNodeViewRenderer the decoration lands on the
  * outer `.react-renderer` wrapper TipTap creates per NodeView, NOT on
  * the inner contentDOM. We position the hint absolutely so it overlays
- * the `.paper-block__content` text area (the chrome is `top: -44px`
- * out of flow, so the content starts at the wrapper's natural top
- * plus its own 4px padding-top — see `.paper-block`). */
+ * the `.paper-block__content` text area (the content starts at the
+ * wrapper's natural top plus its own 4px padding-top — see
+ * `.paper-block`). Post-CW5 the chrome no longer lives inside the
+ * block so we don't need to clear an "out of flow" top reservation. */
 .ProseMirror .react-renderer.is-empty[data-placeholder] {
   position: relative;
 }
@@ -554,24 +555,27 @@
 }
 
 /* ===========================================================================
- * Block chrome (A2) — paper-block + paper-block__chrome + paper-block__insert
+ * Block layout (A2 + CW5) — paper-block + paper-floating-chrome
  *
- * The chrome lives inside each TipTap node-view wrapper (see
- * `extensions/withBlockChrome.ts`). It scrolls with the block because it IS
- * a child of the block — no overlay, no rect recompute.
+ * Per-block embedded chrome is gone (the CW5 refactor): each top-level
+ * NodeView now renders just `.paper-block` with `data-block-type` +
+ * `data-block-idx`. The chrome cluster (drag handle / label / variant
+ * chip / delete / "+") lives ONCE per editor in `.paper-floating-chrome`,
+ * positioned via JS to track the currently-hovered block (Notion /
+ * BlockNote / Linear pattern).
+ *
+ * The class names `.paper-block-drag-handle` / `.paper-block-delete` /
+ * `.paper-block__label` / `.paper-block__variant-slot` survive inside
+ * the floating chrome — same button styling, just one instance.
  *
  * Adapted from `~/docs/paperflow/notes/2026-05-10-paper-vision-prototype.html`
  * (search `.block-toolbar`, `.block-plus`) with the `.paper-` prefix and
  * the motion tokens from motion.css.
  * =========================================================================== */
 
-.paper-block-outer {
-  position: relative;
-  margin: 0 0 22px;
-}
-
 .paper-block {
   position: relative;
+  margin: 0 0 22px;
   padding: 4px 0;
   outline: 1px solid transparent;
   outline-offset: 10px;
@@ -584,14 +588,12 @@
   outline-color: rgba(31, 26, 20, 0.10);
 }
 
-/* The chrome toolbar — fades in on hover/focus.
- * Hidden by default; `.is-hovered` (set by the node-view's mouseenter
- * handler) flips it on. `.is-selecting` overrides everything to hide
- * the chrome whenever a text selection is non-empty (grill Q3). */
-.paper-block__chrome {
-  position: absolute;
-  top: -44px;
-  left: -4px;
+/* The floating chrome cluster — ONE instance per editor, positioned with
+ * `top`/`left` inline styles set by `FloatingBlockChrome.tsx`. Hidden by
+ * default; `.is-tracking` flips it visible. Stays at
+ * `--paper-block-chrome-z` (= 10) so the BubbleMenu (z=20) wins whenever
+ * both want to paint in the same region. */
+.paper-floating-chrome {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -604,29 +606,21 @@
   font-size: 12px;
   color: var(--paper-ink-soft);
   opacity: 0;
-  transform: translateY(4px);
   pointer-events: none;
   white-space: nowrap;
   z-index: var(--paper-block-chrome-z);
   transition:
     opacity var(--motion-chrome-fade-out) ease-out,
-    transform var(--motion-chrome-fade-out) ease-out;
+    top 160ms ease-out,
+    left 160ms ease-out;
 }
-.paper-block:hover > .paper-block__chrome,
-.paper-block.is-hovered > .paper-block__chrome,
-.paper-block.is-focused > .paper-block__chrome {
+.paper-floating-chrome.is-tracking {
   opacity: 1;
-  transform: translateY(0);
   pointer-events: auto;
   transition:
     opacity var(--motion-chrome-fade-in) ease-out,
-    transform var(--motion-chrome-fade-in) ease-out;
-}
-.paper-block.is-selecting > .paper-block__chrome {
-  /* While a text selection is active anywhere in the doc, the BubbleMenu
-   * owns the floating-chrome layer — block chrome must disappear. */
-  opacity: 0;
-  pointer-events: none;
+    top 160ms ease-out,
+    left 160ms ease-out;
 }
 
 .paper-block__label {
@@ -637,7 +631,6 @@
 }
 
 .paper-block__variant-slot {
-  /* A5 paints into this; A2 leaves it empty (no width, no border). */
   display: flex;
   align-items: center;
   gap: 6px;
@@ -677,46 +670,33 @@
   outline-offset: 2px;
 }
 
-/* The "+" between-blocks button — sibling of .paper-block, faint at rest. */
+/* The "+" insert button — lives inside the floating chrome cluster. */
 .paper-block__insert {
-  position: absolute;
-  left: 50%;
-  bottom: -13px;
-  transform: translateX(-50%);
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--paper-chrome-bg);
+  background: transparent;
   border: 1px solid var(--paper-chrome-border);
   color: var(--paper-ink-soft);
   font-family: var(--paper-font-sans);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.25;
   cursor: pointer;
-  z-index: var(--paper-block-chrome-z);
-  transition:
-    opacity var(--motion-chrome-fade-out) ease-out,
-    color 160ms ease-out,
-    transform 160ms ease-out;
+  padding: 0;
+  transition: color 160ms ease-out, transform 160ms ease-out,
+    border-color 160ms ease-out;
 }
 .paper-block__insert:hover {
-  opacity: 1;
   color: var(--paper-accent-warm-rust);
-  transform: translateX(-50%) scale(1.08);
-}
-.paper-block-outer:hover .paper-block__insert {
-  opacity: 0.85;
-  color: var(--paper-ink);
-  transition: opacity var(--motion-chrome-fade-in) ease-out;
+  border-color: var(--paper-accent-warm-rust);
+  transform: scale(1.08);
 }
 .paper-block__insert:focus-visible {
   outline: 2px solid var(--paper-accent-warm-rust);
   outline-offset: 2px;
-  opacity: 1;
 }
 
 /* ===========================================================================

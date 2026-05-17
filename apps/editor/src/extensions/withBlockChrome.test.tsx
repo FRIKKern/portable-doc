@@ -1,32 +1,31 @@
 /**
  * @vitest-environment happy-dom
  *
- * A2 — block-chrome via TipTap NodeView. Replaces the v0.3 BlockTile specs
- * (T4 test-triage: `BlockTile.test.tsx` → disposition `rewrite`).
+ * A2 — block-chrome via TipTap NodeView.
  *
- * Coverage matrix
- * ---------------
+ * Post-CW5: the per-block embedded chrome toolbar is gone. Each NodeView
+ * renders just `.paper-block` with `data-block-type` + `data-block-idx`;
+ * a single floating cluster (`FloatingBlockChrome`) tracks the currently-
+ * hovered block via mouse coordinates. Tests assert the new contract:
+ *
  *   1. `withBlockChrome(Paragraph)` returns an extension whose NodeView
  *      hook (`addNodeView`) is defined.
- *   2. `renderChromeDom('paragraph')` builds the toolbar with drag handle,
- *      label "Paragraph", delete button, variant slot, and the "+" insert.
- *   3. `updateChromeForSelection` toggles `.is-selecting` on the wrapper.
- *   4. Block-chrome CSS reads the motion-fade-in token (animation hook).
- *   5. `prefers-reduced-motion` collapses chrome-fade-in to 0ms via the
- *      same global override the motion stylesheet declares.
- *   6. Block-chrome `--paper-block-chrome-z` < `--paper-bubble-menu-z`
+ *   2. Editor.tsx renders the welcome doc with each top-level node wrapped
+ *      in `.paper-block` carrying `data-block-type` + `data-block-idx`.
+ *   3. Exactly one `.paper-floating-chrome` lives in the editor mount
+ *      (Notion/BlockNote/Linear pattern, not N-per-block).
+ *   4. The floating chrome carries the drag handle, label, variant slot,
+ *      delete, and "+" insert as a single cluster.
+ *   5. Delete button on the floating chrome removes the targeted block.
+ *   6. "+" insert button inserts a paragraph below the target block.
+ *   7. Block-chrome CSS still reads the motion-fade-in token (animation
+ *      hook) and `prefers-reduced-motion` collapses it to 0ms.
+ *   8. Block-chrome `--paper-block-chrome-z` < `--paper-bubble-menu-z`
  *      (stacking; grill Q3).
- *   7. Editor.tsx renders the welcome doc with each top-level node wrapped
- *      in `.paper-block`.
- *   8. Drag-handle aria-label is parametrized over block types.
- *   9. Delete-button click removes the block (editor.getJSON shrinks by 1).
- *  10. `+` insert button inserts a paragraph below the current block.
- *  11. Selection-non-empty hides chrome via `.is-selecting`.
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { PortableDoc } from '@portable-doc/core';
-import { humanLabelFor } from '../lib/block-chrome-helpers.js';
 import { withBlockChrome } from './withBlockChrome.js';
 import Paragraph from '@tiptap/extension-paragraph';
 import Heading from '@tiptap/extension-heading';
@@ -84,39 +83,25 @@ describe('withBlockChrome — factory shape', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. renderChromeDom + humanLabelFor
-// ---------------------------------------------------------------------------
-
-// `renderChromeDom` and `updateChromeForSelection` unit tests removed —
-// those helpers no longer exist post-ReactNodeViewRenderer refactor. The
-// chrome DOM is now rendered by `BlockChromeView.tsx` and the
-// `.is-selecting` class is computed reactively via `useEditorState`. The
-// integration tests at the bottom of this file (section 6) cover the
-// same surface end-to-end through real React rendering.
-//
-// `humanLabelFor` is still exported and used by the React view; the
-// parametrized aria-label check survives under the integration tests
-// below where each block's drag/delete button is asserted.
-
-// ---------------------------------------------------------------------------
-// 4 + 5. Motion / reduced-motion via paper.css
+// 4 + 5. Motion / reduced-motion / z-index via paper.css
 // ---------------------------------------------------------------------------
 
 describe('paper.css — motion + reduced-motion + z-index', () => {
   function loadPaperCss(): string {
     // The CSS file is loaded from disk so we test the source-of-truth, not
     // a copy. happy-dom doesn't apply external CSS by itself; we only need
-    // text inspection here — the integration test below uses live styles
-    // via a <style> tag.
+    // text inspection here.
     return require('node:fs').readFileSync(
       require('node:path').resolve(__dirname, '../styles/paper.css'),
       'utf-8',
     );
   }
 
-  it('block chrome transitions reference --motion-chrome-fade-in', () => {
+  it('floating chrome transitions reference --motion-chrome-fade-in', () => {
     const css = loadPaperCss();
-    expect(css).toMatch(/\.paper-block:hover\s*>\s*\.paper-block__chrome/);
+    // Post-CW5: the chrome lives in `.paper-floating-chrome.is-tracking`,
+    // not on `.paper-block:hover > .paper-block__chrome`.
+    expect(css).toMatch(/\.paper-floating-chrome\.is-tracking/);
     expect(css).toMatch(/var\(--motion-chrome-fade-in\)/);
   });
 
@@ -142,7 +127,7 @@ describe('paper.css — motion + reduced-motion + z-index', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6 + 7 + 9 + 10 + 11. Editor integration — mount + delete + insert + selection
+// 6 + 7. Editor integration — mount + floating chrome contract
 // ---------------------------------------------------------------------------
 
 const welcomeFixture: PortableDoc = {
@@ -174,7 +159,7 @@ const welcomeFixture: PortableDoc = {
   ],
 };
 
-describe('Editor integration — paper-block chrome on every top-level node', () => {
+describe('Editor integration — paper-block + single floating chrome', () => {
   // Each render-then-assert here waits one macrotask so the React
   // NodeView renderers (queued via queueMicrotask in @tiptap/react) flush
   // before we count `.paper-block` elements.
@@ -188,28 +173,52 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
     expect(blocks.length).toBe(4);
   });
 
-  it('every paper-block carries a drag handle, label, and delete button', async () => {
+  it('each paper-block carries data-block-type + data-block-idx (the floating chrome reads these)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
     const blocks = surface!.querySelectorAll('.paper-block');
-    for (const b of Array.from(blocks)) {
-      expect(b.querySelector('.paper-block-drag-handle')).toBeTruthy();
-      expect(b.querySelector('.paper-block__label')).toBeTruthy();
-      expect(b.querySelector('.paper-block-delete')).toBeTruthy();
-    }
+    blocks.forEach((b, i) => {
+      expect(b.getAttribute('data-block-type')).toBeTruthy();
+      expect(b.getAttribute('data-block-idx')).toBe(String(i));
+    });
   });
 
-  it('every paper-block-outer carries a .paper-block__insert button', async () => {
+  it('paper-block does NOT carry per-block chrome (no embedded toolbar)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
-    const inserts = surface!.querySelectorAll('.paper-block__insert');
-    // welcome doc: 4 top-level blocks → 4 insert buttons.
-    expect(inserts.length).toBe(4);
+    // Zero per-block chrome toolbars / inserts / drag handles inside the
+    // PM surface — they all moved to the single floating cluster.
+    expect(surface!.querySelectorAll('.paper-block__chrome').length).toBe(0);
+    expect(surface!.querySelectorAll('.paper-block__insert').length).toBe(0);
+    expect(surface!.querySelectorAll('.paper-block-drag-handle').length).toBe(0);
+    expect(surface!.querySelectorAll('.paper-block-delete').length).toBe(0);
   });
 
-  it('delete button removes the targeted block (heading goes away)', async () => {
+  it('exactly one .paper-floating-chrome lives in the editor mount', async () => {
+    render(<Editor doc={welcomeFixture} />);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    const mount = screen.getByTestId('paper-editor');
+    const clusters = mount.querySelectorAll('.paper-floating-chrome');
+    // Single cluster — the highest-leverage CW5 architecture invariant.
+    expect(clusters.length).toBe(1);
+  });
+
+  it('the floating chrome carries drag handle, label, variant slot, delete, and "+" insert', async () => {
+    render(<Editor doc={welcomeFixture} />);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    const mount = screen.getByTestId('paper-editor');
+    const chrome = mount.querySelector('.paper-floating-chrome');
+    expect(chrome).toBeTruthy();
+    expect(chrome!.querySelector('.paper-block-drag-handle')).toBeTruthy();
+    expect(chrome!.querySelector('.paper-block__label')).toBeTruthy();
+    expect(chrome!.querySelector('.paper-block__variant-slot')).toBeTruthy();
+    expect(chrome!.querySelector('.paper-block-delete')).toBeTruthy();
+    expect(chrome!.querySelector('.paper-block__insert')).toBeTruthy();
+  });
+
+  it('floating-chrome delete button removes the targeted block when fired against a block', async () => {
     let captured: import('@tiptap/react').Editor | null = null;
     render(
       <Editor
@@ -219,35 +228,46 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
         }}
       />,
     );
-    // Editor mounts on the next effect tick.
     await new Promise<void>((r) => setTimeout(r, 0));
-    expect(captured).toBeTruthy();
     const editor = captured!;
     const beforeTypes = (editor.getJSON().content ?? []).map((n) => n.type);
     expect(beforeTypes).toContain('heading');
 
-    // Click the first delete button — it targets the heading (the first
-    // top-level block in the welcome fixture).
-    const firstDelete = editor.view.dom.querySelector(
-      '.paper-block-delete',
-    ) as HTMLButtonElement | null;
-    expect(firstDelete).toBeTruthy();
-    // The welcome fixture's first block is an H1, so the chrome label
-    // appends "1" → "Delete heading 1".
-    expect(firstDelete!.getAttribute('aria-label')).toBe('Delete heading 1');
-    firstDelete!.dispatchEvent(
+    // Simulate a mousemove over the first block so the floating chrome
+    // adopts it as target, then click delete.
+    const firstBlock = editor.view.dom.querySelector(
+      '.paper-block[data-block-idx="0"]',
+    ) as HTMLElement | null;
+    expect(firstBlock).toBeTruthy();
+    // The block is wrapped by `.react-renderer` (TipTap's per-NodeView
+    // outer wrapper). Bubble a mousemove from inside the block; the
+    // floating chrome's rAF-throttled handler walks up to the wrapper.
+    firstBlock!.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 100,
+        clientY: 50,
+      }),
+    );
+    // Let the rAF + state update flush.
+    await new Promise<void>((r) => setTimeout(r, 16));
+
+    const deleteBtn = document
+      .querySelector('.paper-floating-chrome .paper-block-delete') as HTMLButtonElement | null;
+    expect(deleteBtn).toBeTruthy();
+    // The welcome fixture's first block is an H1, so the floating chrome
+    // shows "Delete heading 1".
+    expect(deleteBtn!.getAttribute('aria-label')).toBe('Delete heading 1');
+    deleteBtn!.dispatchEvent(
       new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
     );
 
     const afterTypes = (editor.getJSON().content ?? []).map((n) => n.type);
-    // The heading is gone — that's the contract the chrome delete promises.
-    // StarterKit's TrailingNode extension may insert an empty paragraph at
-    // the end of the doc as a side effect, so we assert structural absence
-    // of the heading rather than a length delta.
     expect(afterTypes).not.toContain('heading');
   });
 
-  it('+ insert button inserts a paragraph immediately after the current block', async () => {
+  it('floating-chrome "+" inserts a paragraph below the targeted block', async () => {
     let captured: import('@tiptap/react').Editor | null = null;
     render(
       <Editor
@@ -263,12 +283,26 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
     expect(beforeTypes[0]).toBe('heading');
     expect(beforeTypes[1]).toBe('paragraph');
 
-    const firstInsert = editor.view.dom.querySelector(
-      '.paper-block__insert',
-    ) as HTMLButtonElement | null;
-    expect(firstInsert).toBeTruthy();
-    expect(firstInsert!.getAttribute('aria-label')).toBe('Insert block below');
-    firstInsert!.dispatchEvent(
+    // Adopt block 0 as the floating chrome target.
+    const firstBlock = editor.view.dom.querySelector(
+      '.paper-block[data-block-idx="0"]',
+    ) as HTMLElement | null;
+    expect(firstBlock).toBeTruthy();
+    firstBlock!.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 100,
+        clientY: 50,
+      }),
+    );
+    await new Promise<void>((r) => setTimeout(r, 16));
+
+    const insertBtn = document
+      .querySelector('.paper-floating-chrome .paper-block__insert') as HTMLButtonElement | null;
+    expect(insertBtn).toBeTruthy();
+    expect(insertBtn!.getAttribute('aria-label')).toBe('Insert block below');
+    insertBtn!.dispatchEvent(
       new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
     );
 
@@ -277,19 +311,13 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
     // intro paragraph — heading at index 0, NEW paragraph at index 1.
     expect(afterTypes[0]).toBe('heading');
     expect(afterTypes[1]).toBe('paragraph');
-    // The original intro paragraph is now at index 2 — confirms insertion.
     expect(afterTypes[2]).toBe('paragraph');
-    // The new paragraph starts with the slash-menu trigger character `/`
-    // pre-typed: clicking `+` is meant to immediately open the same picker
-    // the writer gets by typing `/`, so they can choose the block type
-    // (heading, list, callout, code, …) instead of being stuck on plain
-    // paragraph. The caret lands after the `/`, ready for filter typing
-    // or arrow-key selection.
+    // The new paragraph starts with the slash-menu trigger `/`.
     const inserted = editor.getJSON().content?.[1];
     expect(inserted?.content ?? []).toEqual([{ type: 'text', text: '/' }]);
   });
 
-  it('non-empty selection adds .is-selecting to every paper-block (grill Q3)', async () => {
+  it('floating chrome hides when a non-empty selection is active (BubbleMenu wins)', async () => {
     let captured: import('@tiptap/react').Editor | null = null;
     render(
       <Editor
@@ -301,15 +329,25 @@ describe('Editor integration — paper-block chrome on every top-level node', ()
     );
     await new Promise<void>((r) => setTimeout(r, 0));
     const editor = captured!;
-    // Select the whole doc.
+    // Adopt block 0.
+    const firstBlock = editor.view.dom.querySelector(
+      '.paper-block[data-block-idx="0"]',
+    ) as HTMLElement | null;
+    firstBlock!.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 100,
+        clientY: 50,
+      }),
+    );
+    await new Promise<void>((r) => setTimeout(r, 16));
+    const chrome = document.querySelector('.paper-floating-chrome') as HTMLElement;
+    expect(chrome.classList.contains('is-tracking')).toBe(true);
+
+    // Select the whole doc — selection becomes non-empty.
     editor.commands.selectAll();
-    // selectionUpdate is sync on the next microtask.
     await new Promise<void>((r) => setTimeout(r, 0));
-    const blocks = editor.view.dom.querySelectorAll('.paper-block');
-    const selectingCount = Array.from(blocks).filter((b) =>
-      b.classList.contains('is-selecting'),
-    ).length;
-    expect(selectingCount).toBe(blocks.length);
-    expect(selectingCount).toBeGreaterThan(0);
+    expect(chrome.classList.contains('is-tracking')).toBe(false);
   });
 });

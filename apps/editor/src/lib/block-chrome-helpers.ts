@@ -1,26 +1,31 @@
 /**
  * Block-chrome helpers — small lib used by `BlockChromeView.tsx` (the React
- * NodeView that paints chrome around every top-level block). Originally
- * lived at `src/BlockChrome.ts` back when chrome rendering happened here
- * imperatively; after the React NodeView refactor only the helpers below
- * remain, so the file moved to `src/lib/` where it belongs.
+ * NodeView for every paperflow block) and `FloatingBlockChrome.tsx` (the
+ * single floating chrome cluster).
  *
  * Three responsibilities:
  *
- *   1. `humanLabelFor`     pure: block-type → "Paragraph" / "Heading" / …
- *   2. `pdBlockTypeFor`    pure: tiptap node name → PortableDoc block type
- *                          (null for blocks without a variant catalog entry)
- *   3. `bindDragHandlers`  imperative: wires native HTML5 drag-and-drop on
- *                          the chrome's `⋮⋮` button so block drops respect
- *                          slot semantics (above-midline = slot N,
- *                          below-midline = slot N+1) and dispatch the
- *                          `moveBlock` editor command. Schema-level
- *                          `draggable: true` + `data-drag-handle` are also
- *                          set on the button — TipTap's NodeView.onDragStart
- *                          uses them to hand a clean drag image to the OS.
- *                          But the drop side is OURS: PM's default drops
- *                          at text-coords, not block slots, so we own the
- *                          drop handler + the indicator paint.
+ *   1. `humanLabelFor`                 pure: block-type → "Paragraph" /
+ *                                       "Heading" / …
+ *   2. `pdBlockTypeFor`                pure: tiptap node name → PortableDoc
+ *                                       block type (null for blocks without
+ *                                       a variant catalog entry).
+ *   3. `bindEditorLevelDragHandlers`   imperative: wires native HTML5 drag-
+ *                                       and-drop. dragstart on a single
+ *                                       floating drag button (which carries
+ *                                       the CURRENT target block's idx),
+ *                                       dragover/dragleave/drop ONCE at the
+ *                                       editor surface (the listener walks
+ *                                       `event.target` up to the nearest
+ *                                       `.react-renderer` wrapper to find
+ *                                       the drop's target block).
+ *
+ * Schema-level `draggable: true` + the `data-drag-handle` attribute on the
+ * drag button hand TipTap's NodeView.onDragStart a clean drag image and a
+ * NodeSelection. The drop side is OURS — PM's default drops at text-coords,
+ * not block slots, so the drop handler computes slot semantics (above-
+ * midline = slot N, below-midline = slot N+1) and dispatches the
+ * `moveBlock` editor command.
  */
 import type { Editor } from '@tiptap/core';
 
@@ -70,32 +75,55 @@ export function pdBlockTypeFor(tiptapName: string): string | null {
  *  unambiguous. */
 const DRAG_MIME = 'application/x-paper-block-idx';
 
-/** Returned by `bindDragHandlers` so the NodeView can detach all
+/** Returned by drag-handler binders so the React side can detach all
  *  listeners on `destroy` without re-deriving handler identity. */
 export interface DragHandle {
   destroy(): void;
 }
 
+/** Walk `el` and its ancestors to find the top-level block wrapper —
+ *  the `.paper-block` element carrying `data-block-idx`. (Nested
+ *  `.paper-block-nested` wrappers don't have the attribute, so this
+ *  walk skips past them and stops at the top-level block.) Returns
+ *  `null` for events outside any block. */
+function closestTopLevelBlockWrapper(el: Element | null): HTMLElement | null {
+  let cur: Element | null = el;
+  while (cur != null) {
+    if (cur instanceof HTMLElement && cur.dataset.blockIdx !== undefined) {
+      return cur;
+    }
+    cur = cur.parentElement;
+  }
+  return null;
+}
+
 /**
- * Wire native HTML5 drag-and-drop onto a block's drag handle + wrapper.
+ * Editor-level drag wiring.
  *
- * The handle (the `⋮⋮` button) gets `dragstart` — writes the source
- * index into the `DataTransfer` payload via our custom MIME. The wrapper
- * itself listens for `dragover` (paint the drop-indicator above or
- * below depending on which half of the wrapper the pointer is over),
- * `dragleave` (hide indicator), and `drop` (read source idx, compute
- * slot-style `toIdx`, dispatch `editor.commands.moveBlock`).
+ * One dragstart listener on the floating drag button (its target idx is
+ * resolved lazily via `getCurrentBlockIdx` at drag time). One
+ * dragover/dragleave/drop trio on the editor surface (each event resolves
+ * the target wrapper from `event.target.closest('.react-renderer')`).
  *
- * `getBlockIdx` returns this block's current top-level index — re-read
- * lazily on every event so inserts/deletes above don't stale the value.
+ * The drop indicator is appended to / removed from the target wrapper —
+ * its `data-side` ("above" / "below") follows the midline of the wrapper
+ * the pointer is currently over.
+ *
+ * `onDragStart` and `onDragEnd` callbacks let the caller flip a
+ * `isDragging` ref (so the floating chrome doesn't hide-hysteresis itself
+ * while a drag is in flight).
  */
-export function bindDragHandlers(
-  dragBtn: HTMLButtonElement,
-  wrapper: HTMLElement,
+export function bindEditorLevelDragHandlers(
   editor: Editor,
-  getBlockIdx: () => number | undefined,
+  dragBtn: HTMLButtonElement,
+  getCurrentBlockIdx: () => number | undefined,
+  onDragStart?: () => void,
+  onDragEnd?: () => void,
 ): DragHandle {
+  const surface = editor.view.dom as HTMLElement;
+  let currentIndicatorParent: HTMLElement | null = null;
   let indicator: HTMLDivElement | null = null;
+
   const ensureIndicator = (): HTMLDivElement => {
     if (indicator) return indicator;
     const el = document.createElement('div');
@@ -105,78 +133,115 @@ export function bindDragHandlers(
     return el;
   };
   const hideIndicator = (): void => {
-    if (indicator && indicator.parentNode === wrapper) {
-      wrapper.removeChild(indicator);
+    if (indicator && currentIndicatorParent && indicator.parentNode === currentIndicatorParent) {
+      currentIndicatorParent.removeChild(indicator);
     }
+    currentIndicatorParent = null;
   };
-  const showIndicator = (side: 'above' | 'below'): void => {
+  const showIndicator = (wrapper: HTMLElement, side: 'above' | 'below'): void => {
     const el = ensureIndicator();
     el.dataset.side = side;
+    if (currentIndicatorParent && currentIndicatorParent !== wrapper) {
+      if (el.parentNode === currentIndicatorParent) {
+        currentIndicatorParent.removeChild(el);
+      }
+    }
+    // The drop indicator is positioned absolute against the wrapper;
+    // ensure the wrapper itself is positioned so the indicator's top/
+    // bottom anchor correctly.
+    if (getComputedStyle(wrapper).position === 'static') {
+      wrapper.style.position = 'relative';
+    }
     if (el.parentNode !== wrapper) wrapper.appendChild(el);
+    currentIndicatorParent = wrapper;
   };
 
-  const onDragStart = (e: DragEvent): void => {
-    const idx = getBlockIdx();
+  const handleDragStart = (e: DragEvent): void => {
+    const idx = getCurrentBlockIdx();
     if (idx == null) return;
     const dt = e.dataTransfer;
     if (!dt) return;
     dt.setData(DRAG_MIME, String(idx));
     dt.effectAllowed = 'move';
-    wrapper.classList.add('is-dragging');
+    onDragStart?.();
   };
-  const onDragEnd = (): void => {
-    wrapper.classList.remove('is-dragging');
+  const handleDragEnd = (): void => {
     hideIndicator();
+    onDragEnd?.();
   };
-  dragBtn.addEventListener('dragstart', onDragStart);
-  dragBtn.addEventListener('dragend', onDragEnd);
+  dragBtn.addEventListener('dragstart', handleDragStart);
+  dragBtn.addEventListener('dragend', handleDragEnd);
 
-  const onDragOver = (e: DragEvent): void => {
+  const handleDragOver = (e: DragEvent): void => {
     const dt = e.dataTransfer;
-    if (!dt || !Array.from(dt.types).includes(DRAG_MIME)) return;
+    if (!dt) return;
+    if (!Array.from(dt.types).includes(DRAG_MIME)) return;
+    const wrapper = closestTopLevelBlockWrapper(e.target as Element | null);
+    if (!wrapper) return;
     e.preventDefault();
     dt.dropEffect = 'move';
     const rect = wrapper.getBoundingClientRect();
     const mid = rect.top + rect.height / 2;
-    showIndicator(e.clientY < mid ? 'above' : 'below');
+    showIndicator(wrapper, e.clientY < mid ? 'above' : 'below');
   };
-  const onDragLeave = (e: DragEvent): void => {
+  const handleDragLeave = (e: DragEvent): void => {
+    // Only hide when the pointer leaves the editor surface entirely.
     const next = e.relatedTarget as Node | null;
-    if (next && wrapper.contains(next)) return;
+    if (next && surface.contains(next)) return;
     hideIndicator();
   };
-  const onDrop = (e: DragEvent): void => {
+  const handleDrop = (e: DragEvent): void => {
     const dt = e.dataTransfer;
     if (!dt) return;
     const raw = dt.getData(DRAG_MIME);
     if (!raw) return;
-    e.preventDefault();
-    const fromIdx = Number(raw);
-    const targetIdx = getBlockIdx();
-    if (!Number.isFinite(fromIdx) || targetIdx == null) {
+    const wrapper = closestTopLevelBlockWrapper(e.target as Element | null);
+    if (!wrapper) {
       hideIndicator();
       return;
     }
+    const idxRaw = wrapper.dataset.blockIdx;
+    const targetIdx = idxRaw === undefined ? NaN : Number(idxRaw);
+    const fromIdx = Number(raw);
+    if (!Number.isFinite(fromIdx) || !Number.isFinite(targetIdx)) {
+      hideIndicator();
+      return;
+    }
+    e.preventDefault();
     const rect = wrapper.getBoundingClientRect();
     const mid = rect.top + rect.height / 2;
     const toIdx = e.clientY < mid ? targetIdx : targetIdx + 1;
     hideIndicator();
-    wrapper.classList.remove('is-dragging');
     // moveBlock's own no-op short-circuits handle the identity cases.
     editor.commands.moveBlock(fromIdx, toIdx);
   };
-  wrapper.addEventListener('dragover', onDragOver);
-  wrapper.addEventListener('dragleave', onDragLeave);
-  wrapper.addEventListener('drop', onDrop);
+  surface.addEventListener('dragover', handleDragOver);
+  surface.addEventListener('dragleave', handleDragLeave);
+  surface.addEventListener('drop', handleDrop);
 
   return {
     destroy() {
-      dragBtn.removeEventListener('dragstart', onDragStart);
-      dragBtn.removeEventListener('dragend', onDragEnd);
-      wrapper.removeEventListener('dragover', onDragOver);
-      wrapper.removeEventListener('dragleave', onDragLeave);
-      wrapper.removeEventListener('drop', onDrop);
+      dragBtn.removeEventListener('dragstart', handleDragStart);
+      dragBtn.removeEventListener('dragend', handleDragEnd);
+      surface.removeEventListener('dragover', handleDragOver);
+      surface.removeEventListener('dragleave', handleDragLeave);
+      surface.removeEventListener('drop', handleDrop);
       hideIndicator();
     },
   };
+}
+
+/**
+ * @deprecated Use `bindEditorLevelDragHandlers` — the per-block binder is
+ * retained as a no-op shim so callers that haven't migrated still
+ * type-check. New code should bind once at the editor surface level via
+ * `bindEditorLevelDragHandlers`.
+ */
+export function bindDragHandlers(
+  _dragBtn: HTMLButtonElement,
+  _wrapper: HTMLElement,
+  _editor: Editor,
+  _getBlockIdx: () => number | undefined,
+): DragHandle {
+  return { destroy() {} };
 }

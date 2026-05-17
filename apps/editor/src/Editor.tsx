@@ -68,6 +68,7 @@ import { SlashCommand } from './extensions/SlashCommand.js';
 import { MoveBlock } from './extensions/MoveBlock.js';
 import { FormatBubble } from './FormatBubble.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
+import { FloatingBlockChrome } from './FloatingBlockChrome.js';
 
 interface EditorProps {
   /** PortableDoc rendered into the editor. Re-syncs via `setContent`
@@ -376,6 +377,11 @@ export function Editor({
        *  issues are filtered inside MarginDiagnostics and surface in the
        *  footer count (A8). */}
       <MarginDiagnostics issues={issues} doc={doc} editor={editorInstance} />
+      {/* CW5 — single floating chrome cluster that tracks the currently-
+       *  hovered top-level block (Notion/BlockNote/Linear pattern). One
+       *  instance per editor; positions itself via mousemove → closest
+       *  `.react-renderer` ancestor walk + getBoundingClientRect. */}
+      <FloatingBlockChrome editor={editorInstance} />
     </div>
   );
 }

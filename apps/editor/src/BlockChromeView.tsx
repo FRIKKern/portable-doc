@@ -1,50 +1,32 @@
 /**
  * BlockChromeView — the canonical React NodeView for every paperflow block.
  *
- * This component replaces v0.4's three-piece custom pipeline:
- *   - hand-rolled DOM in BlockChrome.ts (`renderChromeDom`/`bindChromeHandlers`),
- *   - module-scoped variant-slot registry + portal in Editor.tsx,
- *   - `ignoreMutation` workaround for ProseMirror's MutationObserver.
+ * Post-CW5: this component renders ONLY the block content + variant style.
+ * The chrome cluster (drag handle, label, variant chip, delete, "+") lives
+ * once per editor in `FloatingBlockChrome.tsx`, tracking the currently-
+ * hovered block via mouse coordinates. The per-block toolbar that lived
+ * here previously is gone.
  *
- * The official TipTap 3 pattern is `ReactNodeViewRenderer(Component)`. Inside
- * the component we use:
+ * What this component still owns:
+ *   - `<NodeViewWrapper>` + `<NodeViewContent>` (the canonical TipTap shape).
+ *   - `data-block-type` + `data-block-idx` on the wrapper — the floating
+ *     chrome reads these via ancestor walk to resolve the target block.
+ *   - The variant-style application (live preview of variant choices on
+ *     the block's content element).
+ *   - `paper-block-nested` markers for nested blocks (paragraphs inside
+ *     lists / callouts) so styling can hide affordances on them.
  *
- *   <NodeViewWrapper>   — the root DOM element ProseMirror tracks; everything
- *                         inside it lives in the editor's React tree, owned by
- *                         the editor's React root (not a NodeView-local
- *                         createRoot). Mutations to it don't trigger
- *                         ProseMirror's "unexpected mutation" rebuild loop
- *                         because TipTap registers the React-rendered subtree
- *                         with the EditorView.
- *
- *   <NodeViewContent />  — the ProseMirror content placeholder. Whatever tag
- *                         we set via `as` (p / h1-h3 / ul / ol / blockquote /
- *                         pre) becomes the contentDOM that ProseMirror writes
- *                         inline content into.
- *
- *   useEditorState({ editor, selector }) — TipTap 3's official subscription
- *                         hook. The selector runs on every TX and the
- *                         component only re-renders when its output changes.
- *                         We use it to read selection-emptiness (for the
- *                         `.is-selecting` class) and the wrapper's top-level
- *                         index (for `data-block-idx`).
- *
- * What goes in this file:
- *   - the chrome toolbar (drag handle + label + variant chip + delete)
- *   - the "+" between-blocks button
- *   - hover state with 300ms hide hysteresis
- *   - selection-driven `.is-selecting` class
- *   - variant-style application (live preview of variant choices)
- *   - native HTML5 drag wiring via a useEffect adapter
- *
- * What does NOT go in this file:
- *   - block schema (handled by the base TipTap extensions)
- *   - slash menu logic (A3 — separate extension)
- *   - inline format bubble (A4 — separate component)
- *   - variant catalog math (delegated to @portable-doc/variants)
+ * What moved out:
+ *   - The chrome toolbar JSX (drag handle, label, variant chip, delete).
+ *   - The "+" insert-below button.
+ *   - The per-block `mouseenter` / `mouseleave` hover state with 300ms
+ *     hide hysteresis (the floating-chrome owns hover semantics now via
+ *     a single mousemove listener on the editor surface).
+ *   - The native HTML5 drag wiring (dragstart attaches to the floating
+ *     drag button now; dragover/drop attach once at the editor surface
+ *     instead of N times).
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { NodeViewContent, NodeViewWrapper, useEditorState } from '@tiptap/react';
+import { useEditorState, NodeViewContent, NodeViewWrapper } from '@tiptap/react';
 import type { ReactNodeViewProps } from '@tiptap/react';
 
 // NodeViewContent's `as` prop is generic over `keyof JSX.IntrinsicElements`
@@ -54,12 +36,8 @@ import type { ReactNodeViewProps } from '@tiptap/react';
 // `src/types/tiptap-react-augment.d.ts` for the rationale.
 import { VARIANT_CATALOG } from '@portable-doc/variants';
 import type { BlockType } from '@portable-doc/core';
-import { VariantChip } from './VariantChip.js';
-import {
-  bindDragHandlers,
-  humanLabelFor,
-  pdBlockTypeFor,
-} from './lib/block-chrome-helpers.js';
+import { useMemo } from 'react';
+import { pdBlockTypeFor } from './lib/block-chrome-helpers.js';
 
 /** Tag union we route block types into. Narrowing this lets
  *  `<NodeViewContent as={tag} />` typecheck — its `as` prop is generic over
@@ -171,7 +149,7 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
   const contentTag = contentTagFor(blockType, node.attrs ?? {});
 
   // Top-level vs nested. Nested blocks (paragraphs inside lists/callouts)
-  // skip the chrome entirely — their parent block already carries it.
+  // get a thin marker wrapper; the floating chrome ignores them.
   const isTopLevel = useEditorState({
     editor,
     selector: ({ editor: e }) => {
@@ -185,8 +163,8 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
     },
   });
 
-  // Top-level child index — used by drag-and-drop. Re-read on every TX so
-  // inserts/deletes above this block update the value reactively.
+  // Top-level child index — written to `data-block-idx` so the floating
+  // chrome can resolve the target block from a DOM event.target walk.
   const topLevelIdx = useEditorState({
     editor,
     selector: ({ editor: e }) => {
@@ -200,130 +178,17 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
     },
   });
 
-  // Selection-emptiness. When the writer has a non-empty selection anywhere
-  // in the doc, A4's BubbleMenu owns the floating-chrome layer — block
-  // chrome must hide so the two don't stack (grill Q3).
-  const selectionEmpty = useEditorState({
-    editor,
-    selector: ({ editor: e }) => e.state.selection.empty,
-  });
-
-  // Hover state with 300ms hide hysteresis. Keeps the chrome stable while
-  // the mouse crosses block boundaries; lets the writer move from the
-  // block's text up to the chrome buttons without it disappearing.
-  const [isHovered, setIsHovered] = useState(false);
-  const hideTimerRef = useRef<number | undefined>(undefined);
-  const onMouseEnter = (): void => {
-    if (hideTimerRef.current !== undefined) {
-      window.clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = undefined;
-    }
-    setIsHovered(true);
-  };
-  const onMouseLeave = (): void => {
-    if (hideTimerRef.current !== undefined) window.clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(() => {
-      setIsHovered(false);
-      hideTimerRef.current = undefined;
-    }, 300);
-  };
-  useEffect(() => () => {
-    if (hideTimerRef.current !== undefined) window.clearTimeout(hideTimerRef.current);
-  }, []);
-
-  // Resolve variant axes into a React style object. Passing this as
-  // `style={…}` on NodeViewContent keeps the values React-owned so they
-  // survive the inline-style replacement that `<NodeViewContent>` does on
-  // every TX (it writes `{ whiteSpace: 'pre-wrap', ...props.style }`).
-  const wrapperElRef = useRef<HTMLDivElement | null>(null);
-  // `pdType` is the PortableDoc block-type name ('callout' for tiptap's
-  // 'blockquote', 'code' for 'codeBlock', null for blocks without a
-  // catalog entry). VARIANT_CATALOG is keyed by these names, NOT the
-  // raw TipTap node name.
+  // Resolve variant axes into a React style object. `pdType` is the
+  // PortableDoc block-type name ('callout' for tiptap's 'blockquote',
+  // 'code' for 'codeBlock', null for blocks without a catalog entry).
+  // VARIANT_CATALOG is keyed by these names, NOT the raw TipTap node
+  // name.
   const variantStyle = useMemo(
     () => (pdType === null ? null : resolveVariantStyle(pdType, node.attrs ?? {})),
     [pdType, node.attrs],
   );
 
-  // Drag wiring. The canonical-only path (schema `draggable: true` +
-  // `data-drag-handle`) hands TipTap's NodeView.onDragStart a clean
-  // drag image + a NodeSelection — but PM's default drop logic drops
-  // at TEXT coordinates, not block slots, which is the wrong UX for
-  // Notion-style block reorder. We keep schema + `data-drag-handle`
-  // for the drag-image side and additionally bind native HTML5
-  // dragstart/dragover/drop ourselves so the drop respects slot
-  // semantics (above-midline = slot N, below = slot N+1) and
-  // dispatches `editor.commands.moveBlock`. `bindDragHandlers` does
-  // the listener setup + paints the drop indicator.
-  const dragBtnRef = useRef<HTMLButtonElement | null>(null);
-  const idxRef = useRef<number | undefined>(topLevelIdx);
-  idxRef.current = topLevelIdx;
-  useEffect(() => {
-    if (!isTopLevel) return undefined;
-    if (!wrapperElRef.current || !dragBtnRef.current) return undefined;
-    const handle = bindDragHandlers(
-      dragBtnRef.current,
-      wrapperElRef.current,
-      editor,
-      () => idxRef.current,
-    );
-    return () => handle.destroy();
-  }, [editor, isTopLevel]);
-
-  // Chrome handlers.
-  const handleDelete = (e: React.MouseEvent | React.KeyboardEvent): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    const pos = typeof getPos === 'function' ? getPos() : undefined;
-    if (typeof pos !== 'number') return;
-    const liveNode = editor.state.doc.nodeAt(pos);
-    if (!liveNode) return;
-    editor.commands.deleteRange({ from: pos, to: pos + liveNode.nodeSize });
-  };
-
-  /** Insert an empty paragraph after this block, focus into it, and type
-   *  `/` to open the slash menu so the writer picks the block type. */
-  const handleInsertBelow = (e: React.MouseEvent | React.KeyboardEvent): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    const pos = typeof getPos === 'function' ? getPos() : undefined;
-    if (typeof pos !== 'number') return;
-    const liveNode = editor.state.doc.nodeAt(pos);
-    if (!liveNode) return;
-    const after = pos + liveNode.nodeSize;
-    editor
-      .chain()
-      .focus()
-      .insertContentAt(after, { type: 'paragraph' })
-      .setTextSelection(after + 1)
-      .insertContent('/')
-      .run();
-  };
-
-  /** Variant chip change handler — merges new axes into the node's
-   *  `variant` attr via setNodeMarkup at this node's current position. */
-  const onVariantChange = useMemo(
-    () =>
-      (next: Record<string, string>): void => {
-        const pos = typeof getPos === 'function' ? getPos() : undefined;
-        if (typeof pos !== 'number') return;
-        const liveNode = editor.state.doc.nodeAt(pos);
-        if (!liveNode) return;
-        const prev = (liveNode.attrs?.variant as Record<string, string> | null) ?? {};
-        const merged = { ...prev, ...next };
-        editor
-          .chain()
-          .command(({ tr }) => {
-            tr.setNodeMarkup(pos, undefined, { ...liveNode.attrs, variant: merged });
-            return true;
-          })
-          .run();
-      },
-    [editor, getPos],
-  );
-
-  // Nested blocks (paragraphs inside lists, callouts) skip chrome and
-  // return a bare NodeViewContent wrapped in a thin marker div.
+  // Nested blocks — thin marker so future styling can hide affordances.
   if (!isTopLevel) {
     return (
       <NodeViewWrapper
@@ -339,133 +204,24 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
     );
   }
 
-  // For headings, append the level so the chrome label reads
-  // "Heading 1" / "Heading 2" etc. — matches the slash menu entries
-  // and is a clearer affordance than the generic "Heading".
-  const baseLabel = humanLabelFor(blockType);
-  const headingLevel =
-    blockType === 'heading' ? Number(node.attrs?.level ?? 1) : null;
-  const label =
-    headingLevel != null && Number.isFinite(headingLevel)
-      ? `${baseLabel} ${headingLevel}`
-      : baseLabel;
-  const lower = label.toLowerCase();
-  const isSelecting = !selectionEmpty;
-  const wrapperClassName = [
-    'paper-block',
-    isHovered ? 'is-hovered' : '',
-    isSelecting ? 'is-selecting' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
   return (
     <NodeViewWrapper
       as="div"
-      className="paper-block-outer"
-      ref={wrapperElRef}
+      className="paper-block"
+      data-block-type={blockType}
+      data-block-idx={topLevelIdx ?? undefined}
     >
-      <div
-        className={wrapperClassName}
-        data-block-type={blockType}
-        data-block-idx={topLevelIdx ?? undefined}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      >
-        <div
-          className="paper-block__chrome"
-          role="toolbar"
-          aria-label={`${label} block toolbar`}
-          // `contentEditable={false}` is the canonical TipTap NodeView
-          // pattern for chrome inside ProseMirror's contenteditable
-          // surface. Without it, the browser treats mousedowns in the
-          // chrome as text-selection intents and HTML5 drag never
-          // starts — the user can grab the `⋮⋮` handle but no drag
-          // event fires, so block reordering looks "impossible".
-          contentEditable={false}
-          // Some browsers still want explicit suppress on the user-
-          // select side; redundant but harmless.
-          suppressContentEditableWarning
-        >
-          <button
-            ref={dragBtnRef}
-            type="button"
-            className="paper-block-drag-handle"
-            aria-label={`Drag ${lower}`}
-            data-block-type={blockType}
-            // The canonical TipTap node-drag pattern needs BOTH:
-            //   1. `draggable=true` HTML attribute — makes the browser
-            //      fire `dragstart` when the user grabs the button.
-            //      Without this no drag event is ever dispatched and
-            //      TipTap's onDragStart never gets a chance to react.
-            //   2. `data-drag-handle` — the attribute TipTap's
-            //      NodeView base class scans for in the click chain.
-            //      With it, TipTap sets a NodeSelection at the node's
-            //      position, hands a drag-image clone to the OS, and
-            //      PM's drop machinery moves the node. Combined with
-            //      the node's schema `draggable: true` (set in
-            //      `withBlockChrome.ts`), that's the full canonical
-            //      block-reorder flow.
-            draggable
-            data-drag-handle=""
-            // The button is purely a drag affordance — clicking it
-            // shouldn't dispatch a command.
-            onClick={(e) => e.preventDefault()}
-          >
-            ⋮⋮
-          </button>
-          <span className="paper-block__label">{label}</span>
-          <div className="paper-block__variant-slot">
-            {pdType !== null ? (
-              <VariantChip
-                blockType={pdType}
-                attrs={node.attrs ?? {}}
-                onChange={onVariantChange}
-              />
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="paper-block-delete"
-            aria-label={`Delete ${lower}`}
-            data-block-type={blockType}
-            onMouseDown={handleDelete}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') handleDelete(e);
-            }}
-          >
-            ×
-          </button>
-        </div>
-        {contentTag === 'hr' ? (
-          // Horizontal rule has no inline content — render the rule
-          // element directly and skip NodeViewContent.
-          <hr className="paper-block__content" />
-        ) : (
-          <NodeViewContent
-            as={contentTag}
-            className="paper-block__content"
-            style={variantStyle ?? undefined}
-          />
-        )}
-      </div>
-      <button
-        type="button"
-        className="paper-block__insert"
-        aria-label="Insert block below"
-        data-block-type={blockType}
-        // Same rationale as the chrome wrapper above — keep this button
-        // out of ProseMirror's contenteditable click handling so the
-        // mousedown reliably reaches our onMouseDown handler.
-        contentEditable={false}
-        suppressContentEditableWarning
-        onMouseDown={handleInsertBelow}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') handleInsertBelow(e);
-        }}
-      >
-        +
-      </button>
+      {contentTag === 'hr' ? (
+        // Horizontal rule has no inline content — render the rule
+        // element directly and skip NodeViewContent.
+        <hr className="paper-block__content" />
+      ) : (
+        <NodeViewContent
+          as={contentTag}
+          className="paper-block__content"
+          style={variantStyle ?? undefined}
+        />
+      )}
     </NodeViewWrapper>
   );
 }
