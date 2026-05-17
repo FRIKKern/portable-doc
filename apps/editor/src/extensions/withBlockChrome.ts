@@ -1,105 +1,122 @@
 /**
- * A2 — withBlockChrome(extension): Node factory.
+ * withBlockChrome(extension): block-level paperflow adapter.
  *
- * Wraps a base TipTap Node extension (Paragraph, Heading, BulletList, etc.)
- * with a React-based NodeView that renders paperflow's block chrome (drag
- * handle, type label, variant chip, delete, "+" insert).
+ * Wraps a base TipTap Node so each instance is:
+ *   - draggable as a unit (schema `draggable: true` → PM drag pipeline +
+ *     `tiptap-extension-global-drag-handle`).
+ *   - styled by paper.css via a `paper-block` class on the rendered
+ *     element (added through the canonical TipTap `HTMLAttributes`
+ *     option, so the schema's own `toDOM` shape stays in charge).
+ *   - carrying optional variant axes (callout / code) emitted as per-axis
+ *     `data-tone="warning"`, `data-emphasis="bold"`, etc. — CSS rules in
+ *     paper.css own the visual rendering, not JS-inline-style.
  *
- * The implementation is canonical TipTap 3:
- *
- *   - `addNodeView()` returns `ReactNodeViewRenderer(BlockChromeView)`.
- *     TipTap mounts the React component via a portal from the editor's
- *     stable React root (set up in Editor.tsx via `useEditor`), NOT a
- *     fresh `createRoot` per node. That portal pattern is what makes the
- *     pre-existing "Attempted to synchronously unmount a root while React
- *     was already rendering" warning impossible to reproduce.
- *
- *   - `addAttributes()` declares the optional `variant` attr (for blocks
- *     that have a catalog entry). Stored as a JSON object on the node;
- *     serialized to HTML as `data-variant`. Read live by the NodeView's
- *     React component which converts it to inline style via
- *     `VARIANT_CATALOG[blockType].resolve(axes)`.
- *
- * Everything visual (chrome, variant style preview, drag, hover, insert)
- * is owned by `BlockChromeView.tsx`. This file is intentionally thin.
+ * What this file used to do
+ * -------------------------
+ * Until D + E, every wrapped block also mounted a React NodeView
+ * (`BlockChromeView`) that wrote inline `style` from the variant
+ * catalog and reserved space for an embedded chrome cluster. Both
+ * jobs moved: the cluster lives once per editor in
+ * `FloatingBlockChrome.tsx`; the variant style lives in paper.css
+ * keyed off the per-axis data-attrs this extension emits. The
+ * NodeView round-trip — and the React module-augmentation it
+ * required — are gone. Every wrapped block now renders the
+ * canonical TipTap element directly.
  */
 import type { Node } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 import { pdBlockTypeFor } from '../lib/block-chrome-helpers.js';
-import { BlockChromeView } from '../BlockChromeView.js';
+
+/** Emit per-axis `data-*` attributes from the JSON variant object so
+ *  CSS can select on them (`blockquote[data-tone="warning"]`). When the
+ *  variant is null or empty we emit nothing — the block's static look
+ *  from paper.css remains the default. */
+function renderVariantHTML(
+  variant: Record<string, string> | null | undefined,
+): Record<string, string> {
+  if (!variant) return {};
+  const out: Record<string, string> = {};
+  for (const [axis, value] of Object.entries(variant)) {
+    if (typeof value === 'string' && value.length > 0) {
+      out[`data-${axis}`] = value;
+    }
+  }
+  return out;
+}
+
+/** Parse the JSON object back from the rendered per-axis `data-*` attrs
+ *  on the DOM. The catalog's axes are listed up front so we know which
+ *  attrs are ours vs. unrelated host attrs that may live on the same
+ *  element. */
+function parseVariantHTML(
+  el: HTMLElement,
+  axes: readonly string[],
+): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  for (const axis of axes) {
+    const v = el.getAttribute(`data-${axis}`);
+    if (typeof v === 'string' && v.length > 0) out[axis] = v;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Catalog of variant axes per TipTap node name. Mirrors
+ *  `@portable-doc/variants`'s VARIANT_CATALOG but keyed by the TipTap
+ *  node name (`blockquote`, `codeBlock`) rather than the PortableDoc
+ *  block name (`callout`, `code`). Centralised here so the round-trip
+ *  parser knows which `data-*` attributes belong to us. */
+const VARIANT_AXES: Record<string, readonly string[]> = {
+  blockquote: ['tone', 'emphasis'],
+  codeBlock: ['theme', 'density'],
+};
 
 /**
- * Wrap a base TipTap Node so every instance renders with paper-block chrome.
- *
- * The returned Node behaves identically to the input — same name, schema,
- * commands, and input rules — but its DOM is a React NodeView that mounts
- * the chrome around the contentDOM.
+ * Wrap a base TipTap Node so every instance:
+ *   1. is `draggable: true` at the schema level
+ *   2. renders with `class="paper-block"` on its element
+ *   3. carries an optional `variant` attribute (callout / code only),
+ *      emitted as per-axis `data-*` attrs that paper.css selects on
  */
 export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode {
   const blockType = baseExtension.name;
   const pdType = pdBlockTypeFor(blockType);
-  const hasVariants = pdType !== null;
+  const hasVariants = pdType !== null && VARIANT_AXES[blockType] !== undefined;
+  const axes = VARIANT_AXES[blockType] ?? [];
 
   return baseExtension.extend({
-    // `draggable: true` is the canonical ProseMirror/TipTap signal that
-    // the whole node can be dragged as a unit. Combined with
-    // `tiptap-extension-global-drag-handle` (the headless extension that
-    // owns the `⋮⋮` glyph + dragstart wiring) and the schema flag here,
-    // PM's NodeView.onDragStart picks up the mousedown, sets a
-    // NodeSelection at this node's position, hands a drag image to the
-    // OS, and lets PM's standard drop machinery handle the reorder.
-    // `prosemirror-dropcursor` (registered via StarterKit by default)
-    // paints the visual drop position during the drag — no app-owned
-    // drop-indicator DOM lives anywhere.
     draggable: true,
+    addOptions() {
+      // Merge the `paper-block` class into the base extension's
+      // `HTMLAttributes` so the schema's natural toDOM shape paints it
+      // (no NodeView indirection). Other options the base extension
+      // declares — `levels` for Heading, `lowlight` for CodeBlock —
+      // pass through untouched via the parent spread.
+      const parent = (this.parent?.() ?? {}) as {
+        HTMLAttributes?: Record<string, string>;
+      } & Record<string, unknown>;
+      const parentAttrs = parent.HTMLAttributes ?? {};
+      const existingClass = parentAttrs.class ?? '';
+      return {
+        ...parent,
+        HTMLAttributes: {
+          ...parentAttrs,
+          class: existingClass
+            ? `${existingClass} paper-block`
+            : 'paper-block',
+        },
+      };
+    },
     addAttributes() {
-      // Preserve any attributes the base extension declares.
       const base = (this.parent?.() ?? {}) as Record<string, unknown>;
       if (!hasVariants) return base;
       return {
         ...base,
         variant: {
           default: null,
-          parseHTML: (el: HTMLElement) => {
-            const raw = el.getAttribute('data-variant');
-            if (!raw) return null;
-            try {
-              return JSON.parse(raw) as Record<string, string>;
-            } catch {
-              return null;
-            }
-          },
-          renderHTML: (attrs: Record<string, unknown>) => {
-            const v = attrs.variant as Record<string, string> | null | undefined;
-            if (!v || Object.keys(v).length === 0) return {};
-            return { 'data-variant': JSON.stringify(v) };
-          },
+          parseHTML: (el: HTMLElement) => parseVariantHTML(el, axes),
+          renderHTML: (attrs: Record<string, unknown>) =>
+            renderVariantHTML(attrs.variant as Record<string, string> | null),
         },
       };
-    },
-    addNodeView() {
-      // ReactNodeViewRenderer:
-      //   - `as: 'div'` matches our v0.4 wrapper convention (a `<div>`
-      //     hosts the NodeView's outer paper-block-outer / paper-block-
-      //     nested element).
-      //   - `update` returns `false` when the heading level changes so
-      //     ProseMirror rebuilds the contentDOM with the right tag
-      //     (h1 vs h2 vs h3). For other attr changes the component
-      //     re-renders in place.
-      return ReactNodeViewRenderer(BlockChromeView, {
-        as: 'div',
-        update: ({ oldNode, newNode, updateProps }) => {
-          if (oldNode.type.name !== newNode.type.name) return false;
-          if (
-            newNode.type.name === 'heading' &&
-            oldNode.attrs.level !== newNode.attrs.level
-          ) {
-            return false;
-          }
-          updateProps();
-          return true;
-        },
-      });
     },
   }) as TNode;
 }

@@ -162,9 +162,8 @@ export function MarginDiagnostics({
   if (blockIssues.length === 0) return null;
 
   // Click handler — focus + scroll the offending block. We resolve the
-  // target DOM element through ProseMirror (`view.nodeDOM(pos)`) instead
-  // of via `.paper-block__content` querySelector so this code path is
-  // independent of paperflow's class naming.
+  // target DOM element through ProseMirror (`view.nodeDOM(pos)`) so
+  // this code path is independent of paperflow's class naming.
   const onNoteClick = (blockId: string | undefined): void => {
     if (!blockId || !editor) return;
     const idx = indexByBlockId.get(blockId);

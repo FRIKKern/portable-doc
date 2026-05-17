@@ -249,6 +249,63 @@
   margin: 28px 0;
 }
 
+/* Variant rendering — per-axis data-attrs emitted by withBlockChrome.
+ * The hex values mirror `@portable-doc/core/tokens.ts` `tonePalette`
+ * and `@portable-doc/variants/catalog.ts`'s `calloutSchema.resolve()`
+ * output. Single source of truth lives in core/tokens.ts; if you
+ * change a tone there, mirror the bg/fg pair here so the editor's
+ * preview matches what every other renderer ships. The runtime
+ * variant catalog is what backends (web/native/email/tui) render
+ * with — these CSS rules just paint the editor's local preview.
+ *
+ * Callout — 5 tones × 2 emphases. Tone fixes border-color + bg;
+ * emphasis bumps the border width. */
+.paper-column blockquote[data-tone="success"] {
+  background: #ecfdf5;
+  border-left-color: #047857;
+}
+.paper-column blockquote[data-tone="warning"] {
+  background: #fffbeb;
+  border-left-color: #92400e;
+}
+.paper-column blockquote[data-tone="danger"] {
+  background: #fef2f2;
+  border-left-color: #b91c1c;
+}
+.paper-column blockquote[data-tone="info"] {
+  background: #eff6ff;
+  border-left-color: #1d4ed8;
+}
+.paper-column blockquote[data-tone="neutral"] {
+  background: #f3f4f6;
+  border-left-color: #374151;
+}
+.paper-column blockquote[data-emphasis="subtle"] {
+  border-left-width: 3px;
+}
+.paper-column blockquote[data-emphasis="bold"] {
+  border-left-width: 4px;
+}
+
+/* Code — 2 themes × 2 densities. `data-theme="dark"` flips the
+ * surface to the catalog's CODE_DARK_BG with a light foreground.
+ * `data-density="compact"` tightens vertical padding. */
+.paper-column pre[data-theme="dark"] {
+  background: #111827;
+  color: #f9fafb;
+  border-color: #1f2937;
+}
+.paper-column pre[data-theme="dark"] code {
+  background: transparent;
+  color: inherit;
+}
+.paper-column pre[data-density="compact"] {
+  padding: 8px 12px;
+}
+.paper-column pre[data-density="normal"] {
+  padding: 14px 16px;
+}
+
 /* Table (minimum scope — slash menu inserts a 3×3 with header row).
  * Notion/TipTap-style: thin rule between cells, header row gets a
  * faint deep-paper background to mark it apart, comfortable cell
@@ -340,17 +397,13 @@
 
 /* Placeholder for empty blocks. `@tiptap/extension-placeholder` adds
  * decorations with `class: "is-empty"` + `data-placeholder: <text>` to
- * empty nodes. Under ReactNodeViewRenderer the decoration lands on the
- * outer `.react-renderer` wrapper TipTap creates per NodeView, NOT on
- * the inner contentDOM. We position the hint absolutely so it overlays
- * the `.paper-block__content` text area (the content starts at the
- * wrapper's natural top plus its own 4px padding-top — see
- * `.paper-block`). Post-CW5 the chrome no longer lives inside the
- * block so we don't need to clear an "out of flow" top reservation. */
-.ProseMirror .react-renderer.is-empty[data-placeholder] {
+ * the empty top-level block element directly (post-D+E: there's no
+ * NodeView wrapper between the schema element and the placeholder
+ * decoration anymore — selectors target the block element itself). */
+.ProseMirror .paper-block.is-empty[data-placeholder] {
   position: relative;
 }
-.ProseMirror .react-renderer.is-empty[data-placeholder]::before {
+.ProseMirror .paper-block.is-empty[data-placeholder]::before {
   content: attr(data-placeholder);
   position: absolute;
   top: 4px;
@@ -610,7 +663,14 @@
  * the motion tokens from motion.css.
  * =========================================================================== */
 
-.paper-block {
+/* Top-level blocks only — the class lands on every wrapped element
+ * via `withBlockChrome`'s HTMLAttributes injection (canonical TipTap
+ * pattern), including nested paragraphs inside lists or callouts.
+ * The `> .paper-block` direct-child selector scopes the editor's
+ * block-level affordances (margin, hover-outline) to top-level
+ * blocks so nested elements keep their `.paper-column p`,
+ * `.paper-column li` rules intact. */
+.ProseMirror > .paper-block {
   position: relative;
   margin: 0 0 22px;
   padding: 4px 0;
@@ -619,9 +679,9 @@
   border-radius: 2px;
   transition: outline-color 220ms ease-out;
 }
-.paper-block:hover,
-.paper-block.is-hovered,
-.paper-block.is-focused {
+.ProseMirror > .paper-block:hover,
+.ProseMirror > .paper-block.is-hovered,
+.ProseMirror > .paper-block.is-focused {
   outline-color: rgba(31, 26, 20, 0.10);
 }
 

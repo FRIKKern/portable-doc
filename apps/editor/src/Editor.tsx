@@ -175,7 +175,7 @@ export function Editor({
     // "re-render parent component on every ProseMirror transaction"
     // path that TipTap docs flag for removal. Subscribers that need
     // TX-derived state use `useEditorState` with a selector (see
-    // FormatBubble.tsx + BlockChromeView.tsx).
+    // FormatBubble.tsx + FloatingBlockChrome.tsx).
     //
     // `immediatelyRender` left at its default (`true`) — defers-to-
     // useEffect only matters for SSR; here it would delay editor mount
@@ -240,10 +240,11 @@ export function Editor({
     if (onEditorReady) onEditorReady(editor);
   }, [editor, onEditorReady]);
 
-  // A5 — variant chips are rendered as a direct child of the React
-  // NodeView (see `BlockChromeView.tsx`). The previous registry+portal
-  // bridge is no longer needed because `ReactNodeViewRenderer` owns the
-  // chip's React lifecycle from this editor's stable React tree.
+  // A5 — variant chips live inside the single FloatingBlockChrome
+  // cluster (see FloatingBlockChrome.tsx). Per-block NodeViews and
+  // their React portal/registry are gone — variant rendering is now
+  // pure CSS (per-axis `data-*` attrs emitted by `withBlockChrome`,
+  // styled by paper.css).
 
   return (
     <div className="paper-editor" data-testid="paper-editor">
@@ -302,8 +303,8 @@ export function Editor({
       <MarginDiagnostics issues={issues} doc={doc} editor={editorInstance} />
       {/* CW5 — single floating chrome cluster that tracks the currently-
        *  hovered top-level block (Notion/BlockNote/Linear pattern). One
-       *  instance per editor; positions itself via mousemove → closest
-       *  `.react-renderer` ancestor walk + getBoundingClientRect. */}
+       *  instance per editor; resolves the target via canonical
+       *  `view.posAtCoords` + `view.nodeDOM` calls. */}
       <FloatingBlockChrome editor={editorInstance} />
     </div>
   );

@@ -1,12 +1,13 @@
 /**
  * A5 — inline variant chip (replaces v0.3's VariantPicker grid).
  *
- * Rendered directly as a child of the React NodeView in `BlockChromeView.tsx`
- * — no DOM bridge, no `createRoot` indirection. Variant-axis math (which
- * options exist, what the current selection resolves to, how attrs map back)
- * comes from `@portable-doc/variants` via `VARIANT_CATALOG` / `resolveVariant`.
- * Click an option → `onChange(newAttrs)` fires; BlockChromeView translates
- * that into `editor.commands.updateAttributes(blockType, newAttrs)`.
+ * Rendered inside the single FloatingBlockChrome cluster — no DOM
+ * bridge, no `createRoot` indirection. Variant-axis math (which
+ * options exist, what the current selection resolves to, how attrs
+ * map back) comes from `@portable-doc/variants` via VARIANT_CATALOG.
+ * Click an option → `onChange(newAttrs)` fires; the floating chrome
+ * translates that into a setNodeMarkup transaction at the target
+ * block's pos.
  *
  * paperflow-owned. No Tailwind, no class-string shims. Hand-rolled inline
  * style + the .paper-variant-chip CSS section in paper.css.
