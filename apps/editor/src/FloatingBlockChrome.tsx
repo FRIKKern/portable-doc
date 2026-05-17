@@ -35,6 +35,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor as TipTapEditor } from '@tiptap/react';
+import { useEditorState } from '@tiptap/react';
 import { VariantChip } from './VariantChip.js';
 import { humanLabelFor, pdBlockTypeFor } from './lib/block-chrome-helpers.js';
 
@@ -102,10 +103,18 @@ export function FloatingBlockChrome({
   const [chromeHovered, setChromeHovered] = useState(false);
   const hideTimerRef = useRef<number | undefined>(undefined);
   const chromeElRef = useRef<HTMLDivElement | null>(null);
-  // Subscribe to the editor's selection-empty state — when the writer
-  // has a non-empty selection, BubbleMenu owns the floating layer and
-  // we must hide.
-  const [selectionEmpty, setSelectionEmpty] = useState(true);
+  // Subscribe to the editor's selection-empty state via the canonical
+  // TipTap 3 `useEditorState` pattern — when the writer has a non-empty
+  // selection, BubbleMenu owns the floating layer and we must hide.
+  // The library shallow-compares the boolean and only re-renders when
+  // it actually flips, which is cheaper than the previous
+  // `editor.on('selectionUpdate'/'update', …) + setState` pair.
+  // Defaults to `true` while the editor is mounting (no flicker before
+  // first selection).
+  const selectionEmpty = useEditorState({
+    editor,
+    selector: ({ editor: e }) => (e ? e.state.selection.empty : true),
+  }) ?? true;
 
   // Cached node attrs at the target block — drives the variant chip.
   const [targetAttrs, setTargetAttrs] = useState<Record<string, unknown> | null>(
@@ -151,21 +160,6 @@ export function FloatingBlockChrome({
       editor.off('transaction', read);
     };
   }, [editor, target]);
-
-  // Subscribe to editor selection state. Mirrors the chrome's
-  // `.is-selecting` behavior — text-selection bubble menu wins the
-  // floating layer.
-  useEffect(() => {
-    if (!editor) return;
-    const update = (): void => setSelectionEmpty(editor.state.selection.empty);
-    update();
-    editor.on('selectionUpdate', update);
-    editor.on('update', update);
-    return () => {
-      editor.off('selectionUpdate', update);
-      editor.off('update', update);
-    };
-  }, [editor]);
 
   // Reposition the chrome whenever target changes or the editor scrolls /
   // is resized. Reads the wrapper's rect against viewport — we use `fixed`

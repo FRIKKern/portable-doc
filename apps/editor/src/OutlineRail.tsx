@@ -33,8 +33,9 @@
  * `withBlockChrome.ts`, so the scroll target naturally includes the
  * .paper-block chrome.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
+import { useEditorState } from '@tiptap/react';
 
 interface OutlineRailProps {
   /** TipTap editor instance — null while it's still mounting. */
@@ -109,16 +110,22 @@ function isNarrowViewport(): boolean {
 }
 
 export function OutlineRail({ editor, open, onClose }: OutlineRailProps): JSX.Element | null {
-  // Re-render on every editor transaction so the entry list tracks doc edits.
-  const [, forceUpdate] = useState(0);
-  useEffect(() => {
-    if (!editor) return;
-    const tick = () => forceUpdate((n) => n + 1);
-    editor.on('transaction', tick);
-    return () => {
-      editor.off('transaction', tick);
-    };
-  }, [editor]);
+  // Re-render on every editor transaction so the entry list tracks doc
+  // edits. Uses the canonical TipTap 3 `useEditorState` pattern — the
+  // selector returns the entries array on each TX, the library's default
+  // deepEqual compares the result, and the component only re-renders
+  // when the entries actually change.
+  //
+  // The previous version used a `forceUpdate` bump on
+  // `editor.on('transaction', …)` and re-computed entries in a `useMemo`.
+  // That triggered a re-render on EVERY TX (caret moves, focus changes),
+  // not just doc changes. Moving the computation into the selector lets
+  // the default deepEqual prune those — entries are plain objects with
+  // primitive fields, exactly what deepEqual is good at.
+  const entries: OutlineEntry[] = useEditorState({
+    editor,
+    selector: ({ editor: e }) => (e ? entriesFromEditor(e) : ([] as OutlineEntry[])),
+  }) ?? [];
 
   // Re-render on viewport changes so ≥768px ↔ <768px swap takes effect.
   const [narrow, setNarrow] = useState<boolean>(() => isNarrowViewport());
@@ -153,15 +160,6 @@ export function OutlineRail({ editor, open, onClose }: OutlineRailProps): JSX.El
   // rail itself does NOT register a window keydown listener for Esc; doing
   // so would race the App handler and bypass the gate when both surfaces
   // are open simultaneously.
-
-  const entries = useMemo<OutlineEntry[]>(() => {
-    if (!editor) return [];
-    return entriesFromEditor(editor);
-  }, [editor,
-    // The transaction tick above invalidates the closure via state change;
-    // include the doc identity for explicit dependency tracking.
-    editor?.state.doc,
-  ]);
 
   const ref = useRef<HTMLElement | null>(null);
 

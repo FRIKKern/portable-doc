@@ -148,32 +148,34 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
   const pdType = pdBlockTypeFor(blockType);
   const contentTag = contentTagFor(blockType, node.attrs ?? {});
 
-  // Top-level vs nested. Nested blocks (paragraphs inside lists/callouts)
-  // get a thin marker wrapper; the floating chrome ignores them.
-  const isTopLevel = useEditorState({
+  // Collapsed `useEditorState` selector — ONE subscription returns BOTH
+  // derived flags as an object. The library shallow-compares the result
+  // and only re-renders the NodeView when one of these fields actually
+  // changes. The previous two-call version ran each selector on every
+  // TX and could trigger independent React re-render passes; collapsing
+  // matches the TipTap 3 canonical pattern + cuts render churn under
+  // heavy typing.
+  //   - `isTopLevel`: top-level vs nested. Nested blocks (paragraphs
+  //     inside lists/callouts) get a thin marker wrapper; the floating
+  //     chrome ignores them.
+  //   - `topLevelIdx`: top-level child index — written to
+  //     `data-block-idx` so the floating chrome can resolve the target
+  //     block from a DOM event.target walk.
+  const { isTopLevel, topLevelIdx } = useEditorState({
     editor,
     selector: ({ editor: e }) => {
       try {
         const pos = typeof getPos === 'function' ? getPos() : undefined;
-        if (typeof pos !== 'number') return false;
-        return e.state.doc.resolve(pos).depth === 0;
+        if (typeof pos !== 'number') {
+          return { isTopLevel: false, topLevelIdx: undefined as number | undefined };
+        }
+        const $pos = e.state.doc.resolve(pos);
+        return {
+          isTopLevel: $pos.depth === 0,
+          topLevelIdx: $pos.index(0) as number | undefined,
+        };
       } catch {
-        return false;
-      }
-    },
-  });
-
-  // Top-level child index — written to `data-block-idx` so the floating
-  // chrome can resolve the target block from a DOM event.target walk.
-  const topLevelIdx = useEditorState({
-    editor,
-    selector: ({ editor: e }) => {
-      try {
-        const pos = typeof getPos === 'function' ? getPos() : undefined;
-        if (typeof pos !== 'number') return undefined;
-        return e.state.doc.resolve(pos).index(0);
-      } catch {
-        return undefined;
+        return { isTopLevel: false, topLevelIdx: undefined as number | undefined };
       }
     },
   });
