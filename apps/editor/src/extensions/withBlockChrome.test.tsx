@@ -26,7 +26,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { PortableDoc } from '@portable-doc/core';
-import { humanLabelFor } from '../BlockChrome.js';
+import { humanLabelFor } from '../lib/block-chrome-helpers.js';
 import { withBlockChrome } from './withBlockChrome.js';
 import Paragraph from '@tiptap/extension-paragraph';
 import Heading from '@tiptap/extension-heading';

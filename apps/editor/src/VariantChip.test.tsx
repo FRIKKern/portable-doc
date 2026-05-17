@@ -22,7 +22,7 @@ vi.mock('@portable-doc/backend-web/static', () => ({
 }));
 
 import { VariantChip } from './VariantChip.js';
-import { pdBlockTypeFor } from './BlockChrome.js';
+import { pdBlockTypeFor } from './lib/block-chrome-helpers.js';
 
 afterEach(() => cleanup());
 

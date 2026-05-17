@@ -1,24 +1,12 @@
 /**
  * A5 — inline variant chip (replaces v0.3's VariantPicker grid).
  *
- * The chip lives inside the block-chrome's `data-block-type` variant slot
- * (built by A2 in `BlockChrome.ts`). Closed-by-default — shows a compact
- * "current variant" summary (e.g. a tone dot + "success / bold" label).
- * Click to expand a hovering palette of variant options. Click an option
- * → onChange(newAttrs) fires; the BlockChrome integration glue translates
+ * Rendered directly as a child of the React NodeView in `BlockChromeView.tsx`
+ * — no DOM bridge, no `createRoot` indirection. Variant-axis math (which
+ * options exist, what the current selection resolves to, how attrs map back)
+ * comes from `@portable-doc/variants` via `VARIANT_CATALOG` / `resolveVariant`.
+ * Click an option → `onChange(newAttrs)` fires; BlockChromeView translates
  * that into `editor.commands.updateAttributes(blockType, newAttrs)`.
- *
- * Hybrid rendering carries from v0.3 (grill q4):
- *   - callout, section, code → direct PdStyle → CSS projection. The tile
- *     identity is tone + border + bg fill, all covered by PdStyle. No
- *     backend round-trip per option needed.
- *   - action → backend-web/static `renderHtml` round-trip. Button shape
- *     differs materially across surfaces (filled vs outlined, padding by
- *     size), so we pay the cost for true visual fidelity.
- *
- * The chip is React; the BlockChrome NodeView is plain DOM. The two are
- * bridged via `ReactDOM.createRoot` in `BlockChrome.ts`'s `mountVariantChip`
- * helper — which calls back into here to render this component.
  *
  * paperflow-owned. No Tailwind, no class-string shims. Hand-rolled inline
  * style + the .paper-variant-chip CSS section in paper.css.

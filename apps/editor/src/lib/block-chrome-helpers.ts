@@ -1,5 +1,9 @@
 /**
- * Block-chrome helpers — used by the React NodeView (`BlockChromeView.tsx`).
+ * Block-chrome helpers — small lib used by `BlockChromeView.tsx` (the React
+ * NodeView that paints chrome around every top-level block). Originally
+ * lived at `src/BlockChrome.ts` back when chrome rendering happened here
+ * imperatively; after the React NodeView refactor only the helpers below
+ * remain, so the file moved to `src/lib/` where it belongs.
  *
  * Three responsibilities:
  *

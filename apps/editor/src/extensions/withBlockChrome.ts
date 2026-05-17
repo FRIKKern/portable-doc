@@ -25,7 +25,7 @@
  */
 import type { Node } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import { pdBlockTypeFor } from '../BlockChrome.js';
+import { pdBlockTypeFor } from '../lib/block-chrome-helpers.js';
 import { BlockChromeView } from '../BlockChromeView.js';
 
 /**

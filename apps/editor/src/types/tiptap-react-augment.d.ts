@@ -15,21 +15,17 @@
 // per block from `node.attrs.level`) cannot satisfy the generic by inference
 // and produces a TS2322 error at the call site.
 //
-// Previously `BlockChromeView.tsx` worked around this with:
+// Canonical use case: `BlockChromeView.tsx` computes `as` per block as a
+// `keyof React.JSX.IntrinsicElements` union (`'p' | 'h1' | … | 'pre'`) and
+// passes it straight to `<NodeViewContent as={tag} />`. Without this
+// augmentation `NoInfer<T>` swallows the inference and the union widening
+// produces TS2322. This augmentation adds a compile-time overload that
+// drops `NoInfer<>` from the `as` prop so the union typechecks directly —
+// no runtime cast, no `as unknown as ComponentType<…>` workaround. Runtime
+// behavior is unchanged (TipTap still spreads `as` as the JSX tag); only
+// the type surface is widened.
 //
-//   const TagContent = NodeViewContent as unknown as ComponentType<{
-//     as?: keyof React.JSX.IntrinsicElements;
-//     className?: string;
-//     style?: React.CSSProperties;
-//   }>;
-//
-// — a runtime `as unknown as` cast purely to satisfy the compiler. This
-// augmentation replaces that cast with a compile-time overload that widens
-// the `as` prop so a `keyof React.JSX.IntrinsicElements` union typechecks
-// directly. Runtime behavior is unchanged (TipTap still spreads `as` as the
-// JSX tag); only the type surface is widened.
-//
-// Scope: minimal — only the overload needed to remove the cast. If TipTap's
+// Scope: minimal — only the overload needed to widen `as`. If TipTap's
 // upstream signature changes, revisit `apps/editor/node_modules/@tiptap/react/dist/index.d.ts`
 // and re-confirm the augmentation still composes.
 

@@ -59,7 +59,7 @@ import {
   bindDragHandlers,
   humanLabelFor,
   pdBlockTypeFor,
-} from './BlockChrome.js';
+} from './lib/block-chrome-helpers.js';
 
 /** Tag union we route block types into. Narrowing this lets
  *  `<NodeViewContent as={tag} />` typecheck — its `as` prop is generic over
