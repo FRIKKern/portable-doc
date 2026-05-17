@@ -60,7 +60,7 @@ import Image from '@tiptap/extension-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
-import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
+import { portableDocToTipTapJson } from './lib/portable-doc-to-tiptap-json.js';
 import { tiptapToPortableDoc } from './lib/tiptap-to-portable-doc.js';
 import { withBlockChrome } from './extensions/withBlockChrome.js';
 import { SlashCommand } from './extensions/SlashCommand.js';
@@ -248,11 +248,11 @@ export function Editor({
   }, []);
 
   // Initial content snapshot — captured at the FIRST render only. We use
-  // a ref instead of recomputing `portableDocToTipTapHtml(doc)` in the
+  // a ref instead of recomputing `portableDocToTipTapJson(doc)` in the
   // useEditor options so a later `doc` prop change does NOT rebuild the
   // whole editor (which would lose cursor/selection). The doc-sync
   // useEffect below handles in-flight changes via `setContent`.
-  const initialContent = useRef(portableDocToTipTapHtml(doc));
+  const initialContent = useRef(portableDocToTipTapJson(doc));
 
   const editor = useEditor({
     extensions,
@@ -313,7 +313,10 @@ export function Editor({
       return;
     }
     lastSyncedDocRef.current = doc;
-    editor.commands.setContent(portableDocToTipTapHtml(doc), { emitUpdate: false });
+    // Seed via TipTap-canonical JSON (not an HTML round-trip) so attrs
+    // like blockquote's `variant` and explicit mark-array order survive
+    // intact — see `portable-doc-to-tiptap-json.ts` for the rationale.
+    editor.commands.setContent(portableDocToTipTapJson(doc), { emitUpdate: false });
   }, [editor, doc]);
 
   // Surface the editor instance once it's ready. A2 / A3 / A4 will read this
