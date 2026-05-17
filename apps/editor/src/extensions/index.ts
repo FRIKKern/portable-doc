@@ -41,7 +41,6 @@ import {
 import Image from '@tiptap/extension-image';
 import Typography from '@tiptap/extension-typography';
 import { CharacterCount } from '@tiptap/extension-character-count';
-import GlobalDragHandle from 'tiptap-extension-global-drag-handle';
 import AutoJoiner from 'tiptap-extension-auto-joiner';
 import { withBlockChrome } from './withBlockChrome.js';
 import { SlashCommand } from './SlashCommand.js';
@@ -172,19 +171,12 @@ export function buildExtensions(
       onImageRequest: (e) => opts.getOnImageRequest()?.(e),
     }),
     MoveBlock,
-    // CW5 / T3b — the canonical Tiptap floating drag handle (what
-    // Novel uses). Renders ONE `<div class="drag-handle"
-    // data-drag-handle>` next to the editor's parent and positions it
-    // on mousemove. Drives PM's built-in drag pipeline (NodeSelection
-    // → slice serialize → drop). `dragHandleWidth: 20` matches the
-    // visual slot the floating chrome reserves.
-    GlobalDragHandle.configure({
-      dragHandleWidth: 20,
-      scrollTreshold: 100,
-    }),
-    // Companion to GlobalDragHandle — auto-joins adjacent lists after
-    // a drag-reorder so dragging a list item out of List A and
-    // adjacent to List B merges them. Stateless, no config needed.
+    // Auto-joins adjacent lists after a drag-reorder so dragging a
+    // list item out of List A and adjacent to List B merges them.
+    // Stateless, no config needed. (Drag itself comes from the
+    // ⋮⋮ button inside FloatingBlockChrome — the external
+    // tiptap-extension-global-drag-handle was dropped in favor of
+    // one unified floating toolbar.)
     AutoJoiner,
     // Typography — smart quotes, em-dash, ellipsis, ©, etc. The
     // single highest-leverage visual change per line of code:

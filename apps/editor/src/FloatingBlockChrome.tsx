@@ -38,6 +38,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
+import { NodeSelection } from 'prosemirror-state';
 import { VariantChip } from './VariantChip.js';
 import { humanLabelFor, pdBlockTypeFor } from './lib/block-chrome-helpers.js';
 
@@ -55,21 +56,17 @@ interface TargetBlock {
   pos: number;
 }
 
-/** Hide hysteresis — match the per-block-chrome 300ms hide delay so the
- *  cluster stays stable while the writer aims at one of its buttons. */
-const HIDE_HYSTERESIS_MS = 300;
+/** Hide hysteresis — the cluster sticks around this long after the
+ *  pointer leaves so the writer can chase a button without it
+ *  evaporating mid-aim. 600ms is the noticeably-stable feel; tighter
+ *  values flicker, looser feel laggy. */
+const HIDE_HYSTERESIS_MS = 600;
 
 /** Right-edge offset of the floating chrome from the block's left edge.
- *  The global drag-handle extension hugs the block's left edge in a
- *  20px slot; we want our cluster (variant chip + ×) to sit IMMEDIATELY
- *  to the left of the handle so the two floats read as one contiguous
- *  cluster — `[chip · ×] [⋮⋮] [block]` — instead of two visually
- *  detached surfaces.
- *
- *  Math: chrome.right = block.left - 24 = handle.left - 4 (handle.left
- *  is block.left - 20). 4px is the hairline visual gap that lets the
- *  two pieces breathe without reading as separated. */
-const CHROME_GAP_PX = 24;
+ *  The cluster contains its OWN drag handle (post-drop of the external
+ *  global-drag-handle extension), so we just need a hairline 8px gap
+ *  between the cluster and the block. */
+const CHROME_GAP_PX = 8;
 
 /** Resolve the doc-position of the top-level block at idx `n`. */
 function topLevelBlockPos(editor: TipTapEditor, idx: number): number | null {
@@ -274,27 +271,11 @@ export function FloatingBlockChrome({
       if (!chromeHovered) scheduleHide();
     };
 
-    // Hide immediately on any mousedown in the editor so the cluster
-    // can't visually interfere with a text-select drag the writer is
-    // about to start. The mousemove handler will re-show it on the
-    // next non-button-down mouse move. Without this guard the cluster
-    // stays anchored to the hovered block while the writer drags
-    // through text — easy to mistake for the chrome blocking the
-    // selection.
-    const onMouseDown = (): void => {
-      clearHideTimer();
-      setTarget(null);
-      setPosition(null);
-      setTargetAttrs(null);
-    };
-
     surface.addEventListener('mousemove', processEvent);
     surface.addEventListener('mouseleave', onMouseLeave);
-    surface.addEventListener('mousedown', onMouseDown);
     return () => {
       surface.removeEventListener('mousemove', processEvent);
       surface.removeEventListener('mouseleave', onMouseLeave);
-      surface.removeEventListener('mousedown', onMouseDown);
     };
   }, [editor, chromeHovered, clearHideTimer, scheduleHide]);
 
@@ -333,6 +314,45 @@ export function FloatingBlockChrome({
       const liveNode = editor.state.doc.nodeAt(pos);
       if (!liveNode) return;
       editor.commands.deleteRange({ from: pos, to: pos + liveNode.nodeSize });
+      setTarget(null);
+      setPosition(null);
+    },
+    [editor, target],
+  );
+
+  // Drag the target block via the cluster's own ⋮⋮ handle. Replaces
+  // the external `tiptap-extension-global-drag-handle` — one cluster,
+  // one drag affordance, no floating-handle-vs-floating-chrome split
+  // and no separate hit area to confuse text-select intent.
+  //
+  // Canonical PM pattern:
+  //   1. Set a NodeSelection at the block's position.
+  //   2. Get the slice's clipboard form via view.serializeForClipboard.
+  //   3. Stash both `slice` and `move: true` on view.dragging so PM's
+  //      drop machinery applies them at the drop site.
+  // PM's prosemirror-dropcursor (registered via StarterKit) paints
+  // the drop indicator during the drag.
+  const handleDragStart = useCallback(
+    (e: React.DragEvent<HTMLButtonElement>): void => {
+      if (!editor || !target || !e.dataTransfer) return;
+      const view = editor.view;
+      const pos = topLevelBlockPos(editor, target.idx);
+      if (pos == null) return;
+      view.focus();
+      const selection = NodeSelection.create(view.state.doc, pos);
+      view.dispatch(view.state.tr.setSelection(selection));
+      const slice = view.state.selection.content();
+      const { dom, text } = view.serializeForClipboard(slice);
+      e.dataTransfer.clearData();
+      e.dataTransfer.setData('text/html', dom.innerHTML);
+      e.dataTransfer.setData('text/plain', text);
+      e.dataTransfer.effectAllowed = 'copyMove';
+      // PM uses `view.dragging` as the source of truth for what's
+      // being dragged; without setting it the drop side falls back
+      // to clipboard data and loses block-move semantics.
+      (view as unknown as { dragging: { slice: typeof slice; move: boolean } })
+        .dragging = { slice, move: true };
+      // Hide chrome during the drag so it doesn't follow the cursor.
       setTarget(null);
       setPosition(null);
     },
@@ -401,6 +421,20 @@ export function FloatingBlockChrome({
         scheduleHide();
       }}
     >
+      <button
+        type="button"
+        className="paper-block__drag-handle"
+        aria-label={`Drag ${lower}`}
+        title="Drag to reorder"
+        // HTML5 draggable on this button is the canonical pattern for
+        // initiating a node-drag — onDragStart runs our serializer,
+        // PM's drop machinery handles the rest.
+        draggable
+        data-drag-handle
+        onDragStart={handleDragStart}
+      >
+        ⋮⋮
+      </button>
       <div className="paper-block__variant-slot">
         {pdType !== null && target && targetAttrs ? (
           <VariantChip

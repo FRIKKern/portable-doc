@@ -806,43 +806,34 @@
   gap: 6px;
 }
 
-/* The global drag-handle div rendered by `tiptap-extension-global-drag-handle`
- * (lives next to the editor's parent, `position: fixed` is set by the
- * extension via inline `top`/`left`). We add the ⋮⋮ glyph via `::before`
- * so the headless extension element reads as the canonical drag affordance
- * without us controlling its DOM. The `.hide` class is added by the
- * extension when the pointer leaves the editor. */
-.drag-handle {
-  position: fixed;
-  width: 20px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: grab;
+/* The ⋮⋮ drag handle — first child of `.paper-floating-chrome`. The
+ * button has HTML5 `draggable` set; onDragStart in FloatingBlockChrome
+ * sets a NodeSelection on the target block and hands the serialized
+ * slice to PM's drop machinery. `user-select: none` keeps the glyph
+ * from highlighting; `cursor: grab → grabbing` matches the OS drag
+ * affordance. */
+.paper-block__drag-handle {
+  background: transparent;
+  border: 0;
   color: var(--paper-ink-faint);
   font-family: var(--paper-font-sans);
   font-size: 14px;
   line-height: 1;
-  user-select: none;
-  opacity: 0.7;
-  z-index: var(--paper-block-chrome-z);
-  transition: opacity 160ms ease-out, color 160ms ease-out;
-}
-.drag-handle::before {
-  content: '⋮⋮';
   letter-spacing: -1px;
+  padding: 2px 4px;
+  cursor: grab;
+  user-select: none;
+  transition: color 160ms ease-out;
 }
-.drag-handle:hover {
-  opacity: 1;
+.paper-block__drag-handle:hover {
   color: var(--paper-ink-soft);
 }
-.drag-handle:active {
+.paper-block__drag-handle:active {
   cursor: grabbing;
 }
-.drag-handle.hide {
-  opacity: 0;
-  pointer-events: none;
+.paper-block__drag-handle:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
 }
 
 .paper-block-delete {

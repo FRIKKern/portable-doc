@@ -279,17 +279,17 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(clusters.length).toBe(1);
   });
 
-  it('the floating chrome carries the variant slot and delete button (drag handle lives outside, owned by global-drag-handle; type label + "+" dropped to match Notion / Novel / BlockNote)', async () => {
+  it('the floating chrome carries the drag handle, variant slot, and delete button (one unified cluster, no external drag handle)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const mount = screen.getByTestId('paper-editor');
     const chrome = mount.querySelector('.paper-floating-chrome');
     expect(chrome).toBeTruthy();
-    // Drag handle is NOT a child of the cluster — the global extension
-    // renders its own `<div class="drag-handle" data-drag-handle>` as a
-    // sibling of the editor (positioned with inline top/left on
-    // mousemove). Cluster owns the remaining affordances.
-    expect(chrome!.querySelector('[data-drag-handle]')).toBeFalsy();
+    // Drag handle is now a child of the cluster — the external
+    // tiptap-extension-global-drag-handle was dropped in favor of
+    // one unified floating toolbar (the user-requested shape).
+    expect(chrome!.querySelector('.paper-block__drag-handle')).toBeTruthy();
+    expect(chrome!.querySelector('[data-drag-handle]')).toBeTruthy();
     expect(chrome!.querySelector('.paper-block__variant-slot')).toBeTruthy();
     expect(chrome!.querySelector('.paper-block-delete')).toBeTruthy();
     // Type label dropped (Notion / Novel / BlockNote don't render one
@@ -301,18 +301,17 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(chrome!.querySelector('.paper-block__insert')).toBeFalsy();
   });
 
-  it('the global drag handle div (`data-drag-handle`) is rendered as a sibling of the editor', async () => {
+  it('NO external [data-drag-handle] outside the cluster (the global drag-handle extension is gone)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
-    // Allow the global-drag-handle plugin's `view()` hook to run, which
-    // appends the handle to `view.dom.parentElement` (one tick after the
-    // editor instance is created).
     await new Promise<void>((r) => setTimeout(r, 0));
-    // The handle lives at document scope (it's appended to the editor's
-    // parent element, not inside the editor mount), so we query
-    // `document` rather than the mount.
-    const handles = document.querySelectorAll('[data-drag-handle]');
-    expect(handles.length).toBeGreaterThanOrEqual(1);
+    // The only [data-drag-handle] now is INSIDE
+    // `.paper-floating-chrome`. There should be no sibling/external
+    // drag handle div anymore.
+    const handlesOutsideChrome = Array.from(
+      document.querySelectorAll('[data-drag-handle]'),
+    ).filter((el) => !el.closest('.paper-floating-chrome'));
+    expect(handlesOutsideChrome.length).toBe(0);
   });
 
   it('floating-chrome delete button removes the targeted block when fired against a block', async () => {
