@@ -119,6 +119,7 @@
   line-height: var(--paper-line-height-body);
   letter-spacing: var(--paper-letter-spacing-body);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   /* Reserve room for the fixed footer at the bottom. */
   padding-bottom: var(--paper-footer-height);
   box-sizing: border-box;
@@ -133,6 +134,19 @@
   line-height: var(--paper-line-height-body);
   letter-spacing: var(--paper-letter-spacing-body);
   color: var(--paper-ink);
+  /* Premium serif rendering. Iowan Old Style with OLD-STYLE NUMERALS
+   * (the `onum` feature) is the unmistakable "this is a typeset page"
+   * cue — figures sit on the baseline with descenders like body letters
+   * rather than standing tall as lining numerals. `kern` + `liga` fire
+   * proper kerning pairs and standard ligatures (fi, fl, ffi, …) in
+   * every browser. `text-rendering: optimizeLegibility` is the older-
+   * browser sibling that backstops both. Font-smoothing pairs with the
+   * `.paper-app` declarations so the column inherits crisp anti-aliased
+   * type on both WebKit and Firefox/macOS. */
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "liga", "onum";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Doc-level heading rhythm. Headings inherit the serif (T1: body voice,
@@ -182,6 +196,13 @@
 }
 .paper-column p {
   margin: 0 0 22px;
+  /* Optional hyphenation at the column edge. Long-form writing on a
+   * 680px column reads better when the browser is allowed to break a
+   * 14-letter word rather than leave a 100px hole in the rag. The
+   * alignment stays left (no `text-align: justify` anywhere in the
+   * chain) — we let the writer's words pick the line; hyphens just
+   * keep the right edge from getting jagged. */
+  hyphens: auto;
 }
 .paper-column a {
   color: var(--paper-accent-warm-rust);

@@ -57,6 +57,7 @@ import {
   TableCell,
 } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
+import Typography from '@tiptap/extension-typography';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
@@ -183,6 +184,13 @@ export function Editor({
       }),
       SlashCommand,
       MoveBlock,
+      // Typography — transforms input on the fly: straight quotes become
+      // curly ("foo" → “foo”, 'bar' → ‘bar’), `--` collapses to an em-dash,
+      // `...` to a horizontal ellipsis, `(c)` to ©, etc. Smart-quote handling
+      // is what makes the Iowan Old Style surface read like a typeset page
+      // instead of a draft — the single highest-leverage visual change per
+      // line of code. Stateless, no config needed.
+      Typography,
       // Per-block placeholder text. Empty headings/lists/callouts get
       // their own hint instead of the generic "Start typing, or press /
       // for blocks." — quieter and more informative.
