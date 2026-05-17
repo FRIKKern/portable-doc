@@ -8,7 +8,7 @@
  *
  * Coverage matrix
  * ---------------
- *   1. Renders 4 buttons with correct aria-labels (B / I / </> / 🔗).
+ *   1. Renders 4 buttons with correct aria-labels (B / I / </> / Link).
  *   2. Clicking each button invokes the matching editor chain command.
  *   3. `aria-pressed` reflects `editor.isActive(<mark>)`.
  *   4. Clicking the link button opens the inline URL input.

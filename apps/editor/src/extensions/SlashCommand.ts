@@ -76,20 +76,19 @@ export function applyInsert(
       chain.toggleCodeBlock().run();
       return;
     case 'image': {
-      // Prompt for the URL inline — minimal v0.4 UX. v0.5 can swap in a
-      // proper upload picker. The link `validate` rule applies to image
-      // src too: we reject anything that isn't http(s). Empty input or
-      // a rejected URL cancels without modifying the doc.
-      const src = typeof window !== 'undefined' ? window.prompt('Image URL') : null;
-      if (!src) return;
-      if (!/^https?:\/\//i.test(src)) {
-        if (typeof window !== 'undefined') {
-          window.alert('Image URL must start with http(s)://');
-        }
-        return;
+      // First close the slash menu's "/" marker by consuming the range,
+      // then dispatch a CustomEvent the App-mounted ImageInsertDialog
+      // listens for. The dialog owns the URL + alt inputs and issues
+      // `setImage` itself — keeps the URL ask inside paperflow's chrome
+      // family (calm dialog matching the slash menu surface) instead of
+      // the jarring native browser prompt. The link extension's
+      // `^https?://` validation rule is mirrored inside the dialog.
+      chain.run();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('paperflow:image-insert', { detail: { editor } }),
+        );
       }
-      const alt = typeof window !== 'undefined' ? (window.prompt('Alt text') ?? '') : '';
-      chain.setImage({ src, alt }).run();
       return;
     }
     case 'table':

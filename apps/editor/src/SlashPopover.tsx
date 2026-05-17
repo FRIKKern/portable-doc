@@ -31,7 +31,124 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { BlockType } from '@portable-doc/core';
 import { COMMANDS, filterCommands, type SlashCommand } from './lib/slash-filter.js';
+
+/**
+ * Inline lucide-style icon — 16×16, stroke="currentColor", stroke-width="1.5".
+ * Hand-rolled paths (no `lucide-react` dep). Each `type` maps to a simple
+ * pictogram tuned to read at this size; the row's `color` (CSS, A-active
+ * row resolves to warm-rust) flows through `currentColor`.
+ */
+function Icon({ type }: { type: BlockType }): JSX.Element {
+  const common = {
+    width: 16,
+    height: 16,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.5,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    focusable: false,
+  };
+  switch (type) {
+    case 'heading':
+      // "type" — capital T with serifs
+      return (
+        <svg {...common}>
+          <path d="M5 6h14" />
+          <path d="M12 6v13" />
+        </svg>
+      );
+    case 'paragraph':
+      // "pilcrow" — paragraph mark
+      return (
+        <svg {...common}>
+          <path d="M13 4v16" />
+          <path d="M17 4v16" />
+          <path d="M17 4h-7a4 4 0 0 0 0 8h3" />
+        </svg>
+      );
+    case 'list':
+      // "list" — three lines with leading dots
+      return (
+        <svg {...common}>
+          <path d="M9 6h11" />
+          <path d="M9 12h11" />
+          <path d="M9 18h11" />
+          <circle cx="4.5" cy="6" r="1" />
+          <circle cx="4.5" cy="12" r="1" />
+          <circle cx="4.5" cy="18" r="1" />
+        </svg>
+      );
+    case 'callout':
+      // "message-square" — quiet card hint
+      return (
+        <svg {...common}>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      );
+    case 'action':
+      // "arrow-right-circle" — CTA
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 12h8" />
+          <path d="M13 8l4 4-4 4" />
+        </svg>
+      );
+    case 'section':
+      // "rows-3" — grouped blocks
+      return (
+        <svg {...common}>
+          <rect x="3" y="4" width="18" height="5" rx="1" />
+          <rect x="3" y="11" width="18" height="2" rx="1" />
+          <rect x="3" y="15" width="18" height="5" rx="1" />
+        </svg>
+      );
+    case 'divider':
+      // "minus" — horizontal rule
+      return (
+        <svg {...common}>
+          <path d="M4 12h16" />
+        </svg>
+      );
+    case 'code':
+      // "code" — angle brackets
+      return (
+        <svg {...common}>
+          <path d="M8 8l-4 4 4 4" />
+          <path d="M16 8l4 4-4 4" />
+          <path d="M14 5l-4 14" />
+        </svg>
+      );
+    case 'image':
+      // "image" — frame + sun + hill
+      return (
+        <svg {...common}>
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <circle cx="9" cy="10" r="1.5" />
+          <path d="M21 16l-5-5-9 9" />
+        </svg>
+      );
+    case 'table':
+      // "table-2" — grid
+      return (
+        <svg {...common}>
+          <rect x="3" y="4" width="18" height="16" rx="1" />
+          <path d="M3 10h18" />
+          <path d="M3 16h18" />
+          <path d="M9 4v16" />
+          <path d="M15 4v16" />
+        </svg>
+      );
+    default:
+      // Defensive fallback — empty span keeps grid columns intact.
+      return <svg {...common} />;
+  }
+}
 
 export interface SlashPopoverProps {
   /** Standalone: whether the popover is visible. Ignored in controlled mode. */
@@ -207,6 +324,9 @@ export const SlashPopover = forwardRef<SlashPopoverHandle, SlashPopoverProps>(
                   : `slash-item-${cmd.type}`
               }
             >
+              <span className="paper-slash-popover__icon" aria-hidden="true">
+                <Icon type={cmd.type} />
+              </span>
               <span className="paper-slash-popover__name">{cmd.label}</span>
               <span className="paper-slash-popover__hint">{cmd.hint}</span>
             </li>

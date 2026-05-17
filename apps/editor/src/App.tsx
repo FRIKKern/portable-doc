@@ -25,6 +25,7 @@ import type { Editor as TipTapEditor } from '@tiptap/react';
 import welcomeJson from '../../../examples/welcome.json';
 import { Editor } from './Editor.js';
 import { FooterStatus } from './FooterStatus.js';
+import { ImageInsertDialog } from './ImageInsertDialog.js';
 import { JsonEditMode } from './JsonEditMode.js';
 import { McpProvider } from './McpProvider.js';
 import { OutlineRail } from './OutlineRail.js';
@@ -49,6 +50,19 @@ function AppShell(): JSX.Element {
   // so the rail can read top-level blocks + drive scroll/focus.
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [editor, setEditor] = useState<TipTapEditor | null>(null);
+  // ImageInsertDialog state — the slash menu's `image` command dispatches a
+  // `paperflow:image-insert` event carrying the editor; we open the dialog
+  // when we receive it and clear when it dismisses. Replaces the jarring
+  // native `window.prompt` flow.
+  const [imageDialogEditor, setImageDialogEditor] = useState<TipTapEditor | null>(null);
+  useEffect(() => {
+    function onImageInsert(e: Event) {
+      const detail = (e as CustomEvent<{ editor: TipTapEditor }>).detail;
+      if (detail?.editor) setImageDialogEditor(detail.editor);
+    }
+    window.addEventListener('paperflow:image-insert', onImageInsert);
+    return () => window.removeEventListener('paperflow:image-insert', onImageInsert);
+  }, []);
 
   // Reverse pipeline: the Editor converts TipTap state → PortableDoc on
   // every doc-affecting transaction and hands the AST to us via
@@ -142,6 +156,10 @@ function AppShell(): JSX.Element {
         doc={doc}
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
+      />
+      <ImageInsertDialog
+        editor={imageDialogEditor}
+        onClose={() => setImageDialogEditor(null)}
       />
     </div>
   );

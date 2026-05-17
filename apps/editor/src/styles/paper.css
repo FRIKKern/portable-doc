@@ -856,11 +856,26 @@
 .paper-slash-popover__row[aria-selected='true'] {
   background: var(--paper-accent-soft);
 }
+.paper-slash-popover__icon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--paper-ink-faint);
+}
+.paper-slash-popover__row.is-active .paper-slash-popover__icon,
+.paper-slash-popover__row[aria-selected='true'] .paper-slash-popover__icon {
+  color: var(--paper-accent-warm-rust);
+}
 .paper-slash-popover__name {
+  flex: 1 1 auto;
   font-weight: 600;
   letter-spacing: 0.005em;
 }
 .paper-slash-popover__hint {
+  flex: 0 0 auto;
   margin-left: auto;
   color: var(--paper-ink-faint);
   font-size: 12px;
@@ -890,6 +905,106 @@
   padding: 0 4px;
   color: var(--paper-ink-soft);
   margin: 0 2px;
+}
+
+/* ===========================================================================
+ * Image insert dialog (post-A3 polish) — paper-image-dialog*
+ *
+ * Quiet modal replacing the v0.4-era `window.prompt('Image URL')` pair.
+ * Surface tokens match the slash popover (`--paper-chrome-bg`,
+ * `--paper-chrome-border`) so the dialog reads as part of the same chrome
+ * family. The motion token reuses `--motion-slash-menu-open` — the open
+ * curve is the same beat as the slash menu it replaces.
+ * =========================================================================== */
+
+.paper-image-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(31, 26, 20, 0.18);
+  animation: paper-slash-fade var(--motion-slash-menu-open) ease-out;
+}
+
+.paper-image-dialog {
+  width: min(420px, calc(100vw - 32px));
+  background: var(--paper-chrome-bg);
+  border: 1px solid var(--paper-chrome-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  font-family: var(--paper-font-sans);
+  padding: 14px 16px 12px;
+}
+.paper-image-dialog__title {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+  margin-bottom: 10px;
+}
+.paper-image-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.paper-image-dialog__input {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 4px;
+  font-family: var(--paper-font-serif);
+  font-size: 13.5px;
+  color: var(--paper-ink);
+  letter-spacing: 0.01em;
+  box-sizing: border-box;
+}
+.paper-image-dialog__input:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 1px;
+}
+.paper-image-dialog__error {
+  font-size: 12px;
+  color: var(--paper-accent-warm-rust);
+  letter-spacing: 0.01em;
+}
+.paper-image-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.paper-image-dialog__btn {
+  font-family: var(--paper-font-sans);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--paper-ink-soft);
+  border: 1px solid var(--paper-rule);
+  cursor: pointer;
+}
+.paper-image-dialog__btn:hover {
+  background: var(--paper-accent-soft);
+  color: var(--paper-ink);
+}
+.paper-image-dialog__btn:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 1px;
+}
+.paper-image-dialog__btn--primary {
+  color: var(--paper-chrome-bg);
+  background: var(--paper-accent-warm-rust);
+  border-color: var(--paper-accent-warm-rust);
+}
+.paper-image-dialog__btn--primary:hover {
+  background: var(--paper-accent-warm-rust);
+  color: var(--paper-chrome-bg);
+  filter: brightness(0.94);
 }
 
 /* ===========================================================================

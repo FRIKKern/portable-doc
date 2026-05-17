@@ -53,6 +53,32 @@ export interface FormatBubbleProps {
 }
 
 /**
+ * Inline lucide-style "link" SVG used by the link button. Replaces the
+ * old chain-link emoji that fought the serif paper aesthetic — the SVG
+ * inherits `currentColor` like the B / I / </> glyphs so active + hover
+ * states tint consistently. 16×16, stroke 1.5, fill none.
+ */
+function LinkIcon(): JSX.Element {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
+    >
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+    </svg>
+  );
+}
+
+/**
  * Returns the current `href` for the link mark at the active selection, or
  * `null` when the selection doesn't carry a link. Used to seed the URL input
  * with the existing value when the writer clicks the link button on a
@@ -191,7 +217,7 @@ export function FormatBubble({ editor }: FormatBubbleProps): JSX.Element {
         onMouseDown={(e) => e.preventDefault()}
         onClick={onLinkButton}
       >
-        🔗
+        <LinkIcon />
       </button>
       {linkMode === 'editing' ? (
         <div className="paper-format-bubble__link-row" data-testid="bubble-link-row">
