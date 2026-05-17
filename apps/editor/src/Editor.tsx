@@ -90,6 +90,11 @@ interface EditorProps {
   onEditorReady?: (editor: TipTapEditor) => void;
   /** Stable test id forwarded to the contenteditable for assertion targeting. */
   dataTestId?: string;
+  /** Fired when the slash menu's "Image" command is picked. The host opens
+   *  its own URL dialog (replaces the v0.4-era `window.prompt('Image URL')`
+   *  and the brief CustomEvent bridge it used to go through). Wired into
+   *  SlashCommand.configure(). */
+  onImageRequest?: (editor: TipTapEditor) => void;
 }
 
 /** Debounce window between doc-prop changes and the next validateDoc call
@@ -102,11 +107,18 @@ export function Editor({
   onChange,
   onEditorReady,
   dataTestId,
+  onImageRequest,
 }: EditorProps): JSX.Element {
   // Keep the latest onChange in a ref so re-renders of the parent don't
   // re-create the editor (TipTap remounts are expensive + lose selection).
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // Same pattern for onImageRequest — kept in a ref so the SlashCommand
+  // option doesn't churn the extensions array (which would rebuild the
+  // ProseMirror view; see the lengthy comment on `extensions` below).
+  const onImageRequestRef = useRef(onImageRequest);
+  onImageRequestRef.current = onImageRequest;
 
   // A10 — track the TipTap editor instance locally so MarginDiagnostics can
   // read the editor's DOM (top-level block elements) for note positioning.
@@ -191,7 +203,12 @@ export function Editor({
         allowBase64: false,
         HTMLAttributes: { class: 'paper-block__image' },
       }),
-      SlashCommand,
+      // `onImageRequest` is read through a ref so the option doesn't
+      // depend on a changing prop — keeps the extensions array stable
+      // and avoids the useEditor compareOptions → rebuild trap.
+      SlashCommand.configure({
+        onImageRequest: (e) => onImageRequestRef.current?.(e),
+      }),
       MoveBlock,
       // CW5 / T3b — the global drag handle owns the `⋮⋮` glyph + dragstart
       // wiring. `dragHandleWidth: 20` matches the visual slot the cluster

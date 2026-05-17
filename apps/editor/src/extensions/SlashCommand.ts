@@ -33,6 +33,7 @@ export function applyInsert(
   editor: Editor,
   range: Range,
   cmd: SlashCmd,
+  onImageRequest?: (editor: Editor) => void,
 ): void {
   const chain = editor.chain().focus().deleteRange(range);
 
@@ -76,19 +77,15 @@ export function applyInsert(
       chain.toggleCodeBlock().run();
       return;
     case 'image': {
-      // First close the slash menu's "/" marker by consuming the range,
-      // then dispatch a CustomEvent the App-mounted ImageInsertDialog
-      // listens for. The dialog owns the URL + alt inputs and issues
-      // `setImage` itself — keeps the URL ask inside paperflow's chrome
-      // family (calm dialog matching the slash menu surface) instead of
-      // the jarring native browser prompt. The link extension's
-      // `^https?://` validation rule is mirrored inside the dialog.
+      // Close the slash menu's "/" marker by consuming the range, then
+      // hand control to the host via the `onImageRequest` extension
+      // option. The host (App.tsx) mounts the calm ImageInsertDialog and
+      // issues `setImage` itself — keeps the URL ask inside paperflow's
+      // chrome family instead of the jarring native browser prompt. The
+      // link extension's `^https?://` validation rule is mirrored inside
+      // the dialog.
       chain.run();
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('paperflow:image-insert', { detail: { editor } }),
-        );
-      }
+      onImageRequest?.(editor);
       return;
     }
     case 'table':
@@ -186,6 +183,11 @@ function buildSuggestionRender(): () => {
 
 export interface SlashCommandOptions {
   suggestion: Partial<SuggestionOptions<SlashCmd>>;
+  /** Host callback fired when the writer picks the "Image" slash command.
+   *  The host opens its own URL dialog (ImageInsertDialog) and issues
+   *  `setImage` once the user submits — keeps the URL ask in the host's
+   *  chrome family instead of the jarring native `window.prompt`. */
+  onImageRequest?: (editor: Editor) => void;
 }
 
 export const SlashCommand = Extension.create<SlashCommandOptions>({
@@ -199,6 +201,25 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         allow: ({ state }: { state: AllowState }) => !isInsideCodeBlock(state),
         items: ({ query }: { query: string }): SlashCmd[] =>
           [...filterCommands(query)] satisfies SlashCmd[],
+        // `command` is invoked by @tiptap/suggestion with `this` bound to
+        // the suggestion plugin context — not the extension. We resolve
+        // `onImageRequest` via the extension storage at call-time below.
+        render: buildSuggestionRender(),
+      },
+      onImageRequest: undefined,
+    };
+  },
+
+  addProseMirrorPlugins() {
+    const ext = this;
+    return [
+      Suggestion<SlashCmd>({
+        editor: this.editor,
+        ...this.options.suggestion,
+        // Bind `command` here (rather than in addOptions) so we capture
+        // a stable reference to the extension and can read the latest
+        // `onImageRequest` option at command-time. Overrides whatever
+        // the user may have passed in `suggestion.command`.
         command: ({
           editor,
           range,
@@ -208,18 +229,8 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
           range: Range;
           props: SlashCmd;
         }) => {
-          applyInsert(editor, range, props);
+          applyInsert(editor, range, props, ext.options.onImageRequest);
         },
-        render: buildSuggestionRender(),
-      },
-    };
-  },
-
-  addProseMirrorPlugins() {
-    return [
-      Suggestion<SlashCmd>({
-        editor: this.editor,
-        ...this.options.suggestion,
       } as SuggestionOptions<SlashCmd>),
     ];
   },

@@ -558,8 +558,9 @@
  * Block layout (A2 + CW5 / T3b) — paper-block + paper-floating-chrome + .drag-handle
  *
  * Per-block embedded chrome is gone (the CW5 refactor): each top-level
- * NodeView now renders just `.paper-block` with `data-block-type` +
- * `data-block-idx`.
+ * NodeView now renders just `.paper-block` with `data-block-type`. The
+ * floating cluster resolves the target block via `editor.view.posAtCoords`
+ * — no DOM contract leaks out of the NodeView.
  *
  * Two floating siblings live above the editor on hover (T3b):
  *   - `.drag-handle` — rendered by `tiptap-extension-global-drag-handle`,
@@ -720,45 +721,6 @@
 .paper-block__insert:focus-visible {
   outline: 2px solid var(--paper-accent-warm-rust);
   outline-offset: 2px;
-}
-
-/* ===========================================================================
- * Drag + drop indicator (A6) — paper-drop-indicator + .paper-block.is-dragging
- *
- * `.paper-drop-indicator` is a 2px warm-rust rule that BlockChrome appends
- * to the hovered wrapper during HTML5 `dragover`. `data-side="above|below"`
- * controls whether it sits at the top edge or bottom edge — absolute
- * positioning keeps it from displacing the surrounding flow. Fade-in uses
- * `--motion-drop-indicator` so prefers-reduced-motion collapses it.
- *
- * `.paper-block.is-dragging` dims the source block to ~50% opacity while
- * a drag is in flight so the user can see "this is the one in motion".
- * =========================================================================== */
-
-.paper-drop-indicator {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--paper-accent-warm-rust);
-  opacity: 0;
-  pointer-events: none;
-  z-index: var(--paper-block-chrome-z);
-  animation: paper-drop-indicator-fade var(--motion-drop-indicator) ease-out forwards;
-}
-.paper-drop-indicator[data-side='above'] {
-  top: -2px;
-}
-.paper-drop-indicator[data-side='below'] {
-  bottom: -2px;
-}
-@keyframes paper-drop-indicator-fade {
-  from { opacity: 0; }
-  to   { opacity: 0.7; }
-}
-
-.paper-block.is-dragging {
-  opacity: 0.5;
 }
 
 /* ===========================================================================
@@ -1781,7 +1743,6 @@
     --motion-chrome-fade-out: 0ms;
     --motion-slash-menu-open: 0ms;
     --motion-bubble-menu-open: 0ms;
-    --motion-drop-indicator: 0ms;
     --motion-variant-chip-expand: 0ms;
     --motion-outline-slide: 0ms;
     --motion-preview-overlay-open: 0ms;

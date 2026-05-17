@@ -10,11 +10,12 @@
  *
  * Wiring contract
  * ---------------
- * `SlashCommand.ts`'s `image` case dispatches a `paperflow:image-insert`
- * `CustomEvent` on `window`. The dialog (mounted at `App.tsx`) listens for it
- * and surfaces with the editor pre-captured. On Insert with a valid URL the
- * dialog forwards to `editor.chain().focus().setImage({ src, alt }).run()`.
- * On Cancel / Esc / click-outside it dismisses without touching the doc.
+ * `SlashCommand.ts`'s `image` case invokes the extension's `onImageRequest`
+ * option with the live editor. App.tsx wires that callback to set the
+ * `imageDialogEditor` state, which mounts this dialog with the editor
+ * pre-captured. On Insert with a valid URL the dialog forwards to
+ * `editor.chain().focus().setImage({ src, alt }).run()`. On Cancel / Esc /
+ * click-outside it dismisses without touching the doc.
  *
  * URL validation matches the link extension's policy exactly:
  *   `/^https?:\/\//i.test(href)`

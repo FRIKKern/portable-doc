@@ -10,7 +10,6 @@
   --motion-chrome-fade-out: 300ms;
   --motion-slash-menu-open: 120ms;
   --motion-bubble-menu-open: 80ms;
-  --motion-drop-indicator: 100ms;
   --motion-variant-chip-expand: 150ms;
   --motion-outline-slide: 200ms;
   --motion-preview-overlay-open: 180ms;
@@ -25,7 +24,6 @@
     --motion-chrome-fade-out: 0ms;
     --motion-slash-menu-open: 0ms;
     --motion-bubble-menu-open: 0ms;
-    --motion-drop-indicator: 0ms;
     --motion-variant-chip-expand: 0ms;
     --motion-outline-slide: 0ms;
     --motion-preview-overlay-open: 0ms;

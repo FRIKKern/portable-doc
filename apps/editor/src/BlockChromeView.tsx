@@ -4,13 +4,13 @@
  * Post-CW5: this component renders ONLY the block content + variant style.
  * The chrome cluster (drag handle, label, variant chip, delete, "+") lives
  * once per editor in `FloatingBlockChrome.tsx`, tracking the currently-
- * hovered block via mouse coordinates. The per-block toolbar that lived
- * here previously is gone.
+ * hovered block via `editor.view.posAtCoords` — no `data-*` contract leaks
+ * out of the NodeView.
  *
  * What this component still owns:
  *   - `<NodeViewWrapper>` + `<NodeViewContent>` (the canonical TipTap shape).
- *   - `data-block-type` + `data-block-idx` on the wrapper — the floating
- *     chrome reads these via ancestor walk to resolve the target block.
+ *   - `data-block-type` on the wrapper (used by paper.css selectors for
+ *     per-type tweaks).
  *   - The variant-style application (live preview of variant choices on
  *     the block's content element).
  *   - `paper-block-nested` markers for nested blocks (paragraphs inside
@@ -25,6 +25,10 @@
  *   - The native HTML5 drag wiring (dragstart attaches to the floating
  *     drag button now; dragover/drop attach once at the editor surface
  *     instead of N times).
+ *   - The top-level child-index data attribute that previously kept the
+ *     floating cluster coupled to this NodeView; the cluster now resolves
+ *     the target via canonical PM coordinate APIs (`view.posAtCoords` /
+ *     `view.posAtDOM`).
  */
 import { useEditorState, NodeViewContent, NodeViewWrapper } from '@tiptap/react';
 import type { ReactNodeViewProps } from '@tiptap/react';
@@ -148,34 +152,21 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
   const pdType = pdBlockTypeFor(blockType);
   const contentTag = contentTagFor(blockType, node.attrs ?? {});
 
-  // Collapsed `useEditorState` selector — ONE subscription returns BOTH
-  // derived flags as an object. The library shallow-compares the result
-  // and only re-renders the NodeView when one of these fields actually
-  // changes. The previous two-call version ran each selector on every
-  // TX and could trigger independent React re-render passes; collapsing
-  // matches the TipTap 3 canonical pattern + cuts render churn under
-  // heavy typing.
-  //   - `isTopLevel`: top-level vs nested. Nested blocks (paragraphs
-  //     inside lists/callouts) get a thin marker wrapper; the floating
-  //     chrome ignores them.
-  //   - `topLevelIdx`: top-level child index — written to
-  //     `data-block-idx` so the floating chrome can resolve the target
-  //     block from a DOM event.target walk.
-  const { isTopLevel, topLevelIdx } = useEditorState({
+  // Single selector — `isTopLevel` discriminates the wrapper variant
+  // (top-level `.paper-block` vs nested `.paper-block-nested`). The
+  // floating chrome resolves its own target via `view.posAtCoords` so
+  // we no longer need to project the top-level index onto a data
+  // attribute here.
+  const isTopLevel = useEditorState({
     editor,
     selector: ({ editor: e }) => {
       try {
         const pos = typeof getPos === 'function' ? getPos() : undefined;
-        if (typeof pos !== 'number') {
-          return { isTopLevel: false, topLevelIdx: undefined as number | undefined };
-        }
+        if (typeof pos !== 'number') return false;
         const $pos = e.state.doc.resolve(pos);
-        return {
-          isTopLevel: $pos.depth === 0,
-          topLevelIdx: $pos.index(0) as number | undefined,
-        };
+        return $pos.depth === 0;
       } catch {
-        return { isTopLevel: false, topLevelIdx: undefined as number | undefined };
+        return false;
       }
     },
   });
@@ -211,7 +202,6 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
       as="div"
       className="paper-block"
       data-block-type={blockType}
-      data-block-idx={topLevelIdx ?? undefined}
     >
       {contentTag === 'hr' ? (
         // Horizontal rule has no inline content — render the rule

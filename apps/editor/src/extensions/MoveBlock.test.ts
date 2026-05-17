@@ -229,46 +229,10 @@ describe('moveBlock — single transaction', () => {
 });
 
 // ---------------------------------------------------------------------------
-// paper.css — A6 drag-indicator + dragging-source rules. The visual
-// indicator's exact owner changed (StarterKit's dropcursor now paints
-// during drag), but the warm-rust accent rules and the
-// prefers-reduced-motion fallback still live in paper.css.
+// Drag indicator: after the global-drag-handle swap (commit 098a3c6),
+// `prosemirror-dropcursor` (registered by StarterKit) paints the visual
+// drop position during a drag. Our former hand-rolled drop-indicator rule
+// and source-dim class are gone — nothing programmatically appends a
+// paperflow drop indicator anymore. The CSS-assertion tests that lived
+// here are removed with them.
 // ---------------------------------------------------------------------------
-
-describe('paper.css — A6 drag indicator rules', () => {
-  function loadPaperCss(): string {
-    return require('node:fs').readFileSync(
-      require('node:path').resolve(__dirname, '../styles/paper.css'),
-      'utf-8',
-    );
-  }
-
-  it('declares .paper-drop-indicator with the warm-rust accent', () => {
-    const css = loadPaperCss();
-    // Locate the actual rule block (not the doc comment) by matching
-    // `.paper-drop-indicator {` followed by the next closing brace.
-    const ruleMatch = css.match(/\.paper-drop-indicator\s*\{([^}]+)\}/);
-    expect(ruleMatch).toBeTruthy();
-    const body = ruleMatch?.[1] ?? '';
-    // The indicator references the warm-rust accent variable, not a
-    // hard-coded color — keeps the design token discipline intact.
-    expect(body).toMatch(/var\(--paper-accent-warm-rust\)/);
-  });
-
-  it('drop-indicator fade animation references --motion-drop-indicator', () => {
-    const css = loadPaperCss();
-    expect(css).toMatch(/animation:\s*paper-drop-indicator-fade\s+var\(--motion-drop-indicator\)/);
-  });
-
-  it('@media (prefers-reduced-motion: reduce) collapses --motion-drop-indicator to 0ms', () => {
-    const css = loadPaperCss();
-    const reducedBlock = css.split('@media (prefers-reduced-motion: reduce)')[1];
-    expect(reducedBlock).toBeTruthy();
-    expect(reducedBlock).toMatch(/--motion-drop-indicator:\s*0ms/);
-  });
-
-  it('declares .paper-block.is-dragging dimming rule', () => {
-    const css = loadPaperCss();
-    expect(css).toMatch(/\.paper-block\.is-dragging/);
-  });
-});

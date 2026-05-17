@@ -148,7 +148,6 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
       '--motion-chrome-fade-out',
       '--motion-slash-menu-open',
       '--motion-bubble-menu-open',
-      '--motion-drop-indicator',
       '--motion-variant-chip-expand',
       '--motion-outline-slide',
       '--motion-preview-overlay-open',

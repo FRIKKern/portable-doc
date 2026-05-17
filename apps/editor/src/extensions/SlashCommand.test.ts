@@ -31,8 +31,17 @@ describe('SlashCommand extension shape', () => {
     expect(opts?.suggestion?.char).toBe('/');
     expect(typeof opts?.suggestion?.allow).toBe('function');
     expect(typeof opts?.suggestion?.items).toBe('function');
-    expect(typeof opts?.suggestion?.command).toBe('function');
     expect(typeof opts?.suggestion?.render).toBe('function');
+    // `command` is bound inside addProseMirrorPlugins so the extension
+    // can capture a stable reference to its options at plugin-creation
+    // time — keeps the `onImageRequest` callback wiring canonical.
+    expect(opts?.suggestion?.command).toBeUndefined();
+  });
+
+  it('exposes the optional onImageRequest option (default undefined)', () => {
+    const opts = getOptions();
+    expect('onImageRequest' in (opts ?? {})).toBe(true);
+    expect(opts?.onImageRequest).toBeUndefined();
   });
 
   it('addProseMirrorPlugins is a function', () => {
@@ -181,5 +190,32 @@ describe('SlashCommand — applyInsert dispatch', () => {
     dispatch({ type: 'action', label: 'Action', hint: '' }, editor);
     expect(chain.insertContent).toHaveBeenCalled();
     expect(chain.run).toHaveBeenCalled();
+  });
+
+  it('image → invokes onImageRequest with the editor (replaces the CustomEvent bridge)', () => {
+    const { editor, chain } = makeEditor();
+    const onImageRequest = vi.fn();
+    applyInsert(
+      editor as never,
+      { from: 5, to: 6 },
+      { type: 'image', label: 'Image', hint: '' },
+      onImageRequest as never,
+    );
+    // The chain still runs (consumes the slash "/" range) before the
+    // host callback fires.
+    expect(chain.run).toHaveBeenCalled();
+    expect(onImageRequest).toHaveBeenCalledTimes(1);
+    expect(onImageRequest).toHaveBeenCalledWith(editor);
+  });
+
+  it('image → no-throw when onImageRequest is omitted (option is optional)', () => {
+    const { editor } = makeEditor();
+    expect(() =>
+      applyInsert(
+        editor as never,
+        { from: 5, to: 6 },
+        { type: 'image', label: 'Image', hint: '' },
+      ),
+    ).not.toThrow();
   });
 });

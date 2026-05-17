@@ -20,16 +20,18 @@
  * additional affordances (label, variant chip, delete, "+" insert) and
  * position them as a sibling of the extension's handle.
  *
- * Mouse tracking strategy (unchanged from the bespoke version)
- * ------------------------------------------------------------
+ * Mouse tracking strategy (canonical ProseMirror)
+ * ----------------------------------------------
  * - One `mousemove` listener on the editor's `.ProseMirror` surface.
- * - For each event we walk `event.target` up to the closest element with
- *   `data-block-idx` — the `.paper-block` wrapper BlockChromeView renders.
- *   That wrapper carries `data-block-type` + `data-block-idx`, so
- *   resolving the target block is a constant-time ancestor walk.
- * - Positioning reads the target wrapper's `getBoundingClientRect()` and
- *   places the cluster to the LEFT of the wrapper, leaving room for the
- *   global drag-handle's own 20px slot just to the cluster's right.
+ * - For each event we call `editor.view.posAtCoords({left, top})` to
+ *   resolve the doc-position under the pointer, then walk up its
+ *   resolution chain to find the top-level child index. No DOM contract
+ *   leaks out of the NodeView — the cluster works on any node, whether
+ *   we own its NodeView or not.
+ * - The block's DOM element is fetched via `editor.view.nodeDOM(pos)`
+ *   (canonical PM API) for `getBoundingClientRect()` positioning;
+ *   the cluster sits to the LEFT of that rect, leaving room for the
+ *   global drag-handle's 20px slot just to the cluster's right.
  * - 300ms hide hysteresis prevents flicker as the mouse crosses block
  *   boundaries or aims for a button.
  */
@@ -45,13 +47,11 @@ interface FloatingBlockChromeProps {
 
 /** Resolved info about the currently-hovered top-level block. */
 interface TargetBlock {
-  /** The `.paper-block` wrapper BlockChromeView renders for top-level nodes. */
-  wrapper: HTMLElement;
-  /** Top-level child index — read from `data-block-idx`. */
+  /** Top-level child index — derived from the resolved $pos. */
   idx: number;
-  /** TipTap node name — read from `data-block-type`. */
+  /** TipTap node name at the top-level position. */
   blockType: string;
-  /** Doc-position of the block node (resolved on demand for commands). */
+  /** Doc-position of the block node — the slot BEFORE the top-level child. */
   pos: number;
 }
 
@@ -76,21 +76,52 @@ function topLevelBlockPos(editor: TipTapEditor, idx: number): number | null {
   return pos;
 }
 
-/** Walk `el` and its ancestors to find the top-level block wrapper —
- *  the `.paper-block` element BlockChromeView renders, carrying
- *  `data-block-idx` (the discriminator: nested `.paper-block-nested`
- *  wrappers don't have it). Returns `null` for events outside any
- *  block (gutter, surface padding). */
-function closestBlockWrapper(el: Element | null): HTMLElement | null {
-  if (!el) return null;
-  let cur: Element | null = el;
-  while (cur != null) {
-    if (cur instanceof HTMLElement && cur.dataset.blockIdx !== undefined) {
-      return cur;
+/** Resolve the top-level block under the pointer using canonical PM APIs.
+ *  - `view.posAtCoords({left, top})` returns the doc position at the given
+ *    viewport coordinates (or null if the point is outside the editable
+ *    area — e.g. surface padding).
+ *  - `state.doc.resolve(pos).index(0)` walks up to depth 0 (the doc node)
+ *    and reports which top-level child contains that position.
+ *
+ *  Falls back to `view.posAtDOM(el, 0)` when posAtCoords yields nothing
+ *  (jsdom/happy-dom doesn't run layout, so coord-based hit-testing returns
+ *  null there; the DOM-based path still works on synthetic events). The
+ *  fallback is the same canonical PM API — no `data-*` attribute walk. */
+function targetBlockFromEvent(
+  editor: TipTapEditor,
+  e: MouseEvent,
+): TargetBlock | null {
+  const view = editor.view;
+  let pos: number | null = null;
+  const coordResult = view.posAtCoords({ left: e.clientX, top: e.clientY });
+  if (coordResult) {
+    pos = coordResult.inside >= 0 ? coordResult.inside : coordResult.pos;
+  } else if (e.target instanceof Node && view.dom.contains(e.target)) {
+    try {
+      pos = view.posAtDOM(e.target, 0);
+    } catch {
+      pos = null;
     }
-    cur = cur.parentElement;
   }
-  return null;
+  if (pos == null) return null;
+  if (pos < 0 || pos > editor.state.doc.content.size) return null;
+  const $pos = editor.state.doc.resolve(pos);
+  // Walk up to a top-level child of the doc. `$pos.depth === 0` means the
+  // position is at the doc level itself (between blocks) — skip.
+  if ($pos.depth === 0) return null;
+  const idx = $pos.index(0);
+  const blockPos = $pos.before(1);
+  const node = editor.state.doc.nodeAt(blockPos);
+  if (!node) return null;
+  return { idx, blockType: node.type.name, pos: blockPos };
+}
+
+/** Fetch the DOM element for the top-level block at `blockPos`. Uses the
+ *  canonical `view.nodeDOM` API so the cluster works regardless of whether
+ *  the block has a paperflow NodeView or a third-party one. */
+function nodeDOMAt(editor: TipTapEditor, blockPos: number): HTMLElement | null {
+  const dom = editor.view.nodeDOM(blockPos);
+  return dom instanceof HTMLElement ? dom : null;
 }
 
 export function FloatingBlockChrome({
@@ -162,21 +193,28 @@ export function FloatingBlockChrome({
   }, [editor, target]);
 
   // Reposition the chrome whenever target changes or the editor scrolls /
-  // is resized. Reads the wrapper's rect against viewport — we use `fixed`
-  // positioning so the rect's left/top are usable directly.
+  // is resized. Fetches the block's DOM via `view.nodeDOM(blockPos)` — the
+  // canonical PM API that works for any node regardless of which NodeView
+  // (if any) owns it. We use `fixed` positioning so the rect's left/top
+  // are usable directly against the viewport.
   const reposition = useCallback((): void => {
-    if (!target || !chromeElRef.current) {
+    if (!editor || !target || !chromeElRef.current) {
       setPosition(null);
       return;
     }
-    const wrapperRect = target.wrapper.getBoundingClientRect();
+    const blockDOM = nodeDOMAt(editor, target.pos);
+    if (!blockDOM) {
+      setPosition(null);
+      return;
+    }
+    const wrapperRect = blockDOM.getBoundingClientRect();
     const chromeRect = chromeElRef.current.getBoundingClientRect();
     const chromeWidth = chromeRect.width > 0 ? chromeRect.width : 160;
     const chromeHeight = chromeRect.height > 0 ? chromeRect.height : 28;
     const left = wrapperRect.left - chromeWidth - CHROME_GAP_PX;
     const top = wrapperRect.top + Math.max(0, (wrapperRect.height - chromeHeight) / 2);
     setPosition({ top, left });
-  }, [target]);
+  }, [editor, target]);
 
   // Recompute position whenever target changes, after the chrome has
   // rendered (so chromeElRef has its measured width).
@@ -197,41 +235,32 @@ export function FloatingBlockChrome({
     };
   }, [target, reposition]);
 
-  // The main mousemove tracker — bound on the editor surface root. The
-  // handler is fast (one DOM walk per move) so we don't bother throttling;
-  // an rAF gate added subtle test timing issues that weren't worth the
-  // perf savings on a per-block walk.
+  // The main mousemove tracker — bound on the editor surface root.
+  // Resolution is canonical PM (`view.posAtCoords` with a `view.posAtDOM`
+  // fallback for layout-less test envs); see `targetBlockFromEvent` above.
   useEffect(() => {
     if (!editor) return;
     const surface = editor.view.dom as HTMLElement;
 
     const processEvent = (e: MouseEvent): void => {
-      const targetEl = e.target as Element | null;
-      const wrapper = closestBlockWrapper(targetEl);
-      if (!wrapper) {
+      const next = targetBlockFromEvent(editor, e);
+      if (!next) {
         // Outside any block — schedule hide unless the mouse is over
         // the chrome itself.
         if (!chromeHovered) scheduleHide();
         return;
       }
-      const idxRaw = wrapper.dataset.blockIdx;
-      const blockType = wrapper.dataset.blockType ?? 'paragraph';
-      const idx = idxRaw === undefined ? NaN : Number(idxRaw);
-      if (!Number.isFinite(idx)) return;
-      const pos = topLevelBlockPos(editor, idx);
-      if (pos == null) return;
       clearHideTimer();
       setTarget((prev) => {
         if (
           prev &&
-          prev.wrapper === wrapper &&
-          prev.idx === idx &&
-          prev.blockType === blockType &&
-          prev.pos === pos
+          prev.idx === next.idx &&
+          prev.blockType === next.blockType &&
+          prev.pos === next.pos
         ) {
           return prev;
         }
-        return { wrapper, idx, blockType, pos };
+        return next;
       });
     };
 
@@ -339,7 +368,6 @@ export function FloatingBlockChrome({
         (visible ? ' is-tracking' : '')
       }
       data-block-type={target?.blockType}
-      data-block-idx={target?.idx}
       role="toolbar"
       aria-label={`${label} block toolbar`}
       aria-hidden={!visible}

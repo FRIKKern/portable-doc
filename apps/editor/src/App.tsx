@@ -19,7 +19,7 @@
  *   - JsonEditMode (Cmd+Shift+J power-user overlay) — kept verbatim per
  *     T4 disposition `keep`.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import welcomeJson from '../../../examples/welcome.json';
@@ -50,18 +50,15 @@ function AppShell(): JSX.Element {
   // so the rail can read top-level blocks + drive scroll/focus.
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [editor, setEditor] = useState<TipTapEditor | null>(null);
-  // ImageInsertDialog state — the slash menu's `image` command dispatches a
-  // `paperflow:image-insert` event carrying the editor; we open the dialog
-  // when we receive it and clear when it dismisses. Replaces the jarring
-  // native `window.prompt` flow.
+  // ImageInsertDialog state — when the slash menu's "Image" command fires,
+  // SlashCommand calls back through the `onImageRequest` option (wired via
+  // an Editor prop) with the editor instance. We stash it here to open the
+  // calm dialog; the dialog issues `setImage` once the writer submits.
+  // Replaces the v0.4-era `window.prompt('Image URL')` flow and the
+  // intermediate window-level CustomEvent bridge.
   const [imageDialogEditor, setImageDialogEditor] = useState<TipTapEditor | null>(null);
-  useEffect(() => {
-    function onImageInsert(e: Event) {
-      const detail = (e as CustomEvent<{ editor: TipTapEditor }>).detail;
-      if (detail?.editor) setImageDialogEditor(detail.editor);
-    }
-    window.addEventListener('paperflow:image-insert', onImageInsert);
-    return () => window.removeEventListener('paperflow:image-insert', onImageInsert);
+  const handleImageRequest = useCallback((ed: TipTapEditor) => {
+    setImageDialogEditor(ed);
   }, []);
 
   // Reverse pipeline: the Editor converts TipTap state → PortableDoc on
@@ -135,7 +132,12 @@ function AppShell(): JSX.Element {
   return (
     <div className="paper-app" data-testid="paper-app">
       <main className="paper-column" data-testid="paper-column">
-        <Editor doc={doc} onEditorReady={setEditor} onChange={setDoc} />
+        <Editor
+          doc={doc}
+          onEditorReady={setEditor}
+          onChange={setDoc}
+          onImageRequest={handleImageRequest}
+        />
       </main>
       <OutlineRail
         editor={editor}

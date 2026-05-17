@@ -4,19 +4,18 @@
  * A2 — block-chrome via TipTap NodeView.
  *
  * Post-CW5 / T3b: the per-block embedded chrome toolbar is gone. Each
- * NodeView renders just `.paper-block` with `data-block-type` +
- * `data-block-idx`; the drag handle is owned by the mainstream
- * `tiptap-extension-global-drag-handle` (Novel's choice) and renders as a
- * single `<div class="drag-handle" data-drag-handle>` next to the editor.
- * Our React-owned cluster (`.paper-floating-chrome`) carries the
- * remaining affordances (label / variant chip / delete / "+" insert),
- * positioned as a sibling of the global handle. Tests assert that
- * contract:
+ * NodeView renders just `.paper-block` with `data-block-type`; the drag
+ * handle is owned by the mainstream `tiptap-extension-global-drag-handle`
+ * (Novel's choice) and renders as a single `<div class="drag-handle"
+ * data-drag-handle>` next to the editor. Our React-owned cluster
+ * (`.paper-floating-chrome`) carries the remaining affordances (label /
+ * variant chip / delete / "+" insert), positioned as a sibling of the
+ * global handle. Tests assert that contract:
  *
  *   1. `withBlockChrome(Paragraph)` returns an extension whose NodeView
  *      hook (`addNodeView`) is defined.
  *   2. Editor.tsx renders the welcome doc with each top-level node wrapped
- *      in `.paper-block` carrying `data-block-type` + `data-block-idx`.
+ *      in `.paper-block` carrying `data-block-type`.
  *   3. Exactly one `.paper-floating-chrome` lives in the editor mount
  *      (Notion/BlockNote/Linear pattern, not N-per-block).
  *   4. The floating chrome carries label, variant slot, delete, and "+"
@@ -189,14 +188,17 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(blocks.length).toBe(4);
   });
 
-  it('each paper-block carries data-block-type + data-block-idx (the floating chrome reads these)', async () => {
+  it('each paper-block carries data-block-type (the floating chrome resolves idx via posAtCoords/posAtDOM)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
     const blocks = surface!.querySelectorAll('.paper-block');
-    blocks.forEach((b, i) => {
+    blocks.forEach((b) => {
       expect(b.getAttribute('data-block-type')).toBeTruthy();
-      expect(b.getAttribute('data-block-idx')).toBe(String(i));
+      // `data-block-idx` is intentionally NOT written — the floating
+      // chrome uses canonical PM APIs (`view.posAtCoords` with a
+      // `view.posAtDOM` fallback) to find the target block.
+      expect(b.getAttribute('data-block-idx')).toBeNull();
     });
   });
 
@@ -271,8 +273,10 @@ describe('Editor integration — paper-block + single floating chrome', () => {
 
     // Simulate a mousemove over the first block so the floating chrome
     // adopts it as target, then click delete.
+    // First top-level `.paper-block` — the floating chrome resolves the
+    // idx via canonical PM APIs (`view.posAtDOM` fallback under happy-dom).
     const firstBlock = editor.view.dom.querySelector(
-      '.paper-block[data-block-idx="0"]',
+      '.paper-block',
     ) as HTMLElement | null;
     expect(firstBlock).toBeTruthy();
     // The block is wrapped by `.react-renderer` (TipTap's per-NodeView
@@ -320,8 +324,10 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(beforeTypes[1]).toBe('paragraph');
 
     // Adopt block 0 as the floating chrome target.
+    // First top-level `.paper-block` — the floating chrome resolves the
+    // idx via canonical PM APIs (`view.posAtDOM` fallback under happy-dom).
     const firstBlock = editor.view.dom.querySelector(
-      '.paper-block[data-block-idx="0"]',
+      '.paper-block',
     ) as HTMLElement | null;
     expect(firstBlock).toBeTruthy();
     firstBlock!.dispatchEvent(
@@ -366,8 +372,10 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     await new Promise<void>((r) => setTimeout(r, 0));
     const editor = captured!;
     // Adopt block 0.
+    // First top-level `.paper-block` — the floating chrome resolves the
+    // idx via canonical PM APIs (`view.posAtDOM` fallback under happy-dom).
     const firstBlock = editor.view.dom.querySelector(
-      '.paper-block[data-block-idx="0"]',
+      '.paper-block',
     ) as HTMLElement | null;
     firstBlock!.dispatchEvent(
       new MouseEvent('mousemove', {
