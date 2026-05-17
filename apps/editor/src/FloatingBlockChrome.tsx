@@ -317,29 +317,9 @@ export function FloatingBlockChrome({
     [editor, target],
   );
 
-  const handleInsertBelow = useCallback(
-    (e: React.MouseEvent | React.KeyboardEvent): void => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!editor || !target) return;
-      const pos = topLevelBlockPos(editor, target.idx);
-      if (pos == null) return;
-      const liveNode = editor.state.doc.nodeAt(pos);
-      if (!liveNode) return;
-      const after = pos + liveNode.nodeSize;
-      editor
-        .chain()
-        .focus()
-        .insertContentAt(after, { type: 'paragraph' })
-        .setTextSelection(after + 1)
-        .insertContent('/')
-        .run();
-    },
-    [editor, target],
-  );
-
-  // Read the live block type so the variant chip + label use the freshest
-  // node info (heading level may change without target.idx changing).
+  // Read the live block type so the variant chip + screen-reader labels
+  // use the freshest node info (heading level may change without
+  // target.idx changing).
   const blockType = target?.blockType ?? 'paragraph';
   const pdType = useMemo(() => pdBlockTypeFor(blockType), [blockType]);
 
@@ -348,11 +328,16 @@ export function FloatingBlockChrome({
       ? Number(targetAttrs.level ?? 1)
       : null;
   const baseLabel = humanLabelFor(blockType);
-  const label =
-    headingLevel != null && Number.isFinite(headingLevel)
+  // Screen-reader-only label string (e.g. "heading 2", "callout"). Used
+  // by the delete button's aria-label so SR users still hear which block
+  // type is being acted on. The label is never rendered visually —
+  // Notion / Novel / BlockNote don't show a type label by default, and
+  // it's noise for sighted writers.
+  const lower =
+    (headingLevel != null && Number.isFinite(headingLevel)
       ? `${baseLabel} ${headingLevel}`
-      : baseLabel;
-  const lower = label.toLowerCase();
+      : baseLabel
+    ).toLowerCase();
 
   // Visibility: chrome is mounted at all times (so refs work) but
   // hidden when there's no target, when a text selection is active, or
@@ -369,7 +354,7 @@ export function FloatingBlockChrome({
       }
       data-block-type={target?.blockType}
       role="toolbar"
-      aria-label={`${label} block toolbar`}
+      aria-label="Block toolbar"
       aria-hidden={!visible}
       // `contentEditable={false}` keeps the floating chrome out of
       // ProseMirror's text-selection / drag-handling scope so mousedowns
@@ -394,7 +379,6 @@ export function FloatingBlockChrome({
         scheduleHide();
       }}
     >
-      <span className="paper-block__label">{label}</span>
       <div className="paper-block__variant-slot">
         {pdType !== null && target && targetAttrs ? (
           <VariantChip
@@ -418,18 +402,6 @@ export function FloatingBlockChrome({
         }}
       >
         ×
-      </button>
-      <button
-        type="button"
-        className="paper-block__insert"
-        aria-label="Insert block below"
-        data-block-type={target?.blockType}
-        onMouseDown={handleInsertBelow}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') handleInsertBelow(e);
-        }}
-      >
-        +
       </button>
     </div>
   );

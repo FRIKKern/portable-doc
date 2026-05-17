@@ -225,7 +225,7 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(clusters.length).toBe(1);
   });
 
-  it('the floating chrome carries label, variant slot, delete, and "+" insert (drag handle lives outside, owned by global-drag-handle)', async () => {
+  it('the floating chrome carries the variant slot and delete button (drag handle lives outside, owned by global-drag-handle; type label + "+" dropped to match Notion / Novel / BlockNote)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const mount = screen.getByTestId('paper-editor');
@@ -236,10 +236,15 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     // sibling of the editor (positioned with inline top/left on
     // mousemove). Cluster owns the remaining affordances.
     expect(chrome!.querySelector('[data-drag-handle]')).toBeFalsy();
-    expect(chrome!.querySelector('.paper-block__label')).toBeTruthy();
     expect(chrome!.querySelector('.paper-block__variant-slot')).toBeTruthy();
     expect(chrome!.querySelector('.paper-block-delete')).toBeTruthy();
-    expect(chrome!.querySelector('.paper-block__insert')).toBeTruthy();
+    // Type label dropped (Notion / Novel / BlockNote don't render one
+    // by default; SR users still get the type via the delete button's
+    // aria-label, e.g. "Delete heading 1").
+    expect(chrome!.querySelector('.paper-block__label')).toBeFalsy();
+    // "+" insert dropped — the slash menu (`/`) is the canonical
+    // insert path, so the cluster no longer duplicates it.
+    expect(chrome!.querySelector('.paper-block__insert')).toBeFalsy();
   });
 
   it('the global drag handle div (`data-drag-handle`) is rendered as a sibling of the editor', async () => {
@@ -307,57 +312,9 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(afterTypes).not.toContain('heading');
   });
 
-  it('floating-chrome "+" inserts a paragraph below the targeted block', async () => {
-    let captured: import('@tiptap/react').Editor | null = null;
-    render(
-      <Editor
-        doc={welcomeFixture}
-        onEditorReady={(e) => {
-          captured = e;
-        }}
-      />,
-    );
-    await new Promise<void>((r) => setTimeout(r, 0));
-    const editor = captured!;
-    const beforeTypes = (editor.getJSON().content ?? []).map((n) => n.type);
-    expect(beforeTypes[0]).toBe('heading');
-    expect(beforeTypes[1]).toBe('paragraph');
-
-    // Adopt block 0 as the floating chrome target.
-    // First top-level `.paper-block` — the floating chrome resolves the
-    // idx via canonical PM APIs (`view.posAtDOM` fallback under happy-dom).
-    const firstBlock = editor.view.dom.querySelector(
-      '.paper-block',
-    ) as HTMLElement | null;
-    expect(firstBlock).toBeTruthy();
-    firstBlock!.dispatchEvent(
-      new MouseEvent('mousemove', {
-        bubbles: true,
-        cancelable: true,
-        clientX: 100,
-        clientY: 50,
-      }),
-    );
-    await new Promise<void>((r) => setTimeout(r, 16));
-
-    const insertBtn = document
-      .querySelector('.paper-floating-chrome .paper-block__insert') as HTMLButtonElement | null;
-    expect(insertBtn).toBeTruthy();
-    expect(insertBtn!.getAttribute('aria-label')).toBe('Insert block below');
-    insertBtn!.dispatchEvent(
-      new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
-    );
-
-    const afterTypes = (editor.getJSON().content ?? []).map((n) => n.type);
-    // The inserted paragraph sits between the heading and the original
-    // intro paragraph — heading at index 0, NEW paragraph at index 1.
-    expect(afterTypes[0]).toBe('heading');
-    expect(afterTypes[1]).toBe('paragraph');
-    expect(afterTypes[2]).toBe('paragraph');
-    // The new paragraph starts with the slash-menu trigger `/`.
-    const inserted = editor.getJSON().content?.[1];
-    expect(inserted?.content ?? []).toEqual([{ type: 'text', text: '/' }]);
-  });
+  // The floating-chrome "+" insert affordance was dropped — the slash
+  // menu (`/`) is the canonical insert path and the chrome no longer
+  // duplicates it. The previous insert test lived here.
 
   it('floating chrome hides when a non-empty selection is active (BubbleMenu wins)', async () => {
     let captured: import('@tiptap/react').Editor | null = null;
