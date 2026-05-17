@@ -44,19 +44,14 @@
  *   - variant catalog math (delegated to @portable-doc/variants)
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentType } from 'react';
 import { NodeViewContent, NodeViewWrapper, useEditorState } from '@tiptap/react';
 import type { ReactNodeViewProps } from '@tiptap/react';
 
-/** NodeViewContent's `as` prop is generic over `keyof JSX.IntrinsicElements`
- *  with `NoInfer<T>`, so TS can't widen the union — passing a dynamic tag
- *  triggers TS2322. A local re-typing keeps callers clean while preserving
- *  runtime behavior (TipTap spreads `as` as the JSX tag). */
-const TagContent = NodeViewContent as unknown as ComponentType<{
-  as?: keyof React.JSX.IntrinsicElements;
-  className?: string;
-  style?: React.CSSProperties;
-}>;
+// NodeViewContent's `as` prop is generic over `keyof JSX.IntrinsicElements`
+// with `NoInfer<T>` upstream, so TS can't widen a union — passing a dynamic
+// `ContentTag` value would trigger TS2322. We compile-time augment the
+// module to widen the generic; see
+// `src/types/tiptap-react-augment.d.ts` for the rationale.
 import { VARIANT_CATALOG } from '@portable-doc/variants';
 import type { BlockType } from '@portable-doc/core';
 import { VariantChip } from './VariantChip.js';
@@ -322,7 +317,7 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
         className="paper-block-nested"
         data-block-type={blockType}
       >
-        <TagContent
+        <NodeViewContent
           as={contentTag === 'hr' ? 'div' : contentTag}
           className="paper-block__content"
         />
@@ -433,7 +428,7 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
           // element directly and skip NodeViewContent.
           <hr className="paper-block__content" />
         ) : (
-          <TagContent
+          <NodeViewContent
             as={contentTag}
             className="paper-block__content"
             style={variantStyle ?? undefined}
