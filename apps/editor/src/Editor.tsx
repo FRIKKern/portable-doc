@@ -35,45 +35,12 @@
  */
 import { useEditor, EditorContent, type Editor as TipTapEditor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import Paragraph from '@tiptap/extension-paragraph';
-import Heading from '@tiptap/extension-heading';
-import { BulletList, OrderedList } from '@tiptap/extension-list';
-import Blockquote from '@tiptap/extension-blockquote';
-import CodeBlock from '@tiptap/extension-code-block';
-import HorizontalRule from '@tiptap/extension-horizontal-rule';
-// Minimum table support: TipTap delegates to prosemirror-tables. Cells are
-// editable, Tab cycles to the next cell, Shift+Tab walks back. We don't
-// wrap with withBlockChrome — the chrome was tuned for paragraph/heading
-// outer shapes and adding it to <table> needs its own pass.
-// `@tiptap/extension-table` re-exports all four nodes from the main entry,
-// so one import suffices. The per-node sub-packages exist for treeshaking
-// but reference the same classes.
-import {
-  Table,
-  TableRow,
-  TableHeader,
-  TableCell,
-} from '@tiptap/extension-table';
-import Image from '@tiptap/extension-image';
-import Typography from '@tiptap/extension-typography';
-// CW5 / T3b — the canonical Tiptap floating drag handle (what Novel uses).
-// Renders ONE `<div class="drag-handle" data-drag-handle>` next to the
-// editor's parent and positions it on mousemove. Drives PM's built-in
-// drag pipeline (NodeSelection → slice serialize → drop). Companion
-// `tiptap-extension-auto-joiner` auto-joins adjacent lists after a
-// drag-reorder so dragging a list item between two lists merges them.
-import GlobalDragHandle from 'tiptap-extension-global-drag-handle';
-import AutoJoiner from 'tiptap-extension-auto-joiner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapJson } from './lib/portable-doc-to-tiptap-json.js';
 import { tiptapToPortableDoc } from './lib/tiptap-to-portable-doc.js';
-import { withBlockChrome } from './extensions/withBlockChrome.js';
-import { SlashCommand } from './extensions/SlashCommand.js';
-import { MoveBlock } from './extensions/MoveBlock.js';
+import { buildExtensions } from './extensions/index.js';
 import { FormatBubble } from './FormatBubble.js';
 import { TableMenu } from './TableMenu.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
@@ -139,126 +106,19 @@ export function Editor({
     [debouncedDoc],
   );
 
-  // Memoize extensions + editorProps + initial content. `useEditor` runs
-  // an internal `compareOptions` check on every render and, when any
-  // option's reference has changed, calls `editor.setOptions()` — which
-  // tears down and rebuilds the ProseMirror EditorView, destroying every
-  // NodeView (and the React roots inside them via `chipHandle.unmount()`).
-  // With fresh array/object literals each render, that loops forever:
-  // the rebuild triggers a state update inside TipTap, which re-renders
-  // Editor, which produces fresh literals again, which fails the compare,
-  // which rebuilds, … 19k+ DOM mutations per second of "idle" time.
-  //
-  // The extensions and editor props don't depend on any state that can
-  // change at runtime, so `[]` deps are correct here.
+  // The extensions list lives in `extensions/index.ts` (Novel does the
+  // same — keeps Editor.tsx focused on React glue). `useEditor` runs
+  // a `compareOptions` check on every render and rebuilds the
+  // ProseMirror view on any reference change, so the array MUST be
+  // referentially stable; `useMemo([], [])` gives us that. The
+  // host's `onImageRequest` is bound late via a getter that reads our
+  // ref so a fresh closure from a parent re-render doesn't invalidate
+  // the array.
   const extensions = useMemo(
-    () => [
-      StarterKit.configure({
-        // Drop the seven block nodes — A2 re-adds them with chrome below.
-        paragraph: false,
-        heading: false,
-        bulletList: false,
-        orderedList: false,
-        blockquote: false,
-        codeBlock: false,
-        horizontalRule: false,
-        // Link safety: `validate` runs on every setLink() and on pasted
-        // hrefs. Reject anything that isn't http(s) or mailto so a
-        // malicious paste can't smuggle `javascript:` or `data:` URLs
-        // into the doc (real XSS surface). `rel="noopener noreferrer
-        // nofollow"` is the standard hardening for any outbound link.
-        // `openOnClick: false` matches the editor convention — clicks
-        // place a caret; the FormatBubble's link affordance is what
-        // edits/removes.
-        link: {
-          openOnClick: false,
-          autolink: true,
-          linkOnPaste: true,
-          HTMLAttributes: { rel: 'noopener noreferrer nofollow' },
-          validate: (href: string) =>
-            /^https?:\/\//i.test(href) || /^mailto:/i.test(href),
-        },
+    () =>
+      buildExtensions({
+        getOnImageRequest: () => onImageRequestRef.current,
       }),
-      withBlockChrome(Paragraph),
-      withBlockChrome(Heading.configure({ levels: [1, 2, 3, 4, 5, 6] })),
-      withBlockChrome(BulletList),
-      withBlockChrome(OrderedList),
-      withBlockChrome(Blockquote),
-      withBlockChrome(CodeBlock),
-      withBlockChrome(HorizontalRule),
-      // Table needs all four nodes registered together — Table contains
-      // TableRow, which contains TableCell/TableHeader. `resizable: false`
-      // keeps v0.4 minimum scope — column resize is v0.5.
-      //
-      // Tab-extends-row: `@tiptap/extension-table@3.23.4+` already ships
-      // the canonical Notion / Novel keymap — Tab tries `goToNextCell()`
-      // first and falls through to `addRowAfter()` when at the last cell.
-      // No override needed; trust the upstream behavior.
-      Table.configure({ resizable: false }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      // Image (web/native only — PortableDoc's image block surfaces are
-      // narrowed to those two; backends without raster support skip it
-      // at render time). `inline: false` keeps images as block-level
-      // nodes so they sit on their own line like every other block.
-      // `allowBase64: false` blocks data-URLs from being pasted; only
-      // http(s) URLs make it through, matching the link `validate` policy.
-      Image.configure({
-        inline: false,
-        allowBase64: false,
-        HTMLAttributes: { class: 'paper-block__image' },
-      }),
-      // `onImageRequest` is read through a ref so the option doesn't
-      // depend on a changing prop — keeps the extensions array stable
-      // and avoids the useEditor compareOptions → rebuild trap.
-      SlashCommand.configure({
-        onImageRequest: (e) => onImageRequestRef.current?.(e),
-      }),
-      MoveBlock,
-      // CW5 / T3b — the global drag handle owns the `⋮⋮` glyph + dragstart
-      // wiring. `dragHandleWidth: 20` matches the visual slot the cluster
-      // reserves to its right (CHROME_GAP_PX in FloatingBlockChrome).
-      // `scrollTreshold: 100` mirrors Novel's default — start auto-scroll
-      // when the drag pointer is within 100px of the viewport edge.
-      GlobalDragHandle.configure({
-        dragHandleWidth: 20,
-        scrollTreshold: 100,
-      }),
-      // Auto-joins adjacent lists after a drag-reorder so dragging a list
-      // item out of List A and adjacent to List B merges them. Stateless,
-      // no config needed.
-      AutoJoiner,
-      // Typography — transforms input on the fly: straight quotes become
-      // curly ("foo" → “foo”, 'bar' → ‘bar’), `--` collapses to an em-dash,
-      // `...` to a horizontal ellipsis, `(c)` to ©, etc. Smart-quote handling
-      // is what makes the Iowan Old Style surface read like a typeset page
-      // instead of a draft — the single highest-leverage visual change per
-      // line of code. Stateless, no config needed.
-      Typography,
-      // Per-block placeholder text. Empty headings/lists/callouts get
-      // their own hint instead of the generic "Start typing, or press /
-      // for blocks." — quieter and more informative.
-      Placeholder.configure({
-        showOnlyCurrent: true,
-        showOnlyWhenEditable: true,
-        placeholder: ({ node }) => {
-          switch (node.type.name) {
-            case 'heading':
-              return 'Heading';
-            case 'bulletList':
-            case 'orderedList':
-              return 'List item';
-            case 'blockquote':
-              return 'Callout';
-            case 'codeBlock':
-              return 'Code';
-            default:
-              return 'Start typing, or press / for blocks.';
-          }
-        },
-      }),
-    ],
     [],
   );
 
