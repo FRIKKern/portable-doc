@@ -79,12 +79,22 @@ function previewFor(text: string): string {
 }
 
 /** Walk the doc's top-level children once and produce an entry per child.
- *  Internal helper exported so tests can hit the pure traversal directly. */
+ *  Internal helper exported so tests can hit the pure traversal directly.
+ *
+ *  Skips empty paragraphs — the TrailingNode extension appends one at the
+ *  doc's end whenever the last block isn't already a paragraph, and an
+ *  empty entry would just add noise to the outline. */
 export function entriesFromEditor(editor: Editor): OutlineEntry[] {
   const result: OutlineEntry[] = [];
   const { doc } = editor.state;
   let i = 0;
   doc.forEach((node, offset) => {
+    const isEmptyParagraph =
+      node.type.name === 'paragraph' && node.content.size === 0;
+    if (isEmptyParagraph) {
+      i += 1;
+      return;
+    }
     result.push({
       pos: offset,
       type: node.type.name,

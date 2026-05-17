@@ -228,8 +228,12 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     const topLevel = Array.from(surface!.children).filter((el) =>
       el.classList.contains('paper-block'),
     );
-    // welcome doc: heading + paragraph + callout + list = 4 top-level blocks.
-    expect(topLevel.length).toBe(4);
+    // welcome doc: heading + paragraph + callout + list = 4 top-level
+    // blocks; the TrailingNode extension appends one empty <p> at the
+    // end (since the doc ends in a list, not already a paragraph), so
+    // the rendered count is 5. The trailing slot is the universal
+    // Notion / Novel / Linear pattern.
+    expect(topLevel.length).toBe(5);
   });
 
   it('every wrapped extension carries the schema-level `draggable: true` flag (the global drag-handle reads this)', async () => {

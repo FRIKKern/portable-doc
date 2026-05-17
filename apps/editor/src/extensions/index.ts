@@ -23,8 +23,15 @@ import Paragraph from '@tiptap/extension-paragraph';
 import Heading from '@tiptap/extension-heading';
 import { BulletList, OrderedList } from '@tiptap/extension-list';
 import Blockquote from '@tiptap/extension-blockquote';
-import CodeBlock from '@tiptap/extension-code-block';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { common, createLowlight } from 'lowlight';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
+import { mergeAttributes } from '@tiptap/core';
+// TrailingNode — inlined here (the community package pins
+// @tiptap/core@2 which conflicts at the type layer). Keeps an empty
+// paragraph at the doc's end so the writer can always click below
+// the last block. Universal Notion / Novel / Linear pattern.
+import { TrailingNode } from './TrailingNode.js';
 import {
   Table,
   TableRow,
@@ -47,6 +54,25 @@ export interface BuildExtensionsOpts {
    *  without invalidating the extension array. */
   getOnImageRequest: () => ((editor: TipTapEditor) => void) | undefined;
 }
+
+/** ASCII-slugify a heading's text for the `id` attribute. Trims,
+ *  lowercases, drops non-alphanum, collapses whitespace+dashes,
+ *  caps at 64 chars. Pure function so unit tests can lock it down. */
+export function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 64);
+}
+
+/** Single lowlight instance — registers the ~37 languages in
+ *  `lowlight/lib/common` (JS/TS/Python/Go/Rust/Java/C/C++/Bash/SQL/
+ *  HTML/CSS/Markdown/JSON/YAML/…). Plenty for technical writing. */
+const lowlight = createLowlight(common);
 
 /** Build the canonical paperflow extension stack.
  *
@@ -84,11 +110,43 @@ export function buildExtensions(
       },
     }),
     withBlockChrome(Paragraph),
-    withBlockChrome(Heading.configure({ levels: [1, 2, 3, 4, 5, 6] })),
+    // Auto-generate anchor `id` attrs from heading text so deep
+    // links work (e.g. /docs#setup-complete scrolls to the matching
+    // <h2 id="setup-complete">). GitHub / Notion / most docs do
+    // this. `node.textContent` is the live text of the heading at
+    // render time; slugifyHeading lowercases + drops non-alphanum +
+    // collapses whitespace. Empty headings get no id (the empty
+    // string slug would collide between blocks).
+    withBlockChrome(
+      Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }).extend({
+        renderHTML({ node, HTMLAttributes }) {
+          const levels = (this.options as { levels: number[] }).levels;
+          const level = levels.includes(node.attrs.level)
+            ? (node.attrs.level as number)
+            : levels[0]!;
+          const id = slugifyHeading(node.textContent);
+          return [
+            `h${level}`,
+            mergeAttributes(
+              (this.options as { HTMLAttributes: Record<string, string> })
+                .HTMLAttributes,
+              HTMLAttributes,
+              id ? { id } : {},
+            ),
+            0,
+          ];
+        },
+      }),
+    ),
     withBlockChrome(BulletList),
     withBlockChrome(OrderedList),
     withBlockChrome(Blockquote),
-    withBlockChrome(CodeBlock),
+    // CodeBlockLowlight swaps the plain CodeBlock for one that
+    // tokenises the source via `lowlight` (highlight.js without the
+    // file-size cost). The plugin emits inline `.hljs-keyword`,
+    // `.hljs-string`, `.hljs-comment`, etc. spans inside the
+    // `<code>` element; paper.css owns the colour palette.
+    withBlockChrome(CodeBlockLowlight.configure({ lowlight })),
     withBlockChrome(HorizontalRule),
     // Table needs all four nodes registered together — Table contains
     // TableRow, which contains TableCell/TableHeader. `resizable: true`
@@ -140,6 +198,10 @@ export function buildExtensions(
     // `textCounter` whitespace-splits the doc text, which matches
     // the previous behavior.
     CharacterCount,
+    // Always-empty trailing paragraph at the doc end. Notion / Novel
+    // / Linear canon — the writer can click below the last block and
+    // start typing without first having to position the caret.
+    TrailingNode,
     // Per-block placeholder text. Empty headings/lists/callouts get
     // their own hint instead of the generic "Start typing, or press /
     // for blocks."

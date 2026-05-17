@@ -116,6 +116,12 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
           // toggled during an active drag.
           c !== '.column-resize-handle' &&
           c !== '.resize-cursor' &&
+          // lowlight / highlight.js syntax-highlight token classes
+          // emitted inside <pre><code> by CodeBlockLowlight. The set is
+          // open-ended (keyword, string, attr, number, comment, …) —
+          // accept the `hljs-` prefix wholesale, mirroring the
+          // tonal-allowlist pattern below.
+          !c.startsWith('.hljs-') &&
           // `@tiptap/extension-placeholder` sets `.is-empty` on the empty
           // first-current top-level node. Our placeholder hint rule keys
           // off this third-party class in the `.ProseMirror` scope.

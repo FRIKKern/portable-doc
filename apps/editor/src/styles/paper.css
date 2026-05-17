@@ -249,6 +249,86 @@
   margin: 28px 0;
 }
 
+/* CodeBlockLowlight — `.hljs-*` spans emitted inside <pre><code>.
+ * Palette tuned to the warm-paper aesthetic on the light theme;
+ * dark theme (`pre[data-theme="dark"]`) inverts later in this file.
+ * Keep this palette small — too many distinct hues read as visual
+ * noise on the page. */
+.paper-column pre code .hljs-keyword,
+.paper-column pre code .hljs-built_in {
+  color: #a23925;
+  font-weight: 600;
+}
+.paper-column pre code .hljs-string,
+.paper-column pre code .hljs-attr {
+  color: #047857;
+}
+.paper-column pre code .hljs-number,
+.paper-column pre code .hljs-literal {
+  color: #1d4ed8;
+}
+.paper-column pre code .hljs-comment,
+.paper-column pre code .hljs-meta {
+  color: var(--paper-ink-faint);
+  font-style: italic;
+}
+.paper-column pre code .hljs-title,
+.paper-column pre code .hljs-name,
+.paper-column pre code .hljs-function {
+  color: #92400e;
+}
+.paper-column pre code .hljs-tag,
+.paper-column pre code .hljs-attribute {
+  color: #5b21b6;
+}
+/* Dark theme — soft pastels on the catalog's deep-blue background. */
+.paper-column pre[data-theme="dark"] code .hljs-keyword,
+.paper-column pre[data-theme="dark"] code .hljs-built_in {
+  color: #fca5a5;
+}
+.paper-column pre[data-theme="dark"] code .hljs-string,
+.paper-column pre[data-theme="dark"] code .hljs-attr {
+  color: #86efac;
+}
+.paper-column pre[data-theme="dark"] code .hljs-number,
+.paper-column pre[data-theme="dark"] code .hljs-literal {
+  color: #93c5fd;
+}
+.paper-column pre[data-theme="dark"] code .hljs-comment,
+.paper-column pre[data-theme="dark"] code .hljs-meta {
+  color: #9ca3af;
+  font-style: italic;
+}
+.paper-column pre[data-theme="dark"] code .hljs-title,
+.paper-column pre[data-theme="dark"] code .hljs-name {
+  color: #fcd34d;
+}
+
+/* Heading anchor — `:target` is the URL-hash match. When a deep
+ * link lands on a heading, paint a soft accent strip beside it for
+ * one second so the reader can see where they landed. GitHub /
+ * Notion pattern, kept calm. */
+.paper-column :is(h1, h2, h3, h4, h5, h6):target {
+  scroll-margin-top: 24px;
+  position: relative;
+}
+.paper-column :is(h1, h2, h3, h4, h5, h6):target::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 0.25em;
+  bottom: 0.25em;
+  width: 3px;
+  background: var(--paper-accent-warm-rust);
+  border-radius: 2px;
+  animation: paper-target-flash 1200ms ease-out;
+}
+@keyframes paper-target-flash {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 0.55; }
+}
+
 /* Variant rendering — per-axis data-attrs emitted by withBlockChrome.
  * The hex values mirror `@portable-doc/core/tokens.ts` `tonePalette`
  * and `@portable-doc/variants/catalog.ts`'s `calloutSchema.resolve()`
