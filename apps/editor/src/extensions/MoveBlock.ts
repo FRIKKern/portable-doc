@@ -65,7 +65,14 @@ export const MoveBlock = Extension.create({
           // Cheap guard: anything that would no-op or crash returns
           // `false` so chained `.run()` short-circuits to "nothing
           // happened" rather than dispatching an empty transaction.
+          //
+          // Slot semantics — `toIdx === fromIdx + 1` is the identity
+          // case too: dropping a block onto the slot AFTER itself just
+          // puts it back where it was. The math below would produce a
+          // valid TX that recomputes to the original doc; the guard
+          // makes that explicit + skips the dispatch.
           if (fromIdx === toIdx) return false;
+          if (toIdx === fromIdx + 1) return false;
           if (fromIdx < 0 || fromIdx >= doc.childCount) return false;
           if (toIdx < 0 || toIdx > doc.childCount) return false;
 

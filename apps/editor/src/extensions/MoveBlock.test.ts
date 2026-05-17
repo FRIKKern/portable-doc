@@ -97,6 +97,16 @@ describe('moveBlock(fromIdx, toIdx) — the command', () => {
     expect(textOrder(editor)).toEqual(['A', 'B', 'C']);
   });
 
+  it('moveBlock(fromIdx, fromIdx + 1) returns false (slot identity)', () => {
+    // Slot semantics: dropping a block on the slot AFTER itself lands
+    // it back where it started. The command short-circuits this so the
+    // chained .run() doesn't dispatch an identity transaction.
+    const editor = track(mountThreeBlocks());
+    expect(editor.commands.moveBlock(0, 1)).toBe(false);
+    expect(editor.commands.moveBlock(1, 2)).toBe(false);
+    expect(textOrder(editor)).toEqual(['A', 'B', 'C']);
+  });
+
   it('moveBlock(0, doc.childCount) lands at the end (A,B,C → B,C,A)', () => {
     const editor = track(mountThreeBlocks());
     const ok = editor.commands.moveBlock(0, editor.state.doc.childCount);
