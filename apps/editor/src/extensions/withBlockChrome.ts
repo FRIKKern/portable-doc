@@ -2,8 +2,6 @@
  * withBlockChrome(extension): block-level paperflow adapter.
  *
  * Wraps a base TipTap Node so each instance is:
- *   - draggable as a unit (schema `draggable: true` → PM drag pipeline +
- *     `tiptap-extension-global-drag-handle`).
  *   - styled by paper.css via a `paper-block` class on the rendered
  *     element (added through the canonical TipTap `HTMLAttributes`
  *     option, so the schema's own `toDOM` shape stays in charge).
@@ -71,10 +69,14 @@ const VARIANT_AXES: Record<string, readonly string[]> = {
 
 /**
  * Wrap a base TipTap Node so every instance:
- *   1. is `draggable: true` at the schema level
- *   2. renders with `class="paper-block"` on its element
- *   3. carries an optional `variant` attribute (callout / code only),
+ *   1. renders with `class="paper-block"` on its element
+ *   2. carries an optional `variant` attribute (callout / code only),
  *      emitted as per-axis `data-*` attrs that paper.css selects on
+ *
+ * Drag is opt-in via the ⋮⋮ button in FloatingBlockChrome — see the
+ * comment on the returned spec below. We deliberately do NOT set
+ * schema `draggable: true` (it makes PM treat mousedown-and-drag on
+ * text as a block-drag, which steals text-select).
  */
 export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode {
   const blockType = baseExtension.name;
@@ -83,7 +85,14 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
   const axes = VARIANT_AXES[blockType] ?? [];
 
   return baseExtension.extend({
-    draggable: true,
+    // No schema-level `draggable: true`. ProseMirror's mousedown
+    // handler converts mousedown-and-drag on draggable-schema nodes
+    // into a NodeSelection drag — which fights text selection inside
+    // the block. The drag affordance lives on the ⋮⋮ button in
+    // FloatingBlockChrome (its HTML5 `draggable` attribute + an
+    // explicit onDragStart that calls view.serializeForClipboard).
+    // PM's drop machinery still applies the move at the drop site
+    // because our handler sets `view.dragging = { slice, move: true }`.
     addOptions() {
       // Merge the `paper-block` class into the base extension's
       // `HTMLAttributes` so the schema's natural toDOM shape paints it

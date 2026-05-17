@@ -27,11 +27,10 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import { mergeAttributes } from '@tiptap/core';
-// TrailingNode — inlined here (the community package pins
-// @tiptap/core@2 which conflicts at the type layer). Keeps an empty
-// paragraph at the doc's end so the writer can always click below
-// the last block. Universal Notion / Novel / Linear pattern.
-import { TrailingNode } from './TrailingNode.js';
+// TrailingNode is shipped INSIDE @tiptap/starter-kit (re-exported
+// from @tiptap/extensions). Don't add a second one — duplicate
+// extension names cause PM plugin chaos including selection
+// corruption. The StarterKit-shipped one is the canonical impl.
 import {
   Table,
   TableRow,
@@ -190,10 +189,9 @@ export function buildExtensions(
     // `textCounter` whitespace-splits the doc text, which matches
     // the previous behavior.
     CharacterCount,
-    // Always-empty trailing paragraph at the doc end. Notion / Novel
-    // / Linear canon — the writer can click below the last block and
-    // start typing without first having to position the caret.
-    TrailingNode,
+    // (TrailingNode — the always-empty trailing paragraph at the doc
+    // end — is shipped by StarterKit. Adding it here a second time
+    // was a duplicate plugin and corrupted text selection. Removed.)
     // Per-block placeholder text. Empty headings/lists/callouts get
     // their own hint instead of the generic "Start typing, or press /
     // for blocks."

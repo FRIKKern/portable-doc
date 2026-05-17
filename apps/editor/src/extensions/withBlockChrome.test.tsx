@@ -81,7 +81,7 @@ afterEach(() => cleanup());
 // ---------------------------------------------------------------------------
 
 describe('withBlockChrome — factory shape', () => {
-  it('returns a schema-draggable Node with NO NodeView (post-D+E canonical TipTap rendering)', () => {
+  it('returns a NodeView-less wrapper that does NOT set schema-level `draggable: true`', () => {
     const Wrapped = withBlockChrome(Paragraph);
     expect(Wrapped.name).toBe('paragraph');
     // Post-D+E: variant rendering is CSS-driven (per-axis data-attrs),
@@ -89,9 +89,13 @@ describe('withBlockChrome — factory shape', () => {
     // schema's natural toDOM shape paints the element directly.
     const hook = (Wrapped.config as { addNodeView?: unknown }).addNodeView;
     expect(hook).toBeUndefined();
-    // `draggable: true` lives on the extension config so PM's drag
-    // pipeline knows the whole node can be picked up as a unit.
-    expect((Wrapped.config as { draggable?: boolean }).draggable).toBe(true);
+    // Schema `draggable` is intentionally NOT set. PM converts
+    // mousedown-and-drag on draggable-schema nodes into a
+    // NodeSelection drag, which steals text-selection inside the
+    // block. The drag affordance lives on the ⋮⋮ button in
+    // FloatingBlockChrome (its HTML5 `draggable` + an explicit
+    // onDragStart that serializes via view.serializeForClipboard).
+    expect((Wrapped.config as { draggable?: boolean }).draggable).toBeUndefined();
   });
 
   it('preserves the base node name across diverse block types', () => {
@@ -228,27 +232,31 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     const topLevel = Array.from(surface!.children).filter((el) =>
       el.classList.contains('paper-block'),
     );
-    // welcome doc: heading + paragraph + callout + list = 4 top-level
-    // blocks; the TrailingNode extension appends one empty <p> at the
-    // end (since the doc ends in a list, not already a paragraph), so
-    // the rendered count is 5. The trailing slot is the universal
-    // Notion / Novel / Linear pattern.
-    expect(topLevel.length).toBe(5);
+    // welcome doc has 4 top-level blocks. StarterKit's TrailingNode
+    // appends an empty trailing paragraph on the first user
+    // transaction (not on mount — that's the canonical PM
+    // appendTransaction pattern), so the initial mount count is 4.
+    expect(topLevel.length).toBe(4);
   });
 
-  it('every wrapped extension carries the schema-level `draggable: true` flag (the global drag-handle reads this)', async () => {
+  it('top-level blocks do NOT carry `draggable=true` (text-select must work; drag is on the ⋮⋮ button only)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
-    // The schema-draggable flag surfaces in the rendered DOM as
-    // `draggable="true"` on the block element (PM's NodeView default
-    // toDOM reads the schema spec). Walk the top-level children and
-    // confirm.
     const topLevel = Array.from(surface!.children).filter((el) =>
       el.classList.contains('paper-block'),
     );
     expect(topLevel.length).toBeGreaterThan(0);
     topLevel.forEach((el) => {
+      // Atom/void blocks (e.g. <hr>) get `draggable=true` from PM
+      // anyway since they have no editable interior — that's fine,
+      // there's no text to select inside them. Skip those.
+      if (el.tagName === 'HR') return;
+      // For every other block (paragraph, heading, list, blockquote,
+      // codeblock), `draggable` must NOT be set. PM would convert
+      // mousedown-and-drag on the text to a NodeSelection drag,
+      // which would steal text-selection from the writer.
+      expect(el.getAttribute('draggable')).toBeNull();
       // `data-block-idx` is intentionally NOT written — the floating
       // chrome uses canonical PM APIs (`view.posAtCoords` with a
       // `view.posAtDOM` fallback) to find the target block.
