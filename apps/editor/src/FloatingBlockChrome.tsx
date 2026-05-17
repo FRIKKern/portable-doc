@@ -1,41 +1,35 @@
 /**
- * CW5 / T3b — Floating block-chrome cluster.
+ * BlockBubble — the ONE floating toolbar.
  *
- * Renders ONE floating cluster — `[ Label · variant chip · × ]  [ + ]` —
- * to the right of the global drag handle (a sibling element rendered by
- * `tiptap-extension-global-drag-handle`). Tracks the currently-hovered
- * top-level block via a single mousemove listener on the editor surface
- * so the cluster follows the writer's pointer with the canonical Notion /
- * BlockNote / Linear feel.
+ * Lives once per editor, positioned ABOVE the currently-active block
+ * (the block containing the caret/selection, or — when the editor
+ * isn't focused — the block under the pointer). Contains every
+ * block-level affordance and inline-format button in a single
+ * cluster, so the writer sees exactly one floating UI at a time:
  *
- * Why this file is now thin
- * -------------------------
- * The previous version (~455 LOC) also owned the drag handle button + its
- * dragstart wiring + the editor-level dragover/drop indicator painter. All
- * of that is now delegated to `tiptap-extension-global-drag-handle` (the
- * same extension Novel uses) — it renders a single `<div class="drag-handle"
- * data-drag-handle>` next to the editor's parent, positions it on
- * mousemove, owns the dragstart slice serialization, and lets PM's
- * built-in drop machinery handle the reorder. We render only the
- * additional affordances (label, variant chip, delete, "+" insert) and
- * position them as a sibling of the extension's handle.
+ *   [ ⋮⋮ ] [ B ] [ I ] [ </> ] [ link ] [ chip ] [ × ]
  *
- * Mouse tracking strategy (canonical ProseMirror)
- * ----------------------------------------------
- * - One `mousemove` listener on the editor's `.ProseMirror` surface.
- * - For each event we call `editor.view.posAtCoords({left, top})` to
- *   resolve the doc-position under the pointer, then walk up its
- *   resolution chain to find the top-level child index. No DOM contract
- *   leaks out of the NodeView — the cluster works on any node, whether
- *   we own its NodeView or not.
- * - The block's DOM element is fetched via `editor.view.nodeDOM(pos)`
- *   (canonical PM API) for `getBoundingClientRect()` positioning;
- *   the cluster sits to the LEFT of that rect, leaving room for the
- *   global drag-handle's 20px slot just to the cluster's right.
- * - 300ms hide hysteresis prevents flicker as the mouse crosses block
- *   boundaries or aims for a button.
+ *   ⋮⋮     draggable button — onDragStart sets a NodeSelection at the
+ *          active block's pos and serializes for clipboard so PM's
+ *          drop machinery can move the block.
+ *   B/I/</>/link
+ *          canonical inline format. Active state mirrors the editor's
+ *          mark state via useEditorState. Link button surfaces an
+ *          inline URL input when there's a non-empty selection.
+ *   chip   variant chip — renders only for blocks with catalog
+ *          entries (callout, code).
+ *   ×      delete block.
+ *
+ * Position is `top - bubble.height - 10` and `left = block.left`; the
+ * bubble floats just above the block's first line, flush to the
+ * block's left margin. Falls below the block when there's no room
+ * above (e.g. first heading at top of viewport).
+ *
+ * This replaces the v0.4-era split of `FormatBubble` (selection-anchored)
+ * + `FloatingBlockChrome` (gutter-anchored) — the user-requested
+ * shape is one toolbar.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import { NodeSelection } from 'prosemirror-state';
@@ -46,29 +40,67 @@ interface FloatingBlockChromeProps {
   editor: TipTapEditor | null;
 }
 
-/** Resolved info about the currently-hovered top-level block. */
 interface TargetBlock {
-  /** Top-level child index — derived from the resolved $pos. */
+  /** Top-level child index (0-based). */
   idx: number;
   /** TipTap node name at the top-level position. */
   blockType: string;
   /** Doc-position of the block node — the slot BEFORE the top-level child. */
   pos: number;
+  /** Where the target came from — drives subtle UX differences. */
+  source: 'selection' | 'hover';
 }
 
-/** Hide hysteresis — the cluster sticks around this long after the
- *  pointer leaves so the writer can chase a button without it
- *  evaporating mid-aim. 600ms is the noticeably-stable feel; tighter
- *  values flicker, looser feel laggy. */
+/** Hide hysteresis — applied only to hover-derived targets. Selection-
+ *  derived targets don't hide (the caret is in the doc, the bubble
+ *  stays). 600ms is the noticeably-stable feel; tighter values flicker,
+ *  looser feel laggy. */
 const HIDE_HYSTERESIS_MS = 600;
 
-/** Right-edge offset of the floating chrome from the block's left edge.
- *  The cluster contains its OWN drag handle (post-drop of the external
- *  global-drag-handle extension), so we just need a hairline 8px gap
- *  between the cluster and the block. */
-const CHROME_GAP_PX = 8;
+/** Vertical gap between the bubble and the block, in px. */
+const BUBBLE_GAP_PX = 10;
 
-/** Resolve the doc-position of the top-level block at idx `n`. */
+/** Inline-style URL validator — matches the StarterKit link config so
+ *  the chrome's link affordance only accepts the same URL shapes the
+ *  paste-handler would. */
+function isAllowedLink(href: string): boolean {
+  return /^https?:\/\//i.test(href) || /^mailto:/i.test(href);
+}
+
+/** Walk to the top-level child of the doc that contains `pos`. Returns
+ *  the index, block-pos (before the child), and node name. */
+function topLevelAtPos(
+  editor: TipTapEditor,
+  pos: number,
+): { idx: number; blockPos: number; blockType: string } | null {
+  if (pos < 0 || pos > editor.state.doc.content.size) return null;
+  const $pos = editor.state.doc.resolve(pos);
+  if ($pos.depth === 0) {
+    // Position is at the doc level itself. Use the previous top-level
+    // child (so a click between blocks lands on the block above the cursor).
+    const idx = Math.max(0, ($pos.index(0) || 1) - 1);
+    let i = 0;
+    let blockPos = 0;
+    let blockType = '';
+    editor.state.doc.forEach((node, offset) => {
+      if (i === idx) {
+        blockPos = offset;
+        blockType = node.type.name;
+      }
+      i += 1;
+    });
+    return blockType ? { idx, blockPos, blockType } : null;
+  }
+  const idx = $pos.index(0);
+  const blockPos = $pos.before(1);
+  const node = editor.state.doc.nodeAt(blockPos);
+  if (!node) return null;
+  return { idx, blockPos, blockType: node.type.name };
+}
+
+/** Resolve the doc-position of the top-level block at idx `n`. Used by
+ *  delete / variant / drag handlers that must re-resolve `pos` at
+ *  command-time (the cached `target.pos` can go stale across edits). */
 function topLevelBlockPos(editor: TipTapEditor, idx: number): number | null {
   let i = 0;
   let pos: number | null = null;
@@ -79,17 +111,9 @@ function topLevelBlockPos(editor: TipTapEditor, idx: number): number | null {
   return pos;
 }
 
-/** Resolve the top-level block under the pointer using canonical PM APIs.
- *  - `view.posAtCoords({left, top})` returns the doc position at the given
- *    viewport coordinates (or null if the point is outside the editable
- *    area — e.g. surface padding).
- *  - `state.doc.resolve(pos).index(0)` walks up to depth 0 (the doc node)
- *    and reports which top-level child contains that position.
- *
- *  Falls back to `view.posAtDOM(el, 0)` when posAtCoords yields nothing
- *  (jsdom/happy-dom doesn't run layout, so coord-based hit-testing returns
- *  null there; the DOM-based path still works on synthetic events). The
- *  fallback is the same canonical PM API — no `data-*` attribute walk. */
+/** Resolve the block under the pointer via canonical PM APIs. Falls
+ *  back to `view.posAtDOM(el, 0)` when posAtCoords yields nothing
+ *  (jsdom / happy-dom don't run layout). */
 function targetBlockFromEvent(
   editor: TipTapEditor,
   e: MouseEvent,
@@ -107,48 +131,112 @@ function targetBlockFromEvent(
     }
   }
   if (pos == null) return null;
-  if (pos < 0 || pos > editor.state.doc.content.size) return null;
-  const $pos = editor.state.doc.resolve(pos);
-  // Walk up to a top-level child of the doc. `$pos.depth === 0` means the
-  // position is at the doc level itself (between blocks) — skip.
-  if ($pos.depth === 0) return null;
-  const idx = $pos.index(0);
-  const blockPos = $pos.before(1);
-  const node = editor.state.doc.nodeAt(blockPos);
-  if (!node) return null;
-  return { idx, blockType: node.type.name, pos: blockPos };
+  const top = topLevelAtPos(editor, pos);
+  if (!top) return null;
+  return {
+    idx: top.idx,
+    blockType: top.blockType,
+    pos: top.blockPos,
+    source: 'hover',
+  };
 }
 
-/** Fetch the DOM element for the top-level block at `blockPos`. Uses the
- *  canonical `view.nodeDOM` API so the cluster works regardless of whether
- *  the block has a paperflow NodeView or a third-party one. */
+/** Fetch the DOM element for a top-level block at `blockPos`. Uses the
+ *  canonical `view.nodeDOM` API so this code path is independent of
+ *  paperflow's class naming. */
 function nodeDOMAt(editor: TipTapEditor, blockPos: number): HTMLElement | null {
   const dom = editor.view.nodeDOM(blockPos);
   return dom instanceof HTMLElement ? dom : null;
 }
 
+/** Lucide-style link glyph; mirrors the previous FormatBubble icon. */
+function LinkIcon(): JSX.Element {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
+    >
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+    </svg>
+  );
+}
+
 export function FloatingBlockChrome({
   editor,
 }: FloatingBlockChromeProps): JSX.Element | null {
-  const [target, setTarget] = useState<TargetBlock | null>(null);
+  const [hoverTarget, setHoverTarget] = useState<TargetBlock | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(
     null,
   );
   const [chromeHovered, setChromeHovered] = useState(false);
   const hideTimerRef = useRef<number | undefined>(undefined);
   const chromeElRef = useRef<HTMLDivElement | null>(null);
-  // Subscribe to the editor's selection-empty state via the canonical
-  // TipTap 3 `useEditorState` pattern — when the writer has a non-empty
-  // selection, BubbleMenu owns the floating layer and we must hide.
-  // The library shallow-compares the boolean and only re-renders when
-  // it actually flips, which is cheaper than the previous
-  // `editor.on('selectionUpdate'/'update', …) + setState` pair.
-  // Defaults to `true` while the editor is mounting (no flicker before
-  // first selection).
-  const selectionEmpty = useEditorState({
+
+  // Inline-link UI state — when the writer clicks the link button,
+  // toggle to an inline URL input. Mirrors the previous FormatBubble
+  // affordance, ported into the unified bubble.
+  const [linkMode, setLinkMode] = useState<'closed' | 'editing'>('closed');
+  const [linkValue, setLinkValue] = useState('');
+  const linkInputRef = useRef<HTMLInputElement | null>(null);
+
+  // ONE selector that captures everything the bubble needs from the
+  // editor state — top-level block index at the caret, the mark
+  // states, selection emptiness, focused flag. useEditorState only
+  // re-renders on shallow-changes, so this is cheap.
+  const stateInfo = useEditorState({
     editor,
-    selector: ({ editor: e }) => (e ? e.state.selection.empty : true),
-  }) ?? true;
+    selector: ({ editor: e }) => {
+      if (!e) {
+        return {
+          selectionTarget: null as TargetBlock | null,
+          selectionEmpty: true,
+          isFocused: false,
+          isInTable: false,
+          bold: false,
+          italic: false,
+          code: false,
+          link: false,
+        };
+      }
+      const { from } = e.state.selection;
+      const top = topLevelAtPos(e, from);
+      return {
+        selectionTarget: top
+          ? ({
+              idx: top.idx,
+              blockType: top.blockType,
+              pos: top.blockPos,
+              source: 'selection' as const,
+            } satisfies TargetBlock)
+          : null,
+        selectionEmpty: e.state.selection.empty,
+        isFocused: e.isFocused,
+        // Table cells have their own contextual bubble (TableMenu); the
+        // block-level bubble would fight it inside tables.
+        isInTable: e.isActive('tableCell') || e.isActive('tableHeader'),
+        bold: e.isActive('bold'),
+        italic: e.isActive('italic'),
+        code: e.isActive('code'),
+        link: e.isActive('link'),
+      };
+    },
+  });
+
+  // Active target: selection wins when the editor is focused; hover
+  // is the fallback so the bubble can preview a block before the
+  // caret lands there.
+  const target: TargetBlock | null = stateInfo.isFocused
+    ? stateInfo.selectionTarget
+    : (hoverTarget ?? stateInfo.selectionTarget);
 
   // Cached node attrs at the target block — drives the variant chip.
   const [targetAttrs, setTargetAttrs] = useState<Record<string, unknown> | null>(
@@ -165,15 +253,13 @@ export function FloatingBlockChrome({
   const scheduleHide = useCallback((): void => {
     clearHideTimer();
     hideTimerRef.current = window.setTimeout(() => {
-      setTarget(null);
-      setPosition(null);
-      setTargetAttrs(null);
+      setHoverTarget(null);
       hideTimerRef.current = undefined;
     }, HIDE_HYSTERESIS_MS);
   }, [clearHideTimer]);
 
-  // Recompute the cached node attrs whenever the target's idx changes
-  // (and on any editor transaction that may have changed the node).
+  // Recompute cached attrs on every editor transaction that may have
+  // changed the active block.
   useEffect(() => {
     if (!editor || !target) {
       setTargetAttrs(null);
@@ -195,11 +281,7 @@ export function FloatingBlockChrome({
     };
   }, [editor, target]);
 
-  // Reposition the chrome whenever target changes or the editor scrolls /
-  // is resized. Fetches the block's DOM via `view.nodeDOM(blockPos)` — the
-  // canonical PM API that works for any node regardless of which NodeView
-  // (if any) owns it. We use `fixed` positioning so the rect's left/top
-  // are usable directly against the viewport.
+  // Reposition above the block whenever the target or layout changes.
   const reposition = useCallback((): void => {
     if (!editor || !target || !chromeElRef.current) {
       setPosition(null);
@@ -210,23 +292,23 @@ export function FloatingBlockChrome({
       setPosition(null);
       return;
     }
-    const wrapperRect = blockDOM.getBoundingClientRect();
+    const blockRect = blockDOM.getBoundingClientRect();
     const chromeRect = chromeElRef.current.getBoundingClientRect();
-    const chromeWidth = chromeRect.width > 0 ? chromeRect.width : 160;
-    const chromeHeight = chromeRect.height > 0 ? chromeRect.height : 28;
-    const left = wrapperRect.left - chromeWidth - CHROME_GAP_PX;
-    const top = wrapperRect.top + Math.max(0, (wrapperRect.height - chromeHeight) / 2);
+    const chromeHeight = chromeRect.height > 0 ? chromeRect.height : 36;
+    // Default: above the block. Fall below if there isn't room above.
+    let top = blockRect.top - chromeHeight - BUBBLE_GAP_PX;
+    if (top < 8) top = blockRect.bottom + BUBBLE_GAP_PX;
+    const left = blockRect.left;
     setPosition({ top, left });
   }, [editor, target]);
 
-  // Recompute position whenever target changes, after the chrome has
-  // rendered (so chromeElRef has its measured width).
-  useEffect(() => {
+  // Reposition AFTER paint so chrome has a measured size. useLayoutEffect
+  // prevents a flicker where the bubble is briefly off-screen on first
+  // render.
+  useLayoutEffect(() => {
     reposition();
   }, [reposition, targetAttrs]);
 
-  // Reposition on scroll + resize. Bound to window in capture phase so
-  // nested scroll containers also fire it.
   useEffect(() => {
     if (!target) return;
     const onScrollOrResize = (): void => reposition();
@@ -238,9 +320,9 @@ export function FloatingBlockChrome({
     };
   }, [target, reposition]);
 
-  // The main mousemove tracker — bound on the editor surface root.
-  // Resolution is canonical PM (`view.posAtCoords` with a `view.posAtDOM`
-  // fallback for layout-less test envs); see `targetBlockFromEvent` above.
+  // Hover tracking — drives the fallback target when the editor isn't
+  // focused. When focused, the selection-target wins and hover is
+  // effectively ignored.
   useEffect(() => {
     if (!editor) return;
     const surface = editor.view.dom as HTMLElement;
@@ -248,13 +330,11 @@ export function FloatingBlockChrome({
     const processEvent = (e: MouseEvent): void => {
       const next = targetBlockFromEvent(editor, e);
       if (!next) {
-        // Outside any block — schedule hide unless the mouse is over
-        // the chrome itself.
         if (!chromeHovered) scheduleHide();
         return;
       }
       clearHideTimer();
-      setTarget((prev) => {
+      setHoverTarget((prev) => {
         if (
           prev &&
           prev.idx === next.idx &&
@@ -279,11 +359,19 @@ export function FloatingBlockChrome({
     };
   }, [editor, chromeHovered, clearHideTimer, scheduleHide]);
 
-  // Cleanup hide timer on unmount.
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
-  // Variant chip change handler — merges new axes into the target
-  // block's `variant` attr via setNodeMarkup at its current position.
+  // Pre-fill the URL input when entering link mode.
+  useEffect(() => {
+    if (linkMode === 'editing' && editor) {
+      const href = editor.getAttributes('link')?.href as string | undefined;
+      setLinkValue(typeof href === 'string' ? href : '');
+      queueMicrotask(() => linkInputRef.current?.focus());
+    }
+  }, [linkMode, editor]);
+
+  // -------- Block-level actions ---------------------------------------
+
   const onVariantChange = useCallback(
     (next: Record<string, string>): void => {
       if (!editor || !target) return;
@@ -314,24 +402,11 @@ export function FloatingBlockChrome({
       const liveNode = editor.state.doc.nodeAt(pos);
       if (!liveNode) return;
       editor.commands.deleteRange({ from: pos, to: pos + liveNode.nodeSize });
-      setTarget(null);
-      setPosition(null);
+      setHoverTarget(null);
     },
     [editor, target],
   );
 
-  // Drag the target block via the cluster's own ⋮⋮ handle. Replaces
-  // the external `tiptap-extension-global-drag-handle` — one cluster,
-  // one drag affordance, no floating-handle-vs-floating-chrome split
-  // and no separate hit area to confuse text-select intent.
-  //
-  // Canonical PM pattern:
-  //   1. Set a NodeSelection at the block's position.
-  //   2. Get the slice's clipboard form via view.serializeForClipboard.
-  //   3. Stash both `slice` and `move: true` on view.dragging so PM's
-  //      drop machinery applies them at the drop site.
-  // PM's prosemirror-dropcursor (registered via StarterKit) paints
-  // the drop indicator during the drag.
   const handleDragStart = useCallback(
     (e: React.DragEvent<HTMLButtonElement>): void => {
       if (!editor || !target || !e.dataTransfer) return;
@@ -347,60 +422,76 @@ export function FloatingBlockChrome({
       e.dataTransfer.setData('text/html', dom.innerHTML);
       e.dataTransfer.setData('text/plain', text);
       e.dataTransfer.effectAllowed = 'copyMove';
-      // PM uses `view.dragging` as the source of truth for what's
-      // being dragged; without setting it the drop side falls back
-      // to clipboard data and loses block-move semantics.
       (view as unknown as { dragging: { slice: typeof slice; move: boolean } })
         .dragging = { slice, move: true };
-      // Hide chrome during the drag so it doesn't follow the cursor.
-      setTarget(null);
-      setPosition(null);
+      setHoverTarget(null);
     },
     [editor, target],
   );
 
-  // Read the live block type so the variant chip + screen-reader labels
-  // use the freshest node info (heading level may change without
-  // target.idx changing).
+  // -------- Inline-mark commands --------------------------------------
+
+  const toggleBold = useCallback(() => {
+    editor?.chain().focus().toggleBold().run();
+  }, [editor]);
+  const toggleItalic = useCallback(() => {
+    editor?.chain().focus().toggleItalic().run();
+  }, [editor]);
+  const toggleCode = useCallback(() => {
+    editor?.chain().focus().toggleCode().run();
+  }, [editor]);
+
+  const applyLink = useCallback((): void => {
+    if (!editor) return;
+    const href = linkValue.trim();
+    if (!href || !isAllowedLink(href)) {
+      setLinkMode('closed');
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
+    setLinkMode('closed');
+  }, [editor, linkValue]);
+
+  const removeLink = useCallback((): void => {
+    if (!editor) return;
+    editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    setLinkMode('closed');
+  }, [editor]);
+
+  const onLinkButton = useCallback((): void => {
+    setLinkMode((prev) => (prev === 'editing' ? 'closed' : 'editing'));
+  }, []);
+
+  // -------- Render ---------------------------------------------------
+
   const blockType = target?.blockType ?? 'paragraph';
   const pdType = useMemo(() => pdBlockTypeFor(blockType), [blockType]);
-
   const headingLevel =
     blockType === 'heading' && targetAttrs
       ? Number(targetAttrs.level ?? 1)
       : null;
   const baseLabel = humanLabelFor(blockType);
-  // Screen-reader-only label string (e.g. "heading 2", "callout"). Used
-  // by the delete button's aria-label so SR users still hear which block
-  // type is being acted on. The label is never rendered visually —
-  // Notion / Novel / BlockNote don't show a type label by default, and
-  // it's noise for sighted writers.
   const lower =
     (headingLevel != null && Number.isFinite(headingLevel)
       ? `${baseLabel} ${headingLevel}`
       : baseLabel
     ).toLowerCase();
 
-  // Visibility: chrome is mounted at all times (so refs work) but
-  // hidden when there's no target, when a text selection is active, or
-  // when the editor isn't ready.
-  const visible =
-    editor != null && target != null && selectionEmpty;
+  const visible = editor != null && target != null && !stateInfo.isInTable;
+  // Link button is disabled when there's nothing to mark (and no
+  // existing link to edit at the caret).
+  const linkActionable = !stateInfo.selectionEmpty || stateInfo.link;
 
   return (
     <div
       ref={chromeElRef}
       className={
-        'paper-floating-chrome' +
-        (visible ? ' is-tracking' : '')
+        'paper-floating-chrome' + (visible ? ' is-tracking' : '')
       }
       data-block-type={target?.blockType}
       role="toolbar"
       aria-label="Block toolbar"
       aria-hidden={!visible}
-      // `contentEditable={false}` keeps the floating chrome out of
-      // ProseMirror's text-selection / drag-handling scope so mousedowns
-      // on the delete + insert buttons reliably reach OUR handlers.
       contentEditable={false}
       suppressContentEditableWarning
       style={
@@ -426,20 +517,105 @@ export function FloatingBlockChrome({
         className="paper-block__drag-handle"
         aria-label={`Drag ${lower}`}
         title="Drag to reorder"
-        // HTML5 draggable on this button is the canonical pattern for
-        // initiating a node-drag — onDragStart runs our serializer,
-        // PM's drop machinery handles the rest.
         draggable
         data-drag-handle
         onDragStart={handleDragStart}
       >
         ⋮⋮
       </button>
+      <span className="paper-format-bubble__sep" aria-hidden="true" />
+      <button
+        type="button"
+        className={
+          'paper-format-bubble__btn paper-format-bubble__btn--bold' +
+          (stateInfo.bold ? ' paper-format-bubble__btn--active' : '')
+        }
+        aria-label="Bold"
+        aria-pressed={stateInfo.bold}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleBold}
+      >
+        B
+      </button>
+      <button
+        type="button"
+        className={
+          'paper-format-bubble__btn paper-format-bubble__btn--italic' +
+          (stateInfo.italic ? ' paper-format-bubble__btn--active' : '')
+        }
+        aria-label="Italic"
+        aria-pressed={stateInfo.italic}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleItalic}
+      >
+        I
+      </button>
+      <button
+        type="button"
+        className={
+          'paper-format-bubble__btn paper-format-bubble__btn--code' +
+          (stateInfo.code ? ' paper-format-bubble__btn--active' : '')
+        }
+        aria-label="Inline code"
+        aria-pressed={stateInfo.code}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleCode}
+      >
+        {'</>'}
+      </button>
+      <button
+        type="button"
+        className={
+          'paper-format-bubble__btn paper-format-bubble__btn--link' +
+          (stateInfo.link ? ' paper-format-bubble__btn--active' : '')
+        }
+        aria-label={stateInfo.link ? 'Edit or remove link' : 'Link'}
+        aria-pressed={stateInfo.link}
+        data-link-state={stateInfo.link ? 'linked' : 'unlinked'}
+        disabled={!linkActionable}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onLinkButton}
+      >
+        <LinkIcon />
+      </button>
+      {linkMode === 'editing' && linkActionable ? (
+        <div className="paper-format-bubble__link-row" data-testid="bubble-link-row">
+          <input
+            ref={linkInputRef}
+            type="url"
+            className="paper-format-bubble__link-input"
+            aria-label="Link URL"
+            placeholder="https://"
+            value={linkValue}
+            onChange={(e) => setLinkValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                applyLink();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setLinkMode('closed');
+              }
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          />
+          {stateInfo.link ? (
+            <button
+              type="button"
+              className="paper-format-bubble__link-remove"
+              aria-label="Remove link"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={removeLink}
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <span className="paper-format-bubble__sep" aria-hidden="true" />
       <div className="paper-block__variant-slot">
         {pdType !== null && target && targetAttrs ? (
           <VariantChip
-            // Re-key by target idx so the chip's local state (`open`,
-            // hover) resets when the writer hops to a different block.
             key={`${target.idx}-${blockType}`}
             blockType={pdType}
             attrs={targetAttrs}

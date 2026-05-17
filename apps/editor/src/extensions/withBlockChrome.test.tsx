@@ -370,7 +370,12 @@ describe('Editor integration — paper-block + single floating chrome', () => {
   // menu (`/`) is the canonical insert path and the chrome no longer
   // duplicates it. The previous insert test lived here.
 
-  it('floating chrome hides when a non-empty selection is active (BubbleMenu wins)', async () => {
+  it('floating chrome STAYS visible during a non-empty selection (format buttons act on the selection)', async () => {
+    // Post-unification: the bubble owns inline format (B/I/code/link)
+    // alongside the block-level affordances, so it deliberately does
+    // NOT hide on selection — the writer needs the buttons while
+    // text is selected. The earlier behavior (hide on selection so
+    // the separate FormatBubble could take over) is gone.
     let captured: import('@tiptap/react').Editor | null = null;
     render(
       <Editor
@@ -382,10 +387,6 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     );
     await new Promise<void>((r) => setTimeout(r, 0));
     const editor = captured!;
-    // Adopt block 0.
-    // First top-level `.paper-block` — direct child of the editor
-    // surface (paper-block lands on every wrapped node via
-    // HTMLAttributes, so we scope by direct child for top-level).
     const firstBlock = Array.from(editor.view.dom.children).find((el) =>
       el.classList?.contains('paper-block'),
     ) as HTMLElement | undefined;
@@ -401,9 +402,9 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     const chrome = document.querySelector('.paper-floating-chrome') as HTMLElement;
     expect(chrome.classList.contains('is-tracking')).toBe(true);
 
-    // Select the whole doc — selection becomes non-empty.
     editor.commands.selectAll();
     await new Promise<void>((r) => setTimeout(r, 0));
-    expect(chrome.classList.contains('is-tracking')).toBe(false);
+    // Stays visible — format buttons are inside the bubble now.
+    expect(chrome.classList.contains('is-tracking')).toBe(true);
   });
 });

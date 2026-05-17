@@ -41,7 +41,6 @@ import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapJson } from './lib/portable-doc-to-tiptap-json.js';
 import { tiptapToPortableDoc } from './lib/tiptap-to-portable-doc.js';
 import { buildExtensions } from './extensions/index.js';
-import { FormatBubble } from './FormatBubble.js';
 import { TableMenu } from './TableMenu.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
 import { FloatingBlockChrome } from './FloatingBlockChrome.js';
@@ -250,41 +249,11 @@ export function Editor({
     <div className="paper-editor" data-testid="paper-editor">
       <EditorContent editor={editor} />
       {editor ? (
-        // A4 — inline format BubbleMenu. The @tiptap/react substrate owns
-        // floating-element positioning and show/hide; FormatBubble owns the
-        // toolbar UI (B/I/code/link + inline URL input).
-        //
-        // `shouldShow` filter: providing a custom callback REPLACES TipTap's
-        // default (which checks selection-empty + editor focus). We add
-        // contextual guards on top:
-        //   - code blocks: no inline marks apply inside; the bubble
-        //     would offer disabled-looking buttons.
-        //   - tables: the bubble overlaps cell text awkwardly and the
-        //     formatting buttons fight cell-selection semantics.
-        // Plus the basic safety checks the default would have made:
-        //   - empty selection (nothing to format)
-        //   - non-editable editor
-        <BubbleMenu
-          editor={editor}
-          shouldShow={({ editor: e, state }) => {
-            if (state.selection.empty) return false;
-            if (!e.isEditable) return false;
-            if (e.isActive('codeBlock')) return false;
-            if (e.isActive('tableCell') || e.isActive('tableHeader')) return false;
-            return true;
-          }}
-        >
-          <FormatBubble editor={editor} />
-        </BubbleMenu>
-      ) : null}
-      {editor ? (
         // Table BubbleMenu — surfaces row / column / table actions
-        // whenever the caret sits in a cell. Uses the same @tiptap/react
-        // floating substrate as FormatBubble; the two never co-mount
-        // because their `shouldShow` predicates are mutually exclusive
-        // (FormatBubble bails on table cells; this menu requires one).
-        // `pluginKey` distinguishes the two bubble plugins so PM doesn't
-        // see a duplicate key when both extensions register.
+        // whenever the caret sits in a cell. The block-level toolbar
+        // (FloatingBlockChrome below) intentionally yields to this
+        // contextual menu inside tables — table cells have their own
+        // structural shape that doesn't fit the block-bubble.
         <BubbleMenu
           editor={editor}
           pluginKey="tableMenu"
