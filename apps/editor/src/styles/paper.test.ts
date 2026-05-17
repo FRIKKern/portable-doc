@@ -111,6 +111,11 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
           // by the table plugin). Used by our `.ProseMirror .selectedCell`
           // rule for the cell-focus accent.
           c !== '.selectedCell' &&
+          // prosemirror-tables' column-resize plugin classes — the handle
+          // strip on a cell's right edge, and the editor-surface class
+          // toggled during an active drag.
+          c !== '.column-resize-handle' &&
+          c !== '.resize-cursor' &&
           // `@tiptap/extension-placeholder` sets `.is-empty` on the empty
           // first-current top-level node. Our placeholder hint rule keys
           // off this third-party class in the `.ProseMirror` scope.

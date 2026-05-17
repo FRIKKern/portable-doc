@@ -287,6 +287,24 @@
   outline-offset: -1px;
 }
 
+/* prosemirror-tables column-resize: a thin grab strip on the right
+ * edge of each cell that the writer drags to set column width. Only
+ * appears mid-hover (handled by the plugin). `.resize-cursor` is
+ * added to the editor surface during an active drag so the cursor
+ * stays as col-resize across the whole page. */
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--paper-accent-warm-rust);
+  pointer-events: none;
+}
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
 /* Table BubbleMenu — same floating shell as FormatBubble (`.paper-
  * format-bubble` rules apply), with a danger-tinted variant for the
  * three delete actions so the writer can tell at a glance which side

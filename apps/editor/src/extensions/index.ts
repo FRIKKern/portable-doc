@@ -91,9 +91,11 @@ export function buildExtensions(
     withBlockChrome(CodeBlock),
     withBlockChrome(HorizontalRule),
     // Table needs all four nodes registered together — Table contains
-    // TableRow, which contains TableCell/TableHeader. `resizable: false`
-    // keeps v0.4 minimum scope; column resize is v0.5.
-    Table.configure({ resizable: false }),
+    // TableRow, which contains TableCell/TableHeader. `resizable: true`
+    // turns on prosemirror-tables' canonical column-resize handles —
+    // a thin grab strip on each column's right edge that the writer
+    // drags to set width. No paperflow chrome involved.
+    Table.configure({ resizable: true }),
     TableRow,
     TableHeader,
     TableCell,
