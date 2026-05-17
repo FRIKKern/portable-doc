@@ -75,6 +75,7 @@ import { withBlockChrome } from './extensions/withBlockChrome.js';
 import { SlashCommand } from './extensions/SlashCommand.js';
 import { MoveBlock } from './extensions/MoveBlock.js';
 import { FormatBubble } from './FormatBubble.js';
+import { TableMenu } from './TableMenu.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
 import { FloatingBlockChrome } from './FloatingBlockChrome.js';
 
@@ -188,6 +189,11 @@ export function Editor({
       // Table needs all four nodes registered together — Table contains
       // TableRow, which contains TableCell/TableHeader. `resizable: false`
       // keeps v0.4 minimum scope — column resize is v0.5.
+      //
+      // Tab-extends-row: `@tiptap/extension-table@3.23.4+` already ships
+      // the canonical Notion / Novel keymap — Tab tries `goToNextCell()`
+      // first and falls through to `addRowAfter()` when at the last cell.
+      // No override needed; trust the upstream behavior.
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
@@ -408,6 +414,25 @@ export function Editor({
           }}
         >
           <FormatBubble editor={editor} />
+        </BubbleMenu>
+      ) : null}
+      {editor ? (
+        // Table BubbleMenu — surfaces row / column / table actions
+        // whenever the caret sits in a cell. Uses the same @tiptap/react
+        // floating substrate as FormatBubble; the two never co-mount
+        // because their `shouldShow` predicates are mutually exclusive
+        // (FormatBubble bails on table cells; this menu requires one).
+        // `pluginKey` distinguishes the two bubble plugins so PM doesn't
+        // see a duplicate key when both extensions register.
+        <BubbleMenu
+          editor={editor}
+          pluginKey="tableMenu"
+          shouldShow={({ editor: e }) => {
+            if (!e.isEditable) return false;
+            return e.isActive('table');
+          }}
+        >
+          <TableMenu editor={editor} />
         </BubbleMenu>
       ) : null}
       {/* A10 — soft margin notes in the right gutter (≥768px) or inline

@@ -32,7 +32,7 @@ export const COMMANDS: readonly SlashCommand[] = [
   { type: 'divider', label: 'Divider', hint: 'horizontal rule' },
   { type: 'code', label: 'Code', hint: 'syntax-highlighted block' },
   { type: 'image', label: 'Image', hint: 'web/native only' },
-  { type: 'table', label: 'Table', hint: 'web/native only' },
+  { type: 'table', label: 'Table', hint: 'Tab to navigate · menu for rows/cols' },
 ];
 
 export function filterCommands(query: string): readonly SlashCommand[] {

@@ -287,6 +287,24 @@
   outline-offset: -1px;
 }
 
+/* Table BubbleMenu — same floating shell as FormatBubble (`.paper-
+ * format-bubble` rules apply), with a danger-tinted variant for the
+ * three delete actions so the writer can tell at a glance which side
+ * of the toolbar removes structure. The toolbar wraps to a second
+ * row on narrow viewports so the eight buttons + separators don't
+ * overflow the column. */
+.paper-table-menu {
+  flex-wrap: wrap;
+  max-width: min(440px, calc(100vw - 32px));
+}
+.paper-table-menu__danger:hover:not(:disabled) {
+  color: var(--paper-accent-warm-rust);
+  background: var(--paper-accent-soft);
+}
+.paper-table-menu__danger:disabled {
+  opacity: 0.4;
+}
+
 /* Image (slash menu → "Image"). The extension renders `<img>` with the
  * `.paper-block__image` class we configure in Editor.tsx. Scales to the
  * column width, preserves aspect ratio, gets a faint frame so a misload
