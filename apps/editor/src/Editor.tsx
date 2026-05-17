@@ -58,6 +58,14 @@ import {
 } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import Typography from '@tiptap/extension-typography';
+// CW5 / T3b — the canonical Tiptap floating drag handle (what Novel uses).
+// Renders ONE `<div class="drag-handle" data-drag-handle>` next to the
+// editor's parent and positions it on mousemove. Drives PM's built-in
+// drag pipeline (NodeSelection → slice serialize → drop). Companion
+// `tiptap-extension-auto-joiner` auto-joins adjacent lists after a
+// drag-reorder so dragging a list item between two lists merges them.
+import GlobalDragHandle from 'tiptap-extension-global-drag-handle';
+import AutoJoiner from 'tiptap-extension-auto-joiner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
@@ -185,6 +193,19 @@ export function Editor({
       }),
       SlashCommand,
       MoveBlock,
+      // CW5 / T3b — the global drag handle owns the `⋮⋮` glyph + dragstart
+      // wiring. `dragHandleWidth: 20` matches the visual slot the cluster
+      // reserves to its right (CHROME_GAP_PX in FloatingBlockChrome).
+      // `scrollTreshold: 100` mirrors Novel's default — start auto-scroll
+      // when the drag pointer is within 100px of the viewport edge.
+      GlobalDragHandle.configure({
+        dragHandleWidth: 20,
+        scrollTreshold: 100,
+      }),
+      // Auto-joins adjacent lists after a drag-reorder so dragging a list
+      // item out of List A and adjacent to List B merges them. Stateless,
+      // no config needed.
+      AutoJoiner,
       // Typography — transforms input on the fly: straight quotes become
       // curly ("foo" → “foo”, 'bar' → ‘bar’), `--` collapses to an em-dash,
       // `...` to a horizontal ellipsis, `(c)` to ©, etc. Smart-quote handling

@@ -118,7 +118,14 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
           // `@tiptap/react`'s ReactRenderer wraps each NodeView in
           // `<div class="react-renderer node-<type>">`. Our placeholder
           // hint targets `.react-renderer.is-empty[data-placeholder]`.
-          c !== '.react-renderer',
+          c !== '.react-renderer' &&
+          // `tiptap-extension-global-drag-handle` renders the handle
+          // with a fixed `.drag-handle` class (and toggles `.hide` to
+          // dismiss it). We style both here without renaming — those
+          // are the canonical hooks Novel and other community editors
+          // also style.
+          c !== '.drag-handle' &&
+          c !== '.hide',
       );
 
     for (const cls of userClasses) {

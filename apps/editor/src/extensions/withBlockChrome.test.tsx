@@ -3,10 +3,15 @@
  *
  * A2 — block-chrome via TipTap NodeView.
  *
- * Post-CW5: the per-block embedded chrome toolbar is gone. Each NodeView
- * renders just `.paper-block` with `data-block-type` + `data-block-idx`;
- * a single floating cluster (`FloatingBlockChrome`) tracks the currently-
- * hovered block via mouse coordinates. Tests assert the new contract:
+ * Post-CW5 / T3b: the per-block embedded chrome toolbar is gone. Each
+ * NodeView renders just `.paper-block` with `data-block-type` +
+ * `data-block-idx`; the drag handle is owned by the mainstream
+ * `tiptap-extension-global-drag-handle` (Novel's choice) and renders as a
+ * single `<div class="drag-handle" data-drag-handle>` next to the editor.
+ * Our React-owned cluster (`.paper-floating-chrome`) carries the
+ * remaining affordances (label / variant chip / delete / "+" insert),
+ * positioned as a sibling of the global handle. Tests assert that
+ * contract:
  *
  *   1. `withBlockChrome(Paragraph)` returns an extension whose NodeView
  *      hook (`addNodeView`) is defined.
@@ -14,8 +19,9 @@
  *      in `.paper-block` carrying `data-block-type` + `data-block-idx`.
  *   3. Exactly one `.paper-floating-chrome` lives in the editor mount
  *      (Notion/BlockNote/Linear pattern, not N-per-block).
- *   4. The floating chrome carries the drag handle, label, variant slot,
- *      delete, and "+" insert as a single cluster.
+ *   4. The floating chrome carries label, variant slot, delete, and "+"
+ *      insert as a single cluster (drag handle is the global extension's
+ *      sibling div, NOT inside the cluster).
  *   5. Delete button on the floating chrome removes the targeted block.
  *   6. "+" insert button inserts a paragraph below the target block.
  *   7. Block-chrome CSS still reads the motion-fade-in token (animation
@@ -54,6 +60,16 @@ beforeAll(() => {
         top: 0, left: 0, right: 0, bottom: 0,
         toJSON: () => ({}),
       }),
+      configurable: true,
+    });
+  }
+  // happy-dom doesn't implement `document.elementsFromPoint`. The global
+  // drag-handle extension calls it on every editor `mousemove` to find
+  // the block under the pointer. The shim returns an empty array which
+  // is safe — the extension hides its handle when no node is found.
+  if (typeof (document as Document).elementsFromPoint !== 'function') {
+    Object.defineProperty(document, 'elementsFromPoint', {
+      value: () => [] as Element[],
       configurable: true,
     });
   }
@@ -188,11 +204,13 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
-    // Zero per-block chrome toolbars / inserts / drag handles inside the
-    // PM surface — they all moved to the single floating cluster.
+    // Zero per-block chrome toolbars / inserts / handles inside the
+    // PM surface — they all moved to the single floating cluster (and
+    // the global drag handle lives next to the editor's parent, not
+    // inside the surface).
     expect(surface!.querySelectorAll('.paper-block__chrome').length).toBe(0);
     expect(surface!.querySelectorAll('.paper-block__insert').length).toBe(0);
-    expect(surface!.querySelectorAll('.paper-block-drag-handle').length).toBe(0);
+    expect(surface!.querySelectorAll('[data-drag-handle]').length).toBe(0);
     expect(surface!.querySelectorAll('.paper-block-delete').length).toBe(0);
   });
 
@@ -205,17 +223,35 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(clusters.length).toBe(1);
   });
 
-  it('the floating chrome carries drag handle, label, variant slot, delete, and "+" insert', async () => {
+  it('the floating chrome carries label, variant slot, delete, and "+" insert (drag handle lives outside, owned by global-drag-handle)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const mount = screen.getByTestId('paper-editor');
     const chrome = mount.querySelector('.paper-floating-chrome');
     expect(chrome).toBeTruthy();
-    expect(chrome!.querySelector('.paper-block-drag-handle')).toBeTruthy();
+    // Drag handle is NOT a child of the cluster — the global extension
+    // renders its own `<div class="drag-handle" data-drag-handle>` as a
+    // sibling of the editor (positioned with inline top/left on
+    // mousemove). Cluster owns the remaining affordances.
+    expect(chrome!.querySelector('[data-drag-handle]')).toBeFalsy();
     expect(chrome!.querySelector('.paper-block__label')).toBeTruthy();
     expect(chrome!.querySelector('.paper-block__variant-slot')).toBeTruthy();
     expect(chrome!.querySelector('.paper-block-delete')).toBeTruthy();
     expect(chrome!.querySelector('.paper-block__insert')).toBeTruthy();
+  });
+
+  it('the global drag handle div (`data-drag-handle`) is rendered as a sibling of the editor', async () => {
+    render(<Editor doc={welcomeFixture} />);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    // Allow the global-drag-handle plugin's `view()` hook to run, which
+    // appends the handle to `view.dom.parentElement` (one tick after the
+    // editor instance is created).
+    await new Promise<void>((r) => setTimeout(r, 0));
+    // The handle lives at document scope (it's appended to the editor's
+    // parent element, not inside the editor mount), so we query
+    // `document` rather than the mount.
+    const handles = document.querySelectorAll('[data-drag-handle]');
+    expect(handles.length).toBeGreaterThanOrEqual(1);
   });
 
   it('floating-chrome delete button removes the targeted block when fired against a block', async () => {

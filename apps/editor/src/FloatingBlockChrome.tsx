@@ -1,47 +1,42 @@
 /**
- * CW5 — Floating block chrome.
+ * CW5 / T3b — Floating block-chrome cluster.
  *
- * One React component, one editor surface. Tracks the currently-hovered
- * top-level block via a single mousemove listener and renders a single
- * floating chrome cluster — `[ ⋮⋮ ]  [ Label · variant chip · × ]  [ + ]` —
- * positioned to the left of the target block.
+ * Renders ONE floating cluster — `[ Label · variant chip · × ]  [ + ]` —
+ * to the right of the global drag handle (a sibling element rendered by
+ * `tiptap-extension-global-drag-handle`). Tracks the currently-hovered
+ * top-level block via a single mousemove listener on the editor surface
+ * so the cluster follows the writer's pointer with the canonical Notion /
+ * BlockNote / Linear feel.
  *
- * Replaces the previous per-block embedded chrome in `BlockChromeView.tsx`
- * (one toolbar per top-level block, nine simultaneously in the welcome
- * doc). The single floating-cluster pattern is the Notion/BlockNote/Linear
- * shape and is the highest-leverage Awwwards-quality move for the editor.
+ * Why this file is now thin
+ * -------------------------
+ * The previous version (~455 LOC) also owned the drag handle button + its
+ * dragstart wiring + the editor-level dragover/drop indicator painter. All
+ * of that is now delegated to `tiptap-extension-global-drag-handle` (the
+ * same extension Novel uses) — it renders a single `<div class="drag-handle"
+ * data-drag-handle>` next to the editor's parent, positions it on
+ * mousemove, owns the dragstart slice serialization, and lets PM's
+ * built-in drop machinery handle the reorder. We render only the
+ * additional affordances (label, variant chip, delete, "+" insert) and
+ * position them as a sibling of the extension's handle.
  *
- * Mouse tracking strategy
- * -----------------------
- * - One `mousemove` listener on the editor's `.ProseMirror` surface
- *   (rAF-throttled so each animation frame at most produces one position
- *   recompute).
- * - For each event we walk `event.target` up to its closest
- *   `.react-renderer` ancestor (TipTap's per-NodeView outer wrapper). That
- *   wrapper carries `data-block-type` + `data-block-idx` from
- *   BlockChromeView, so resolving the target block is a constant-time
- *   ancestor walk — no `posAtCoords` round trip needed in the hot path.
+ * Mouse tracking strategy (unchanged from the bespoke version)
+ * ------------------------------------------------------------
+ * - One `mousemove` listener on the editor's `.ProseMirror` surface.
+ * - For each event we walk `event.target` up to the closest element with
+ *   `data-block-idx` — the `.paper-block` wrapper BlockChromeView renders.
+ *   That wrapper carries `data-block-type` + `data-block-idx`, so
+ *   resolving the target block is a constant-time ancestor walk.
  * - Positioning reads the target wrapper's `getBoundingClientRect()` and
- *   places the floating chrome to the LEFT of the wrapper, vertically
- *   centered to its first line.
- * - 300ms hide hysteresis matches the per-block-chrome behavior the user
- *   was used to — without it the cluster flickers as the mouse crosses
- *   block boundaries.
- *
- * Drag wiring lives here too — the floating `⋮⋮` button is the
- * dragstart source, with `getCurrentBlockIdx()` resolving the target
- * block's idx at drag-start time. The dragover/drop listeners are
- * attached at the editor surface level (one listener, not N) and
- * resolve the target block from `event.target.closest('.react-renderer')`.
+ *   places the cluster to the LEFT of the wrapper, leaving room for the
+ *   global drag-handle's own 20px slot just to the cluster's right.
+ * - 300ms hide hysteresis prevents flicker as the mouse crosses block
+ *   boundaries or aims for a button.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { VariantChip } from './VariantChip.js';
-import {
-  bindEditorLevelDragHandlers,
-  humanLabelFor,
-  pdBlockTypeFor,
-} from './lib/block-chrome-helpers.js';
+import { humanLabelFor, pdBlockTypeFor } from './lib/block-chrome-helpers.js';
 
 interface FloatingBlockChromeProps {
   editor: TipTapEditor | null;
@@ -49,7 +44,7 @@ interface FloatingBlockChromeProps {
 
 /** Resolved info about the currently-hovered top-level block. */
 interface TargetBlock {
-  /** The `.react-renderer` wrapper TipTap creates around the NodeView. */
+  /** The `.paper-block` wrapper BlockChromeView renders for top-level nodes. */
   wrapper: HTMLElement;
   /** Top-level child index — read from `data-block-idx`. */
   idx: number;
@@ -63,8 +58,11 @@ interface TargetBlock {
  *  cluster stays stable while the writer aims at one of its buttons. */
 const HIDE_HYSTERESIS_MS = 300;
 
-/** Horizontal gap between the floating chrome and the target block. */
-const CHROME_GAP_PX = 12;
+/** Horizontal gap between the floating chrome and the target block. The
+ *  global drag-handle extension lives in the ~20px slot just to the
+ *  cluster's right (between cluster and block), so a larger gap leaves
+ *  room for it without overlap. */
+const CHROME_GAP_PX = 32;
 
 /** Resolve the doc-position of the top-level block at idx `n`. */
 function topLevelBlockPos(editor: TipTapEditor, idx: number): number | null {
@@ -104,8 +102,6 @@ export function FloatingBlockChrome({
   const [chromeHovered, setChromeHovered] = useState(false);
   const hideTimerRef = useRef<number | undefined>(undefined);
   const chromeElRef = useRef<HTMLDivElement | null>(null);
-  const dragBtnRef = useRef<HTMLButtonElement | null>(null);
-  const isDraggingRef = useRef(false);
   // Subscribe to the editor's selection-empty state — when the writer
   // has a non-empty selection, BubbleMenu owns the floating layer and
   // we must hide.
@@ -207,10 +203,10 @@ export function FloatingBlockChrome({
     };
   }, [target, reposition]);
 
-  // The main mousemove tracker — bound on the editor surface root.
-  // The handler is fast (one DOM walk per move) so we don't bother
-  // throttling; an rAF gate added subtle test timing issues that weren't
-  // worth the perf savings on a per-block walk.
+  // The main mousemove tracker — bound on the editor surface root. The
+  // handler is fast (one DOM walk per move) so we don't bother throttling;
+  // an rAF gate added subtle test timing issues that weren't worth the
+  // perf savings on a per-block walk.
   useEffect(() => {
     if (!editor) return;
     const surface = editor.view.dom as HTMLElement;
@@ -246,7 +242,7 @@ export function FloatingBlockChrome({
     };
 
     const onMouseLeave = (): void => {
-      if (!isDraggingRef.current && !chromeHovered) scheduleHide();
+      if (!chromeHovered) scheduleHide();
     };
 
     surface.addEventListener('mousemove', processEvent);
@@ -256,27 +252,6 @@ export function FloatingBlockChrome({
       surface.removeEventListener('mouseleave', onMouseLeave);
     };
   }, [editor, chromeHovered, clearHideTimer, scheduleHide]);
-
-  // Editor-level drag wiring. dragstart attaches to the floating drag
-  // button (writes the CURRENT target idx into the DataTransfer payload).
-  // dragover/drop attach to the editor surface — one listener handles
-  // every drop target. The drop-indicator painter resolves its target
-  // wrapper from `event.target`.
-  useEffect(() => {
-    if (!editor || !dragBtnRef.current) return;
-    const handle = bindEditorLevelDragHandlers(
-      editor,
-      dragBtnRef.current,
-      () => target?.idx,
-      () => {
-        isDraggingRef.current = true;
-      },
-      () => {
-        isDraggingRef.current = false;
-      },
-    );
-    return () => handle.destroy();
-  }, [editor, target]);
 
   // Cleanup hide timer on unmount.
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
@@ -376,7 +351,7 @@ export function FloatingBlockChrome({
       aria-hidden={!visible}
       // `contentEditable={false}` keeps the floating chrome out of
       // ProseMirror's text-selection / drag-handling scope so mousedowns
-      // on the drag button + delete + insert reliably reach OUR handlers.
+      // on the delete + insert buttons reliably reach OUR handlers.
       contentEditable={false}
       suppressContentEditableWarning
       style={
@@ -397,22 +372,6 @@ export function FloatingBlockChrome({
         scheduleHide();
       }}
     >
-      <button
-        ref={dragBtnRef}
-        type="button"
-        className="paper-block-drag-handle"
-        aria-label={`Drag ${lower}`}
-        data-block-type={target?.blockType}
-        // Canonical TipTap node-drag wiring: `draggable=true` to make the
-        // browser fire dragstart + `data-drag-handle` so TipTap's
-        // NodeView.onDragStart picks up the click and sets a
-        // NodeSelection at the source node's position.
-        draggable
-        data-drag-handle=""
-        onClick={(e) => e.preventDefault()}
-      >
-        ⋮⋮
-      </button>
       <span className="paper-block__label">{label}</span>
       <div className="paper-block__variant-slot">
         {pdType !== null && target && targetAttrs ? (

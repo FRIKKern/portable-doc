@@ -555,18 +555,18 @@
 }
 
 /* ===========================================================================
- * Block layout (A2 + CW5) — paper-block + paper-floating-chrome
+ * Block layout (A2 + CW5 / T3b) — paper-block + paper-floating-chrome + .drag-handle
  *
  * Per-block embedded chrome is gone (the CW5 refactor): each top-level
  * NodeView now renders just `.paper-block` with `data-block-type` +
- * `data-block-idx`. The chrome cluster (drag handle / label / variant
- * chip / delete / "+") lives ONCE per editor in `.paper-floating-chrome`,
- * positioned via JS to track the currently-hovered block (Notion /
- * BlockNote / Linear pattern).
+ * `data-block-idx`.
  *
- * The class names `.paper-block-drag-handle` / `.paper-block-delete` /
- * `.paper-block__label` / `.paper-block__variant-slot` survive inside
- * the floating chrome — same button styling, just one instance.
+ * Two floating siblings live above the editor on hover (T3b):
+ *   - `.drag-handle` — rendered by `tiptap-extension-global-drag-handle`,
+ *     positioned by the extension's own mousemove plugin. We only style
+ *     it to fit the paper aesthetic.
+ *   - `.paper-floating-chrome` — our React-owned cluster (label, variant
+ *     chip, delete, "+"); positioned by JS to track the hovered block.
  *
  * Adapted from `~/docs/paperflow/notes/2026-05-10-paper-vision-prototype.html`
  * (search `.block-toolbar`, `.block-plus`) with the `.paper-` prefix and
@@ -636,20 +636,43 @@
   gap: 6px;
 }
 
-.paper-block-drag-handle {
+/* The global drag-handle div rendered by `tiptap-extension-global-drag-handle`
+ * (lives next to the editor's parent, `position: fixed` is set by the
+ * extension via inline `top`/`left`). We add the ⋮⋮ glyph via `::before`
+ * so the headless extension element reads as the canonical drag affordance
+ * without us controlling its DOM. The `.hide` class is added by the
+ * extension when the pointer leaves the editor. */
+.drag-handle {
+  position: fixed;
+  width: 20px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: grab;
-  background: transparent;
-  border: 0;
   color: var(--paper-ink-faint);
-  font-size: 13px;
+  font-family: var(--paper-font-sans);
+  font-size: 14px;
   line-height: 1;
-  padding: 2px 4px;
   user-select: none;
-  font-family: inherit;
+  opacity: 0.7;
+  z-index: var(--paper-block-chrome-z);
+  transition: opacity 160ms ease-out, color 160ms ease-out;
 }
-.paper-block-drag-handle:focus-visible {
-  outline: 2px solid var(--paper-accent-warm-rust);
-  outline-offset: 2px;
+.drag-handle::before {
+  content: '⋮⋮';
+  letter-spacing: -1px;
+}
+.drag-handle:hover {
+  opacity: 1;
+  color: var(--paper-ink-soft);
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+.drag-handle.hide {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .paper-block-delete {
