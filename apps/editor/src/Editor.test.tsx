@@ -163,4 +163,65 @@ describe('Editor — single document-level TipTap instance (A1)', () => {
     render(<Editor doc={welcomeFixture} />);
     expect(screen.queryByTestId('variant-chip')).toBeNull();
   });
+
+  it('wires onContentError + emitContentError so parse failures log instead of throwing', async () => {
+    // TipTap's `onContentError` fires when content handed to the editor
+    // fails schema parsing. Default behaviour rethrows the error into the
+    // React tree — the editor surface crashes. We opt into the canonical
+    // log + recover path by setting `emitContentError: true` and wiring
+    // an `onContentError` callback that logs via a stable prefix string
+    // (`[paperflow editor] onContentError —`) consumers can detect.
+    //
+    // We assert the wiring directly off the editor instance — feeding
+    // invalid TipTap JSON through `setContent` while the editor schema
+    // accepts a wide range of inputs (StarterKit + the seven re-added
+    // block nodes + table family) is brittle to schema changes, and the
+    // existing tests already cover the happy-path render. Here we prove:
+    //   1. happy-path: no console.error fires for a valid doc
+    //   2. emitContentError is enabled on the editor's options
+    //   3. onContentError handler is registered, and when invoked
+    //      directly it logs with the stable prefix
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let captured: TipTapEditor | null = null;
+    render(
+      <Editor
+        doc={welcomeFixture}
+        onEditorReady={(e) => {
+          captured = e;
+        }}
+      />,
+    );
+    await new Promise<void>((r) => setTimeout(r, 0));
+    expect(captured).toBeTruthy();
+    const editor = captured as unknown as TipTapEditor;
+
+    // 1. Happy path — no parse errors fired during welcome-fixture mount.
+    const prefixedBefore = errorSpy.mock.calls.find(
+      (call) => call[0] === '[paperflow editor] onContentError —',
+    );
+    expect(prefixedBefore).toBeUndefined();
+
+    // 2. emitContentError is enabled — so a future parse failure routes
+    //    to `onContentError` instead of throwing.
+    expect(
+      (editor.options as unknown as { emitContentError?: boolean })
+        .emitContentError,
+    ).toBe(true);
+
+    // 3. The handler is wired and logs with the stable prefix. We invoke
+    //    it directly by emitting the `contentError` event — that's the
+    //    same channel TipTap uses internally when a parse fails.
+    (editor as unknown as {
+      emit: (e: string, payload: unknown) => void;
+    }).emit('contentError', {
+      editor,
+      error: new Error('synthetic parse failure'),
+      disableCollaboration: () => undefined,
+    });
+    const prefixedAfter = errorSpy.mock.calls.find(
+      (call) => call[0] === '[paperflow editor] onContentError —',
+    );
+    expect(prefixedAfter).toBeTruthy();
+    errorSpy.mockRestore();
+  });
 });

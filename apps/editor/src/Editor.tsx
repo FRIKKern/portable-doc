@@ -57,7 +57,7 @@ import {
   TableCell,
 } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PortableDoc, ValidationIssue } from '@portable-doc/core';
 import { validateDoc } from '@portable-doc/core';
 import { portableDocToTipTapHtml } from './lib/portable-doc-to-tiptap.js';
@@ -219,6 +219,34 @@ export function Editor({
     [dataTestId],
   );
 
+  // Keep the latest doc in a ref so the onContentError handler can read
+  // `docTitle` / `blockCount` without going stale — and without having to
+  // list `doc` as a useCallback dep (which would churn the handler's
+  // identity on every doc prop change and trip the useEditor
+  // `compareOptions` rebuild path described above).
+  const docRef = useRef(doc);
+  docRef.current = doc;
+
+  // `onContentError` fires when TipTap fails to parse content passed to
+  // the initial `content` option or to `editor.commands.setContent()`.
+  // Without a handler, TipTap throws into the React tree and the editor
+  // surface crashes. Canonical pattern is to log + recover (no rethrow)
+  // so the editor stays mounted with whatever it could parse, and
+  // consumers can detect parse failures by watching for the stable
+  // `[paperflow editor] onContentError —` prefix.
+  //
+  // Stable identity via useCallback (empty deps) so the useEditor
+  // compareOptions check doesn't see a fresh ref on every render —
+  // same memo discipline as `extensions` / `editorProps` above.
+  const onContentError = useCallback((props: { error: Error }) => {
+    const d = docRef.current;
+    console.error(
+      '[paperflow editor] onContentError —',
+      props.error,
+      { docTitle: d.title, blockCount: d.blocks.length },
+    );
+  }, []);
+
   // Initial content snapshot — captured at the FIRST render only. We use
   // a ref instead of recomputing `portableDocToTipTapHtml(doc)` in the
   // useEditor options so a later `doc` prop change does NOT rebuild the
@@ -242,6 +270,15 @@ export function Editor({
     // (the createRoot-in-NodeView pattern that needed StrictMode safety
     // is gone now that we use ReactNodeViewRenderer).
     shouldRerenderOnTransaction: false,
+    // `emitContentError: true` routes parse failures through the
+    // `contentError` event (→ `onContentError` below) WITHOUT failing
+    // the parse — TipTap still salvages whatever the schema accepts and
+    // keeps that as the editor's content. Pairing this with the handler
+    // is the canonical "log + recover" pattern; `enableContentCheck`
+    // (the stricter sibling) would also abort the parse and is heavier
+    // than we need here.
+    emitContentError: true,
+    onContentError,
     onUpdate: ({ editor: e }) => {
       // Convert TipTap state → PortableDoc and emit it. We stash the
       // produced doc in `lastEmittedDocRef` BEFORE notifying upward so
