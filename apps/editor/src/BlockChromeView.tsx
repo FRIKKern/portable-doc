@@ -56,6 +56,7 @@ import { VARIANT_CATALOG } from '@portable-doc/variants';
 import type { BlockType } from '@portable-doc/core';
 import { VariantChip } from './VariantChip.js';
 import {
+  bindDragHandlers,
   humanLabelFor,
   pdBlockTypeFor,
 } from './BlockChrome.js';
@@ -244,17 +245,30 @@ export function BlockChromeView(props: ReactNodeViewProps): JSX.Element {
     [pdType, node.attrs],
   );
 
-  // Drag: canonical TipTap-native flow. The block's schema is marked
-  // `draggable: true` in `withBlockChrome.ts`; the `⋮⋮` button below
-  // carries `data-drag-handle`. On mousedown, TipTap's NodeView base
-  // class detects the handle, sets a NodeSelection at this node's
-  // position, and on dragstart hands a clone of the node DOM to the OS
-  // as the drag image. PM's built-in node-drag drop logic moves the
-  // node to the drop position; `prosemirror-dropcursor` (registered via
-  // StarterKit) paints the drop indicator. No hand-rolled HTML5
-  // handlers needed — we only need a ref to the button so React can
-  // attach `data-drag-handle` to the right element.
+  // Drag wiring. The canonical-only path (schema `draggable: true` +
+  // `data-drag-handle`) hands TipTap's NodeView.onDragStart a clean
+  // drag image + a NodeSelection — but PM's default drop logic drops
+  // at TEXT coordinates, not block slots, which is the wrong UX for
+  // Notion-style block reorder. We keep schema + `data-drag-handle`
+  // for the drag-image side and additionally bind native HTML5
+  // dragstart/dragover/drop ourselves so the drop respects slot
+  // semantics (above-midline = slot N, below = slot N+1) and
+  // dispatches `editor.commands.moveBlock`. `bindDragHandlers` does
+  // the listener setup + paints the drop indicator.
   const dragBtnRef = useRef<HTMLButtonElement | null>(null);
+  const idxRef = useRef<number | undefined>(topLevelIdx);
+  idxRef.current = topLevelIdx;
+  useEffect(() => {
+    if (!isTopLevel) return undefined;
+    if (!wrapperElRef.current || !dragBtnRef.current) return undefined;
+    const handle = bindDragHandlers(
+      dragBtnRef.current,
+      wrapperElRef.current,
+      editor,
+      () => idxRef.current,
+    );
+    return () => handle.destroy();
+  }, [editor, isTopLevel]);
 
   // Chrome handlers.
   const handleDelete = (e: React.MouseEvent | React.KeyboardEvent): void => {
