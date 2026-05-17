@@ -59,11 +59,17 @@ interface TargetBlock {
  *  cluster stays stable while the writer aims at one of its buttons. */
 const HIDE_HYSTERESIS_MS = 300;
 
-/** Horizontal gap between the floating chrome and the target block. The
- *  global drag-handle extension lives in the ~20px slot just to the
- *  cluster's right (between cluster and block), so a larger gap leaves
- *  room for it without overlap. */
-const CHROME_GAP_PX = 32;
+/** Right-edge offset of the floating chrome from the block's left edge.
+ *  The global drag-handle extension hugs the block's left edge in a
+ *  20px slot; we want our cluster (variant chip + ×) to sit IMMEDIATELY
+ *  to the left of the handle so the two floats read as one contiguous
+ *  cluster — `[chip · ×] [⋮⋮] [block]` — instead of two visually
+ *  detached surfaces.
+ *
+ *  Math: chrome.right = block.left - 24 = handle.left - 4 (handle.left
+ *  is block.left - 20). 4px is the hairline visual gap that lets the
+ *  two pieces breathe without reading as separated. */
+const CHROME_GAP_PX = 24;
 
 /** Resolve the doc-position of the top-level block at idx `n`. */
 function topLevelBlockPos(editor: TipTapEditor, idx: number): number | null {
@@ -268,11 +274,27 @@ export function FloatingBlockChrome({
       if (!chromeHovered) scheduleHide();
     };
 
+    // Hide immediately on any mousedown in the editor so the cluster
+    // can't visually interfere with a text-select drag the writer is
+    // about to start. The mousemove handler will re-show it on the
+    // next non-button-down mouse move. Without this guard the cluster
+    // stays anchored to the hovered block while the writer drags
+    // through text — easy to mistake for the chrome blocking the
+    // selection.
+    const onMouseDown = (): void => {
+      clearHideTimer();
+      setTarget(null);
+      setPosition(null);
+      setTargetAttrs(null);
+    };
+
     surface.addEventListener('mousemove', processEvent);
     surface.addEventListener('mouseleave', onMouseLeave);
+    surface.addEventListener('mousedown', onMouseDown);
     return () => {
       surface.removeEventListener('mousemove', processEvent);
       surface.removeEventListener('mouseleave', onMouseLeave);
+      surface.removeEventListener('mousedown', onMouseDown);
     };
   }, [editor, chromeHovered, clearHideTimer, scheduleHide]);
 

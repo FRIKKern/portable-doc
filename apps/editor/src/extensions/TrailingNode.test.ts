@@ -14,11 +14,12 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
+import type { JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { TrailingNode } from './TrailingNode.js';
 
 const editors: Editor[] = [];
-function mk(lastBlock: { type: string; content?: unknown[] }): Editor {
+function mk(lastBlock: JSONContent): Editor {
   const e = new Editor({
     extensions: [StarterKit, TrailingNode],
     content: { type: 'doc', content: [lastBlock] },
