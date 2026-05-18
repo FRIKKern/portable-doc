@@ -34,6 +34,7 @@ import type { Editor as TipTapEditor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import { NodeSelection } from 'prosemirror-state';
 import { VariantChip } from './VariantChip.js';
+import { linkOpenStorage } from './extensions/LinkOpen.js';
 import { humanLabelFor, pdBlockTypeFor } from './lib/block-chrome-helpers.js';
 
 interface FloatingBlockChromeProps {
@@ -247,9 +248,7 @@ export function FloatingBlockChrome({
         link: e.isActive('link'),
         // Counter bumped by the LinkOpen extension on Mod-K; we watch
         // for changes and open the link UI when it bumps.
-        linkOpenRequestId:
-          ((e.storage as unknown as Record<string, unknown>).linkOpen as
-            { requestId: number } | undefined)?.requestId ?? 0,
+        linkOpenRequestId: linkOpenStorage(e)?.requestId ?? 0,
       };
     },
   });

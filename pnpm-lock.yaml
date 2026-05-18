@@ -80,14 +80,11 @@ importers:
       '@tiptap/extension-bubble-menu':
         specifier: ^3
         version: 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
-      '@tiptap/extension-character-count':
-        specifier: ^3.23.4
-        version: 3.23.4(@tiptap/extensions@3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))
       '@tiptap/extension-code-block':
         specifier: ^3
         version: 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
       '@tiptap/extension-code-block-lowlight':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/extension-code-block@3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)(highlight.js@11.11.1)(lowlight@3.3.0)
       '@tiptap/extension-heading':
         specifier: ^3
@@ -96,40 +93,40 @@ importers:
         specifier: ^3
         version: 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
       '@tiptap/extension-image':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))
       '@tiptap/extension-list':
         specifier: ^3
         version: 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
-      '@tiptap/extension-list-keymap':
-        specifier: ^3.23.4
-        version: 3.23.4(@tiptap/extension-list@3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))
       '@tiptap/extension-paragraph':
         specifier: ^3
         version: 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))
       '@tiptap/extension-placeholder':
-        specifier: ^3.23.1
+        specifier: ^3
         version: 3.23.1(@tiptap/extensions@3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))
       '@tiptap/extension-table':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
       '@tiptap/extension-table-cell':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/extension-table@3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))
       '@tiptap/extension-table-header':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/extension-table@3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))
       '@tiptap/extension-table-row':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/extension-table@3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))
       '@tiptap/extension-text-align':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))
       '@tiptap/extension-typography':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))
+      '@tiptap/extensions':
+        specifier: ^3
+        version: 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
       '@tiptap/pm':
-        specifier: ^3.23.4
+        specifier: ^3
         version: 3.23.4
       '@tiptap/react':
         specifier: ^3
@@ -2047,11 +2044,6 @@ packages:
     resolution: {integrity: sha512-owWnBBI4t+jqVDY0naDjhsAmrNGldh4czouef2K+mEf032B7uGsDVCwKp1qaX1JZesyYDfvXOaIwT22hNID2mw==}
     peerDependencies:
       '@tiptap/extension-list': 3.23.1
-
-  '@tiptap/extension-character-count@3.23.4':
-    resolution: {integrity: sha512-oxaTE6iDBa+/Ftq95vMP6rTOynJSJ7sEZybBnmb1zn63+jpiz6ovDrY6Ox7uA8avvGdBOnh6uUUjGIymA4iiTg==}
-    peerDependencies:
-      '@tiptap/extensions': 3.23.4
 
   '@tiptap/extension-code-block-lowlight@3.23.4':
     resolution: {integrity: sha512-fnqUBS9zTXntCzdXMKtH18vLunZ+vyLONmco3rChWKII8lBV7Dycdrj9jGvJKJ4BsvK7NLwZp3NLokSyVSGtiQ==}
@@ -6863,10 +6855,6 @@ snapshots:
   '@tiptap/extension-bullet-list@3.23.1(@tiptap/extension-list@3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))':
     dependencies:
       '@tiptap/extension-list': 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
-
-  '@tiptap/extension-character-count@3.23.4(@tiptap/extensions@3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))':
-    dependencies:
-      '@tiptap/extensions': 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
 
   '@tiptap/extension-code-block-lowlight@3.23.4(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/extension-code-block@3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)(highlight.js@11.11.1)(lowlight@3.3.0)':
     dependencies:

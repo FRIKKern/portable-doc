@@ -766,6 +766,26 @@
  * the motion tokens from motion.css.
  * =========================================================================== */
 
+/* @tiptap/extensions Focus adds `.has-focus` to the top-level block
+ * containing the caret. Marks the active block with a thin warm-rust
+ * accent on the left edge — Notion / Linear style "this is where
+ * you are". Subtle enough to not compete with the bubble. */
+.ProseMirror > .has-focus {
+  position: relative;
+}
+.ProseMirror > .has-focus::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--paper-accent-warm-rust);
+  border-radius: 2px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 /* Top-level blocks only — the class lands on every wrapped element
  * via `withBlockChrome`'s HTMLAttributes injection (canonical TipTap
  * pattern), including nested paragraphs inside lists or callouts.

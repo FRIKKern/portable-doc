@@ -39,7 +39,12 @@ import {
 } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import Typography from '@tiptap/extension-typography';
-import { CharacterCount } from '@tiptap/extension-character-count';
+// `@tiptap/extensions` is TipTap 3.x's consolidated bundle for
+// CharacterCount, Focus, Mathematics, TrailingNode, UndoRedo, etc.
+// Importing from the bundle (rather than the legacy
+// @tiptap/extension-character-count standalone) is the canonical
+// path going forward — same runtime, single dep to track.
+import { CharacterCount, Focus } from '@tiptap/extensions';
 // ListKeymap is auto-injected by StarterKit (unless you pass
 // listKeymap: false). Adding it here a second time produced a
 // duplicate plugin and broke vertical arrow-key caret movement —
@@ -122,6 +127,13 @@ export function buildExtensions(
         width: 4,
         color: false, // CSS class owns the color
         class: 'paper-drop-cursor',
+      },
+      // Undo depth. Default is 100; long writing sessions hit it.
+      // 250 matches Notion / Docs and is canonical for prose
+      // editors. Memory cost is negligible — single linked list of
+      // tiny step records.
+      undoRedo: {
+        depth: 250,
       },
     }),
     withBlockChrome(Paragraph),
@@ -246,6 +258,12 @@ export function buildExtensions(
     // `textCounter` whitespace-splits the doc text, which matches
     // the previous behavior.
     CharacterCount,
+    // Focus — applies `.has-focus` to the node containing the
+    // caret. Lets paper.css highlight the active block visually
+    // (subtle outline tint) independent of the bubble. Mode
+    // 'shallowest' marks only the top-level focused block, not
+    // every ancestor; matches Notion / Linear's behavior.
+    Focus.configure({ mode: 'shallowest', className: 'has-focus' }),
     // (ListKeymap is shipped INSIDE StarterKit's auto-injection;
     //  adding it here a second time was a duplicate plugin and
     //  broke arrow-key caret movement. Removed.)

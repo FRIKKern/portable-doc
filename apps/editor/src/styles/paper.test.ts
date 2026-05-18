@@ -129,7 +129,11 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
           // `@tiptap/react`'s ReactRenderer wraps each NodeView in
           // `<div class="react-renderer node-<type>">`. Our placeholder
           // hint targets `.react-renderer.is-empty[data-placeholder]`.
-          c !== '.react-renderer',
+          c !== '.react-renderer' &&
+          // `@tiptap/extensions` Focus adds `.has-focus` to the
+          // top-level block containing the caret. Third-party
+          // hook; we style it under the `.ProseMirror >` scope.
+          c !== '.has-focus',
       );
 
     for (const cls of userClasses) {

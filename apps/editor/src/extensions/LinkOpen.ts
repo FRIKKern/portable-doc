@@ -9,10 +9,20 @@
  * would dedupe and miss the second press).
  */
 import { Extension } from '@tiptap/core';
+import type { Editor } from '@tiptap/core';
 
 export interface LinkOpenStorage {
   /** Monotonic counter — increments every Mod-K press. */
   requestId: number;
+}
+
+/** Typed accessor for `editor.storage.linkOpen`. Avoids the
+ *  `unknown` cast at every call site — @tiptap/core's Storage type
+ *  is `Record<string, any>`, so a helper is cheaper than module
+ *  augmentation for a single private storage slot. */
+export function linkOpenStorage(editor: Editor): LinkOpenStorage {
+  return (editor.storage as unknown as Record<string, LinkOpenStorage>)
+    .linkOpen;
 }
 
 export const LinkOpen = Extension.create({
@@ -25,8 +35,7 @@ export const LinkOpen = Extension.create({
   addKeyboardShortcuts() {
     return {
       'Mod-k': () => {
-        const storage = this.editor.storage as unknown as Record<string, unknown>;
-        const store = storage.linkOpen as LinkOpenStorage;
+        const store = linkOpenStorage(this.editor);
         store.requestId += 1;
         // Force a transaction so useEditorState selectors re-run and
         // the bubble sees the bumped counter. A no-op selection update
