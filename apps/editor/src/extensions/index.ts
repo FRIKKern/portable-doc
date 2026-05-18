@@ -112,6 +112,17 @@ export function buildExtensions(
         validate: (href: string) =>
           /^https?:\/\//i.test(href) || /^mailto:/i.test(href),
       },
+      // Drop indicator — the line that shows EXACTLY where a dragged
+      // block will land. The stock default is a 1px line in
+      // currentColor (warm-dark ink), almost invisible against the
+      // warm-paper bg. Notion / Linear / Novel all use a thicker
+      // accent line; bumping width to 4 and handing color over to
+      // CSS makes the snap-point unambiguous.
+      dropcursor: {
+        width: 4,
+        color: false, // CSS class owns the color
+        class: 'paper-drop-cursor',
+      },
     }),
     withBlockChrome(Paragraph),
     // Auto-generate anchor `id` attrs from heading text so deep

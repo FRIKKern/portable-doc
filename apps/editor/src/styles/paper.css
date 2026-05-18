@@ -329,6 +329,29 @@
   100% { opacity: 0.55; }
 }
 
+/* Drop indicator (prosemirror-dropcursor with our class). The line
+ * appears between blocks during a drag, showing the snap-point.
+ * 4px-tall horizontal bar in the warm-rust accent so it's
+ * unambiguous against the cream paper background. PM positions it
+ * inline (absolute) — we just paint it. */
+.paper-drop-cursor {
+  background: var(--paper-accent-warm-rust);
+  border-radius: 2px;
+  opacity: 0.9;
+  pointer-events: none;
+  /* Soft glow makes the snap-point easier to track at the edges of
+   * vision while the cursor is on the dragged item. */
+  box-shadow: 0 0 0 1px rgba(162, 57, 37, 0.15);
+}
+/* Editor surface gets `.is-dragging` for the duration of a block
+ * drag. Added by FloatingBlockChrome's onDragStart, removed on
+ * drop/dragend. Cursor stays grabbing across the whole surface so
+ * the user has continuous feedback that they're moving a block. */
+.ProseMirror.is-dragging,
+.ProseMirror.is-dragging * {
+  cursor: grabbing !important;
+}
+
 /* Variant rendering — per-axis data-attrs emitted by withBlockChrome.
  * The hex values mirror `@portable-doc/core/tokens.ts` `tonePalette`
  * and `@portable-doc/variants/catalog.ts`'s `calloutSchema.resolve()`

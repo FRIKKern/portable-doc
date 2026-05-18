@@ -592,10 +592,33 @@ export function FloatingBlockChrome({
       (view as unknown as {
         dragging: { slice: typeof slice; move: boolean; node: NodeSelection };
       }).dragging = { slice, move: true, node: selection };
+      // Add a marker class for the duration of the drag so CSS can
+      // style the surface (grabbing cursor, etc.). Removed on drop /
+      // dragend. PM no longer adds this automatically — used to come
+      // from tiptap-extension-global-drag-handle, which we dropped.
+      view.dom.classList.add('is-dragging');
       setHoverTarget(null);
     },
     [editor, target],
   );
+
+  // Strip the `is-dragging` class on drop / dragend at the editor
+  // level. One global listener (added once when editor mounts) is
+  // simpler than wiring onDragEnd on the button — dragend fires on
+  // the source element but bubbles to document.
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom as HTMLElement;
+    const clear = (): void => {
+      dom.classList.remove('is-dragging');
+    };
+    document.addEventListener('dragend', clear);
+    document.addEventListener('drop', clear);
+    return () => {
+      document.removeEventListener('dragend', clear);
+      document.removeEventListener('drop', clear);
+    };
+  }, [editor]);
 
   // -------- Inline-mark commands --------------------------------------
 
