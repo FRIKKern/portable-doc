@@ -40,10 +40,13 @@ import {
 import Image from '@tiptap/extension-image';
 import Typography from '@tiptap/extension-typography';
 import { CharacterCount } from '@tiptap/extension-character-count';
+import { ListKeymap } from '@tiptap/extension-list-keymap';
+import { TextAlign } from '@tiptap/extension-text-align';
 import AutoJoiner from 'tiptap-extension-auto-joiner';
 import { withBlockChrome } from './withBlockChrome.js';
 import { SlashCommand } from './SlashCommand.js';
 import { MoveBlock } from './MoveBlock.js';
+import { LinkOpen } from './LinkOpen.js';
 
 export interface BuildExtensionsOpts {
   /** Late-bound getter for the host's image-insert handler.
@@ -134,6 +137,22 @@ export function buildExtensions(
             0,
           ];
         },
+        addKeyboardShortcuts() {
+          // Stock TipTap binds Mod-Alt-1..6. Google Docs, Pages, and
+          // Word use Mod-Shift-1..6 (Cmd+Shift on macOS / Ctrl+Shift
+          // on Windows). Keep BOTH so neither cohort of writers
+          // re-learns; merge with the parent map so the existing
+          // Mod-Alt bindings stay live.
+          const parent =
+            (this.parent?.() as Record<string, () => boolean>) ?? {};
+          const docsStyle: Record<string, () => boolean> = {};
+          const levels = (this.options as { levels: number[] }).levels;
+          for (const level of levels) {
+            docsStyle[`Mod-Shift-${level}`] = () =>
+              this.editor.commands.toggleHeading({ level: level as 1 });
+          }
+          return { ...parent, ...docsStyle };
+        },
       }),
     ),
     withBlockChrome(BulletList),
@@ -189,6 +208,27 @@ export function buildExtensions(
     // `textCounter` whitespace-splits the doc text, which matches
     // the previous behavior.
     CharacterCount,
+    // ListKeymap — adds the canonical Backspace / Delete / Enter
+    // behaviors inside list items that match Word / Docs / Pages
+    // expectations (e.g. Backspace at the start of a list item lifts
+    // it out of the list; Enter on an empty item exits the list).
+    // Layers on top of extension-list's stock Tab / Shift-Tab. Pure
+    // keymap polish, no schema changes.
+    ListKeymap,
+    // TextAlign — paragraph + heading alignment with the Word / Docs
+    // / Pages keyboard shortcuts: Mod-Shift-L (left), Mod-Shift-E
+    // (center, the Word convention), Mod-Shift-R (right),
+    // Mod-Shift-J (justify). Default alignment isn't written to the
+    // attribute, so docs that never use alignment round-trip without
+    // any extra attrs in the JSON.
+    TextAlign.configure({
+      types: ['paragraph', 'heading'],
+      defaultAlignment: 'left',
+    }),
+    // Cmd+K opens the link UI in the floating chrome. The extension
+    // is just a keymap → editor.storage flag the bubble watches; no
+    // command logic, no schema work.
+    LinkOpen,
     // (TrailingNode — the always-empty trailing paragraph at the doc
     // end — is shipped by StarterKit. Adding it here a second time
     // was a duplicate plugin and corrupted text selection. Removed.)

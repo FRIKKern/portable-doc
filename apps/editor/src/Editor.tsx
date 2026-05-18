@@ -127,6 +127,23 @@ export function Editor({
         class: 'paper-editor-surface',
         ...(dataTestId ? { 'data-testid': dataTestId } : {}),
       },
+      // Cmd-click / Ctrl-click on a link opens it in a new tab.
+      // Stock TipTap behavior keeps `openOnClick: false` so a plain
+      // click just places the caret (writers don't want a click to
+      // navigate away from their editor). Modifier-click is the
+      // canonical Notion / Linear / Docs escape hatch.
+      handleClick(_view: unknown, _pos: number, event: MouseEvent): boolean {
+        if (!event.metaKey && !event.ctrlKey) return false;
+        const t = event.target as HTMLElement | null;
+        const anchor = t?.closest?.('a') as HTMLAnchorElement | null;
+        if (!anchor?.href) return false;
+        // Only follow http(s) / mailto — matches the link extension's
+        // own validator so we don't open `javascript:` or `data:` URIs.
+        if (!/^(https?:|mailto:)/i.test(anchor.href)) return false;
+        window.open(anchor.href, '_blank', 'noopener,noreferrer');
+        event.preventDefault();
+        return true;
+      },
     }),
     [dataTestId],
   );

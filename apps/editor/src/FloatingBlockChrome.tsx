@@ -192,20 +192,22 @@ export function FloatingBlockChrome({
   // editor state — top-level block index at the caret, the mark
   // states, selection emptiness, focused flag. useEditorState only
   // re-renders on shallow-changes, so this is cheap.
-  const stateInfo = useEditorState({
+  const DEFAULT_STATE_INFO = {
+    selectionTarget: null as TargetBlock | null,
+    selectionEmpty: true,
+    isFocused: false,
+    isInTable: false,
+    bold: false,
+    italic: false,
+    code: false,
+    link: false,
+    linkOpenRequestId: 0,
+  };
+  const rawStateInfo = useEditorState({
     editor,
     selector: ({ editor: e }) => {
       if (!e) {
-        return {
-          selectionTarget: null as TargetBlock | null,
-          selectionEmpty: true,
-          isFocused: false,
-          isInTable: false,
-          bold: false,
-          italic: false,
-          code: false,
-          link: false,
-        };
+        return DEFAULT_STATE_INFO;
       }
       const { from } = e.state.selection;
       const top = topLevelAtPos(e, from);
@@ -227,9 +229,17 @@ export function FloatingBlockChrome({
         italic: e.isActive('italic'),
         code: e.isActive('code'),
         link: e.isActive('link'),
+        // Counter bumped by the LinkOpen extension on Mod-K; we watch
+        // for changes and open the link UI when it bumps.
+        linkOpenRequestId:
+          ((e.storage as unknown as Record<string, unknown>).linkOpen as
+            { requestId: number } | undefined)?.requestId ?? 0,
       };
     },
   });
+  // useEditorState returns null when editor is null. Fall back to the
+  // sentinel defaults so downstream readers don't need null checks.
+  const stateInfo = rawStateInfo ?? DEFAULT_STATE_INFO;
 
   // Active target: selection wins when the editor is focused; hover
   // is the fallback so the bubble can preview a block before the
@@ -369,6 +379,18 @@ export function FloatingBlockChrome({
       queueMicrotask(() => linkInputRef.current?.focus());
     }
   }, [linkMode, editor]);
+
+  // Mod-K from the LinkOpen extension bumps `linkOpenRequestId`; flip
+  // into editing mode whenever the counter changes. The ref tracks
+  // the last-seen value so the very first render (counter = 0) doesn't
+  // count as a "request".
+  const lastLinkRequestRef = useRef(stateInfo.linkOpenRequestId);
+  useEffect(() => {
+    if (stateInfo.linkOpenRequestId !== lastLinkRequestRef.current) {
+      lastLinkRequestRef.current = stateInfo.linkOpenRequestId;
+      setLinkMode('editing');
+    }
+  }, [stateInfo.linkOpenRequestId]);
 
   // -------- Block-level actions ---------------------------------------
 
