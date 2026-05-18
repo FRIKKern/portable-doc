@@ -719,6 +719,14 @@ export function FloatingBlockChrome({
           data-drag-handle
           data-testid="paper-block-side-handle"
           onDragStart={handleDragStart}
+          onMouseEnter={() => {
+            setChromeHovered(true);
+            clearHideTimer();
+          }}
+          onMouseLeave={() => {
+            setChromeHovered(false);
+            scheduleHide();
+          }}
           style={{
             position: 'fixed',
             top: `${sidePosition.top}px`,
