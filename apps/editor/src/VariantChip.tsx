@@ -195,7 +195,7 @@ function ChipPalette({
             key={id}
             testId={`variant-chip-option-${blockType}-${id}`}
             active={active}
-            label={id}
+            label={prettyLabel(axes)}
             onApply={() => apply(axes)}
           >
             {inner}
@@ -311,14 +311,16 @@ function CssDirectPreview({
       </pre>
     );
   }
-  // callout
+  // callout — render a tone-swatch + a single representative text
+  // line. The colored border-left + bg ARE the variant; the label
+  // below the cell names it. No "preview" placeholder text — every
+  // cell looked identical with that.
   return (
     <div
-      className="paper-variant-chip__preview"
-      style={{ ...css, minHeight: 24, fontSize: 10, color: '#111827' }}
-    >
-      preview
-    </div>
+      className="paper-variant-chip__preview paper-variant-chip__preview--callout"
+      style={{ ...css }}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -364,6 +366,16 @@ function cartesian(axes: Record<string, readonly string[]>): Record<string, stri
 }
 
 const comboId = (a: Record<string, string>) => Object.values(a).join('-');
+
+/** Human-readable label for an axes combo. `{tone:'success', emphasis:
+ *  'subtle'}` → `'Success · Subtle'`. Title-cases each value and joins
+ *  with a middot for visual rhythm — much easier to scan than the
+ *  internal kebab-id ('success-subtle') the variant catalog uses. */
+function prettyLabel(a: Record<string, string>): string {
+  return Object.values(a)
+    .map((v) => v.charAt(0).toUpperCase() + v.slice(1))
+    .join(' · ');
+}
 
 function equal(a: Record<string, string>, b: Record<string, string>): boolean {
   const ks = Object.keys(a);

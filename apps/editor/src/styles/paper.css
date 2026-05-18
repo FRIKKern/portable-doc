@@ -1721,9 +1721,9 @@
   z-index: var(--paper-variant-palette-z, 15);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  min-width: 220px;
-  padding: 8px;
+  gap: 8px;
+  min-width: 320px;
+  padding: 10px;
   background: var(--paper-chrome-bg);
   border: 1px solid var(--paper-chrome-border);
   border-radius: 6px;
@@ -1735,32 +1735,36 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Callout has 10 variants (5 tones × 2 emphases); a 5-col grid keeps
- * the palette compact even at the wide end. */
+/* Callout has 10 variants (5 tones × 2 emphases). The catalog
+ * enumerates tone-first so the 2-col layout reads as 5 rows of
+ * (subtle | bold) — natural diff: same row = same tone, columns
+ * are the emphasis ramp. */
 .paper-variant-chip[data-testid$='-callout'] .paper-variant-chip__palette {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  min-width: 280px;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  min-width: 320px;
 }
 
 .paper-variant-chip__option {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px;
+  gap: 6px;
+  padding: 8px;
   background: var(--paper-bg);
   border: 1px solid var(--paper-rule-soft);
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
   text-align: left;
   color: var(--paper-ink);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 11px;
   transition:
     border-color 120ms ease-out,
-    background 120ms ease-out;
+    background 120ms ease-out,
+    transform 120ms ease-out;
 }
 .paper-variant-chip__option:hover {
   border-color: var(--paper-accent-warm-rust);
+  transform: translateY(-1px);
 }
 .paper-variant-chip__option:focus-visible {
   outline: 2px solid var(--paper-accent-warm-rust);
@@ -1769,16 +1773,30 @@
 .paper-variant-chip__option--active {
   border-color: var(--paper-accent-warm-rust);
   background: var(--paper-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--paper-accent-warm-rust);
 }
 
 .paper-variant-chip__option-label {
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  color: var(--paper-ink-soft);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  color: var(--paper-ink);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .paper-variant-chip__preview {
   min-height: 24px;
+}
+
+/* Callout preview: the colored border-left + bg do all the talking.
+ * 36px tall gives enough visual weight for the writer to scan the
+ * 10 tone × emphasis combos at a glance without reading labels. */
+.paper-variant-chip__preview--callout {
+  min-height: 36px;
+  border-radius: 3px;
+  width: 100%;
 }
 
 /* ===========================================================================
