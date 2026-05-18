@@ -91,8 +91,24 @@ function topLevelAtPos(
     });
     return blockType ? { idx, blockPos, blockType } : null;
   }
-  const idx = $pos.index(0);
-  const blockPos = $pos.before(1);
+  // Walk up from the resolved position to find the deepest CONTAINER
+  // block (anything that's not a text-block). When the caret sits in
+  // a paragraph inside a blockquote, we want to target the blockquote
+  // (not the paragraph) so the user can drag the callout out. Notion
+  // / BlockNote use the same rule. When all the way up is still a
+  // text-block (e.g. top-level paragraph), we fall back to depth 1.
+  let d = $pos.depth;
+  while (d > 1) {
+    const node = $pos.node(d);
+    if (!node.isTextblock) break;
+    d -= 1;
+  }
+  // depth 0 = doc; depth 1 = top-level block. `idx` at depth 1 is the
+  // top-level child index. For deeper targets we record -1 (the value
+  // is only meaningful for top-level lookups; the absolute `blockPos`
+  // is the canonical handle).
+  const idx = d === 1 ? $pos.index(0) : -1;
+  const blockPos = $pos.before(d);
   const node = editor.state.doc.nodeAt(blockPos);
   if (!node) return null;
   return { idx, blockPos, blockType: node.type.name };
@@ -327,7 +343,10 @@ export function FloatingBlockChrome({
           ? Date.now() - mouseAwayStartRef.current
           : 0;
       if (idleMs >= IDLE_MS && awayMs >= AWAY_MS && hoverTarget) {
-        if (hoverTarget.idx !== activeBlock?.idx) {
+        // Compare by absolute doc position rather than idx — nested
+        // blocks use idx === -1, so an idx-only check would falsely
+        // report them as equal.
+        if (hoverTarget.pos !== activeBlock?.pos) {
           setActiveBlock(hoverTarget);
           mouseAwayStartRef.current = null;
         }
@@ -380,12 +399,10 @@ export function FloatingBlockChrome({
       return;
     }
     const read = (): void => {
-      const pos = topLevelBlockPos(editor, target.idx);
-      if (pos == null) {
-        setTargetAttrs(null);
-        return;
-      }
-      const node = editor.state.doc.nodeAt(pos);
+      // For nested blocks (idx === -1) `topLevelBlockPos` returns
+      // null; use the absolute pos directly. PM still resolves to
+      // the same node as long as it exists.
+      const node = editor.state.doc.nodeAt(target.pos);
       setTargetAttrs(node?.attrs ?? null);
     };
     read();
@@ -534,8 +551,7 @@ export function FloatingBlockChrome({
   const onVariantChange = useCallback(
     (next: Record<string, string>): void => {
       if (!editor || !target) return;
-      const pos = topLevelBlockPos(editor, target.idx);
-      if (pos == null) return;
+      const pos = target.pos;
       const liveNode = editor.state.doc.nodeAt(pos);
       if (!liveNode) return;
       const prev = (liveNode.attrs?.variant as Record<string, string> | null) ?? {};
@@ -556,8 +572,7 @@ export function FloatingBlockChrome({
       e.preventDefault();
       e.stopPropagation();
       if (!editor || !target) return;
-      const pos = topLevelBlockPos(editor, target.idx);
-      if (pos == null) return;
+      const pos = target.pos;
       const liveNode = editor.state.doc.nodeAt(pos);
       if (!liveNode) return;
       editor.commands.deleteRange({ from: pos, to: pos + liveNode.nodeSize });
@@ -570,8 +585,10 @@ export function FloatingBlockChrome({
     (e: React.DragEvent<HTMLButtonElement>): void => {
       if (!editor || !target || !e.dataTransfer) return;
       const view = editor.view;
-      const pos = topLevelBlockPos(editor, target.idx);
-      if (pos == null) return;
+      const pos = target.pos;
+      // Verify the block is still where we think it is — content may
+      // have shifted between hover and click.
+      if (!editor.state.doc.nodeAt(pos)) return;
       view.focus();
       const selection = NodeSelection.create(view.state.doc, pos);
       view.dispatch(view.state.tr.setSelection(selection));
@@ -805,7 +822,7 @@ export function FloatingBlockChrome({
       <div className="paper-block__variant-slot">
         {pdType !== null && target && targetAttrs ? (
           <VariantChip
-            key={`${target.idx}-${blockType}`}
+            key={`${target.pos}-${blockType}`}
             blockType={pdType}
             attrs={targetAttrs}
             onChange={onVariantChange}

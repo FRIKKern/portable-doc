@@ -171,7 +171,31 @@ export function buildExtensions(
     ),
     withBlockChrome(BulletList),
     withBlockChrome(OrderedList),
-    withBlockChrome(Blockquote),
+    // Blockquote (callout) — Shift-Tab lifts it out of its parent
+    // container. When the user has dragged / typed a callout inside a
+    // list-item and wants to extract it, Shift-Tab is the canonical
+    // Word / Docs / Pages escape hatch.
+    //
+    // Higher `priority` than extension-list (default 100) so when the
+    // caret is in a blockquote that's inside a list-item, OUR
+    // Shift-Tab fires first and lifts the blockquote — instead of
+    // the list-item lift, which would leave the blockquote nested.
+    withBlockChrome(
+      Blockquote.extend({
+        priority: 200,
+        addKeyboardShortcuts() {
+          const parent =
+            (this.parent?.() as Record<string, () => boolean>) ?? {};
+          return {
+            ...parent,
+            'Shift-Tab': ({ editor }) => {
+              if (!editor.isActive('blockquote')) return false;
+              return editor.commands.lift('blockquote');
+            },
+          };
+        },
+      }),
+    ),
     // CodeBlockLowlight swaps the plain CodeBlock for one that
     // tokenises the source via `lowlight` (highlight.js without the
     // file-size cost). The plugin emits inline `.hljs-keyword`,
