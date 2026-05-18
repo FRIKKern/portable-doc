@@ -700,6 +700,46 @@
   outline-offset: 2px;
 }
 
+/* A11 — Export menu (HTML / Markdown / Print). Re-uses the chip-button
+ * look from .paper-footer-status__chip--button; its popover opens UP from
+ * the footer so it never collides with the strip. */
+.paper-export-menu {
+  position: relative;
+}
+.paper-export-menu__popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 30;
+}
+.paper-export-menu__item {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  font-family: var(--paper-font-sans);
+  font-size: 13px;
+  color: var(--paper-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.paper-export-menu__item:hover {
+  background: var(--paper-rule-soft);
+}
+.paper-export-menu__item:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: -2px;
+}
+
 /* Bottom sheet (<768px) — full width above the footer strip. Slides up
  * using --motion-footer-sheet-slide (0ms under prefers-reduced-motion). */
 .paper-footer-status__backdrop {

@@ -36,6 +36,7 @@ import { validateDoc } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import { useMcp } from './McpProvider.js';
+import { ExportMenu } from './ExportMenu.js';
 
 interface Props {
   doc: PortableDoc;
@@ -308,6 +309,8 @@ export function FooterStatus({ doc, editor }: Props): JSX.Element {
       </span>
 
       <span className="paper-footer-status__grow" />
+
+      <ExportMenu doc={doc} editor={editor ?? null} />
 
       <span
         className="paper-footer-status__chip"
