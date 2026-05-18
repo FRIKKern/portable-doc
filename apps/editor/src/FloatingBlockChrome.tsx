@@ -603,10 +603,17 @@ export function FloatingBlockChrome({
       // Verify the block is still where we think it is — content may
       // have shifted between hover and click.
       if (!editor.state.doc.nodeAt(pos)) return;
-      view.focus();
+      // NB: do NOT call view.focus() here. The drag source is a button
+      // OUTSIDE view.dom — calling focus() mid-dragstart shifts focus
+      // away from the source and Chrome/Safari silently cancel the
+      // drag (no drop fires). PM's own drop handler refocuses the
+      // editor after a successful drop. Likewise we do NOT dispatch a
+      // selection transaction here — that fires our onTx → setActiveBlock
+      // re-render mid-dragstart and the browser may abort the drag image
+      // capture. The NodeSelection's own .content() gives us the slice
+      // PM needs without touching editor state.
       const selection = NodeSelection.create(view.state.doc, pos);
-      view.dispatch(view.state.tr.setSelection(selection));
-      const slice = view.state.selection.content();
+      const slice = selection.content();
       const { dom, text } = view.serializeForClipboard(slice);
       e.dataTransfer.clearData();
       e.dataTransfer.setData('text/html', dom.innerHTML);
