@@ -796,8 +796,8 @@
 .paper-floating-chrome {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+  gap: 4px;
+  padding: 3px 6px;
   background: var(--paper-chrome-bg);
   border: 1px solid var(--paper-chrome-border);
   border-radius: 5px;
@@ -1296,8 +1296,12 @@
 }
 
 .paper-format-bubble__btn {
-  width: 28px;
-  height: 24px;
+  /* Compact to match the × icon's visual height — the bar reads as
+   * a single tight row rather than a panel. 20×18 leaves enough hit
+   * area for trackpad/touch without going taller than 1.25× the
+   * delete glyph. */
+  width: 20px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1306,7 +1310,7 @@
   border-radius: 3px;
   color: var(--paper-ink);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   user-select: none;
   padding: 0;
