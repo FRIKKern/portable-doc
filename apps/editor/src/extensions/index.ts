@@ -40,7 +40,10 @@ import {
 import Image from '@tiptap/extension-image';
 import Typography from '@tiptap/extension-typography';
 import { CharacterCount } from '@tiptap/extension-character-count';
-import { ListKeymap } from '@tiptap/extension-list-keymap';
+// ListKeymap is auto-injected by StarterKit (unless you pass
+// listKeymap: false). Adding it here a second time produced a
+// duplicate plugin and broke vertical arrow-key caret movement —
+// same class of bug as the earlier TrailingNode duplicate.
 import { TextAlign } from '@tiptap/extension-text-align';
 import AutoJoiner from 'tiptap-extension-auto-joiner';
 import { withBlockChrome } from './withBlockChrome.js';
@@ -208,13 +211,9 @@ export function buildExtensions(
     // `textCounter` whitespace-splits the doc text, which matches
     // the previous behavior.
     CharacterCount,
-    // ListKeymap — adds the canonical Backspace / Delete / Enter
-    // behaviors inside list items that match Word / Docs / Pages
-    // expectations (e.g. Backspace at the start of a list item lifts
-    // it out of the list; Enter on an empty item exits the list).
-    // Layers on top of extension-list's stock Tab / Shift-Tab. Pure
-    // keymap polish, no schema changes.
-    ListKeymap,
+    // (ListKeymap is shipped INSIDE StarterKit's auto-injection;
+    //  adding it here a second time was a duplicate plugin and
+    //  broke arrow-key caret movement. Removed.)
     // TextAlign — paragraph + heading alignment with the Word / Docs
     // / Pages keyboard shortcuts: Mod-Shift-L (left), Mod-Shift-E
     // (center, the Word convention), Mod-Shift-R (right),
