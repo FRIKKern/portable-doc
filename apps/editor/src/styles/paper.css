@@ -219,11 +219,24 @@
 }
 .paper-column blockquote {
   margin: 0 0 24px;
-  padding: 18px 22px;
+  /* Generous inner padding — content shouldn't kiss the left border
+   * bar or the top edge. 20px vertical reads as one comfortable line
+   * of breathing room around the heading + body. */
+  padding: 20px 28px 20px 32px;
   border-left: 4px solid var(--paper-tone-info);
   background: rgba(59, 110, 143, 0.07);
   border-radius: 2px;
   font-style: normal;
+}
+/* First-child top margin reset so the heading / paragraph inside the
+ * callout sits at the padded top edge — without this, the inner
+ * heading's own top margin adds to the padding and the callout's
+ * vertical rhythm gets uneven across blocks. */
+.paper-column blockquote > :first-child {
+  margin-top: 0;
+}
+.paper-column blockquote > :last-child {
+  margin-bottom: 0;
 }
 .paper-column code {
   font-family: var(--paper-font-mono);
