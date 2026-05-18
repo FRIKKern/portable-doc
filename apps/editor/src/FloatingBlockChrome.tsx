@@ -483,8 +483,17 @@ export function FloatingBlockChrome({
       e.dataTransfer.setData('text/html', dom.innerHTML);
       e.dataTransfer.setData('text/plain', text);
       e.dataTransfer.effectAllowed = 'copyMove';
-      (view as unknown as { dragging: { slice: typeof slice; move: boolean } })
-        .dragging = { slice, move: true };
+      // PM's drop handler reads `view.dragging`. The canonical shape
+      // is `{ slice, move, node }` where `node` is the NodeSelection
+      // covering the source. With `node` set, PM does
+      // `node.replace(tr)` on drop, deleting the source — a proper
+      // node-move. Without it, PM falls back to `tr.deleteSelection()`
+      // which is fragile (selection can shift mid-drag). Including
+      // `node` is what lets us keep schema-draggable: false (so
+      // text-select on click works) AND still drag blocks.
+      (view as unknown as {
+        dragging: { slice: typeof slice; move: boolean; node: NodeSelection };
+      }).dragging = { slice, move: true, node: selection };
       setHoverTarget(null);
     },
     [editor, target],

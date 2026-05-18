@@ -85,22 +85,20 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
   const axes = VARIANT_AXES[blockType] ?? [];
 
   return baseExtension.extend({
-    // Schema-level `draggable: true`. PM's mousedown handler reads
-    // this to decide whether mousedown-and-drag should initiate a
-    // NodeSelection drag. It ALSO drives PM's drop pipeline — without
-    // it, dragstart from our ⋮⋮ button serializes correctly but PM's
-    // drop handler doesn't recognize the slice as a node-move and
-    // the drag visually does nothing.
+    // NO schema-level `draggable: true`. PM's mousedown handler reads
+    // schema-draggable and, when set, dynamically writes
+    // `draggable="true"` to the DOM element on every mousedown — which
+    // breaks text-select inside the block on Chrome/Safari (mousedown
+    // on text inside a draggable element starts a node-drag, not a
+    // text-select).
     //
-    // The drag-vs-select conflict (mousedown on text starts a block
-    // drag) is mitigated by the unified bubble: the dedicated ⋮⋮
-    // drag affordance lives ABOVE the block, so writers reach for it
-    // intentionally instead of "drag-from-anywhere-on-the-block".
-    // PM also checks `event.target` against the node's draggable
-    // descendants — clicking on text proper still text-selects in
-    // practice; the conflict mainly bit when the old external
-    // drag-handle overlapped with text content.
-    draggable: true,
+    // Drag still works: the ⋮⋮ button in FloatingBlockChrome has its
+    // OWN HTML5 `draggable` attribute (it's a separate DOM element
+    // outside the PM surface, so the schema-draggable trap doesn't
+    // apply). Its onDragStart sets `view.dragging = { slice, move,
+    // node: NodeSelection }`. PM's drop handler reads `node` and
+    // calls `node.replace(tr)` — proper node-move on drop without
+    // needing schema-draggable to gate it.
     addOptions() {
       // Merge the `paper-block` class into the base extension's
       // `HTMLAttributes` so the schema's natural toDOM shape paints it

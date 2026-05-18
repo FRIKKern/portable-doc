@@ -81,7 +81,7 @@ afterEach(() => cleanup());
 // ---------------------------------------------------------------------------
 
 describe('withBlockChrome — factory shape', () => {
-  it('returns a NodeView-less, schema-draggable wrapper', () => {
+  it('returns a NodeView-less wrapper with NO schema-draggable (text-select must work)', () => {
     const Wrapped = withBlockChrome(Paragraph);
     expect(Wrapped.name).toBe('paragraph');
     // Post-D+E: variant rendering is CSS-driven (per-axis data-attrs),
@@ -89,11 +89,14 @@ describe('withBlockChrome — factory shape', () => {
     // schema's natural toDOM shape paints the element directly.
     const hook = (Wrapped.config as { addNodeView?: unknown }).addNodeView;
     expect(hook).toBeUndefined();
-    // Schema `draggable: true` is REQUIRED for PM's drop pipeline to
-    // recognize the slice from our ⋮⋮ button's dragstart as a
-    // node-move. Without it the bubble's drag handle visually grabs
-    // but the drop does nothing.
-    expect((Wrapped.config as { draggable?: boolean }).draggable).toBe(true);
+    // Schema `draggable` is intentionally NOT set. PM's mousedown
+    // would dynamically write `draggable="true"` to the DOM element
+    // on every mousedown, breaking text-select on Chrome/Safari.
+    // Drag is initiated by the ⋮⋮ button in FloatingBlockChrome,
+    // which has its own HTML5 `draggable` attribute and sets
+    // `view.dragging.node = NodeSelection` so PM's drop pipeline
+    // performs the node-move directly.
+    expect((Wrapped.config as { draggable?: boolean }).draggable).toBeUndefined();
   });
 
   it('preserves the base node name across diverse block types', () => {
