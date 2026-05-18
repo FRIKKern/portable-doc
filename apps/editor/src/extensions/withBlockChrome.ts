@@ -85,14 +85,22 @@ export function withBlockChrome<TNode extends Node>(baseExtension: TNode): TNode
   const axes = VARIANT_AXES[blockType] ?? [];
 
   return baseExtension.extend({
-    // No schema-level `draggable: true`. ProseMirror's mousedown
-    // handler converts mousedown-and-drag on draggable-schema nodes
-    // into a NodeSelection drag — which fights text selection inside
-    // the block. The drag affordance lives on the ⋮⋮ button in
-    // FloatingBlockChrome (its HTML5 `draggable` attribute + an
-    // explicit onDragStart that calls view.serializeForClipboard).
-    // PM's drop machinery still applies the move at the drop site
-    // because our handler sets `view.dragging = { slice, move: true }`.
+    // Schema-level `draggable: true`. PM's mousedown handler reads
+    // this to decide whether mousedown-and-drag should initiate a
+    // NodeSelection drag. It ALSO drives PM's drop pipeline — without
+    // it, dragstart from our ⋮⋮ button serializes correctly but PM's
+    // drop handler doesn't recognize the slice as a node-move and
+    // the drag visually does nothing.
+    //
+    // The drag-vs-select conflict (mousedown on text starts a block
+    // drag) is mitigated by the unified bubble: the dedicated ⋮⋮
+    // drag affordance lives ABOVE the block, so writers reach for it
+    // intentionally instead of "drag-from-anywhere-on-the-block".
+    // PM also checks `event.target` against the node's draggable
+    // descendants — clicking on text proper still text-selects in
+    // practice; the conflict mainly bit when the old external
+    // drag-handle overlapped with text content.
+    draggable: true,
     addOptions() {
       // Merge the `paper-block` class into the base extension's
       // `HTMLAttributes` so the schema's natural toDOM shape paints it

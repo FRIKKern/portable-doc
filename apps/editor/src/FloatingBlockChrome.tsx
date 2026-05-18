@@ -492,8 +492,6 @@ export function FloatingBlockChrome({
       role="toolbar"
       aria-label="Block toolbar"
       aria-hidden={!visible}
-      contentEditable={false}
-      suppressContentEditableWarning
       style={
         visible && position
           ? {

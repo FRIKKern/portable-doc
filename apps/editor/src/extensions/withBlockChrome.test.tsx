@@ -81,7 +81,7 @@ afterEach(() => cleanup());
 // ---------------------------------------------------------------------------
 
 describe('withBlockChrome — factory shape', () => {
-  it('returns a NodeView-less wrapper that does NOT set schema-level `draggable: true`', () => {
+  it('returns a NodeView-less, schema-draggable wrapper', () => {
     const Wrapped = withBlockChrome(Paragraph);
     expect(Wrapped.name).toBe('paragraph');
     // Post-D+E: variant rendering is CSS-driven (per-axis data-attrs),
@@ -89,13 +89,11 @@ describe('withBlockChrome — factory shape', () => {
     // schema's natural toDOM shape paints the element directly.
     const hook = (Wrapped.config as { addNodeView?: unknown }).addNodeView;
     expect(hook).toBeUndefined();
-    // Schema `draggable` is intentionally NOT set. PM converts
-    // mousedown-and-drag on draggable-schema nodes into a
-    // NodeSelection drag, which steals text-selection inside the
-    // block. The drag affordance lives on the ⋮⋮ button in
-    // FloatingBlockChrome (its HTML5 `draggable` + an explicit
-    // onDragStart that serializes via view.serializeForClipboard).
-    expect((Wrapped.config as { draggable?: boolean }).draggable).toBeUndefined();
+    // Schema `draggable: true` is REQUIRED for PM's drop pipeline to
+    // recognize the slice from our ⋮⋮ button's dragstart as a
+    // node-move. Without it the bubble's drag handle visually grabs
+    // but the drop does nothing.
+    expect((Wrapped.config as { draggable?: boolean }).draggable).toBe(true);
   });
 
   it('preserves the base node name across diverse block types', () => {
@@ -239,7 +237,7 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(topLevel.length).toBe(4);
   });
 
-  it('top-level blocks do NOT carry `draggable=true` (text-select must work; drag is on the ⋮⋮ button only)', async () => {
+  it('top-level blocks render without `data-block-idx` (chrome uses view.posAtCoords)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     const surface = screen.getByTestId('paper-editor').querySelector('.ProseMirror');
@@ -248,15 +246,6 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     );
     expect(topLevel.length).toBeGreaterThan(0);
     topLevel.forEach((el) => {
-      // Atom/void blocks (e.g. <hr>) get `draggable=true` from PM
-      // anyway since they have no editable interior — that's fine,
-      // there's no text to select inside them. Skip those.
-      if (el.tagName === 'HR') return;
-      // For every other block (paragraph, heading, list, blockquote,
-      // codeblock), `draggable` must NOT be set. PM would convert
-      // mousedown-and-drag on the text to a NodeSelection drag,
-      // which would steal text-selection from the writer.
-      expect(el.getAttribute('draggable')).toBeNull();
       // `data-block-idx` is intentionally NOT written — the floating
       // chrome uses canonical PM APIs (`view.posAtCoords` with a
       // `view.posAtDOM` fallback) to find the target block.
