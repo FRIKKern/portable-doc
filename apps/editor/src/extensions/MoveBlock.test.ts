@@ -11,8 +11,8 @@
  *   4. moveBlock(N, doc.childCount) lands at the end.
  *   5. Out-of-range fromIdx returns false.
  *   6. Out-of-range toIdx returns false.
- *   7. Cmd+Shift+ArrowUp keybinding maps to moveBlock(idx, idx-1).
- *   8. Cmd+Shift+ArrowDown keybinding maps to moveBlock(idx, idx+2)
+ *   7. Alt+Shift+ArrowUp keybinding maps to moveBlock(idx, idx-1).
+ *   8. Alt+Shift+ArrowDown keybinding maps to moveBlock(idx, idx+2)
  *      (slot semantics: insert AFTER the next sibling).
  *   9. currentBlockIdx returns the correct top-level index from the
  *      selection.
@@ -170,42 +170,42 @@ function getBindings(): Bindings {
   return cfg.addKeyboardShortcuts.call({} as never);
 }
 
-describe('addKeyboardShortcuts — Cmd+Shift+Arrow{Up,Down}', () => {
-  it('exposes Mod-Shift-ArrowUp and Mod-Shift-ArrowDown handlers', () => {
+describe('addKeyboardShortcuts — Alt+Shift+Arrow{Up,Down}', () => {
+  it('exposes Alt-Shift-ArrowUp and Alt-Shift-ArrowDown handlers', () => {
     const bindings = getBindings();
-    expect(typeof bindings['Mod-Shift-ArrowUp']).toBe('function');
-    expect(typeof bindings['Mod-Shift-ArrowDown']).toBe('function');
+    expect(typeof bindings['Alt-Shift-ArrowUp']).toBe('function');
+    expect(typeof bindings['Alt-Shift-ArrowDown']).toBe('function');
   });
 
-  it('Mod-Shift-ArrowUp moves the current block up one slot', () => {
+  it('Alt-Shift-ArrowUp moves the current block up one slot', () => {
     const editor = track(mountThreeBlocks());
     editor.commands.setTextSelection(5); // inside "B" (idx 1)
     expect(currentBlockIdx(editor)).toBe(1);
-    const ok = getBindings()['Mod-Shift-ArrowUp']!({ editor });
+    const ok = getBindings()['Alt-Shift-ArrowUp']!({ editor });
     expect(ok).toBe(true);
     expect(textOrder(editor)).toEqual(['B', 'A', 'C']);
   });
 
-  it('Mod-Shift-ArrowUp on the first block returns false (no-op)', () => {
+  it('Alt-Shift-ArrowUp on the first block returns false (no-op)', () => {
     const editor = track(mountThreeBlocks());
     editor.commands.setTextSelection(2); // inside "A" (idx 0)
-    const ok = getBindings()['Mod-Shift-ArrowUp']!({ editor });
+    const ok = getBindings()['Alt-Shift-ArrowUp']!({ editor });
     expect(ok).toBe(false);
     expect(textOrder(editor)).toEqual(['A', 'B', 'C']);
   });
 
-  it('Mod-Shift-ArrowDown moves the current block down one slot', () => {
+  it('Alt-Shift-ArrowDown moves the current block down one slot', () => {
     const editor = track(mountThreeBlocks());
     editor.commands.setTextSelection(2); // inside "A" (idx 0)
-    const ok = getBindings()['Mod-Shift-ArrowDown']!({ editor });
+    const ok = getBindings()['Alt-Shift-ArrowDown']!({ editor });
     expect(ok).toBe(true);
     expect(textOrder(editor)).toEqual(['B', 'A', 'C']);
   });
 
-  it('Mod-Shift-ArrowDown on the last block returns false (no-op)', () => {
+  it('Alt-Shift-ArrowDown on the last block returns false (no-op)', () => {
     const editor = track(mountThreeBlocks());
     editor.commands.setTextSelection(8); // inside "C" (idx 2)
-    const ok = getBindings()['Mod-Shift-ArrowDown']!({ editor });
+    const ok = getBindings()['Alt-Shift-ArrowDown']!({ editor });
     expect(ok).toBe(false);
     expect(textOrder(editor)).toEqual(['A', 'B', 'C']);
   });

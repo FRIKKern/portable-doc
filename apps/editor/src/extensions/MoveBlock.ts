@@ -8,7 +8,7 @@
  * The command is the single source of truth for reorder, so:
  *   - the native HTML5 drag handler in `BlockChrome.ts` calls it on
  *     `drop` with `[fromIdx, toIdx]`,
- *   - keyboard reorder via `Cmd+Shift+ArrowUp` / `Cmd+Shift+ArrowDown`
+ *   - keyboard reorder via `Alt+Shift+ArrowUp` / `Alt+Shift+ArrowDown`
  *     (`addKeyboardShortcuts`) calls it with `[currentIdx, currentIdx ± 1]`.
  *
  * Doc-position math (translate top-level child index → absolute doc
@@ -112,17 +112,20 @@ export const MoveBlock = Extension.create({
 
   addKeyboardShortcuts() {
     return {
-      // Cmd+Shift+↑ on macOS / Ctrl+Shift+↑ elsewhere — move the
-      // current block up by one slot. Returns `false` (so the binding
-      // chain continues) when the block is already at index 0; the
-      // command itself short-circuits via the range guard, but
-      // returning `false` here lets future extensions chain on it.
-      'Mod-Shift-ArrowUp': ({ editor }) => {
+      // Alt+Shift+↑ / Alt+Shift+↓ — move the current block. The
+      // earlier binding (Mod+Shift+Arrow) collided with the OS-native
+      // "extend selection to start/end of document" on macOS, so a
+      // Cmd+Shift+↑ that should select up to the doc top instead
+      // shuffled blocks. Alt+Shift+Arrow is the Word / VSCode
+      // canonical "move line/paragraph" shortcut and has no OS or
+      // contenteditable conflict (Alt+Shift+Left/Right extends
+      // selection by word; Up/Down are free).
+      'Alt-Shift-ArrowUp': ({ editor }) => {
         const idx = currentBlockIdx(editor);
         if (idx <= 0) return false;
         return editor.commands.moveBlock(idx, idx - 1);
       },
-      'Mod-Shift-ArrowDown': ({ editor }) => {
+      'Alt-Shift-ArrowDown': ({ editor }) => {
         const idx = currentBlockIdx(editor);
         if (idx < 0) return false;
         if (idx >= editor.state.doc.childCount - 1) return false;
