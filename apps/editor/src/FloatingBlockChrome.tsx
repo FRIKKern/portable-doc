@@ -241,12 +241,110 @@ export function FloatingBlockChrome({
   // sentinel defaults so downstream readers don't need null checks.
   const stateInfo = rawStateInfo ?? DEFAULT_STATE_INFO;
 
-  // Active target: selection wins when the editor is focused; hover
-  // is the fallback so the bubble can preview a block before the
-  // caret lands there.
-  const target: TargetBlock | null = stateInfo.isFocused
-    ? stateInfo.selectionTarget
-    : (hoverTarget ?? stateInfo.selectionTarget);
+  // ─── Active-block lock with idle + away hysteresis ─────────────
+  //
+  // The bubble locks to the user's "active block" — the one they
+  // last interacted with (clicked or typed in). Hover can override
+  // it ONLY after BOTH:
+  //   • 5s of no interaction with the active block
+  //   • 2s of mouse positioned outside (active block ∪ bubble)
+  //
+  // This kills the "bubble flickers to whatever's under the cursor"
+  // problem after the user clicks a chrome button (which refocuses
+  // the editor and would otherwise switch the bubble's target
+  // mid-interaction). The bubble stays where the user expects it
+  // until they've clearly disengaged.
+  const [activeBlock, setActiveBlock] = useState<TargetBlock | null>(null);
+  const lastInteractionRef = useRef<number>(Date.now());
+  const mouseAwayStartRef = useRef<number | null>(null);
+
+  // Any editor transaction counts as interaction — typing,
+  // selection change, mark toggle, anything. The current selection's
+  // block becomes the new active block.
+  useEffect(() => {
+    if (!editor) return;
+    const onTx = (): void => {
+      lastInteractionRef.current = Date.now();
+      mouseAwayStartRef.current = null;
+      const top = topLevelAtPos(editor, editor.state.selection.from);
+      if (top) {
+        setActiveBlock({
+          idx: top.idx,
+          blockType: top.blockType,
+          pos: top.blockPos,
+          source: 'selection',
+        });
+      }
+    };
+    editor.on('transaction', onTx);
+    onTx(); // initial set
+    return () => {
+      editor.off('transaction', onTx);
+    };
+  }, [editor]);
+
+  // Mouse-in-zone tracking + poll for the switch condition. Updates
+  // mouseAwayStartRef on every mousemove; a 250ms timer evaluates
+  // whether both hysteresis thresholds are met and, if so, hands
+  // the active block over to the current hoverTarget.
+  useEffect(() => {
+    if (!editor) return;
+    const surface = editor.view.dom as HTMLElement;
+    const IDLE_MS = 5000;
+    const AWAY_MS = 2000;
+
+    const onMove = (e: MouseEvent): void => {
+      if (!activeBlock) return;
+      const chrome = chromeElRef.current;
+      const blockDOM = nodeDOMAt(editor, activeBlock.pos);
+      if (!blockDOM) return;
+      const cRect = chrome?.getBoundingClientRect();
+      const bRect = blockDOM.getBoundingClientRect();
+      const pad = 8;
+      const inChrome =
+        cRect != null &&
+        cRect.width > 0 &&
+        e.clientX >= cRect.left - pad &&
+        e.clientX <= cRect.right + pad &&
+        e.clientY >= cRect.top - pad &&
+        e.clientY <= cRect.bottom + pad;
+      const inBlock =
+        e.clientX >= bRect.left &&
+        e.clientX <= bRect.right &&
+        e.clientY >= bRect.top &&
+        e.clientY <= bRect.bottom;
+      if (inChrome || inBlock) {
+        mouseAwayStartRef.current = null;
+      } else if (mouseAwayStartRef.current == null) {
+        mouseAwayStartRef.current = Date.now();
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      const idleMs = Date.now() - lastInteractionRef.current;
+      const awayMs =
+        mouseAwayStartRef.current != null
+          ? Date.now() - mouseAwayStartRef.current
+          : 0;
+      if (idleMs >= IDLE_MS && awayMs >= AWAY_MS && hoverTarget) {
+        if (hoverTarget.idx !== activeBlock?.idx) {
+          setActiveBlock(hoverTarget);
+          mouseAwayStartRef.current = null;
+        }
+      }
+    }, 250);
+
+    surface.addEventListener('mousemove', onMove);
+    return () => {
+      surface.removeEventListener('mousemove', onMove);
+      window.clearInterval(interval);
+    };
+  }, [editor, activeBlock, hoverTarget]);
+
+  // The bubble's target IS the active block. Hover/selection feed
+  // INTO activeBlock via the rules above; the bubble never reads
+  // them directly.
+  const target: TargetBlock | null = activeBlock;
 
   // Latest `target` exposed via a ref so the mousemove handler can
   // read it without re-subscribing on every target change (which
