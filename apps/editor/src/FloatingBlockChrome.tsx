@@ -248,6 +248,12 @@ export function FloatingBlockChrome({
     ? stateInfo.selectionTarget
     : (hoverTarget ?? stateInfo.selectionTarget);
 
+  // Latest `target` exposed via a ref so the mousemove handler can
+  // read it without re-subscribing on every target change (which
+  // would re-create the handler and miss in-flight mouse events).
+  const targetRef = useRef(target);
+  targetRef.current = target;
+
   // Cached node attrs at the target block — drives the variant chip.
   const [targetAttrs, setTargetAttrs] = useState<Record<string, unknown> | null>(
     null,
@@ -338,6 +344,39 @@ export function FloatingBlockChrome({
     const surface = editor.view.dom as HTMLElement;
 
     const processEvent = (e: MouseEvent): void => {
+      // Hover-intent guard: when the cursor is in the vertical gap
+      // BETWEEN the current target block and the bubble (the bubble
+      // floats above the block; the user is moving up to click a
+      // button), freeze the target so it doesn't dart to whichever
+      // block now happens to be under the cursor mid-transit. Same
+      // pattern as Amazon's "safe triangle" mega-menu — once a target
+      // exists, the path toward the bubble is sticky.
+      const tgt = targetRef.current;
+      const chrome = chromeElRef.current;
+      if (tgt && chrome) {
+        const blockDOM = nodeDOMAt(editor, tgt.pos);
+        const cRect = chrome.getBoundingClientRect();
+        const bRect = blockDOM?.getBoundingClientRect();
+        if (bRect && cRect.width > 0) {
+          // Approach corridor — slightly wider than the chrome to
+          // forgive small horizontal drift; vertical range covers
+          // the chrome itself and the gap down to the block's top.
+          const xPad = 16;
+          const yPad = 4;
+          const inX =
+            e.clientX >= cRect.left - xPad && e.clientX <= cRect.right + xPad;
+          const inY =
+            e.clientY >= cRect.top - yPad && e.clientY <= bRect.top + yPad;
+          if (inX && inY) {
+            // Mouse is reaching for the bubble — keep current target
+            // and the hide timer cleared. Don't re-resolve under the
+            // cursor.
+            clearHideTimer();
+            return;
+          }
+        }
+      }
+
       const next = targetBlockFromEvent(editor, e);
       if (!next) {
         if (!chromeHovered) scheduleHide();
