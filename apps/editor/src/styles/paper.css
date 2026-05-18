@@ -791,7 +791,11 @@
 .ProseMirror > .has-focus {
   position: relative;
 }
-.ProseMirror > .has-focus::before {
+/* Use ::after, NOT ::before — `.is-empty[data-placeholder]::before`
+ * also lives on this element and CSS cascades per-property, so a
+ * ::before here would leak `width: 2px` into the placeholder and wrap
+ * "Heading" / "List item" / etc. one character per line. */
+.ProseMirror > .has-focus::after {
   content: '';
   position: absolute;
   left: -16px;
