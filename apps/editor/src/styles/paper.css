@@ -217,7 +217,12 @@
 .paper-column li {
   margin: 0 0 8px;
 }
-.paper-column blockquote {
+/* `.paper-column blockquote` has class+element specificity (0,1,1);
+ * `.ProseMirror > .paper-block` has class+class (0,2,0) and would
+ * win — overriding the padding back to its 4px 0 default. We use
+ * the doubled class form so this rule lands at 0,2,1 and reliably
+ * applies the generous inner padding. */
+.paper-column blockquote.paper-block {
   margin: 0 0 24px;
   /* Generous inner padding — content shouldn't kiss the left border
    * bar or the top edge. 20px vertical reads as one comfortable line
