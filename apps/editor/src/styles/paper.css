@@ -824,30 +824,6 @@
  * the motion tokens from motion.css.
  * =========================================================================== */
 
-/* @tiptap/extensions Focus adds `.has-focus` to the top-level block
- * containing the caret. Marks the active block with a thin warm-rust
- * accent on the left edge — Notion / Linear style "this is where
- * you are". Subtle enough to not compete with the bubble. */
-.ProseMirror > .has-focus {
-  position: relative;
-}
-/* Use ::after, NOT ::before — `.is-empty[data-placeholder]::before`
- * also lives on this element and CSS cascades per-property, so a
- * ::before here would leak `width: 2px` into the placeholder and wrap
- * "Heading" / "List item" / etc. one character per line. */
-.ProseMirror > .has-focus::after {
-  content: '';
-  position: absolute;
-  left: -16px;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  background: var(--paper-accent-warm-rust);
-  border-radius: 2px;
-  opacity: 0.55;
-  pointer-events: none;
-}
-
 /* Top-level blocks only — the class lands on every wrapped element
  * via `withBlockChrome`'s HTMLAttributes injection (canonical TipTap
  * pattern), including nested paragraphs inside lists or callouts.
@@ -937,6 +913,39 @@
   cursor: grabbing;
 }
 .paper-block__drag-handle:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+
+/* Side drag handle — appears to the LEFT of each active block,
+ * 12px gap from the block edge, vertically centered. Same glyph
+ * and drag behavior as the toolbar's ⋮⋮. Position is set via
+ * inline style from FloatingBlockChrome's reposition pass. */
+.paper-block__side-handle {
+  background: transparent;
+  border: 0;
+  color: var(--paper-ink-faint);
+  font-family: var(--paper-font-sans);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: -1px;
+  padding: 2px 2px;
+  width: 16px;
+  height: 22px;
+  cursor: grab;
+  user-select: none;
+  z-index: 10;
+  transition:
+    color 160ms ease-out,
+    opacity 160ms ease-out;
+}
+.paper-block__side-handle:hover {
+  color: var(--paper-ink-soft);
+}
+.paper-block__side-handle:active {
+  cursor: grabbing;
+}
+.paper-block__side-handle:focus-visible {
   outline: 2px solid var(--paper-accent-warm-rust);
   outline-offset: 2px;
 }

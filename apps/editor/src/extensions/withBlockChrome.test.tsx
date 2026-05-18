@@ -301,16 +301,21 @@ describe('Editor integration — paper-block + single floating chrome', () => {
     expect(chrome!.querySelector('.paper-block__insert')).toBeFalsy();
   });
 
-  it('NO external [data-drag-handle] outside the cluster (the global drag-handle extension is gone)', async () => {
+  it('NO external [data-drag-handle] outside the cluster except the side handle (the global drag-handle extension is gone)', async () => {
     render(<Editor doc={welcomeFixture} />);
     await new Promise<void>((r) => setTimeout(r, 0));
     await new Promise<void>((r) => setTimeout(r, 0));
-    // The only [data-drag-handle] now is INSIDE
-    // `.paper-floating-chrome`. There should be no sibling/external
-    // drag handle div anymore.
+    // The only [data-drag-handle]s now are INSIDE
+    // `.paper-floating-chrome` or the side-handle sibling that lives
+    // next to the chrome. There should be no other sibling/external
+    // drag handle div anymore (legacy global drag-handle extension).
     const handlesOutsideChrome = Array.from(
       document.querySelectorAll('[data-drag-handle]'),
-    ).filter((el) => !el.closest('.paper-floating-chrome'));
+    ).filter(
+      (el) =>
+        !el.closest('.paper-floating-chrome') &&
+        !el.classList.contains('paper-block__side-handle'),
+    );
     expect(handlesOutsideChrome.length).toBe(0);
   });
 

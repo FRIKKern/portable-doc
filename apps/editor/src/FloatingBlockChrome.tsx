@@ -194,6 +194,9 @@ export function FloatingBlockChrome({
   const [position, setPosition] = useState<{ top: number; left: number } | null>(
     null,
   );
+  const [sidePosition, setSidePosition] = useState<
+    { top: number; left: number } | null
+  >(null);
   const [chromeHovered, setChromeHovered] = useState(false);
   const hideTimerRef = useRef<number | undefined>(undefined);
   const chromeElRef = useRef<HTMLDivElement | null>(null);
@@ -415,11 +418,13 @@ export function FloatingBlockChrome({
   const reposition = useCallback((): void => {
     if (!editor || !target || !chromeElRef.current) {
       setPosition(null);
+      setSidePosition(null);
       return;
     }
     const blockDOM = nodeDOMAt(editor, target.pos);
     if (!blockDOM) {
       setPosition(null);
+      setSidePosition(null);
       return;
     }
     const blockRect = blockDOM.getBoundingClientRect();
@@ -430,6 +435,16 @@ export function FloatingBlockChrome({
     if (top < 8) top = blockRect.bottom + BUBBLE_GAP_PX;
     const left = blockRect.left;
     setPosition({ top, left });
+    // Side handle — vertically centered to the block, 12px gap to its left.
+    // Width 16px (matches the rendered glyph at 14px font-size + horizontal
+    // padding). Height ~22px — re-read from chromeElRef sibling at render
+    // time if needed; for now hard-code 22.
+    const SIDE_HANDLE_GAP_PX = 12;
+    const SIDE_HANDLE_W = 16;
+    const SIDE_HANDLE_H = 22;
+    const sideTop = blockRect.top + blockRect.height / 2 - SIDE_HANDLE_H / 2;
+    const sideLeft = blockRect.left - SIDE_HANDLE_GAP_PX - SIDE_HANDLE_W;
+    setSidePosition({ top: sideTop, left: sideLeft });
   }, [editor, target]);
 
   // Reposition AFTER paint so chrome has a measured size. useLayoutEffect
@@ -690,11 +705,34 @@ export function FloatingBlockChrome({
   const linkActionable = !stateInfo.selectionEmpty || stateInfo.link;
 
   return (
-    <div
-      ref={chromeElRef}
-      className={
-        'paper-floating-chrome' + (visible ? ' is-tracking' : '')
-      }
+    <>
+      {/* Side handle — appears next to the block, 12px gap from its left
+          edge, vertically centered. Same drag logic as the toolbar's
+          ⋮⋮; serves as both the visual cue and the drag affordance. */}
+      {visible && sidePosition && (
+        <button
+          type="button"
+          className="paper-block__side-handle"
+          aria-label={`Drag ${lower}`}
+          title="Drag to reorder"
+          draggable
+          data-drag-handle
+          data-testid="paper-block-side-handle"
+          onDragStart={handleDragStart}
+          style={{
+            position: 'fixed',
+            top: `${sidePosition.top}px`,
+            left: `${sidePosition.left}px`,
+          }}
+        >
+          ⋮⋮
+        </button>
+      )}
+      <div
+        ref={chromeElRef}
+        className={
+          'paper-floating-chrome' + (visible ? ' is-tracking' : '')
+        }
       data-block-type={target?.blockType}
       role="toolbar"
       aria-label="Block toolbar"
@@ -841,5 +879,6 @@ export function FloatingBlockChrome({
         ×
       </button>
     </div>
+    </>
   );
 }
