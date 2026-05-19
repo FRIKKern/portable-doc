@@ -64,7 +64,7 @@ export function DocxPreviewPanel({
             ignoreLastRenderedPageBreak: true,
             experimental: false,
             trimXmlDeclaration: true,
-            useBase64URL: false,
+            useBase64URL: true,
           });
           if (cancelled) return;
           setStatus('ready');

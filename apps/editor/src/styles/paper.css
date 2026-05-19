@@ -1978,6 +1978,34 @@
   margin: 0 0 16px;
 }
 
+/* docx-preview hard-codes section.docx to background:white. Override for the
+ * preview so the cream page color shows even when docx-preview ignores
+ * <w:background>. Real .docx file carries the cream regardless. */
+.paper-docx-preview .docx-wrapper section.docx,
+.paper-docx-preview .docx-wrapper section.paper-docx-preview__page {
+  background: var(--paper-bg) !important;
+  box-shadow: none;
+}
+
+/* Body font fallback — when Iowan/Georgia aren't in the system fonts,
+ * fall back to the editor's serif stack instead of Times/whatever. */
+.paper-docx-preview .docx-wrapper {
+  font-family: Georgia, var(--paper-font-serif), serif;
+}
+
+/* Hyperlinks in the preview — match Papir's warm-rust treatment if
+ * docx-preview drops our direct-formatting (defensive). */
+.paper-docx-preview .docx-wrapper a {
+  color: var(--paper-accent-warm-rust);
+  text-decoration: underline;
+}
+
+/* Images in the preview must not blow out the page width. */
+.paper-docx-preview .docx-wrapper img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* ===========================================================================
  * Margin diagnostics (A10) — calm margin notes in the right gutter.
  *

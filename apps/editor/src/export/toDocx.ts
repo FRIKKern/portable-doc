@@ -42,13 +42,16 @@ import {
   Document,
   ExternalHyperlink,
   HeadingLevel,
+  LineRuleType,
   Packer,
+  PageOrientation,
   Paragraph,
   ShadingType,
   Table,
   TableCell,
   TableRow,
   TextRun,
+  UnderlineType,
   WidthType,
   type ParagraphChild,
 } from 'docx';
@@ -64,6 +67,8 @@ interface RunOpts {
   italics?: boolean;
   font?: string;
   color?: string;
+  style?: string;
+  underline?: { type: (typeof UnderlineType)[keyof typeof UnderlineType]; color?: string };
   shading?: { type: (typeof ShadingType)[keyof typeof ShadingType]; color: string; fill: string };
 }
 
@@ -73,12 +78,15 @@ interface RunOpts {
 // fall through to `null` and trigger the "[Unsupported variant: …]" callout.
 // ---------------------------------------------------------------------------
 
-const TONE_COLOR: Record<Tone, { fg: string; bg: string }> = {
-  success: { fg: '047857', bg: 'ECFDF5' },
-  warning: { fg: '92400E', bg: 'FFFBEB' },
-  danger: { fg: 'B91C1C', bg: 'FEF2F2' },
-  info: { fg: '1D4ED8', bg: 'EFF6FF' },
-  neutral: { fg: '374151', bg: 'F3F4F6' },
+// Hand-picked TailwindCSS-50 background + tone-700 border per the
+// paper.css palette. Used by callouts (block-level pBdr + shading) and
+// the seeded paragraph-style runs.
+const CALLOUT_TONES: Record<Tone, { bg: string; border: string }> = {
+  info: { bg: 'EFF6FF', border: '1D4ED8' },
+  success: { bg: 'ECFDF5', border: '047857' },
+  warning: { bg: 'FFFBEB', border: '92400E' },
+  danger: { bg: 'FEF2F2', border: 'B91C1C' },
+  neutral: { bg: 'F3F4F6', border: '374151' },
 };
 
 function pascal(s: string): string {
@@ -93,12 +101,6 @@ function calloutStyleName(tone: Tone, variant?: Record<string, string>): string 
   const emphasis = variant?.emphasis ?? 'subtle';
   if (emphasis !== 'subtle' && emphasis !== 'bold') return null;
   return `Callout${pascal(tone)}${pascal(emphasis)}`;
-}
-
-function actionStyleName(b: ActionBlock): string {
-  const priority = b.priority ?? 'primary';
-  const size = b.variant?.size ?? 'medium';
-  return `Action${pascal(priority)}${pascal(size)}`;
 }
 
 function sectionStyleName(variant?: Record<string, string>): string {
@@ -143,6 +145,8 @@ interface RunCtx {
   italics?: boolean;
   font?: string;
   color?: string;
+  style?: string;
+  underline?: { type: (typeof UnderlineType)[keyof typeof UnderlineType]; color?: string };
 }
 
 function inlineToRuns(nodes: InlineNode[] | undefined, ctx: RunCtx = {}): ParagraphChild[] {
@@ -156,6 +160,8 @@ function inlineToRuns(nodes: InlineNode[] | undefined, ctx: RunCtx = {}): Paragr
         if (ctx.italics) opts.italics = true;
         if (ctx.font) opts.font = ctx.font;
         if (ctx.color) opts.color = ctx.color;
+        if (ctx.underline) opts.underline = ctx.underline;
+        if (ctx.style) opts.style = ctx.style;
         out.push(new TextRun(opts));
         break;
       }
@@ -177,11 +183,31 @@ function inlineToRuns(nodes: InlineNode[] | undefined, ctx: RunCtx = {}): Paragr
         break;
       }
       case 'link': {
-        const childRuns = inlineToRuns(n.children, ctx);
+        // Belt-and-suspenders: bind the overridden "Hyperlink" character
+        // style AND set direct-formatting color + underline on the
+        // child runs. Pages / Google Docs strip the style binding on
+        // import; the direct formatting survives the round-trip.
+        const linkCtx: RunCtx = {
+          ...ctx,
+          color: 'A23925',
+          underline: { type: UnderlineType.SINGLE },
+          style: 'Hyperlink',
+        };
+        const childRuns = inlineToRuns(n.children, linkCtx);
         out.push(
           new ExternalHyperlink({
             link: n.href,
-            children: childRuns.length > 0 ? childRuns : [new TextRun({ text: n.href })],
+            children:
+              childRuns.length > 0
+                ? childRuns
+                : [
+                    new TextRun({
+                      text: n.href,
+                      color: 'A23925',
+                      underline: { type: UnderlineType.SINGLE },
+                      style: 'Hyperlink',
+                    }),
+                  ],
           }),
         );
         break;
@@ -229,28 +255,62 @@ function paragraphsForCallout(b: CalloutBlock): Paragraph[] {
   if (!styleId) {
     return paragraphsForUnsupportedVariant(`callout/${b.tone}/${b.variant?.emphasis ?? '?'}`);
   }
-  const tone = TONE_COLOR[b.tone];
+  const tone = CALLOUT_TONES[b.tone];
+  const emphasis = b.variant?.emphasis ?? 'subtle';
+  // OOXML pBdr `sz` is in eighths of a point — 18 = 2.25pt subtle,
+  // 24 = 3pt bold. `between` joins the consecutive paragraphs of a
+  // multi-line callout so the left rule reads as one continuous bar.
+  const borderSize = emphasis === 'bold' ? 24 : 18;
+  const calloutBorder = {
+    left: {
+      style: BorderStyle.SINGLE,
+      size: borderSize,
+      space: 16,
+      color: tone.border,
+    },
+    between: {
+      style: BorderStyle.SINGLE,
+      size: borderSize,
+      space: 0,
+      color: tone.border,
+    },
+  };
+  // CRITICAL: ShadingType.CLEAR (not SOLID). SOLID is opaque and paints
+  // over text in some renderers; CLEAR is the OOXML idiom for tinted
+  // fills behind text.
+  const calloutShading = {
+    type: ShadingType.CLEAR,
+    color: 'auto',
+    fill: tone.bg,
+  };
+  const calloutSpacing = {
+    before: 200,
+    after: 200,
+    line: 360,
+    lineRule: LineRuleType.AUTO,
+  };
+  const calloutIndent = { left: 360, right: 360 };
   const out: Paragraph[] = [];
   if (b.title) {
     out.push(
       new Paragraph({
         style: styleId,
-        border: {
-          left: { style: BorderStyle.SINGLE, size: 24, space: 8, color: tone.fg },
-        },
-        shading: { type: ShadingType.SOLID, color: tone.bg, fill: tone.bg },
-        children: [new TextRun({ text: b.title, bold: true, color: tone.fg })],
+        border: calloutBorder,
+        shading: calloutShading,
+        indent: calloutIndent,
+        spacing: calloutSpacing,
+        children: [new TextRun({ text: b.title, bold: true, color: tone.border })],
       }),
     );
   }
   out.push(
     new Paragraph({
       style: styleId,
-      border: {
-        left: { style: BorderStyle.SINGLE, size: 24, space: 8, color: tone.fg },
-      },
-      shading: { type: ShadingType.SOLID, color: tone.bg, fill: tone.bg },
-      children: inlineToRuns(b.content, { color: tone.fg }),
+      border: calloutBorder,
+      shading: calloutShading,
+      indent: calloutIndent,
+      spacing: calloutSpacing,
+      children: inlineToRuns(b.content),
     }),
   );
   return out;
@@ -282,81 +342,64 @@ function paragraphForDivider(_b: DividerBlock): Paragraph {
 }
 
 function tableForTable(b: TableBlock): Table {
+  // Paper palette warm-stone border + paper-ink runs. Header row carries
+  // `tableHeader: true` (repeats across page splits) and bold runs, but
+  // no background shading — the borders alone carry the structure.
+  const BORDER = {
+    style: BorderStyle.SINGLE,
+    size: 4,
+    color: 'D8D1BF',
+  };
   const rows = b.rows.map((row, rowIdx) => {
     const isHeader = rowIdx === 0;
     return new TableRow({
-      children: row.map(
-        (cell) =>
-          new TableCell({
-            shading: isHeader
-              ? { type: ShadingType.SOLID, color: 'F3F4F6', fill: 'F3F4F6' }
-              : undefined,
-            children: [
-              new Paragraph({
-                children: inlineToRuns(cell).map((run) => {
-                  if (isHeader && run instanceof TextRun) {
-                    // Header runs: bold via re-wrap. TextRun is mostly opaque
-                    // post-construction — easiest is to wrap the original text
-                    // in a fresh bold run. We only get here for `text` and
-                    // `code` inlines; links / nested marks emit ExternalHyperlink
-                    // and pass through.
-                    return run;
-                  }
-                  return run;
-                }),
-              }),
-            ],
-          }),
-      ),
+      tableHeader: isHeader,
+      children: row.map((cell) => {
+        const runs = inlineToRuns(cell, isHeader ? { bold: true } : {});
+        // An empty TableCell is invalid OOXML — Word refuses to open the
+        // file. Always emit at least one (possibly empty) Paragraph.
+        const children =
+          runs.length > 0
+            ? [new Paragraph({ children: runs })]
+            : [new Paragraph({ children: [] })];
+        return new TableCell({ children });
+      }),
     });
   });
-
-  // Header bold: rebuild row 0's cells with bold runs (cleaner than mutating).
-  if (rows.length > 0 && b.rows[0]) {
-    rows[0] = new TableRow({
-      children: b.rows[0].map(
-        (cell) =>
-          new TableCell({
-            shading: { type: ShadingType.SOLID, color: 'F3F4F6', fill: 'F3F4F6' },
-            children: [
-              new Paragraph({ children: inlineToRuns(cell, { bold: true }) }),
-            ],
-          }),
-      ),
-    });
-  }
 
   return new Table({
     rows,
     width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: BORDER,
+      bottom: BORDER,
+      left: BORDER,
+      right: BORDER,
+      insideHorizontal: BORDER,
+      insideVertical: BORDER,
+    },
+    margins: { top: 80, bottom: 80, left: 120, right: 120 },
   });
 }
 
 function paragraphForAction(b: ActionBlock): Paragraph {
-  const styleId = actionStyleName(b);
-  const isPrimary = (b.priority ?? 'primary') === 'primary';
+  // v1 ships actions as inline-styled hyperlinks — filled-button paragraph
+  // styles (Action*Primary*, Action*Secondary*) are dropped. Word's "make
+  // this look like a button" doesn't survive Pages / Docs; a warm-rust
+  // underlined link does.
   return new Paragraph({
-    style: styleId,
+    spacing: { before: 160, after: 160 },
     alignment: AlignmentType.LEFT,
-    shading: isPrimary
-      ? { type: ShadingType.SOLID, color: '4F46E5', fill: '4F46E5' }
-      : undefined,
-    border: !isPrimary
-      ? {
-          top: { style: BorderStyle.SINGLE, size: 16, space: 4, color: '4F46E5' },
-          bottom: { style: BorderStyle.SINGLE, size: 16, space: 4, color: '4F46E5' },
-          left: { style: BorderStyle.SINGLE, size: 16, space: 4, color: '4F46E5' },
-          right: { style: BorderStyle.SINGLE, size: 16, space: 4, color: '4F46E5' },
-        }
-      : undefined,
     children: [
       new ExternalHyperlink({
-        link: b.href,
+        link: b.href ?? '#',
         children: [
           new TextRun({
-            text: b.label,
-            bold: true,
-            color: isPrimary ? 'FFFFFF' : '4F46E5',
+            text: b.label ?? '',
+            style: 'Hyperlink',
+            color: 'A23925',
+            underline: { type: UnderlineType.SINGLE, color: 'A23925' },
+            font: 'Georgia',
           }),
         ],
       }),
@@ -459,15 +502,23 @@ function seed(s: SeedStyle) {
     next: 'Normal',
     quickFormat: true,
     run: {
-      font: s.font ?? 'Calibri',
+      // Georgia matches the editor's serif fallback. Iowan Old Style is
+      // Apple-only, so the .docx ships Georgia (universally installed).
+      font: s.font ?? 'Georgia',
       size: s.sizeHalfPoints ?? 22,
       bold: s.bold === true,
       italics: s.italics === true,
-      color: s.color ?? '111827',
+      color: s.color ?? '1F1A14',
     },
     paragraph: {
       indent: s.indentLeftTwips !== undefined ? { left: s.indentLeftTwips } : undefined,
-      spacing: { before: s.spaceBefore ?? 120, after: s.spaceAfter ?? 120 },
+      // 1.6 line-height (line=384, 240×1.6) feels like the editor.
+      spacing: {
+        before: s.spaceBefore ?? 0,
+        after: s.spaceAfter ?? 120,
+        line: 384,
+        lineRule: LineRuleType.AUTO,
+      },
     },
   };
 }
@@ -475,48 +526,32 @@ function seed(s: SeedStyle) {
 function buildVariantStyles() {
   const styles: ReturnType<typeof seed>[] = [];
 
-  // Callouts (10 rows): tone × emphasis
-  const tones: Array<{ tone: Tone; color: string }> = [
-    { tone: 'success', color: '047857' },
-    { tone: 'warning', color: '92400E' },
-    { tone: 'danger', color: 'B91C1C' },
-    { tone: 'info', color: '1D4ED8' },
-    { tone: 'neutral', color: '374151' },
-  ];
-  for (const { tone, color } of tones) {
+  // Callouts (10 rows): tone × emphasis. Runs stay Georgia-on-paper-ink;
+  // the tone color lives on the left border (set inline on each callout
+  // paragraph in paragraphsForCallout, not on the style row).
+  const tones: Tone[] = ['success', 'warning', 'danger', 'info', 'neutral'];
+  for (const tone of tones) {
     for (const emphasis of ['subtle', 'bold'] as const) {
       const id = `Callout${pascal(tone)}${pascal(emphasis)}`;
       styles.push(
         seed({
           id,
           name: id,
-          color,
+          font: 'Georgia',
+          color: '1F1A14',
           bold: emphasis === 'bold',
-          indentLeftTwips: 240,
-          spaceBefore: emphasis === 'bold' ? 160 : 120,
-          spaceAfter: emphasis === 'bold' ? 160 : 120,
+          indentLeftTwips: 360,
+          spaceBefore: 200,
+          spaceAfter: 200,
         }),
       );
     }
   }
 
-  // Actions (4 rows): primary/secondary × medium/large
-  for (const priority of ['Primary', 'Secondary'] as const) {
-    for (const size of ['Medium', 'Large'] as const) {
-      const id = `Action${priority}${size}`;
-      styles.push(
-        seed({
-          id,
-          name: id,
-          sizeHalfPoints: size === 'Large' ? 26 : 22,
-          bold: true,
-          color: priority === 'Primary' ? 'FFFFFF' : '4F46E5',
-          spaceBefore: size === 'Large' ? 160 : 120,
-          spaceAfter: size === 'Large' ? 160 : 120,
-        }),
-      );
-    }
-  }
+  // Actions: no paragraph style — emitted as inline-styled hyperlinks in
+  // paragraphForAction. (Pre-v1 the 4 Action* styles tried to render
+  // filled-buttons via paragraph shading; that look does not survive
+  // Pages / Google Docs, so we ship inline warm-rust links instead.)
 
   // Sections (3 rows): compact / comfortable / spacious
   const sectionSpacing: Record<string, number> = {
@@ -583,16 +618,44 @@ const numberingConfig = {
         {
           level: 0,
           format: 'bullet' as const,
-          text: '•',
+          // \u{F0B7} is the Word/Symbol-font bullet (PUA codepoint).
+          // Pairing it with `font: 'Symbol'` is how native Word lists
+          // ship; Pages + Docs both honour it.
+          text: '\u{F0B7}',
           alignment: AlignmentType.LEFT,
-          style: { paragraph: { indent: { left: 360, hanging: 360 } } },
+          style: {
+            run: { font: { name: 'Symbol' } },
+            paragraph: {
+              indent: { left: 360, hanging: 360 },
+              spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
+            },
+          },
         },
         {
           level: 1,
           format: 'bullet' as const,
-          text: '◦',
+          text: '\u{F0B7}',
           alignment: AlignmentType.LEFT,
-          style: { paragraph: { indent: { left: 720, hanging: 360 } } },
+          style: {
+            run: { font: { name: 'Symbol' } },
+            paragraph: {
+              indent: { left: 720, hanging: 360 },
+              spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
+            },
+          },
+        },
+        {
+          level: 2,
+          format: 'bullet' as const,
+          text: '\u{F0B7}',
+          alignment: AlignmentType.LEFT,
+          style: {
+            run: { font: { name: 'Symbol' } },
+            paragraph: {
+              indent: { left: 1080, hanging: 360 },
+              spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
+            },
+          },
         },
       ],
     },
@@ -653,13 +716,111 @@ export async function toDocxBlob(
   const document = new Document({
     creator: 'Papir',
     title: doc.title ?? 'Untitled',
+    // Document-wide cream paper. dolanmiu/docx auto-emits both
+    // <w:background> in document.xml AND <w:displayBackgroundShape/>
+    // in settings.xml when this option is set, so the colour shows in
+    // Word's Print Layout (Web Layout already shows the document
+    // background by default).
+    background: { color: 'FBFAF6' },
     styles: {
+      default: {
+        document: {
+          run: {
+            font: 'Georgia',
+            size: 22, // 11pt
+            color: '1F1A14',
+          },
+          paragraph: {
+            spacing: { line: 384, lineRule: LineRuleType.AUTO, after: 120 },
+          },
+        },
+        // Heading sizes follow paper.css's scale: H1=24pt … H6=10pt.
+        // OOXML's run.size is half-points, so 24pt → 48.
+        heading1: {
+          run: { font: 'Georgia', size: 48, bold: true, color: '1F1A14' },
+          paragraph: {
+            spacing: { before: 360, after: 240, line: 384, lineRule: LineRuleType.AUTO },
+          },
+        },
+        heading2: {
+          run: { font: 'Georgia', size: 36, bold: true, color: '1F1A14' },
+          paragraph: {
+            spacing: { before: 280, after: 200, line: 384, lineRule: LineRuleType.AUTO },
+          },
+        },
+        heading3: {
+          run: { font: 'Georgia', size: 30, bold: true, color: '1F1A14' },
+          paragraph: {
+            spacing: { before: 240, after: 160, line: 384, lineRule: LineRuleType.AUTO },
+          },
+        },
+        heading4: {
+          run: { font: 'Georgia', size: 26, bold: true, color: '1F1A14' },
+          paragraph: {
+            spacing: { before: 200, after: 140, line: 384, lineRule: LineRuleType.AUTO },
+          },
+        },
+        heading5: {
+          run: { font: 'Georgia', size: 22, bold: true, color: '1F1A14' },
+          paragraph: {
+            spacing: { before: 160, after: 120, line: 384, lineRule: LineRuleType.AUTO },
+          },
+        },
+        heading6: {
+          run: { font: 'Georgia', size: 20, bold: true, color: '1F1A14' },
+          paragraph: {
+            spacing: { before: 160, after: 120, line: 384, lineRule: LineRuleType.AUTO },
+          },
+        },
+        title: {
+          run: { font: 'Georgia', size: 56, bold: true, color: '1F1A14' },
+          paragraph: {
+            spacing: { before: 0, after: 360, line: 384, lineRule: LineRuleType.AUTO },
+          },
+        },
+      },
+      // Hyperlink character style — warm-rust ink, single underline.
+      // Real Word renderers honour the style binding; Pages / Google Docs
+      // strip it but the inline TextRun's direct-formatting (set in
+      // inlineToRuns and paragraphForAction) carries the same look.
+      characterStyles: [
+        {
+          id: 'Hyperlink',
+          name: 'Hyperlink',
+          basedOn: 'DefaultParagraphFont',
+          run: {
+            color: 'A23925',
+            underline: { type: UnderlineType.SINGLE, color: 'A23925' },
+          },
+        },
+      ],
       paragraphStyles: buildVariantStyles(),
     },
     numbering: numberingConfig,
     sections: [
       {
-        properties: {},
+        properties: {
+          page: {
+            // A4 — 11906×16838 twips. Matches the editor's paper canvas
+            // dimensions (canonical European page).
+            size: {
+              width: 11906,
+              height: 16838,
+              orientation: PageOrientation.PORTRAIT,
+            },
+            // Twips: 1440 = 1in vertical, 1200 = 0.83in horizontal.
+            // Header/footer reserved zones at 720 twips (0.5in).
+            margin: {
+              top: 1440,
+              right: 1200,
+              bottom: 1440,
+              left: 1200,
+              header: 720,
+              footer: 720,
+              gutter: 0,
+            },
+          },
+        },
         children,
       },
     ],
