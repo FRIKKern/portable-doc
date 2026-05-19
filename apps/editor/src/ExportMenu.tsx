@@ -17,14 +17,21 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
 } from 'react';
 import type { Block, InlineNode, PortableDoc } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { toDocxBlob } from './export/toDocx.js';
+import { extractFromDocx } from './import/fromDocx.js';
 
 interface Props {
   doc: PortableDoc;
   editor: TipTapEditor | null;
+  /** Round-trip import path. When a .docx carrying a Papir envelope is
+   *  selected, we forward the restored AST upward so the host can replace
+   *  the editor content. The prop is optional so existing call sites
+   *  (and tests) keep working without the import wiring. */
+  onImport?: (ast: unknown) => void;
 }
 
 function slug(s: string): string {
@@ -155,10 +162,14 @@ ${bodyHtml}
 `;
 }
 
-export function ExportMenu({ doc, editor }: Props): JSX.Element {
+export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Hidden file input — the menuitem clicks it; the browser opens the OS
+  // file picker; the change handler reads the bytes. Same pattern as a
+  // typical "upload" button without a visible <input> in the DOM tree.
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const title = useMemo(() => doc.title ?? 'untitled', [doc.title]);
   const filenameBase = useMemo(() => slug(title), [title]);
@@ -215,6 +226,33 @@ export function ExportMenu({ doc, editor }: Props): JSX.Element {
     window.print();
     close();
   }, [close]);
+
+  const onImportClick = useCallback(() => {
+    importInputRef.current?.click();
+  }, []);
+
+  const onImportFileChange = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      // Reset value so picking the same file twice still fires change.
+      e.target.value = '';
+      if (!file) return;
+      const buf = await file.arrayBuffer();
+      const envelope = await extractFromDocx(buf);
+      if (!envelope) {
+        // Pre-feature .docx or a foreign .docx — "import as new" lands in
+        // a later task; for now we just surface a calm one-liner.
+        alert(
+          'No Papir envelope found in this .docx. Importing as new is not implemented yet.',
+        );
+        close();
+        return;
+      }
+      onImport?.(envelope.ast);
+      close();
+    },
+    [onImport, close],
+  );
 
   return (
     <div
@@ -280,8 +318,35 @@ export function ExportMenu({ doc, editor }: Props): JSX.Element {
           >
             Print / PDF
           </button>
+          <div
+            role="separator"
+            className="paper-export-menu__separator"
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            role="menuitem"
+            className="paper-export-menu__item"
+            data-testid="footer-import-docx"
+            onClick={onImportClick}
+          >
+            Import from .docx
+          </button>
         </div>
       )}
+      {/* Hidden file picker for the "Import from .docx" menuitem. Lives
+       *  outside the popover so click → file-dialog still works after the
+       *  popover dismisses on outside-click. */}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        data-testid="footer-import-docx-input"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          void onImportFileChange(e);
+        }}
+      />
     </div>
   );
 }

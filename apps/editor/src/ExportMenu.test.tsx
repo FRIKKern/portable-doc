@@ -74,7 +74,7 @@ describe('ExportMenu', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('opens the popover with four menuitems on click (Word, HTML, Markdown, Print/PDF)', () => {
+  it('opens the popover with five menuitems on click (Word, HTML, Markdown, Print/PDF, Import)', () => {
     render(<ExportMenu doc={minimalDoc} editor={stubEditor('<p>hi</p>')} />);
     fireEvent.click(screen.getByTestId('footer-export-trigger'));
     expect(
@@ -85,8 +85,9 @@ describe('ExportMenu', () => {
     expect(screen.getByTestId('footer-export-html')).toBeTruthy();
     expect(screen.getByTestId('footer-export-markdown')).toBeTruthy();
     expect(screen.getByTestId('footer-export-print')).toBeTruthy();
+    expect(screen.getByTestId('footer-import-docx')).toBeTruthy();
     const items = screen.getAllByRole('menuitem');
-    expect(items).toHaveLength(4);
+    expect(items).toHaveLength(5);
   });
 
   it('closes on outside click', () => {

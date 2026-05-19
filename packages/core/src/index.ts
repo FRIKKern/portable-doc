@@ -51,3 +51,11 @@ export { validateDoc } from './validate.js';
 export type { ValidationIssue, RuleId } from './validate.js';
 
 export { portableDocSchema, blockSchema, inlineNodeSchema } from './schemas.js';
+
+export {
+  ENVELOPE_VERSION,
+  envelopeSchema,
+  buildEnvelope,
+  generateDocUuid,
+} from './roundtrip/envelope-schema.js';
+export type { Envelope } from './roundtrip/envelope-schema.js';

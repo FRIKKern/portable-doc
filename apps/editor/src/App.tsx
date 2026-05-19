@@ -153,6 +153,13 @@ function AppShell(): JSX.Element {
         editor={editor}
         previewVisible={previewVisible}
         onTogglePreview={() => setPreviewVisible((v) => !v)}
+        onImport={(ast) => {
+          // The .docx round-trip envelope carries the original PortableDoc
+          // verbatim. Editor.tsx watches `doc` and runs `setContent` on
+          // external changes, so a plain setDoc threads the restored AST
+          // through the same sync path JsonEditMode uses.
+          setDoc(ast as PortableDoc);
+        }}
       />
       <JsonEditMode
         doc={doc}

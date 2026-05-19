@@ -13,6 +13,7 @@
  *   8. slug() helper handles edge cases.
  */
 import { describe, expect, it } from 'vitest';
+import JSZip from 'jszip';
 import type { PortableDoc } from '@portable-doc/core';
 import { toDocxBlob, slug } from './toDocx.js';
 
@@ -195,6 +196,47 @@ describe('toDocxBlob', () => {
     };
     const blob = await toDocxBlob(doc);
     expect(blob.size).toBeGreaterThan(1000);
+  });
+});
+
+describe('toDocxBlob — embedded envelope (Goal B P1)', () => {
+  const baseDoc: PortableDoc = {
+    version: 1,
+    title: 'Round-trip',
+    blocks: [
+      { id: 'h1', type: 'heading', level: 1, text: 'Hello' },
+      { id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'world' }] },
+    ],
+  };
+
+  it('embeds customXml/item1.xml in the OPC zip', async () => {
+    const blob = await toDocxBlob(baseDoc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const part = zip.file('customXml/item1.xml');
+    expect(part).not.toBeNull();
+    const xml = await part!.async('string');
+    expect(xml).toContain('<papir-envelope');
+    expect(xml).toContain('<![CDATA[');
+  });
+
+  it('registers the customXml part as an Override in [Content_Types].xml', async () => {
+    const blob = await toDocxBlob(baseDoc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const ct = await zip.file('[Content_Types].xml')!.async('string');
+    expect(ct).toContain('PartName="/customXml/item1.xml"');
+    expect(ct).toContain('ContentType="application/xml"');
+  });
+
+  it('adds a customXml relationship in word/_rels/document.xml.rels', async () => {
+    const blob = await toDocxBlob(baseDoc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const rels = await zip
+      .file('word/_rels/document.xml.rels')!
+      .async('string');
+    expect(rels).toContain(
+      'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"',
+    );
+    expect(rels).toContain('Target="../customXml/item1.xml"');
   });
 });
 

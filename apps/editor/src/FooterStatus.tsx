@@ -53,6 +53,10 @@ interface Props {
   /** Toggle callback for the preview chip. When omitted, the chip is
    *  not rendered. */
   onTogglePreview?: () => void;
+  /** Round-trip .docx import — forwarded to the ExportMenu so the
+   *  "Import from .docx" menuitem can restore an AST. Optional so the
+   *  prop drilling is non-breaking for existing call sites. */
+  onImport?: (ast: unknown) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +180,7 @@ export function FooterStatus({
   editor,
   previewVisible,
   onTogglePreview,
+  onImport,
 }: Props): JSX.Element {
   const { reachable, retry } = useMcp();
 
@@ -335,7 +340,7 @@ export function FooterStatus({
         </button>
       )}
 
-      <ExportMenu doc={doc} editor={editor ?? null} />
+      <ExportMenu doc={doc} editor={editor ?? null} onImport={onImport} />
 
       <span
         className="paper-footer-status__chip"

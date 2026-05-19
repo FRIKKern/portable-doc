@@ -52,6 +52,8 @@ import {
   WidthType,
   type ParagraphChild,
 } from 'docx';
+import JSZip from 'jszip';
+import { buildEnvelope, generateDocUuid } from '@portable-doc/core';
 
 // docx's IRunOptions marks every field readonly; we build it incrementally
 // (collapsing nested marks one level at a time) so a writable shape is the
@@ -620,7 +622,19 @@ const numberingConfig = {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function toDocxBlob(doc: PortableDoc): Promise<Blob> {
+/** DOCX export options. Pass `docUuid` to keep the same identifier across
+ *  re-exports of the same source document; otherwise a fresh UUID is
+ *  generated per call (the persistence story for `docUuid` is a later
+ *  task — this signature is the seam). */
+export interface ToDocxOptions {
+  docUuid?: string;
+}
+
+export async function toDocxBlob(
+  doc: PortableDoc,
+  options?: ToDocxOptions,
+): Promise<Blob> {
+  const docUuid = options?.docUuid ?? generateDocUuid();
   const children: TopChild[] = [];
 
   if (doc.title) {
@@ -651,5 +665,84 @@ export async function toDocxBlob(doc: PortableDoc): Promise<Blob> {
     ],
   });
 
-  return await Packer.toBlob(document);
+  const blob = await Packer.toBlob(document);
+  return await embedEnvelope(blob, doc, docUuid);
+}
+
+// ---------------------------------------------------------------------------
+// Round-trip envelope (Goal B, P1) — see specs:
+//   2026-05-19-envelope-spec.html (shape)
+//   2026-05-19-embed-locations.html (customXml/item1.xml + rels + Content_Types)
+//
+// The `docx` library doesn't expose customXml part injection, so we
+// post-process the OPC ZIP directly: write the envelope JSON wrapped in a
+// CDATA section under `customXml/item1.xml`, register the part in
+// `[Content_Types].xml`, and link it from `word/_rels/document.xml.rels`.
+// The .docx still opens in Word / Pages / Google Docs as a normal document;
+// the envelope rides along as an invisible side-car part.
+// ---------------------------------------------------------------------------
+
+const ENVELOPE_PART = 'customXml/item1.xml';
+const ENVELOPE_NS = 'https://portable-doc.dev/envelope/v1';
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+async function embedEnvelope(
+  blob: Blob,
+  doc: PortableDoc,
+  docUuid: string,
+): Promise<Blob> {
+  const buffer = await blob.arrayBuffer();
+  const zip = await JSZip.loadAsync(buffer);
+
+  // 1. Inject customXml/item1.xml — JSON inside CDATA so the OPC parser
+  //    treats it as opaque text and we don't have to XML-escape every
+  //    quote in the payload.
+  const envelope = buildEnvelope(doc, docUuid);
+  const customXmlBody = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<papir-envelope xmlns="${ENVELOPE_NS}">
+  <payload><![CDATA[
+${JSON.stringify(envelope, null, 2)}
+  ]]></payload>
+</papir-envelope>`;
+  zip.file(ENVELOPE_PART, customXmlBody);
+
+  // 2. Add an Override entry to [Content_Types].xml so consumers know the
+  //    new part is application/xml. Word silently drops parts it can't
+  //    type-resolve.
+  const ctFile = zip.file('[Content_Types].xml');
+  if (ctFile) {
+    const ct = await ctFile.async('string');
+    if (!ct.includes(`PartName="/${ENVELOPE_PART}"`)) {
+      const ctPatched = ct.replace(
+        '</Types>',
+        `<Override PartName="/${ENVELOPE_PART}" ContentType="application/xml"/></Types>`,
+      );
+      zip.file('[Content_Types].xml', ctPatched);
+    }
+  }
+
+  // 3. Add a relationship in word/_rels/document.xml.rels — `customXml`
+  //    type, target is the new part. The rId is the next available slot
+  //    in the existing rels file.
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (relsFile) {
+    const rels = await relsFile.async('string');
+    const ids = [...rels.matchAll(/Id="rId(\d+)"/g)].map((m) =>
+      parseInt(m[1] ?? '0', 10),
+    );
+    const nextId = (ids.length === 0 ? 0 : Math.max(...ids)) + 1;
+    const newRel = `<Relationship Id="rId${nextId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../${ENVELOPE_PART}"/>`;
+    const relsPatched = rels.replace(
+      '</Relationships>',
+      `${newRel}</Relationships>`,
+    );
+    zip.file(relsPath, relsPatched);
+  }
+
+  return await zip.generateAsync({
+    type: 'blob',
+    mimeType: DOCX_MIME,
+  });
 }
