@@ -133,7 +133,10 @@ function AppShell(): JSX.Element {
   }, [outlineOpen]);
 
   return (
-    <div className="paper-app" data-testid="paper-app">
+    <div
+      className={'paper-app' + (previewVisible ? ' paper-app--with-preview' : '')}
+      data-testid="paper-app"
+    >
       <main className="paper-column" data-testid="paper-column">
         <Editor
           doc={doc}

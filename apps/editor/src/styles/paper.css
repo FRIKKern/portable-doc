@@ -1896,11 +1896,16 @@
  * page boxes down to fit Papir's typography surface (no harsh white pages
  * floating over warm cream).
  * =========================================================================== */
+/* A4 page width at 96dpi is ~794px; 820px gives a touch of side padding so
+ * the page sits comfortably inside the panel without a horizontal scrollbar. */
+:root {
+  --paper-docx-preview-width: 820px;
+}
 .paper-docx-preview {
   position: fixed;
   top: 60px;
   right: 24px;
-  width: 420px;
+  width: var(--paper-docx-preview-width);
   max-height: calc(100vh - 120px);
   overflow: auto;
   background: var(--paper-bg);
@@ -1910,6 +1915,16 @@
   z-index: 25;
   padding: 12px;
   font-family: var(--paper-font-sans);
+}
+
+/* When the preview is open, shove the editor column to the left half of the
+ * viewport so the full A4 page is visible on the right. Default margin: 0 auto
+ * (centered) is overridden — anchor the column to a 60px left margin and
+ * reserve enough right margin to clear the preview width + its 24px right
+ * offset + a small gap. */
+.paper-app--with-preview .paper-column {
+  margin-left: 60px;
+  margin-right: calc(var(--paper-docx-preview-width) + 60px);
 }
 .paper-docx-preview__title {
   font-size: 11px;
