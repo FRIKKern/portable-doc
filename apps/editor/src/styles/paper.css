@@ -1917,14 +1917,15 @@
   font-family: var(--paper-font-sans);
 }
 
-/* When the preview is open, shove the editor column to the left half of the
- * viewport so the full A4 page is visible on the right. Default margin: 0 auto
- * (centered) is overridden — anchor the column to a 60px left margin and
- * reserve enough right margin to clear the preview width + its 24px right
- * offset + a small gap. */
-.paper-app--with-preview .paper-column {
-  margin-left: 60px;
-  margin-right: calc(var(--paper-docx-preview-width) + 60px);
+/* The preview is an absolute overlay on top of the right side of the
+ * viewport. It does NOT shift the editor — readers keep their original
+ * column position. Close via the × button in the panel header. */
+.paper-docx-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .paper-docx-preview__title {
   font-size: 11px;
@@ -1932,7 +1933,26 @@
   text-transform: uppercase;
   color: var(--paper-ink-faint);
   font-weight: 600;
-  margin-bottom: 12px;
+}
+.paper-docx-preview__close {
+  background: transparent;
+  border: 0;
+  color: var(--paper-ink-faint);
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 160ms ease-out, background 160ms ease-out;
+}
+.paper-docx-preview__close:hover {
+  color: var(--paper-accent-warm-rust);
+  background: var(--paper-rule-soft);
+}
+.paper-docx-preview__close:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
 }
 .paper-docx-preview__body {
   /* docx-preview renders its own .docx-wrapper inside */

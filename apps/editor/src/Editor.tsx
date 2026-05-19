@@ -67,6 +67,9 @@ interface EditorProps {
    *  preview alongside the editor. State is lifted to the parent so the
    *  footer chip can toggle it; default false. */
   previewVisible?: boolean;
+  /** Optional close callback wired into the preview panel's × button so
+   *  users can dismiss the overlay without going back to the footer. */
+  onClosePreview?: () => void;
 }
 
 /** Debounce window between doc-prop changes and the next validateDoc call
@@ -81,6 +84,7 @@ export function Editor({
   dataTestId,
   onImageRequest,
   previewVisible = false,
+  onClosePreview,
 }: EditorProps): JSX.Element {
   // Keep the latest onChange in a ref so re-renders of the parent don't
   // re-create the editor (TipTap remounts are expensive + lose selection).
@@ -297,7 +301,11 @@ export function Editor({
        *  alongside MarginDiagnostics (same right-gutter convention) and
        *  short-circuits to null when visible=false, so toggling it off
        *  costs nothing. */}
-      <DocxPreviewPanel doc={doc} visible={previewVisible} />
+      <DocxPreviewPanel
+        doc={doc}
+        visible={previewVisible}
+        onClose={onClosePreview}
+      />
       {/* CW5 — single floating chrome cluster that tracks the currently-
        *  hovered top-level block (Notion/BlockNote/Linear pattern). One
        *  instance per editor; resolves the target via canonical

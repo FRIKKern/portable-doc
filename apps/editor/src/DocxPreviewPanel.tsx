@@ -16,13 +16,19 @@ import { toDocxBlob } from './export/toDocx.js';
 interface Props {
   doc: PortableDoc;
   visible: boolean;
+  /** Optional close callback — wired into the panel's × button. */
+  onClose?: () => void;
 }
 
 /** Debounce window between doc changes and the next re-render — keeps the
  *  panel calm under rapid keystrokes without falling behind. */
 const PREVIEW_DEBOUNCE_MS = 500;
 
-export function DocxPreviewPanel({ doc, visible }: Props): JSX.Element | null {
+export function DocxPreviewPanel({
+  doc,
+  visible,
+  onClose,
+}: Props): JSX.Element | null {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
     'idle',
@@ -85,10 +91,26 @@ export function DocxPreviewPanel({ doc, visible }: Props): JSX.Element | null {
       aria-label="Live Word preview"
     >
       <div
-        className="paper-docx-preview__title"
-        data-testid="docx-preview-title"
+        className="paper-docx-preview__header"
+        data-testid="docx-preview-header"
       >
-        Word preview
+        <span
+          className="paper-docx-preview__title"
+          data-testid="docx-preview-title"
+        >
+          Word preview
+        </span>
+        {onClose && (
+          <button
+            type="button"
+            className="paper-docx-preview__close"
+            data-testid="docx-preview-close"
+            aria-label="Close Word preview"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        )}
       </div>
       {status === 'loading' && (
         <div
