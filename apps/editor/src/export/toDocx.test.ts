@@ -240,6 +240,166 @@ describe('toDocxBlob — embedded envelope (Goal B P1)', () => {
   });
 });
 
+describe('toDocxBlob — heading + body vertical rhythm', () => {
+  it('emits H1 with before=0 after=210 in styles.xml', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [{ id: 'h1', type: 'heading', level: 1, text: 'X' }],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const styles = await zip.file('word/styles.xml')!.async('string');
+    // The OOXML spacing attributes for the heading 1 style sit on one
+    // <w:spacing/> element. Order isn't guaranteed by the serializer,
+    // so we check each attribute separately within a permissive window.
+    const heading1Block = styles.match(
+      /styleId="Heading1"[\s\S]*?<w:spacing[^/]*\/>/,
+    );
+    expect(heading1Block).not.toBeNull();
+    const spacing = heading1Block![0];
+    expect(spacing).toContain('w:before="0"');
+    expect(spacing).toContain('w:after="210"');
+  });
+
+  it('emits Normal default with spacing.after=330', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [{ id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'x' }] }],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const styles = await zip.file('word/styles.xml')!.async('string');
+    expect(styles).toContain('w:after="330"');
+  });
+});
+
+describe('toDocxBlob — code block as table', () => {
+  it('emits code block as a <w:tbl>, not per-line paragraphs', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [
+        { id: 'k1', type: 'code', lang: 'ts', value: 'a\nb\nc' },
+      ],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+    expect(documentXml).toContain('<w:tbl>');
+    // Every line of the code source should appear inside the table cell.
+    expect(documentXml).toMatch(/<w:t[^>]*>a<\/w:t>/);
+    expect(documentXml).toMatch(/<w:t[^>]*>b<\/w:t>/);
+    expect(documentXml).toMatch(/<w:t[^>]*>c<\/w:t>/);
+  });
+
+  it('handles empty lines by emitting a single space (Word rejects empty)', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [
+        { id: 'k1', type: 'code', value: 'first\n\nthird' },
+      ],
+    };
+    const blob = await toDocxBlob(doc);
+    expect(blob.size).toBeGreaterThan(1000);
+  });
+});
+
+describe('toDocxBlob — styles pane UX', () => {
+  it('styles.xml contains uiPriority + display name fields per spec', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [{ id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'x' }] }],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const styles = await zip.file('word/styles.xml')!.async('string');
+    expect(styles).toContain('w:uiPriority');
+    expect(styles).toContain('Callout · Info');
+    expect(styles).toContain('Section · Comfortable');
+    expect(styles).toContain('Code · Light');
+    expect(styles).toContain('Block Quote');
+    // Hyperlink character style — semiHidden + uiPriority=99
+    expect(styles).toMatch(/styleId="Hyperlink"[\s\S]*?w:semiHidden/);
+  });
+});
+
+describe('toDocxBlob — language + noProof', () => {
+  it('docDefaults emit a language tag (defaulting to en-US)', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [{ id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'x' }] }],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const styles = await zip.file('word/styles.xml')!.async('string');
+    expect(styles).toContain('w:val="en-US"');
+  });
+
+  it('honours a custom language option', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [{ id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'x' }] }],
+    };
+    const blob = await toDocxBlob(doc, { language: 'nb-NO' });
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const styles = await zip.file('word/styles.xml')!.async('string');
+    expect(styles).toContain('w:val="nb-NO"');
+  });
+});
+
+describe('toDocxBlob — dual-embed (customXml + docProps fallback)', () => {
+  const doc: PortableDoc = {
+    version: 1,
+    title: 'Dual',
+    blocks: [{ id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'hi' }] }],
+  };
+
+  it('emits docProps/custom.xml with papir-ast-* properties', async () => {
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const customProps = zip.file('docProps/custom.xml');
+    expect(customProps).not.toBeNull();
+    const xml = await customProps!.async('string');
+    expect(xml).toContain('papir-ast-count');
+    expect(xml).toContain('papir-ast-sha256');
+    expect(xml).toContain('papir-ast-1');
+  });
+
+  it('registers docProps/custom.xml in [Content_Types].xml', async () => {
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const ct = await zip.file('[Content_Types].xml')!.async('string');
+    expect(ct).toContain('PartName="/docProps/custom.xml"');
+    expect(ct).toContain(
+      'application/vnd.openxmlformats-officedocument.custom-properties+xml',
+    );
+  });
+
+  it('registers the custom-properties relationship in the package root _rels/.rels', async () => {
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const rels = await zip.file('_rels/.rels')!.async('string');
+    expect(rels).toContain(
+      'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties"',
+    );
+    expect(rels).toContain('Target="docProps/custom.xml"');
+  });
+});
+
+describe('toDocxBlob — divider styling', () => {
+  it('divider uses warm-stone color D8D1BF and 560/560 spacing', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [{ id: 'd1', type: 'divider' }],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+    expect(documentXml).toContain('D8D1BF');
+    expect(documentXml).toContain('w:before="560"');
+    expect(documentXml).toContain('w:after="560"');
+  });
+});
+
 describe('slug', () => {
   it('lowercases and replaces non-alphanum with -', () => {
     expect(slug('Hello World!')).toBe('hello-world');

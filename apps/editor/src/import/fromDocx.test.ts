@@ -85,4 +85,33 @@ ${JSON.stringify({ version: 'not-semver', exporter: 'x' })}
     const envelope = await extractFromDocx(bytes.buffer);
     expect(envelope).toBeNull();
   });
+
+  it('falls back to docProps/custom.xml when customXml is stripped', async () => {
+    // Simulates Google Docs' upload pipeline: it strips customXml/item1.xml
+    // but preserves docProps/custom.xml byte-for-byte. The importer should
+    // reconstruct the envelope from the chunked base64 properties.
+    const original: PortableDoc = {
+      version: 1,
+      title: 'Fallback round-trip',
+      blocks: [
+        { id: 'h1', type: 'heading', level: 2, text: 'Header' },
+        {
+          id: 'p1',
+          type: 'paragraph',
+          content: [{ type: 'text', value: 'survived google' }],
+        },
+      ],
+    };
+    const blob = await toDocxBlob(original);
+    // Re-pack with customXml stripped, docProps preserved.
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    zip.remove('customXml/item1.xml');
+    // Also strip the customXml relationship so the import path doesn't
+    // mis-detect the file as still having one — purely defensive; the
+    // missing part itself is what matters.
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+    const envelope = await extractFromDocx(buf);
+    expect(envelope).not.toBeNull();
+    expect(envelope!.ast).toEqual(original);
+  });
 });
