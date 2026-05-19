@@ -1,13 +1,15 @@
 /**
  * v0.4 A11 — footer Export menu.
  *
- * Three formats that work today without pandoc-wasm: HTML (live editor HTML
- * wrapped in a minimal document), Markdown (walks the PortableDoc AST and
- * emits CommonMark), and Print / PDF (delegates to `window.print()`).
+ * Four formats: Word (.docx) via pure-JS `docx` (dolanmiu) — opens natively
+ * in Word, Pages, Google Docs; HTML (live editor HTML wrapped in a minimal
+ * document); Markdown (walks the PortableDoc AST and emits CommonMark);
+ * Print / PDF (delegates to `window.print()`).
  *
- * DOCX and EPUB land in the next Goal's build phase via the pandoc-wasm
- * worker — explicitly out of scope here. Bound decision: portable-doc plan
- * "export-menu-v1" (HTML/Markdown/Print today; pandoc later).
+ * Bound decision (2026-05-18-multi-format-export-contract): pandoc-wasm was
+ * named as the v1 DOCX mechanism. Pure-JS docx is the pragmatic stand-in —
+ * same output (a .docx file), no wasm bootstrap. The spec stays valid as a
+ * future-state swap; the menu UI does not change.
  */
 import {
   useCallback,
@@ -18,6 +20,7 @@ import {
 } from 'react';
 import type { Block, InlineNode, PortableDoc } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
+import { toDocxBlob } from './export/toDocx.js';
 
 interface Props {
   doc: PortableDoc;
@@ -187,6 +190,12 @@ export function ExportMenu({ doc, editor }: Props): JSX.Element {
     };
   }, [open]);
 
+  const onExportDocx = useCallback(async () => {
+    const blob = await toDocxBlob(doc);
+    downloadBlob(blob, `${filenameBase}.docx`);
+    close();
+  }, [doc, filenameBase, close]);
+
   const onExportHtml = useCallback(() => {
     const inner = editor ? editor.getHTML() : '';
     const html = buildHtmlDocument(title, inner);
@@ -233,6 +242,17 @@ export function ExportMenu({ doc, editor }: Props): JSX.Element {
           data-testid="footer-export-popover"
           aria-label="Export format"
         >
+          <button
+            type="button"
+            role="menuitem"
+            className="paper-export-menu__item"
+            data-testid="footer-export-docx"
+            onClick={() => {
+              void onExportDocx();
+            }}
+          >
+            Word (.docx)
+          </button>
           <button
             type="button"
             role="menuitem"
