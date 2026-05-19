@@ -44,6 +44,7 @@
     "@tiptap/starter-kit": "^3",
     "@tiptap/suggestion": "^3",
     "docx": "^9.6.1",
+    "docx-preview": "^0.3.7",
     "lowlight": "^3.3.0",
     "nanoid": "^3.3.12",
     "prosemirror-model": "^1.25.6",

@@ -1891,6 +1891,59 @@
 }
 
 /* ===========================================================================
+ * Pioneer move A — lean .docx side-panel preview. Fixed position on the
+ * right edge; toggled from the footer chip. Tones the docx-preview default
+ * page boxes down to fit Papir's typography surface (no harsh white pages
+ * floating over warm cream).
+ * =========================================================================== */
+.paper-docx-preview {
+  position: fixed;
+  top: 60px;
+  right: 24px;
+  width: 420px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  z-index: 25;
+  padding: 12px;
+  font-family: var(--paper-font-sans);
+}
+.paper-docx-preview__title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.paper-docx-preview__body {
+  /* docx-preview renders its own .docx-wrapper inside */
+}
+.paper-docx-preview__loading,
+.paper-docx-preview__error {
+  padding: 24px 12px;
+  color: var(--paper-ink-faint);
+  font-size: 13px;
+  text-align: center;
+}
+.paper-docx-preview__error {
+  color: var(--paper-accent-warm-rust);
+}
+/* Tone down docx-preview's default page boxes so they fit our side-panel
+ * aesthetic — keep its layout but match Papir's typography surface. */
+.paper-docx-preview .docx-wrapper {
+  background: transparent;
+  padding: 0;
+}
+.paper-docx-preview .docx-wrapper section.docx {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  margin: 0 0 16px;
+}
+
+/* ===========================================================================
  * Margin diagnostics (A10) — calm margin notes in the right gutter.
  *
  * Replaces v0.3's red-dot inline diagnostics with soft notes positioned

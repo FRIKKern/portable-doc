@@ -50,6 +50,9 @@ function AppShell(): JSX.Element {
   // so the rail can read top-level blocks + drive scroll/focus.
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [editor, setEditor] = useState<TipTapEditor | null>(null);
+  // Pioneer move A — live .docx side-panel preview. State lives here so the
+  // footer chip can toggle it while the panel itself mounts inside Editor.
+  const [previewVisible, setPreviewVisible] = useState(false);
   // ImageInsertDialog state — when the slash menu's "Image" command fires,
   // SlashCommand calls back through the `onImageRequest` option (wired via
   // an Editor prop) with the editor instance. We stash it here to open the
@@ -137,6 +140,7 @@ function AppShell(): JSX.Element {
           onEditorReady={setEditor}
           onChange={setDoc}
           onImageRequest={handleImageRequest}
+          previewVisible={previewVisible}
         />
       </main>
       <OutlineRail
@@ -144,7 +148,12 @@ function AppShell(): JSX.Element {
         open={outlineOpen}
         onClose={() => setOutlineOpen(false)}
       />
-      <FooterStatus doc={doc} editor={editor} />
+      <FooterStatus
+        doc={doc}
+        editor={editor}
+        previewVisible={previewVisible}
+        onTogglePreview={() => setPreviewVisible((v) => !v)}
+      />
       <JsonEditMode
         doc={doc}
         open={jsonModeOpen}

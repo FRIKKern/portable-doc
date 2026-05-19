@@ -133,7 +133,13 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
           // `@tiptap/extensions` Focus adds `.has-focus` to the
           // top-level block containing the caret. Third-party
           // hook; we style it under the `.ProseMirror >` scope.
-          c !== '.has-focus',
+          c !== '.has-focus' &&
+          // Pioneer move A — `docx-preview` renders its own
+          // `.docx-wrapper > section.docx` page tree inside the
+          // preview panel. Third-party namespace; we only retouch
+          // the surface under the `.paper-docx-preview` scope.
+          c !== '.docx-wrapper' &&
+          c !== '.docx',
       );
 
     for (const cls of userClasses) {

@@ -44,6 +44,7 @@ import { buildExtensions } from './extensions/index.js';
 import { TableMenu } from './TableMenu.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
 import { FloatingBlockChrome } from './FloatingBlockChrome.js';
+import { DocxPreviewPanel } from './DocxPreviewPanel.js';
 
 interface EditorProps {
   /** PortableDoc rendered into the editor. Re-syncs via `setContent`
@@ -62,6 +63,10 @@ interface EditorProps {
    *  and the brief CustomEvent bridge it used to go through). Wired into
    *  SlashCommand.configure(). */
   onImageRequest?: (editor: TipTapEditor) => void;
+  /** Pioneer move A — when true, the DocxPreviewPanel renders the live .docx
+   *  preview alongside the editor. State is lifted to the parent so the
+   *  footer chip can toggle it; default false. */
+  previewVisible?: boolean;
 }
 
 /** Debounce window between doc-prop changes and the next validateDoc call
@@ -75,6 +80,7 @@ export function Editor({
   onEditorReady,
   dataTestId,
   onImageRequest,
+  previewVisible = false,
 }: EditorProps): JSX.Element {
   // Keep the latest onChange in a ref so re-renders of the parent don't
   // re-create the editor (TipTap remounts are expensive + lose selection).
@@ -287,6 +293,11 @@ export function Editor({
        *  issues are filtered inside MarginDiagnostics and surface in the
        *  footer count (A8). */}
       <MarginDiagnostics issues={issues} doc={doc} editor={editorInstance} />
+      {/* Pioneer move A — lean .docx preview side-panel sibling. Mounts
+       *  alongside MarginDiagnostics (same right-gutter convention) and
+       *  short-circuits to null when visible=false, so toggling it off
+       *  costs nothing. */}
+      <DocxPreviewPanel doc={doc} visible={previewVisible} />
       {/* CW5 — single floating chrome cluster that tracks the currently-
        *  hovered top-level block (Notion/BlockNote/Linear pattern). One
        *  instance per editor; resolves the target via canonical

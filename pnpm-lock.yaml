@@ -140,6 +140,9 @@ importers:
       docx:
         specifier: ^9.6.1
         version: 9.6.1
+      docx-preview:
+        specifier: ^0.3.7
+        version: 0.3.7
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -2792,6 +2795,9 @@ packages:
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
+
+  docx-preview@0.3.7:
+    resolution: {integrity: sha512-Lav69CTA/IYZPJTsKH7oYeoZjyg96N0wEJMNslGJnZJ+dMUZK85Lt5ASC79yUlD48ecWjuv+rkcmFt6EVPV0Xg==}
 
   docx@9.6.1:
     resolution: {integrity: sha512-ZJja9/KBUuFC109sCMzovoq2GR2wCG/AuxivjA+OHj/q0TEgJIm3S7yrlUxIy3B+bV8YDj/BiHfWyrRFmyWpDQ==}
@@ -7686,6 +7692,10 @@ snapshots:
   devlop@1.1.0:
     dependencies:
       dequal: 2.0.3
+
+  docx-preview@0.3.7:
+    dependencies:
+      jszip: 3.10.1
 
   docx@9.6.1:
     dependencies:

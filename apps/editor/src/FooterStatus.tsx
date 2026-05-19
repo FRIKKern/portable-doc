@@ -46,6 +46,13 @@ interface Props {
    *  PortableDoc. Falls back to `countWords(doc)` when the prop is
    *  omitted (early renders / tests without an editor). */
   editor?: TipTapEditor | null;
+  /** Pioneer move A — current visibility of the DocxPreviewPanel.
+   *  Optional so existing callers (App.tsx pre-A, tests) keep working
+   *  without supplying preview state. */
+  previewVisible?: boolean;
+  /** Toggle callback for the preview chip. When omitted, the chip is
+   *  not rendered. */
+  onTogglePreview?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +171,12 @@ function useIsWide(): boolean {
 // Component
 // ---------------------------------------------------------------------------
 
-export function FooterStatus({ doc, editor }: Props): JSX.Element {
+export function FooterStatus({
+  doc,
+  editor,
+  previewVisible,
+  onTogglePreview,
+}: Props): JSX.Element {
   const { reachable, retry } = useMcp();
 
   // Debounce validation to once per 500ms.
@@ -309,6 +321,19 @@ export function FooterStatus({ doc, editor }: Props): JSX.Element {
       </span>
 
       <span className="paper-footer-status__grow" />
+
+      {onTogglePreview && (
+        <button
+          type="button"
+          className="paper-footer-status__chip paper-footer-status__chip--button"
+          data-testid="footer-preview-toggle"
+          aria-pressed={previewVisible}
+          aria-label={previewVisible ? 'Hide Word preview' : 'Show Word preview'}
+          onClick={onTogglePreview}
+        >
+          {previewVisible ? '◧ Preview on' : '◧ Preview'}
+        </button>
+      )}
 
       <ExportMenu doc={doc} editor={editor ?? null} />
 
