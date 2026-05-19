@@ -806,7 +806,7 @@ const numberingConfig = {
           style: {
             run: { font: { name: 'Georgia' } },
             paragraph: {
-              indent: { left: 360, hanging: 360 },
+              indent: { left: 360, hanging: 200 },
               spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
             },
           },
@@ -819,7 +819,7 @@ const numberingConfig = {
           style: {
             run: { font: { name: 'Georgia' } },
             paragraph: {
-              indent: { left: 720, hanging: 360 },
+              indent: { left: 720, hanging: 200 },
               spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
             },
           },
@@ -832,7 +832,7 @@ const numberingConfig = {
           style: {
             run: { font: { name: 'Georgia' } },
             paragraph: {
-              indent: { left: 1080, hanging: 360 },
+              indent: { left: 1080, hanging: 200 },
               spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
             },
           },
@@ -847,14 +847,14 @@ const numberingConfig = {
           format: 'decimal' as const,
           text: '%1.',
           alignment: AlignmentType.LEFT,
-          style: { paragraph: { indent: { left: 360, hanging: 360 } } },
+          style: { paragraph: { indent: { left: 360, hanging: 200 } } },
         },
         {
           level: 1,
           format: 'lowerLetter' as const,
           text: '%2.',
           alignment: AlignmentType.LEFT,
-          style: { paragraph: { indent: { left: 720, hanging: 360 } } },
+          style: { paragraph: { indent: { left: 720, hanging: 200 } } },
         },
       ],
     },
