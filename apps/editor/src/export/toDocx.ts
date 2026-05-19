@@ -237,8 +237,14 @@ type TopChild = Paragraph | Table;
 const SECTION_NEST_INDENT = 240;
 
 function nestedIndent(depth: number): { left: number } | undefined {
-  if (depth <= 0) return undefined;
-  return { left: SECTION_NEST_INDENT * depth };
+  // First-level section contents (depth=1) are NOT visually indented in
+  // Papir's editor — sections at the top level read flush with body. Only
+  // DEEPLY nested sections (depth>=2) get the indent step. Otherwise a doc
+  // that contains a "What's next" section would push every paragraph in it
+  // right by 240 twips, while the editor renders them flush — a visible
+  // mismatch in the visual-check pipeline.
+  if (depth <= 1) return undefined;
+  return { left: SECTION_NEST_INDENT * (depth - 1) };
 }
 
 function paragraphForHeading(b: HeadingBlock, depth = 0): Paragraph {
@@ -880,15 +886,12 @@ export async function toDocxBlob(
   const language = options?.language ?? 'en-US';
   const children: TopChild[] = [];
 
-  if (doc.title) {
-    children.push(
-      new Paragraph({
-        heading: HeadingLevel.TITLE,
-        children: [new TextRun({ text: doc.title, bold: true })],
-      }),
-    );
-  }
-
+  // Don't emit a separate TITLE paragraph — the first heading block in the
+  // doc IS the title, by convention. doc.title stays in Document properties
+  // metadata for the file's Title field (set below at `title: doc.title`),
+  // but rendering it as a second visual heading duplicates the H1 the user
+  // already wrote (visible side-by-side in the visual-check pipeline:
+  // welcome.json shows "Welcome to Atlas" twice in the exported .docx).
   for (const b of doc.blocks) {
     children.push(...walkBlock(b));
   }
