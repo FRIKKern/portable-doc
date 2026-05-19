@@ -2006,6 +2006,32 @@
   height: auto;
 }
 
+/* Defensive: even with renderHeaders:false, some docx-preview builds still
+ * emit an empty <header> with a gray placeholder fill. Hide both header and
+ * footer outright in the preview. */
+.paper-docx-preview .docx-wrapper header,
+.paper-docx-preview .docx-wrapper footer {
+  display: none !important;
+}
+
+/* Line-height + paragraph spacing parity with the editor. docx-preview
+ * tends to render paragraphs slightly more compact than the editor's
+ * 1.6 line-height; nudge it to match the on-paper rhythm. */
+.paper-docx-preview .docx-wrapper p,
+.paper-docx-preview .docx-wrapper .paper-docx-preview__page p {
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+/* docx-preview renders bullets via CSS list-style on the <ul>; our
+ * authored Word bullet is a literal "•" run, so suppress the dupe
+ * CSS marker so we don't see both at once. */
+.paper-docx-preview .docx-wrapper ul,
+.paper-docx-preview .docx-wrapper ol {
+  list-style: none;
+  padding-left: 0;
+}
+
 /* ===========================================================================
  * Margin diagnostics (A10) — calm margin notes in the right gutter.
  *

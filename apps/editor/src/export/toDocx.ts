@@ -618,13 +618,15 @@ const numberingConfig = {
         {
           level: 0,
           format: 'bullet' as const,
-          // \u{F0B7} is the Word/Symbol-font bullet (PUA codepoint).
-          // Pairing it with `font: 'Symbol'` is how native Word lists
-          // ship; Pages + Docs both honour it.
-          text: '\u{F0B7}',
+          // Unicode bullet U+2022 in the body font. Symbol-font PUA
+          // (U+F0B7) is the historical Word convention but it doesn't
+          // render in browsers that lack Symbol — docx-preview shows
+          // a missing-glyph box. The plain bullet character carries
+          // identically through Word, Pages, Docs, and docx-preview.
+          text: '•',
           alignment: AlignmentType.LEFT,
           style: {
-            run: { font: { name: 'Symbol' } },
+            run: { font: { name: 'Georgia' } },
             paragraph: {
               indent: { left: 360, hanging: 360 },
               spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
@@ -634,10 +636,10 @@ const numberingConfig = {
         {
           level: 1,
           format: 'bullet' as const,
-          text: '\u{F0B7}',
+          text: '•',
           alignment: AlignmentType.LEFT,
           style: {
-            run: { font: { name: 'Symbol' } },
+            run: { font: { name: 'Georgia' } },
             paragraph: {
               indent: { left: 720, hanging: 360 },
               spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
@@ -647,10 +649,10 @@ const numberingConfig = {
         {
           level: 2,
           format: 'bullet' as const,
-          text: '\u{F0B7}',
+          text: '•',
           alignment: AlignmentType.LEFT,
           style: {
-            run: { font: { name: 'Symbol' } },
+            run: { font: { name: 'Georgia' } },
             paragraph: {
               indent: { left: 1080, hanging: 360 },
               spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },

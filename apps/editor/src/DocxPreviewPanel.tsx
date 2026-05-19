@@ -65,6 +65,11 @@ export function DocxPreviewPanel({
             experimental: false,
             trimXmlDeclaration: true,
             useBase64URL: true,
+            // The empty header section docx-preview reserves at the top of
+            // every page renders as a gray bar above the body content. We
+            // don't author headers/footers anywhere, so suppress both.
+            renderHeaders: false,
+            renderFooters: false,
           });
           if (cancelled) return;
           setStatus('ready');
