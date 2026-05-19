@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# papir-visual-check — fixture JSON → .docx → .pdf → .png pipeline so an
+# agent (or human) can eyeball Papir's editor render against the actual
+# Word/Pages/Docs output. See docs/visual-fidelity-workflow.md.
+set -euo pipefail
+
+QUIET=0; FIXTURE=""
+for arg in "$@"; do
+  case "$arg" in
+    --quiet) QUIET=1 ;;
+    -h|--help) echo "usage: bin/papir-visual-check [fixture.json] [--quiet]"; exit 0 ;;
+    *) FIXTURE="$arg" ;;
+  esac
+done
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+[ -z "$FIXTURE" ] && FIXTURE="$ROOT/examples/welcome.json"
+if [ ! -f "$FIXTURE" ]; then
+  echo "fixture not found: $FIXTURE" >&2
+  echo "usage: pnpm visual-check <path-to-fixture.json>" >&2
+  exit 1
+fi
+
+have() { command -v "$1" >/dev/null 2>&1; }
+have soffice  || { echo "soffice missing — brew install --cask libreoffice" >&2; exit 1; }
+have pdftoppm || { echo "pdftoppm missing — brew install poppler"            >&2; exit 1; }
+IM_OK=false; IM_BIN=""
+if   have magick;  then IM_OK=true; IM_BIN=magick
+elif have convert; then IM_OK=true; IM_BIN=convert; fi
+
+WORK="/tmp/papir-visual-$(date +%s)"
+mkdir -p "$WORK"
+DOCX="$WORK/test.docx"; PDF="$WORK/test.pdf"; PDF_PNG="$WORK/pdf-1.png"
+NOW_MS() { python3 -c 'import time;print(int(time.time()*1000))'; }
+T0=$(NOW_MS)
+
+npx tsx "$ROOT/apps/editor/scripts/export-fixture-to-docx.ts" "$FIXTURE" "$DOCX" >&2
+soffice --headless --convert-to pdf "$DOCX" --outdir "$WORK" >&2
+[ -f "$PDF" ] || { echo "LibreOffice did not produce $PDF" >&2; exit 1; }
+pdftoppm -r 150 -f 1 -l 1 -png "$PDF" "$WORK/pdf" >&2
+[ -f "$PDF_PNG" ] || { echo "pdftoppm did not produce $PDF_PNG" >&2; exit 1; }
+
+SIDE=null
+if $IM_OK; then
+  CAND="$WORK/side-by-side.png"
+  "$IM_BIN" "$PDF_PNG" -resize x900 "$CAND" >&2 && SIDE="$CAND" || SIDE=null
+fi
+ELAPSED=$(( $(NOW_MS) - T0 ))
+
+q() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"; }
+side_field=$([ "$SIDE" = "null" ] && echo null || q "$SIDE")
+cat <<JSON
+{
+  "ok": true,
+  "fixture": $(q "$FIXTURE"),
+  "work_dir": $(q "$WORK"),
+  "artifacts": {
+    "docx": $(q "$DOCX"),
+    "pdf": $(q "$PDF"),
+    "pdf_png": $(q "$PDF_PNG"),
+    "editor_png": null,
+    "side_by_side_png": $side_field,
+    "diff_score": null
+  },
+  "tools_available": {
+    "soffice": true, "pdftoppm": true,
+    "imagemagick": $($IM_OK && echo true || echo false),
+    "playwright": false
+  },
+  "elapsed_ms": $ELAPSED,
+  "next_steps": [
+    "Open $WORK/pdf-1.png in Preview.app",
+    "Compare against the editor at http://localhost:5173/",
+    "Playwright editor screenshot + pixel diff: see docs/visual-fidelity-workflow.md"
+  ]
+}
+JSON
+
+[ "$QUIET" = "0" ] && { open "$PDF" >/dev/null 2>&1 || true; }
+exit 0
