@@ -290,30 +290,28 @@ function paragraphsForCallout(b: CalloutBlock): Paragraph[] {
     lineRule: LineRuleType.AUTO,
   };
   const calloutIndent = { left: 360, right: 360 };
-  const out: Paragraph[] = [];
+  // Emit title + body as ONE paragraph with a soft break (<w:br/>) between
+  // them. The prior "two paragraphs joined by border.between" approach
+  // worked in Word/Pages but Google Docs collapses such joined paragraphs
+  // onto a single visual line on import. A single paragraph with a soft
+  // break is the OOXML idiom every renderer honors identically — title
+  // and body always sit on separate visual lines, regardless of importer.
+  const children: ParagraphChild[] = [];
   if (b.title) {
-    out.push(
-      new Paragraph({
-        style: styleId,
-        border: calloutBorder,
-        shading: calloutShading,
-        indent: calloutIndent,
-        spacing: calloutSpacing,
-        children: [new TextRun({ text: b.title, bold: true, color: tone.border })],
-      }),
-    );
+    children.push(new TextRun({ text: b.title, bold: true, color: tone.border }));
+    children.push(new TextRun({ break: 1 }));
   }
-  out.push(
+  children.push(...inlineToRuns(b.content));
+  return [
     new Paragraph({
       style: styleId,
       border: calloutBorder,
       shading: calloutShading,
       indent: calloutIndent,
       spacing: calloutSpacing,
-      children: inlineToRuns(b.content),
+      children,
     }),
-  );
-  return out;
+  ];
 }
 
 function paragraphsForCode(b: CodeBlock): Paragraph[] {
