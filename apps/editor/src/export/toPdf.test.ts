@@ -122,6 +122,97 @@ describe('toPdfBlob', () => {
     }
   });
 
+  it('embeds a data: URI image into the captured docDefinition', async () => {
+    // 1x1 transparent PNG, the canonical "smallest valid image" data URI.
+    const dataUri =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
+    const doc: PortableDoc = {
+      version: 1,
+      title: 'Pic',
+      blocks: [
+        { id: 'i1', type: 'image', src: dataUri, alt: 'pixel', width: 200, surfaces: ['web', 'native'] },
+      ],
+    };
+
+    type CapturedDef = { content?: unknown };
+    let captured: CapturedDef | undefined;
+    const original = (pdfMake as unknown as { createPdf: (d: unknown) => unknown }).createPdf;
+    const spy = vi
+      .spyOn(pdfMake as unknown as { createPdf: (d: unknown) => unknown }, 'createPdf')
+      .mockImplementation((def: unknown) => {
+        captured = def as CapturedDef;
+        return {
+          getBlob: async () => new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])], { type: PDF_MIME }),
+          getBuffer: async () => new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+        };
+      });
+
+    try {
+      await toPdfBlob(doc);
+      expect(captured).toBeDefined();
+      const content = (captured!.content as Array<Record<string, unknown>>);
+      // Find the image node — the walker may emit other adjacent nodes in the
+      // future, so we search rather than index.
+      const imgNode = content.find((n) => typeof n === 'object' && n && 'image' in n);
+      expect(imgNode).toBeDefined();
+      expect(imgNode!.image).toBe(dataUri);
+      // Width: explicit override, clamped to the A4 column max (470pt). 200 ≤ 470.
+      expect(imgNode!.width).toBe(200);
+      expect(imgNode!.alignment).toBe('center');
+      expect(imgNode!.margin).toEqual([0, 8, 0, 8]);
+    } finally {
+      spy.mockRestore();
+      (pdfMake as unknown as { createPdf: unknown }).createPdf = original;
+    }
+  });
+
+  it('falls back to a placeholder text node when an http(s) image fetch fails', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      title: 'Broken',
+      blocks: [
+        { id: 'i1', type: 'image', src: 'https://example.invalid/missing.png', alt: 'gone', surfaces: ['web', 'native'] },
+      ],
+    };
+
+    // Stub global fetch to a hard network failure. happy-dom provides fetch
+    // by default, so we spy on it rather than installing one from scratch.
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new TypeError('NetworkError: fetch failed'));
+
+    type CapturedDef = { content?: unknown };
+    let captured: CapturedDef | undefined;
+    const original = (pdfMake as unknown as { createPdf: (d: unknown) => unknown }).createPdf;
+    const spy = vi
+      .spyOn(pdfMake as unknown as { createPdf: (d: unknown) => unknown }, 'createPdf')
+      .mockImplementation((def: unknown) => {
+        captured = def as CapturedDef;
+        return {
+          getBlob: async () => new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])], { type: PDF_MIME }),
+          getBuffer: async () => new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+        };
+      });
+
+    try {
+      await toPdfBlob(doc);
+      const content = (captured!.content as Array<Record<string, unknown>>);
+      // No real image node should have made it through.
+      const imgNode = content.find((n) => typeof n === 'object' && n && 'image' in n);
+      expect(imgNode).toBeUndefined();
+      // Instead, we expect the italic `[Image: alt]` placeholder text node.
+      const placeholder = content.find(
+        (n) => typeof n === 'object' && n && 'text' in n && typeof n.text === 'string' && n.text.startsWith('[Image:'),
+      );
+      expect(placeholder).toBeDefined();
+      expect((placeholder!.text as string)).toContain('gone');
+    } finally {
+      fetchSpy.mockRestore();
+      spy.mockRestore();
+      (pdfMake as unknown as { createPdf: unknown }).createPdf = original;
+    }
+  });
+
   it('handles a doc with one of every major block type', async () => {
     const doc: PortableDoc = {
       version: 1,

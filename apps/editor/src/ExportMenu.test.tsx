@@ -16,6 +16,7 @@ import {
   cleanup,
   fireEvent,
   render,
+  waitFor,
   screen,
 } from '@testing-library/react';
 import type { PortableDoc } from '@portable-doc/core';
@@ -121,19 +122,24 @@ describe('ExportMenu', () => {
     expect(screen.queryByTestId('footer-export-popover')).toBeNull();
   });
 
-  it('exports an HTML blob with type text/html', () => {
+  it('exports an HTML blob with type text/html', async () => {
     render(<ExportMenu doc={minimalDoc} editor={stubEditor('<p>hi</p>')} />);
     fireEvent.click(screen.getByTestId('footer-export-trigger'));
     fireEvent.click(screen.getByTestId('footer-export-html'));
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    // HTML export is async now — toHtmlBlob walks the AST and embeds the
+    // round-trip envelope; the download fires after the Promise resolves.
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
     expect(capturedBlobs[0]?.type).toBe('text/html');
   });
 
-  it('exports a Markdown blob with type text/markdown', () => {
+  it('exports a Markdown blob with type text/markdown', async () => {
     render(<ExportMenu doc={minimalDoc} editor={stubEditor('<p>hi</p>')} />);
     fireEvent.click(screen.getByTestId('footer-export-trigger'));
     fireEvent.click(screen.getByTestId('footer-export-markdown'));
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    // Markdown export is async now — gzip+base64 envelope embed lands the
+    // download via a Promise chain that crosses the CompressionStream
+    // boundary, so plain microtask flushing isn't enough.
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
     expect(capturedBlobs[0]?.type).toBe('text/markdown');
   });
 

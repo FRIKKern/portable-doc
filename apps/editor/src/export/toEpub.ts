@@ -111,9 +111,38 @@ function inlineToXhtml(nodes: InlineNode[] | undefined): string {
 // else emits a single element. Heading IDs are slugged from their text so
 // nav.xhtml can deep-link via `chapter-1.xhtml#<slug>` and (later) jumps
 // from the chapter surface itself work.
+//
+// Image blocks need an `ImageRegistry` passed through the walker so each
+// resolved binary lands once in the OPS/images/ directory and is referenced
+// by its slot index from chapter.xhtml + the OPF manifest. The registry is
+// pre-populated by `resolveImages` before the chapter is rendered — the
+// walker only reads.
 // ---------------------------------------------------------------------------
 
-function blockToXhtml(b: Block, depth = 0): string {
+/** A successfully resolved image binary destined for OPS/images/imageN.<ext>. */
+interface ResolvedImage {
+  /** 1-based slot index — image1, image2, …. */
+  slot: number;
+  /** Final file extension without the dot — png|jpg|jpeg|gif. */
+  ext: string;
+  /** OPF manifest media-type — image/png|image/jpeg|image/gif. */
+  mediaType: string;
+  /** Decoded binary payload. */
+  bytes: Uint8Array;
+  /** Optional intrinsic dimensions carried through from the block. */
+  width?: number;
+  height?: number;
+  /** Alt text — escaped at emit time, not now. */
+  alt: string;
+}
+
+/** Index keyed on the originating block's `id` so blockToXhtml can look it
+ *  up cheaply without re-walking. A block whose `id` is not present here
+ *  was either not resolvable (fetch failure / unsupported MIME) or had no
+ *  id, and falls back to the `[Image: alt]` placeholder paragraph. */
+type ImageRegistry = Map<string, ResolvedImage>;
+
+function blockToXhtml(b: Block, depth = 0, images?: ImageRegistry): string {
   switch (b.type) {
     case 'heading':
       return headingToXhtml(b, depth);
@@ -126,13 +155,13 @@ function blockToXhtml(b: Block, depth = 0): string {
     case 'action':
       return actionToXhtml(b);
     case 'section':
-      return sectionToXhtml(b, depth);
+      return sectionToXhtml(b, depth, images);
     case 'divider':
       return dividerToXhtml(b);
     case 'code':
       return codeToXhtml(b);
     case 'image':
-      return imageToXhtml(b);
+      return imageToXhtml(b, images);
     case 'table':
       return tableToXhtml(b);
     default:
@@ -178,11 +207,11 @@ function actionToXhtml(b: ActionBlock): string {
   )}"><a href="${escapeAttr(b.href ?? '#')}">${escapeXml(b.label ?? '')}</a></p>`;
 }
 
-function sectionToXhtml(b: SectionBlock, depth: number): string {
+function sectionToXhtml(b: SectionBlock, depth: number, images?: ImageRegistry): string {
   const titlePart = b.title
     ? `  <h${Math.min(6, 2 + depth)} class="paper-section__title">${escapeXml(b.title)}</h${Math.min(6, 2 + depth)}>\n`
     : '';
-  const children = b.blocks.map((c) => blockToXhtml(c, depth + 1)).join('\n');
+  const children = b.blocks.map((c) => blockToXhtml(c, depth + 1, images)).join('\n');
   return `<section class="paper-section">\n${titlePart}${children}\n</section>`;
 }
 
@@ -196,11 +225,128 @@ function codeToXhtml(b: CodeBlock): string {
   return `<pre class="paper-code"${lang}><code>${escapeXml(b.value ?? '')}</code></pre>`;
 }
 
-function imageToXhtml(b: ImageBlock): string {
-  // v1: skip binary fetch/embed (same disposition as toDocx). Emit a
-  // structural placeholder so the chapter still reads in order.
-  const alt = b.alt || b.src;
-  return `<p class="paper-image-placeholder"><em>[Image: ${escapeXml(alt)}]</em></p>`;
+function imageToXhtml(b: ImageBlock, images?: ImageRegistry): string {
+  const resolved = images?.get(b.id);
+  if (!resolved) {
+    // Unresolved (no fetch attempt, network/CORS/404 failure, or unsupported
+    // MIME). Emit the v1 placeholder paragraph so the chapter still reads.
+    const alt = b.alt || b.src;
+    return `<p class="paper-image-placeholder"><em>[Image: ${escapeXml(alt)}]</em></p>`;
+  }
+  const href = `../images/image${resolved.slot}.${resolved.ext}`;
+  const dimAttrs =
+    (resolved.width ? ` width="${resolved.width}"` : '') +
+    (resolved.height ? ` height="${resolved.height}"` : '');
+  return `<p class="paper-image"><img src="${escapeAttr(href)}" alt="${escapeAttr(resolved.alt)}"${dimAttrs}/></p>`;
+}
+
+// ---------------------------------------------------------------------------
+// Image resolution — data: URI decode + http(s) fetch.
+//
+// Pre-walked once before chapter render so each image's slot index is
+// stable and the OPF manifest, ZIP binary, and chapter `<img src=...>` all
+// agree. Failures (bad data URI, fetch reject, non-2xx, unsupported MIME)
+// drop the entry from the registry — the walker then falls back to the
+// `[Image: alt]` placeholder.
+// ---------------------------------------------------------------------------
+
+/** Per-MIME extension mapping. Anything outside this set is unsupported
+ *  and triggers placeholder fallback — EPUB readers only reliably render
+ *  these three raster formats. SVG is intentionally excluded for v1 (the
+ *  reader sandbox makes it brittle). */
+const MIME_TO_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/gif': 'gif',
+};
+
+function normalizeMime(raw: string): { mediaType: string; ext: string } | null {
+  const lower = raw.toLowerCase().trim().split(';')[0]!.trim();
+  const ext = MIME_TO_EXT[lower];
+  if (!ext) return null;
+  // Normalise image/jpg → image/jpeg in the manifest (jpg is a common but
+  // non-standard MIME); the file extension stays `jpg` for readability.
+  const mediaType = lower === 'image/jpg' ? 'image/jpeg' : lower;
+  return { mediaType, ext };
+}
+
+function decodeBase64(b64: string): Uint8Array {
+  // atob is available in browser + happy-dom test env + modern Node.
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function resolveOne(b: ImageBlock): Promise<Omit<ResolvedImage, 'slot'> | null> {
+  const src = b.src ?? '';
+  try {
+    if (src.startsWith('data:')) {
+      // data:[<mediatype>][;base64],<data>
+      const comma = src.indexOf(',');
+      if (comma < 0) return null;
+      const header = src.slice(5, comma);
+      const payload = src.slice(comma + 1);
+      const isBase64 = /;base64$/i.test(header);
+      const mimeRaw = isBase64 ? header.replace(/;base64$/i, '') : header;
+      const mime = normalizeMime(mimeRaw || 'image/png');
+      if (!mime) return null;
+      const bytes = isBase64
+        ? decodeBase64(payload)
+        : new TextEncoder().encode(decodeURIComponent(payload));
+      return {
+        ext: mime.ext,
+        mediaType: mime.mediaType,
+        bytes,
+        width: b.width,
+        height: b.height,
+        alt: b.alt ?? '',
+      };
+    }
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      const res = await fetch(src);
+      if (!res.ok) return null;
+      const mime = normalizeMime(res.headers.get('content-type') ?? '');
+      if (!mime) return null;
+      const buf = await res.arrayBuffer();
+      return {
+        ext: mime.ext,
+        mediaType: mime.mediaType,
+        bytes: new Uint8Array(buf),
+        width: b.width,
+        height: b.height,
+        alt: b.alt ?? '',
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Walk every nested block, returning each image block (id required so
+ *  blockToXhtml can look it back up). Mirrors the section recursion in
+ *  blockToXhtml — section bodies are flattened in place. */
+function collectImageBlocks(blocks: Block[], out: ImageBlock[] = []): ImageBlock[] {
+  for (const b of blocks) {
+    if (b.type === 'image') out.push(b);
+    else if (b.type === 'section') collectImageBlocks(b.blocks, out);
+  }
+  return out;
+}
+
+async function resolveImages(doc: PortableDoc): Promise<ImageRegistry> {
+  const registry: ImageRegistry = new Map();
+  const imageBlocks = collectImageBlocks(doc.blocks);
+  let slot = 0;
+  for (const b of imageBlocks) {
+    const resolved = await resolveOne(b);
+    if (!resolved) continue;
+    slot += 1;
+    registry.set(b.id, { ...resolved, slot });
+  }
+  return registry;
 }
 
 function tableToXhtml(b: TableBlock): string {
@@ -263,8 +409,24 @@ const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </container>
 `;
 
-function buildOpf(doc: PortableDoc, uuid: string, language: string, modifiedIso: string): string {
+function buildOpf(
+  doc: PortableDoc,
+  uuid: string,
+  language: string,
+  modifiedIso: string,
+  images: ImageRegistry,
+): string {
   const title = doc.title ?? 'Untitled';
+  // Sort by slot so manifest order is deterministic and matches the
+  // images/imageN.<ext> file naming on disk.
+  const imageItems = Array.from(images.values())
+    .sort((a, b) => a.slot - b.slot)
+    .map(
+      (img) =>
+        `    <item id="img-${img.slot}" href="images/image${img.slot}.${img.ext}" media-type="${escapeAttr(img.mediaType)}"/>`,
+    )
+    .join('\n');
+  const imagesSection = imageItems ? `\n${imageItems}` : '';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf"
          xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -290,7 +452,7 @@ function buildOpf(doc: PortableDoc, uuid: string, language: string, modifiedIso:
     <item id="nav"       href="nav.xhtml"           media-type="application/xhtml+xml" properties="nav"/>
     <item id="ncx"       href="ncx.xml"             media-type="application/x-dtbncx+xml"/>
     <item id="css-paper" href="styles/paper.css"    media-type="text/css"/>
-    <item id="ch-1"      href="chapters/chapter-1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch-1"      href="chapters/chapter-1.xhtml" media-type="application/xhtml+xml"/>${imagesSection}
   </manifest>
   <spine toc="ncx">
     <itemref idref="ch-1" linear="yes"/>
@@ -498,9 +660,9 @@ p.paper-image-placeholder { color: #6b7280; font-style: italic; }
 `;
 }
 
-function buildChapterXhtml(doc: PortableDoc, language: string): string {
+function buildChapterXhtml(doc: PortableDoc, language: string, images: ImageRegistry): string {
   const title = doc.title ?? 'Untitled';
-  const body = doc.blocks.map((b) => blockToXhtml(b)).join('\n');
+  const body = doc.blocks.map((b) => blockToXhtml(b, 0, images)).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml"
@@ -561,13 +723,24 @@ export async function toEpubBlob(
     JSON.stringify(envelope, null, 2),
   );
 
+  // Resolve every image up front — must precede chapter render so each
+  // <img src="..."> agrees with the manifest entry and the ZIP binary.
+  // Resolution is best-effort; unresolved images fall back to placeholders.
+  const images = await resolveImages(doc);
+
   // OPS — package, navigation, stylesheet, chapter.
   const toc = harvestToc(doc);
-  zip.file('OPS/package.opf', buildOpf(doc, docUuid, language, modifiedIso));
+  zip.file('OPS/package.opf', buildOpf(doc, docUuid, language, modifiedIso, images));
   zip.file('OPS/nav.xhtml', buildNavXhtml(doc, toc, language));
   zip.file('OPS/ncx.xml', buildNcx(doc, docUuid, toc, language));
   zip.file('OPS/styles/paper.css', buildReaderCss());
-  zip.file('OPS/chapters/chapter-1.xhtml', buildChapterXhtml(doc, language));
+  zip.file('OPS/chapters/chapter-1.xhtml', buildChapterXhtml(doc, language, images));
+
+  // Image binaries — one entry per resolved image, named to match the OPF
+  // manifest hrefs (images/imageN.<ext>) and the chapter <img src=...>.
+  for (const img of images.values()) {
+    zip.file(`OPS/images/image${img.slot}.${img.ext}`, img.bytes);
+  }
 
   return await zip.generateAsync({
     type: 'blob',

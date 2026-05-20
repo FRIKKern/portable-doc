@@ -20,9 +20,11 @@ import {
   type ChangeEvent,
 } from 'react';
 import type { Block, InlineNode, PortableDoc } from '@portable-doc/core';
+import { buildEnvelope, generateDocUuid } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { toDocxBlob } from './export/toDocx.js';
 import { toEpubBlob } from './export/toEpub.js';
+import { toHtmlBlob } from './export/toHtml.js';
 import { toPdfBlob } from './export/toPdf.js';
 import { extractFromDocx } from './import/fromDocx.js';
 
@@ -146,22 +148,52 @@ export function serializeMarkdown(doc: PortableDoc): string {
   return head + body + '\n';
 }
 
-function buildHtmlDocument(title: string, bodyHtml: string): string {
-  const safeTitle = title
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>${safeTitle}</title>
-</head>
-<body>
-${bodyHtml}
-</body>
-</html>
-`;
+/**
+ * Gzip + base64-encode an envelope payload into the single-line HTML comment
+ * the .md round-trip path expects. Browser-native CompressionStream keeps the
+ * comment short enough for typical markdown renderers to scroll right past.
+ * Mirrors the embed-locations spec (P2 of embedded-roundtrip-ast).
+ */
+export async function encodeEnvelopeComment(doc: PortableDoc): Promise<string> {
+  const envelope = buildEnvelope(doc, generateDocUuid());
+  const gzipped = await new Response(
+    new Blob([JSON.stringify(envelope)])
+      .stream()
+      .pipeThrough(new CompressionStream('gzip')),
+  ).arrayBuffer();
+  const bytes = new Uint8Array(gzipped);
+  // Chunk through fromCharCode to dodge the per-call argument-count cap on
+  // very large payloads. 0x8000 is the common-wisdom safe chunk size.
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  const b64 = btoa(binary);
+  return `<!-- portable-doc-ast (gzip+base64): ${b64} -->`;
+}
+
+/**
+ * Insert the envelope comment between the first `# Title` line and the body —
+ * or at the very top when there is no title heading. Idempotent for our own
+ * output: we only ever inject one comment, and downstream the extractor finds
+ * the first match.
+ */
+export function injectEnvelopeIntoMarkdown(md: string, comment: string): string {
+  if (md.startsWith('# ')) {
+    const nl = md.indexOf('\n');
+    if (nl === -1) {
+      // Title-only doc — drop the comment after the title with the standard
+      // blank-line cushion the body would normally have.
+      return `${md}\n\n${comment}\n`;
+    }
+    // Standard shape from serializeMarkdown is `# Title\n\n<body>` — we slot
+    // the comment + blank line into that gap.
+    const head = md.slice(0, nl + 1);
+    const rest = md.slice(nl + 1);
+    return `${head}\n${comment}\n\n${rest.replace(/^\n+/, '')}`;
+  }
+  return `${comment}\n\n${md}`;
 }
 
 export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
@@ -221,17 +253,24 @@ export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
     close();
   }, [doc, filenameBase, close]);
 
-  const onExportHtml = useCallback(() => {
-    const inner = editor ? editor.getHTML() : '';
-    const html = buildHtmlDocument(title, inner);
-    const blob = new Blob([html], { type: 'text/html' });
+  const onExportHtml = useCallback(async () => {
+    // toHtmlBlob walks the AST and embeds the round-trip envelope in
+    // <head> as <script type="application/portable-doc+json">. The old
+    // path used editor.getHTML() which dropped the envelope — re-imports
+    // had no way to recover the original AST. The filename + MIME stay
+    // identical; this is a pure upgrade of the payload.
+    const blob = await toHtmlBlob(doc);
     downloadBlob(blob, `${filenameBase}.html`);
     close();
-  }, [editor, title, filenameBase, close]);
+  }, [doc, filenameBase, close]);
 
-  const onExportMarkdown = useCallback(() => {
+  const onExportMarkdown = useCallback(async () => {
     const md = serializeMarkdown(doc);
-    const blob = new Blob([md], { type: 'text/markdown' });
+    // Embed the envelope sidecar so a re-import reconstructs the AST
+    // losslessly — same contract as the .docx path, lighter mechanism.
+    const comment = await encodeEnvelopeComment(doc);
+    const withEnvelope = injectEnvelopeIntoMarkdown(md, comment);
+    const blob = new Blob([withEnvelope], { type: 'text/markdown' });
     downloadBlob(blob, `${filenameBase}.md`);
     close();
   }, [doc, filenameBase, close]);
@@ -332,7 +371,9 @@ export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
             role="menuitem"
             className="paper-export-menu__item"
             data-testid="footer-export-html"
-            onClick={onExportHtml}
+            onClick={() => {
+              void onExportHtml();
+            }}
           >
             HTML
           </button>
@@ -341,7 +382,9 @@ export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
             role="menuitem"
             className="paper-export-menu__item"
             data-testid="footer-export-markdown"
-            onClick={onExportMarkdown}
+            onClick={() => {
+              void onExportMarkdown();
+            }}
           >
             Markdown
           </button>

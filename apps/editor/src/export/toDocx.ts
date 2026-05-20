@@ -14,10 +14,13 @@
  * not in the catalog emit a `[Unsupported variant: <name>]` callout per
  * bound decision #8.
  *
- * Images are deliberately skipped in v1 (binary embedding requires fetching
- * the src + adding an `ImageRun` with explicit dimensions; deferred). The
- * image block emits a placeholder paragraph `[Image: <alt>]` so the
- * structure survives the round-trip.
+ * Images are embedded as real `ImageRun`s — `data:` URIs are base64-decoded
+ * inline, `http(s)` URLs are fetched and their bytes packed into the OPC
+ * zip under `word/media/imageN.<ext>`. Width is clamped to 720px so a giant
+ * source doesn't blow past the A4 text column; explicit `b.width`/`b.height`
+ * win when present, still clamped. On resolve failure (CORS, 404, malformed
+ * data URI) the renderer falls back to the structural placeholder paragraph
+ * `[Image: <alt>]` so the surrounding document still reads in order.
  */
 
 import type {
@@ -42,6 +45,7 @@ import {
   Document,
   ExternalHyperlink,
   HeadingLevel,
+  ImageRun,
   LineRuleType,
   Packer,
   PageOrientation,
@@ -486,13 +490,229 @@ function paragraphForAction(b: ActionBlock): Paragraph {
   });
 }
 
-function paragraphForImage(b: ImageBlock): Paragraph {
-  // v1: skip binary embedding (would require fetching src + ImageRun with
-  // explicit dimensions). Emit a structural placeholder so the surrounding
-  // document still reads in order.
+// ---------------------------------------------------------------------------
+// Image embedding
+// ---------------------------------------------------------------------------
+
+/** Maximum display width for an embedded image, in pixels. Docx's
+ *  `transformation.{width,height}` is documented as pixels @ 96 dpi (one px
+ *  ≈ 9525 EMU). 720 px ≈ 7.5 inch — narrower than A4's printable column
+ *  (8.27in minus margins) so even a 4K source lands inside the text block
+ *  on every importer. */
+const MAX_IMAGE_WIDTH_PX = 720;
+
+type ImageType = 'png' | 'jpg' | 'gif' | 'bmp';
+
+interface ResolvedImage {
+  type: ImageType;
+  data: Uint8Array;
+  /** Natural pixel width sniffed from the file header, when knowable. */
+  naturalW?: number;
+  /** Natural pixel height sniffed from the file header, when knowable. */
+  naturalH?: number;
+}
+
+/** Decode a base64 string to a Uint8Array. Browsers + happy-dom both ship
+ *  `atob`; node's runtime exposes `Buffer.from(b64, 'base64')` but we stay
+ *  on the browser primitive to keep the bundle Node-free. */
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+/** Map a MIME / extension hint to the four image kinds docx accepts.
+ *  Returns null when the source is something exotic (svg, webp, avif) —
+ *  the caller falls back to the placeholder paragraph. */
+function classifyImage(hint: string): ImageType | null {
+  const h = hint.toLowerCase();
+  if (h.includes('png')) return 'png';
+  if (h.includes('jpeg') || h.includes('jpg')) return 'jpg';
+  if (h.includes('gif')) return 'gif';
+  if (h.includes('bmp')) return 'bmp';
+  return null;
+}
+
+/** Sniff intrinsic pixel dimensions from the file header. Returns
+ *  `{ w, h }` for the four formats docx supports, or `undefined` when the
+ *  header is too short or the magic bytes don't match. Cheap (no decode).
+ *
+ *  PNG  : 8-byte signature, then IHDR chunk with width@16 height@20 (BE).
+ *  GIF  : "GIF8" + width@6 height@8 (LE).
+ *  BMP  : "BM"   + width@18 height@22 (LE, signed).
+ *  JPEG : scan SOFn markers — width/height live after the 5-byte segment
+ *         header. Most photos have it within the first few hundred bytes. */
+function sniffDimensions(
+  type: ImageType,
+  bytes: Uint8Array,
+): { w: number; h: number } | undefined {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  try {
+    if (type === 'png' && bytes.length >= 24) {
+      // 0..7 PNG sig; 8..11 IHDR length; 12..15 "IHDR"; 16..19 width; 20..23 height (BE).
+      return { w: dv.getUint32(16, false), h: dv.getUint32(20, false) };
+    }
+    if (type === 'gif' && bytes.length >= 10) {
+      return { w: dv.getUint16(6, true), h: dv.getUint16(8, true) };
+    }
+    if (type === 'bmp' && bytes.length >= 26) {
+      return {
+        w: dv.getInt32(18, true),
+        h: Math.abs(dv.getInt32(22, true)),
+      };
+    }
+    if (type === 'jpg' && bytes.length >= 4) {
+      // Walk JPEG segments looking for a Start-Of-Frame marker (0xFFC0–0xFFCF
+      // excluding 0xFFC4/0xFFC8/0xFFCC). Each non-SOF segment carries a
+      // 2-byte big-endian length we skip past.
+      let i = 2; // skip SOI 0xFFD8
+      while (i + 9 < bytes.length) {
+        if (bytes[i] !== 0xff) return undefined;
+        const marker = bytes[i + 1]!;
+        const isSof =
+          marker >= 0xc0 &&
+          marker <= 0xcf &&
+          marker !== 0xc4 &&
+          marker !== 0xc8 &&
+          marker !== 0xcc;
+        if (isSof) {
+          return {
+            h: dv.getUint16(i + 5, false),
+            w: dv.getUint16(i + 7, false),
+          };
+        }
+        const segLen = dv.getUint16(i + 2, false);
+        i += 2 + segLen;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+/** Pull a "best guess" extension off a URL's path. Used as a fallback when
+ *  the server didn't send a usable Content-Type. */
+function extensionHint(url: string): string {
+  try {
+    const u = new URL(url);
+    const m = u.pathname.toLowerCase().match(/\.(png|jpe?g|gif|bmp)$/);
+    return m ? m[1]! : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Resolve an image src to bytes + format. Returns null on any error
+ *  (malformed data URI, fetch failure, CORS, unsupported MIME). The caller
+ *  emits the placeholder paragraph in that case. */
+export async function resolveImage(src: string): Promise<ResolvedImage | null> {
+  if (!src) return null;
+  // data: URI — parse the MIME + base64 payload inline. We accept only the
+  // base64 variant; percent-encoded text data URIs aren't a realistic image
+  // source.
+  if (src.startsWith('data:')) {
+    const m = src.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+    if (!m) return null;
+    const mime = m[1] ?? '';
+    const isB64 = !!m[2];
+    const payload = m[3] ?? '';
+    if (!isB64) return null;
+    const type = classifyImage(mime);
+    if (!type) return null;
+    let data: Uint8Array;
+    try {
+      data = base64ToBytes(payload);
+    } catch {
+      return null;
+    }
+    const dims = sniffDimensions(type, data);
+    return { type, data, naturalW: dims?.w, naturalH: dims?.h };
+  }
+  // http(s) URL — fetch + sniff Content-Type or fall back to extension.
+  if (/^https?:\/\//i.test(src)) {
+    try {
+      const res = await fetch(src);
+      if (!res.ok) return null;
+      const ct = res.headers.get('Content-Type') ?? '';
+      const buf = await res.arrayBuffer();
+      const type = classifyImage(ct) ?? classifyImage(extensionHint(src));
+      if (!type) return null;
+      const data = new Uint8Array(buf);
+      const dims = sniffDimensions(type, data);
+      return { type, data, naturalW: dims?.w, naturalH: dims?.h };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Pick the rendered transformation size in pixels, honoring explicit
+ *  block dimensions, falling back to natural dimensions, clamping width to
+ *  MAX_IMAGE_WIDTH_PX while preserving aspect ratio. */
+function imageTransformation(
+  b: ImageBlock,
+  resolved: ResolvedImage,
+): { width: number; height: number } {
+  // Start from explicit block dims, then natural, then a sensible default.
+  let w = b.width ?? resolved.naturalW ?? MAX_IMAGE_WIDTH_PX;
+  let h =
+    b.height ??
+    (b.width && resolved.naturalW && resolved.naturalH
+      ? Math.round((b.width * resolved.naturalH) / resolved.naturalW)
+      : resolved.naturalH ?? Math.round(w * 0.75));
+  // Clamp width to the column max, scaling height proportionally.
+  if (w > MAX_IMAGE_WIDTH_PX) {
+    h = Math.round((h * MAX_IMAGE_WIDTH_PX) / w);
+    w = MAX_IMAGE_WIDTH_PX;
+  }
+  // Guard against pathological zero/negative dims (malformed source).
+  if (w <= 0 || !Number.isFinite(w)) w = MAX_IMAGE_WIDTH_PX;
+  if (h <= 0 || !Number.isFinite(h)) h = Math.round(w * 0.75);
+  return { width: w, height: h };
+}
+
+function paragraphForImage(
+  b: ImageBlock,
+  resolved: ResolvedImage | null,
+): Paragraph {
+  if (!resolved) {
+    // Fallback path — same shape as the v1 placeholder so the surrounding
+    // document still reads in order when the src couldn't be fetched.
+    return new Paragraph({
+      children: [
+        new TextRun({ text: `[Image: ${b.alt || b.src}]`, italics: true }),
+      ],
+    });
+  }
+  const { width, height } = imageTransformation(b, resolved);
+  // ImageRun needs `data` as Buffer | Uint8Array | ArrayBuffer; pass the
+  // Uint8Array directly. altText carries the screen-reader description —
+  // Word/Pages/Docs all surface this in their accessibility inspector.
+  const alt = b.alt || 'image';
   return new Paragraph({
-    children: [new TextRun({ text: `[Image: ${b.alt || b.src}]`, italics: true })],
+    children: [
+      new ImageRun({
+        type: resolved.type,
+        data: resolved.data,
+        transformation: { width, height },
+        altText: { name: alt, title: alt, description: alt },
+      }),
+    ],
   });
+}
+
+/** Walk a Block tree collecting every ImageBlock src (in document order)
+ *  so the caller can resolve them in one async pass before the document
+ *  tree is built. Sections recurse. */
+function collectImageBlocks(blocks: Block[], out: ImageBlock[] = []): ImageBlock[] {
+  for (const b of blocks) {
+    if (b.type === 'image') out.push(b);
+    else if (b.type === 'section') collectImageBlocks(b.blocks, out);
+  }
+  return out;
 }
 
 function paragraphsForUnsupportedVariant(name: string): Paragraph[] {
@@ -509,7 +729,11 @@ function paragraphsForUnsupportedVariant(name: string): Paragraph[] {
   ];
 }
 
-function paragraphsForSection(b: SectionBlock, depth = 0): TopChild[] {
+function paragraphsForSection(
+  b: SectionBlock,
+  images: Map<ImageBlock, ResolvedImage | null>,
+  depth = 0,
+): TopChild[] {
   const styleId = sectionStyleName(b.variant);
   const out: TopChild[] = [];
   // Section title heading level scales with nesting depth but clamps at
@@ -525,7 +749,7 @@ function paragraphsForSection(b: SectionBlock, depth = 0): TopChild[] {
     );
   }
   for (const child of b.blocks) {
-    out.push(...walkBlock(child, depth + 1));
+    out.push(...walkBlock(child, images, depth + 1));
   }
   return out;
 }
@@ -551,11 +775,19 @@ function indentTopChild(child: TopChild, extra: number): TopChild {
   return child;
 }
 
-function walkBlock(b: Block, depth = 0): TopChild[] {
+function walkBlock(
+  b: Block,
+  images: Map<ImageBlock, ResolvedImage | null>,
+  depth = 0,
+): TopChild[] {
   // Section nesting indent is applied by paragraphsForSection's depth
   // parameter, not by post-processing — see indentTopChild's note. The
   // depth parameter rides through so future call sites can layer on
   // additional context-sensitive transforms without changing the seam.
+  //
+  // The `images` map is the pre-resolved-bytes lookup the async pre-pass
+  // builds in toDocxBlob; threading it through keeps walkBlock + helpers
+  // synchronous and lets paragraphForImage stay a plain Paragraph factory.
   void indentTopChild;
   switch (b.type) {
     case 'heading':
@@ -569,13 +801,13 @@ function walkBlock(b: Block, depth = 0): TopChild[] {
     case 'action':
       return [paragraphForAction(b)];
     case 'section':
-      return paragraphsForSection(b, depth);
+      return paragraphsForSection(b, images, depth);
     case 'divider':
       return [paragraphForDivider(b)];
     case 'code':
       return [tableForCode(b)];
     case 'image':
-      return [paragraphForImage(b)];
+      return [paragraphForImage(b, images.get(b) ?? null)];
     case 'table':
       return [tableForTable(b)];
     default:
@@ -889,6 +1121,15 @@ export async function toDocxBlob(
   const language = options?.language ?? 'en-US';
   const children: TopChild[] = [];
 
+  // Pre-resolve every image block in one async pass so walkBlock can stay
+  // synchronous. Each src maps to a ResolvedImage (bytes + format + sniffed
+  // natural dims) or null when the fetch/decode failed — the null case is
+  // handled inside paragraphForImage as the fallback placeholder.
+  const imageBlocks = collectImageBlocks(doc.blocks);
+  const resolved = await Promise.all(imageBlocks.map((b) => resolveImage(b.src)));
+  const images = new Map<ImageBlock, ResolvedImage | null>();
+  imageBlocks.forEach((b, i) => images.set(b, resolved[i] ?? null));
+
   // Don't emit a separate TITLE paragraph — the first heading block in the
   // doc IS the title, by convention. doc.title stays in Document properties
   // metadata for the file's Title field (set below at `title: doc.title`),
@@ -896,7 +1137,7 @@ export async function toDocxBlob(
   // already wrote (visible side-by-side in the visual-check pipeline:
   // welcome.json shows "Welcome to Atlas" twice in the exported .docx).
   for (const b of doc.blocks) {
-    children.push(...walkBlock(b));
+    children.push(...walkBlock(b, images));
   }
 
   const document = new Document({
@@ -1116,12 +1357,20 @@ async function embedEnvelope(
   //    treats it as opaque text and we don't have to XML-escape every
   //    quote in the payload. This is the *primary* embed path: smaller,
   //    survives Word/Pages round-trip unchanged.
+  //
+  //    Any literal `]]>` inside the JSON payload would terminate the
+  //    CDATA section early and corrupt the part — most commonly when a
+  //    `code` block's `value` contains raw XML/CDATA fragments. Split
+  //    each occurrence across two CDATA sections via the standard XML
+  //    idiom: `]]>` → `]]]]><![CDATA[>`. After both CDATA wrappers are
+  //    unwrapped, the parser sees the original `]]>` byte sequence.
   const envelope = buildEnvelope(doc, docUuid);
   const envelopeJson = JSON.stringify(envelope, null, 2);
+  const safeEnvelopeJson = envelopeJson.replace(/]]>/g, ']]]]><![CDATA[>');
   const customXmlBody = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <papir-envelope xmlns="${ENVELOPE_NS}">
   <payload><![CDATA[
-${envelopeJson}
+${safeEnvelopeJson}
   ]]></payload>
 </papir-envelope>`;
   zip.file(ENVELOPE_PART, customXmlBody);

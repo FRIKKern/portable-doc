@@ -14,10 +14,17 @@
  *   5. A doc with one of every major block type succeeds without
  *      throwing during XHTML emission.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
 import type { PortableDoc } from '@portable-doc/core';
 import { toEpubBlob, EPUB_MIME } from './toEpub.js';
+
+// 1×1 transparent PNG — the smallest valid PNG (67 bytes) we can ship in a
+// test fixture. Generated once with `python -c "import base64,zlib"`; the
+// payload is deterministic so the test cannot drift.
+const TINY_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
+const TINY_PNG_DATA_URI = `data:image/png;base64,${TINY_PNG_B64}`;
 
 const TINY_DOC: PortableDoc = {
   version: 1,
@@ -245,5 +252,87 @@ describe('toEpubBlob', () => {
     );
     expect(firstNavPoint).toBeTruthy();
     expect(firstNavPoint![0]).toContain('<text>Alpha</text>');
+  });
+
+  // Image embedding — data: URI happy path. A 1×1 PNG carried as a data:
+  // URI should decode at export time, land as OPS/images/image1.png, be
+  // listed in the OPF manifest with media-type=image/png, and be
+  // referenced by the chapter via the relative `../images/image1.png`.
+  describe('image embedding', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('embeds a data: URI PNG into OPS/images/ + OPF manifest + chapter <img>', async () => {
+      const doc: PortableDoc = {
+        version: 1,
+        title: 'With image',
+        blocks: [
+          { id: 'h1', type: 'heading', level: 1, text: 'Pic' },
+          {
+            id: 'i1',
+            type: 'image',
+            src: TINY_PNG_DATA_URI,
+            alt: 'tiny',
+            width: 1,
+            height: 1,
+            surfaces: ['web', 'native'],
+          },
+        ],
+      };
+      const blob = await toEpubBlob(doc);
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      // ZIP entry exists at the expected path.
+      const imgEntry = zip.file('OPS/images/image1.png');
+      expect(imgEntry).toBeTruthy();
+      const imgBytes = await imgEntry!.async('uint8array');
+      // PNG magic number — eight-byte signature 89 50 4E 47 0D 0A 1A 0A.
+      expect(imgBytes[0]).toBe(0x89);
+      expect(imgBytes[1]).toBe(0x50);
+      expect(imgBytes[2]).toBe(0x4e);
+      expect(imgBytes[3]).toBe(0x47);
+      // OPF manifest lists it with the right id + href + media-type.
+      const opf = await zip.file('OPS/package.opf')!.async('string');
+      expect(opf).toContain(
+        '<item id="img-1" href="images/image1.png" media-type="image/png"/>',
+      );
+      // Chapter XHTML references via the relative path + carries alt + dims.
+      const chapter = await zip.file('OPS/chapters/chapter-1.xhtml')!.async('string');
+      expect(chapter).toContain('<img src="../images/image1.png"');
+      expect(chapter).toContain('alt="tiny"');
+      expect(chapter).toContain('width="1"');
+      expect(chapter).toContain('height="1"');
+      // And the placeholder is NOT present for this resolved image.
+      expect(chapter).not.toContain('[Image: tiny]');
+    });
+
+    it('falls back to placeholder when fetch fails', async () => {
+      // Stub fetch to reject — the resolver should swallow the error and
+      // drop the image from the registry, restoring the v1 placeholder.
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('net down')));
+      const doc: PortableDoc = {
+        version: 1,
+        title: 'Broken image',
+        blocks: [
+          {
+            id: 'i1',
+            type: 'image',
+            src: 'https://example.com/missing.png',
+            alt: 'gone',
+            surfaces: ['web', 'native'],
+          },
+        ],
+      };
+      const blob = await toEpubBlob(doc);
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      // No image binary, no manifest entry.
+      expect(zip.file('OPS/images/image1.png')).toBeNull();
+      const opf = await zip.file('OPS/package.opf')!.async('string');
+      expect(opf).not.toContain('id="img-1"');
+      // Chapter falls back to the placeholder paragraph.
+      const chapter = await zip.file('OPS/chapters/chapter-1.xhtml')!.async('string');
+      expect(chapter).toContain('[Image: gone]');
+      expect(chapter).not.toContain('<img src="../images/');
+    });
   });
 });

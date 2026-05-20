@@ -12,7 +12,7 @@
  *   7. A doc with nested sections + lists succeeds.
  *   8. slug() helper handles edge cases.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
 import type { PortableDoc } from '@portable-doc/core';
 import { toDocxBlob, slug } from './toDocx.js';
@@ -486,5 +486,118 @@ describe('slug', () => {
   it('falls back to "untitled" for empty input', () => {
     expect(slug('')).toBe('untitled');
     expect(slug('!!!')).toBe('untitled');
+  });
+});
+
+// 1×1 fully-transparent PNG. The canonical "smallest valid PNG" — 67 bytes,
+// every test framework + image lib accepts it. Used as the data: URI payload
+// for the inline-embed test below.
+const ONE_PX_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+function decodeBase64(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+describe('toDocxBlob — image embedding', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('embeds an inline data: URI PNG as word/media/image1.png', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [
+        {
+          id: 'i1',
+          type: 'image',
+          src: `data:image/png;base64,${ONE_PX_PNG_B64}`,
+          alt: 'pixel',
+          surfaces: ['web', 'native'],
+        },
+      ],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    // The docx serializer files embedded media under word/media/imageN.<ext>.
+    // We don't care which N — just that at least one PNG landed.
+    const mediaNames = Object.keys(zip.files).filter((p) =>
+      p.startsWith('word/media/'),
+    );
+    expect(mediaNames.length).toBeGreaterThan(0);
+    expect(mediaNames.some((p) => /\.png$/i.test(p))).toBe(true);
+    // No placeholder text should remain when embedding succeeded.
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+    expect(documentXml).not.toContain('[Image:');
+  });
+
+  it('fetches an http(s) URL and embeds the result', async () => {
+    const pngBytes = decodeBase64(ONE_PX_PNG_B64);
+    // Copy into a fresh ArrayBuffer-backed Uint8Array so TS's narrow
+    // `BodyInit` / `BlobPart` unions accept it (they don't admit
+    // `Uint8Array<ArrayBufferLike>` from `atob`-derived bytes).
+    const body = new Uint8Array(pngBytes.length);
+    body.set(pngBytes);
+    const fetchMock = vi.fn(async () =>
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [
+        {
+          id: 'i1',
+          type: 'image',
+          src: 'https://example.com/pixel.png',
+          alt: 'remote pixel',
+          surfaces: ['web', 'native'],
+        },
+      ],
+    };
+    const blob = await toDocxBlob(doc);
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/pixel.png');
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const mediaNames = Object.keys(zip.files).filter((p) =>
+      p.startsWith('word/media/'),
+    );
+    expect(mediaNames.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to placeholder when fetch fails', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error('network down');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [
+        {
+          id: 'i1',
+          type: 'image',
+          src: 'https://broken.example.com/x.png',
+          alt: 'oops',
+          surfaces: ['web', 'native'],
+        },
+      ],
+    };
+    // No throw — fallback path kicks in.
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+    // Placeholder run survives; no media part written.
+    expect(documentXml).toContain('[Image: oops]');
+    const mediaNames = Object.keys(zip.files).filter((p) =>
+      p.startsWith('word/media/'),
+    );
+    expect(mediaNames.length).toBe(0);
   });
 });

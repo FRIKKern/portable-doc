@@ -202,16 +202,14 @@ ${JSON.stringify({ version: 'not-semver', exporter: 'x' })}
     expect(firstInline.value).toBe(greeting);
   });
 
-  // KNOWN ISSUE: toDocx wraps the envelope JSON in a single CDATA section.
+  // Regression: toDocx wraps the envelope JSON in a single CDATA section.
   // When the AST payload contains the literal `]]>` (e.g. a code block whose
-  // `value` includes raw XML/CDATA fragments), the embedded CDATA closes
-  // early and the customXml part becomes malformed — the primary extract
-  // path's CDATA regex either matches a truncated payload or fails to match
-  // at all. The docProps fallback (base64) is immune, but the customXml
-  // primary path is the one Word + Pages use. Fix is to split `]]>` across
-  // CDATA sections in toDocx (`]]]]><![CDATA[>`), tracked as a follow-up.
-  // Marked .skip until the toDocx-side fix lands.
-  it.skip('round-trips a code block whose value contains literal "]]>"', async () => {
+  // `value` includes raw XML/CDATA fragments), a naive wrap would let the
+  // embedded `]]>` terminate the CDATA early and corrupt the customXml part.
+  // toDocx now splits each `]]>` across two CDATA sections via the standard
+  // XML idiom (`]]>` → `]]]]><![CDATA[>`), so the parser reconstructs the
+  // original bytes after unwrapping both sections.
+  it('round-trips a code block whose value contains literal "]]>"', async () => {
     const original: PortableDoc = {
       version: 1,
       title: 'CDATA escape probe',

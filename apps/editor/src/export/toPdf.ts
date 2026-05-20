@@ -25,8 +25,10 @@
  *   - Round-trip envelope: SKIP. PDF custom-XMP would be the analog to
  *     docx customXml, but reMarkable strips PDF custom metadata on
  *     transfer. One path at a time — DOCX remains the round-trip channel.
- *   - Image embedding: emits a `[Image: alt]` placeholder paragraph, same
- *     disposition as toDocx + toEpub. Binary embed is future.
+ *   - Image embedding: data: URIs are embedded directly; http(s) URLs are
+ *     fetched + base64-encoded into the doc; failures fall back to the
+ *     historical italic `[Image: alt]` placeholder so an offline export
+ *     still produces a valid PDF.
  *
  * Body type: Adobe Source Serif 4 (SIL OFL), bundled inline as base64 TTFs
  * — see the SOURCE_SERIF_4_*_B64 block below. The editor's prose lane uses a
@@ -194,6 +196,7 @@ type PdfNode =
       ul?: PdfNode[];
       ol?: PdfNode[];
       image?: string;
+      width?: number;
       bold?: boolean;
       italics?: boolean;
       decoration?: 'underline' | 'lineThrough' | 'overline';
@@ -292,7 +295,7 @@ function markLink(n: PdfNode, href: string): PdfNode {
 // position — they describe shape, the renderer lays it out.
 // ---------------------------------------------------------------------------
 
-function blockToNodes(b: Block, depth = 0): PdfNode[] {
+async function blockToNodes(b: Block, depth = 0): Promise<PdfNode[]> {
   switch (b.type) {
     case 'heading':
       return [headingNode(b, depth)];
@@ -305,13 +308,13 @@ function blockToNodes(b: Block, depth = 0): PdfNode[] {
     case 'action':
       return [actionNode(b)];
     case 'section':
-      return sectionNodes(b, depth);
+      return await sectionNodes(b, depth);
     case 'divider':
       return [dividerNode(b)];
     case 'code':
       return [codeNode(b)];
     case 'image':
-      return [imageNode(b)];
+      return [await imageNodeAsync(b)];
     case 'table':
       return [tableNode(b)];
     default:
@@ -423,7 +426,7 @@ function actionNode(b: ActionBlock): PdfNode {
   };
 }
 
-function sectionNodes(b: SectionBlock, depth: number): PdfNode[] {
+async function sectionNodes(b: SectionBlock, depth: number): Promise<PdfNode[]> {
   // Sections don't draw any chrome themselves — they're a structural wrapper.
   // Title becomes a depth-shifted heading; children recurse. Returning a flat
   // node list (instead of wrapping in `stack`) lets pdfmake paginate inside
@@ -435,7 +438,7 @@ function sectionNodes(b: SectionBlock, depth: number): PdfNode[] {
       depth,
     ));
   }
-  for (const c of b.blocks) out.push(...blockToNodes(c, depth + 1));
+  for (const c of b.blocks) out.push(...(await blockToNodes(c, depth + 1)));
   return out;
 }
 
@@ -495,10 +498,15 @@ function codeNode(b: CodeBlock): PdfNode {
   };
 }
 
-function imageNode(b: ImageBlock): PdfNode {
-  // v1: placeholder — matches toDocx + toEpub. Binary embed (data: URI or
-  // network fetch + base64) is a future story per the multi-format export
-  // Goal's image disposition.
+// A4 content column at 22mm margins ≈ 471pt — clamp embedded images to that
+// width so they never overflow the column. pdfmake widths are in pt.
+const IMAGE_MAX_WIDTH_PT = 470;
+
+function imagePlaceholderNode(b: ImageBlock): PdfNode {
+  // Fallback for non-embeddable images (fetch failure, unrecognized scheme).
+  // Matches the historical v1 disposition + toDocx + toEpub: a faint italic
+  // `[Image: alt]` paragraph so the reader can see something was meant to
+  // be there.
   const alt = b.alt || b.src || '';
   return {
     text: `[Image: ${alt}]`,
@@ -506,6 +514,64 @@ function imageNode(b: ImageBlock): PdfNode {
     color: INK_FAINT,
     fontSize: FONT_BODY - 1,
     margin: [0, 4, 0, 10],
+  };
+}
+
+/**
+ * Resolve an ImageBlock to a pdfmake node.
+ *
+ * Strategy:
+ *   - data: URIs pass straight through to pdfmake's `image` field — pdfmake
+ *     accepts inline data URIs as of 0.3.x without needing to register them
+ *     under `docDefinition.images`.
+ *   - http(s) URLs are fetched, base64-encoded, and rewrapped as a data: URI.
+ *     pdfmake can't follow URLs on its own in the browser build.
+ *   - On any fetch failure (network, non-2xx, hostile MIME), fall back to the
+ *     italic placeholder — the export must never throw on a bad image src.
+ *
+ * Width: respect b.width if given; otherwise pdfmake measures the natural
+ * width. Either way we clamp to IMAGE_MAX_WIDTH_PT so a 4000px screenshot
+ * doesn't overflow the column.
+ */
+async function imageNodeAsync(b: ImageBlock): Promise<PdfNode> {
+  const src = b.src ?? '';
+  let dataUri: string | undefined;
+
+  if (src.startsWith('data:')) {
+    dataUri = src;
+  } else if (/^https?:\/\//i.test(src)) {
+    try {
+      const res = await fetch(src);
+      if (!res.ok) return imagePlaceholderNode(b);
+      const buf = new Uint8Array(await res.arrayBuffer());
+      const mime = res.headers.get('content-type') || 'image/png';
+      // Build base64 without Buffer (we run in browser + happy-dom).
+      let bin = '';
+      for (let i = 0; i < buf.byteLength; i++) bin += String.fromCharCode(buf[i]!);
+      const b64 = typeof btoa === 'function'
+        ? btoa(bin)
+        // Fallback for any environment without btoa (extremely unlikely
+        // here, but cheap insurance).
+        : Buffer.from(bin, 'binary').toString('base64');
+      dataUri = `data:${mime};base64,${b64}`;
+    } catch {
+      return imagePlaceholderNode(b);
+    }
+  } else {
+    // Unknown scheme (file://, relative, etc.) — placeholder.
+    return imagePlaceholderNode(b);
+  }
+
+  // Width: explicit override clamped to column width, otherwise just clamp.
+  const width = typeof b.width === 'number' && b.width > 0
+    ? Math.min(b.width, IMAGE_MAX_WIDTH_PT)
+    : IMAGE_MAX_WIDTH_PT;
+
+  return {
+    image: dataUri,
+    width,
+    alignment: 'center',
+    margin: [0, 8, 0, 8],
   };
 }
 
@@ -570,9 +636,11 @@ export async function toPdfBlob(
   const title = doc.title ?? 'Untitled';
 
   // Walk the AST top-to-bottom. Section nodes flatten into the parent list
-  // so pagination can land inside a section.
+  // so pagination can land inside a section. The walk is async because image
+  // blocks may fetch over the network to resolve their bytes — we pre-resolve
+  // every image before pdfmake's synchronous layout pass sees the tree.
   const body: PdfNode[] = [];
-  for (const b of doc.blocks) body.push(...blockToNodes(b, 0));
+  for (const b of doc.blocks) body.push(...(await blockToNodes(b, 0)));
 
   // Page-background painter — drawn behind every page via pdfmake's
   // `background` hook. Painted as a single full-bleed rectangle in the page
