@@ -50,9 +50,12 @@ function AppShell(): JSX.Element {
   // so the rail can read top-level blocks + drive scroll/focus.
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [editor, setEditor] = useState<TipTapEditor | null>(null);
-  // Pioneer move A — live .docx side-panel preview. State lives here so the
-  // footer chip can toggle it while the panel itself mounts inside Editor.
-  const [previewVisible, setPreviewVisible] = useState(false);
+  // Pioneer move A — live side-panel preview channel. State lives here so
+  // the footer chip can switch channels while the panels themselves mount
+  // inside Editor. Union state replaces the v0.4 boolean: 'off' | 'docx'
+  // | 'ink' — only one panel is visible at a time so they share the same
+  // overlay region without overlap.
+  const [previewChannel, setPreviewChannel] = useState<'off' | 'docx' | 'ink'>('off');
   // ImageInsertDialog state — when the slash menu's "Image" command fires,
   // SlashCommand calls back through the `onImageRequest` option (wired via
   // an Editor prop) with the editor instance. We stash it here to open the
@@ -140,8 +143,8 @@ function AppShell(): JSX.Element {
           onEditorReady={setEditor}
           onChange={setDoc}
           onImageRequest={handleImageRequest}
-          previewVisible={previewVisible}
-          onClosePreview={() => setPreviewVisible(false)}
+          previewChannel={previewChannel}
+          onSetPreviewChannel={setPreviewChannel}
         />
       </main>
       <OutlineRail
@@ -152,8 +155,8 @@ function AppShell(): JSX.Element {
       <FooterStatus
         doc={doc}
         editor={editor}
-        previewVisible={previewVisible}
-        onTogglePreview={() => setPreviewVisible((v) => !v)}
+        previewChannel={previewChannel}
+        onSetPreviewChannel={setPreviewChannel}
         onImport={(ast) => {
           // The .docx round-trip envelope carries the original PortableDoc
           // verbatim. Editor.tsx watches `doc` and runs `setContent` on

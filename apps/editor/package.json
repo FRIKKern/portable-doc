@@ -43,6 +43,7 @@
     "@tiptap/react": "^3",
     "@tiptap/starter-kit": "^3",
     "@tiptap/suggestion": "^3",
+    "anser": "^2.3.5",
     "docx": "^9.6.1",
     "docx-preview": "^0.3.7",
     "jszip": "^3.10.1",

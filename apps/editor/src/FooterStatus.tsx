@@ -38,6 +38,8 @@ import { useEditorState } from '@tiptap/react';
 import { useMcp } from './McpProvider.js';
 import { ExportMenu } from './ExportMenu.js';
 
+export type PreviewChannel = 'off' | 'docx' | 'ink';
+
 interface Props {
   doc: PortableDoc;
   /** Optional editor instance — when present, the word count comes
@@ -46,13 +48,13 @@ interface Props {
    *  PortableDoc. Falls back to `countWords(doc)` when the prop is
    *  omitted (early renders / tests without an editor). */
   editor?: TipTapEditor | null;
-  /** Pioneer move A — current visibility of the DocxPreviewPanel.
-   *  Optional so existing callers (App.tsx pre-A, tests) keep working
-   *  without supplying preview state. */
-  previewVisible?: boolean;
-  /** Toggle callback for the preview chip. When omitted, the chip is
-   *  not rendered. */
-  onTogglePreview?: () => void;
+  /** Pioneer move A — active preview channel. The footer chip is a
+   *  channel picker (Word / Terminal / Off) when this + the setter
+   *  are present. Omitting both hides the chip entirely. */
+  previewChannel?: PreviewChannel;
+  /** Setter for the preview channel. When omitted, the chip is not
+   *  rendered. */
+  onSetPreviewChannel?: (channel: PreviewChannel) => void;
   /** Round-trip .docx import — forwarded to the ExportMenu so the
    *  "Import from .docx" menuitem can restore an AST. Optional so the
    *  prop drilling is non-breaking for existing call sites. */
@@ -178,8 +180,8 @@ function useIsWide(): boolean {
 export function FooterStatus({
   doc,
   editor,
-  previewVisible,
-  onTogglePreview,
+  previewChannel = 'off',
+  onSetPreviewChannel,
   onImport,
 }: Props): JSX.Element {
   const { reachable, retry } = useMcp();
@@ -230,6 +232,41 @@ export function FooterStatus({
 
   const wide = useIsWide();
   const [mcpOpen, setMcpOpen] = useState(false);
+  // Channel-picker popover state — mirrors ExportMenu's pattern (outside-
+  // click + Escape dismissal, rooted on a div that wraps the trigger so
+  // the document mousedown handler can ignore clicks inside the menu).
+  const [previewMenuOpen, setPreviewMenuOpen] = useState(false);
+  const previewMenuRootRef = useRef<HTMLDivElement | null>(null);
+  const previewMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!previewMenuOpen) return;
+    function onDocDown(e: MouseEvent) {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (previewMenuRootRef.current && previewMenuRootRef.current.contains(target)) return;
+      setPreviewMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPreviewMenuOpen(false);
+        previewMenuTriggerRef.current?.focus();
+      }
+    }
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [previewMenuOpen]);
+  const pickChannel = useCallback(
+    (channel: PreviewChannel) => {
+      onSetPreviewChannel?.(channel);
+      setPreviewMenuOpen(false);
+    },
+    [onSetPreviewChannel],
+  );
 
   const closeMcp = useCallback(() => setMcpOpen(false), []);
   const onMcpClick = useCallback(() => setMcpOpen((v) => !v), []);
@@ -327,17 +364,79 @@ export function FooterStatus({
 
       <span className="paper-footer-status__grow" />
 
-      {onTogglePreview && (
-        <button
-          type="button"
-          className="paper-footer-status__chip paper-footer-status__chip--button"
-          data-testid="footer-preview-toggle"
-          aria-pressed={previewVisible}
-          aria-label={previewVisible ? 'Hide Word preview' : 'Show Word preview'}
-          onClick={onTogglePreview}
+      {onSetPreviewChannel && (
+        <div
+          ref={previewMenuRootRef}
+          className="paper-preview-menu"
+          data-testid="footer-preview"
         >
-          {previewVisible ? '◧ Preview on' : '◧ Preview'}
-        </button>
+          <button
+            ref={previewMenuTriggerRef}
+            type="button"
+            className="paper-footer-status__chip paper-footer-status__chip--button paper-preview-menu__trigger"
+            data-testid="footer-preview-toggle"
+            data-preview-channel={previewChannel}
+            aria-haspopup="menu"
+            aria-expanded={previewMenuOpen}
+            aria-label={
+              previewChannel === 'off'
+                ? 'Pick preview channel'
+                : previewChannel === 'docx'
+                  ? 'Preview channel: Word'
+                  : 'Preview channel: Terminal'
+            }
+            onClick={() => setPreviewMenuOpen((v) => !v)}
+          >
+            <span aria-hidden="true">◧</span>
+            <span>
+              {previewChannel === 'off'
+                ? 'Preview'
+                : previewChannel === 'docx'
+                  ? 'Preview · Word'
+                  : 'Preview · Terminal'}
+            </span>
+            <span aria-hidden="true">▾</span>
+          </button>
+          {previewMenuOpen && (
+            <div
+              className="paper-preview-menu__popover"
+              role="menu"
+              data-testid="footer-preview-popover"
+              aria-label="Preview channel"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="paper-preview-menu__item"
+                data-testid="footer-preview-off"
+                aria-checked={previewChannel === 'off'}
+                onClick={() => pickChannel('off')}
+              >
+                Off
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="paper-preview-menu__item"
+                data-testid="footer-preview-docx"
+                aria-checked={previewChannel === 'docx'}
+                onClick={() => pickChannel('docx')}
+              >
+                Word (.docx)
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="paper-preview-menu__item"
+                data-testid="footer-preview-ink"
+                aria-checked={previewChannel === 'ink'}
+                onClick={() => pickChannel('ink')}
+              >
+                Terminal (TUI)
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       <ExportMenu doc={doc} editor={editor ?? null} onImport={onImport} />

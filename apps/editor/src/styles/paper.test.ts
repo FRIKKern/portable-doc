@@ -139,7 +139,12 @@ describe('paper.css — A1 stylesheet smoke tests', () => {
           // preview panel. Third-party namespace; we only retouch
           // the surface under the `.paper-docx-preview` scope.
           c !== '.docx-wrapper' &&
-          c !== '.docx',
+          c !== '.docx' &&
+          // Pioneer move A — `anser` emits `.ansi-<name>-fg` /
+          // `.ansi-bold` etc. as it converts terminal escapes to
+          // HTML. Third-party namespace; we only target it inside
+          // the `.paper-ink-preview` scope.
+          !c.startsWith('.ansi-'),
       );
 
     for (const cls of userClasses) {

@@ -45,6 +45,9 @@ import { TableMenu } from './TableMenu.js';
 import { MarginDiagnostics } from './MarginDiagnostics.js';
 import { FloatingBlockChrome } from './FloatingBlockChrome.js';
 import { DocxPreviewPanel } from './DocxPreviewPanel.js';
+import { InkPreviewPanel } from './InkPreviewPanel.js';
+
+export type PreviewChannel = 'off' | 'docx' | 'ink';
 
 interface EditorProps {
   /** PortableDoc rendered into the editor. Re-syncs via `setContent`
@@ -63,13 +66,14 @@ interface EditorProps {
    *  and the brief CustomEvent bridge it used to go through). Wired into
    *  SlashCommand.configure(). */
   onImageRequest?: (editor: TipTapEditor) => void;
-  /** Pioneer move A — when true, the DocxPreviewPanel renders the live .docx
-   *  preview alongside the editor. State is lifted to the parent so the
-   *  footer chip can toggle it; default false. */
-  previewVisible?: boolean;
-  /** Optional close callback wired into the preview panel's × button so
-   *  users can dismiss the overlay without going back to the footer. */
-  onClosePreview?: () => void;
+  /** Pioneer move A — active preview channel. State lifted to the parent so
+   *  the footer's channel-picker chip can switch between Word (.docx) and
+   *  Terminal (TUI). 'off' hides both panels. */
+  previewChannel?: PreviewChannel;
+  /** Callback wired into each preview panel's × button so users can dismiss
+   *  the overlay without going back to the footer; also used to flip
+   *  channels from anywhere in the editor tree. */
+  onSetPreviewChannel?: (channel: PreviewChannel) => void;
 }
 
 /** Debounce window between doc-prop changes and the next validateDoc call
@@ -83,8 +87,8 @@ export function Editor({
   onEditorReady,
   dataTestId,
   onImageRequest,
-  previewVisible = false,
-  onClosePreview,
+  previewChannel = 'off',
+  onSetPreviewChannel,
 }: EditorProps): JSX.Element {
   // Keep the latest onChange in a ref so re-renders of the parent don't
   // re-create the editor (TipTap remounts are expensive + lose selection).
@@ -297,14 +301,20 @@ export function Editor({
        *  issues are filtered inside MarginDiagnostics and surface in the
        *  footer count (A8). */}
       <MarginDiagnostics issues={issues} doc={doc} editor={editorInstance} />
-      {/* Pioneer move A — lean .docx preview side-panel sibling. Mounts
-       *  alongside MarginDiagnostics (same right-gutter convention) and
-       *  short-circuits to null when visible=false, so toggling it off
-       *  costs nothing. */}
+      {/* Pioneer move A — lean preview side-panel siblings. The two panels
+       *  share the same right-gutter overlay region (only one channel is
+       *  visible at a time so they never overlap), and both short-circuit
+       *  to null when their channel isn't active. The × buttons flip the
+       *  channel back to 'off'. */}
       <DocxPreviewPanel
         doc={doc}
-        visible={previewVisible}
-        onClose={onClosePreview}
+        visible={previewChannel === 'docx'}
+        onClose={onSetPreviewChannel ? () => onSetPreviewChannel('off') : undefined}
+      />
+      <InkPreviewPanel
+        doc={doc}
+        visible={previewChannel === 'ink'}
+        onClose={onSetPreviewChannel ? () => onSetPreviewChannel('off') : undefined}
       />
       {/* CW5 — single floating chrome cluster that tracks the currently-
        *  hovered top-level block (Notion/BlockNote/Linear pattern). One

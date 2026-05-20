@@ -137,6 +137,9 @@ importers:
       '@tiptap/suggestion':
         specifier: ^3
         version: 3.23.1(@tiptap/core@3.23.1(@tiptap/pm@3.23.4))(@tiptap/pm@3.23.4)
+      anser:
+        specifier: ^2.3.5
+        version: 2.3.5
       docx:
         specifier: ^9.6.1
         version: 9.6.1
@@ -2392,6 +2395,9 @@ packages:
 
   anser@1.4.10:
     resolution: {integrity: sha512-hCv9AqTQ8ycjpSd3upOJd7vFwW1JaoYQ7tpham03GJ1ca8/65rqn0RpaWpItOAd6ylW9wAw6luXYPJIyPFVOww==}
+
+  anser@2.3.5:
+    resolution: {integrity: sha512-vcZjxvvVoxTeR5XBNJB38oTu/7eDCZlwdz32N1eNgpyPF7j/Z7Idf+CUwQOkKKpJ7RJyjxgLHCM7vdIK0iCNMQ==}
 
   ansi-escapes@7.3.0:
     resolution: {integrity: sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg==}
@@ -7281,6 +7287,8 @@ snapshots:
       require-from-string: 2.0.2
 
   anser@1.4.10: {}
+
+  anser@2.3.5: {}
 
   ansi-escapes@7.3.0:
     dependencies:

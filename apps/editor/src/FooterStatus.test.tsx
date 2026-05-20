@@ -341,6 +341,151 @@ describe('FooterStatus — MCP click at ≥768px (inline popover)', () => {
   });
 });
 
+describe('FooterStatus — preview channel picker', () => {
+  it('omits the preview chip when no onSetPreviewChannel is provided', () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(<FooterStatus doc={validDoc} />);
+    expect(screen.queryByTestId('footer-preview-toggle')).toBeNull();
+  });
+
+  it('renders the chip with default "Preview" label when channel is off', () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={() => {}} />,
+    );
+    const chip = screen.getByTestId('footer-preview-toggle');
+    expect(chip.textContent).toContain('Preview');
+    expect(chip.textContent).not.toContain('Word');
+    expect(chip.textContent).not.toContain('Terminal');
+    expect(chip.getAttribute('data-preview-channel')).toBe('off');
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('shows "Preview · Word" when channel=docx', () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus
+        doc={validDoc}
+        previewChannel="docx"
+        onSetPreviewChannel={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('footer-preview-toggle').textContent).toContain(
+      'Preview · Word',
+    );
+  });
+
+  it('shows "Preview · Terminal" when channel=ink', () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus
+        doc={validDoc}
+        previewChannel="ink"
+        onSetPreviewChannel={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('footer-preview-toggle').textContent).toContain(
+      'Preview · Terminal',
+    );
+  });
+
+  it('clicking the chip toggles the popover', async () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={() => {}} />,
+    );
+    expect(screen.queryByTestId('footer-preview-popover')).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    expect(screen.getByTestId('footer-preview-popover')).toBeTruthy();
+    expect(
+      screen.getByTestId('footer-preview-toggle').getAttribute('aria-expanded'),
+    ).toBe('true');
+  });
+
+  it('picking "Word (.docx)" calls onSetPreviewChannel with "docx" and closes', async () => {
+    probeMcp.mockResolvedValue(true);
+    const setChannel = vi.fn();
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={setChannel} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-docx'));
+    });
+    expect(setChannel).toHaveBeenCalledTimes(1);
+    expect(setChannel).toHaveBeenCalledWith('docx');
+    expect(screen.queryByTestId('footer-preview-popover')).toBeNull();
+  });
+
+  it('picking "Terminal (TUI)" calls onSetPreviewChannel with "ink"', async () => {
+    probeMcp.mockResolvedValue(true);
+    const setChannel = vi.fn();
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={setChannel} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-ink'));
+    });
+    expect(setChannel).toHaveBeenCalledWith('ink');
+  });
+
+  it('picking "Off" calls onSetPreviewChannel with "off"', async () => {
+    probeMcp.mockResolvedValue(true);
+    const setChannel = vi.fn();
+    renderWithMcp(
+      <FooterStatus
+        doc={validDoc}
+        previewChannel="docx"
+        onSetPreviewChannel={setChannel}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-off'));
+    });
+    expect(setChannel).toHaveBeenCalledWith('off');
+  });
+
+  it('Escape dismisses the popover', async () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={() => {}} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    expect(screen.getByTestId('footer-preview-popover')).toBeTruthy();
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    expect(screen.queryByTestId('footer-preview-popover')).toBeNull();
+  });
+
+  it('mousedown outside the popover dismisses it', async () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={() => {}} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    expect(screen.getByTestId('footer-preview-popover')).toBeTruthy();
+    await act(async () => {
+      fireEvent.mouseDown(document.body);
+    });
+    expect(screen.queryByTestId('footer-preview-popover')).toBeNull();
+  });
+});
+
 describe('FooterStatus — MCP click at <768px (bottom sheet)', () => {
   it('clicking the MCP chip opens the bottom sheet with role=dialog', async () => {
     mockMatchMedia(false);

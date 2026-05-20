@@ -2033,6 +2033,152 @@
 }
 
 /* ===========================================================================
+ * Ink preview panel — Terminal / TUI channel sibling of .paper-docx-preview.
+ *
+ * Same fixed-overlay region (top:60px, right:24px, width:820px) so only one
+ * channel is visible at a time — the two never overlap. Dark terminal
+ * aesthetic: near-black background, light text, monospace, ANSI color spans
+ * mapped to a calm tailwind-derived palette.
+ * =========================================================================== */
+.paper-ink-preview {
+  position: fixed;
+  top: 60px;
+  right: 24px;
+  width: var(--paper-docx-preview-width);
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  background: #1a1a1a;
+  border: 1px solid #2c2c2c;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
+  z-index: 25;
+  padding: 16px;
+  font-family: var(--paper-font-sans);
+  color: #e5e7eb;
+}
+.paper-ink-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.paper-ink-preview__title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  font-weight: 600;
+}
+.paper-ink-preview__close {
+  background: transparent;
+  border: 0;
+  color: #9ca3af;
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 160ms ease-out, background 160ms ease-out;
+}
+.paper-ink-preview__close:hover {
+  color: var(--paper-accent-warm-rust);
+  background: rgba(255, 255, 255, 0.06);
+}
+.paper-ink-preview__close:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+.paper-ink-preview__loading,
+.paper-ink-preview__error {
+  padding: 24px 12px;
+  color: #9ca3af;
+  font-size: 13px;
+  text-align: center;
+  font-family: var(--paper-font-sans);
+}
+.paper-ink-preview__error {
+  color: #f87171;
+}
+.paper-ink-preview__body {
+  font-family: Consolas, 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre;
+  margin: 0;
+  color: #e5e7eb;
+}
+
+/* Anser class-mapped output (use_classes: true). Standard 16-color names
+ * map to a Tailwind-leaning palette so terminal greens / yellows / reds stay
+ * legible against the dark surface. */
+.paper-ink-preview .ansi-black-fg   { color: #4b5563; }
+.paper-ink-preview .ansi-red-fg     { color: #f87171; }
+.paper-ink-preview .ansi-green-fg   { color: #6ee7b7; }
+.paper-ink-preview .ansi-yellow-fg  { color: #fcd34d; }
+.paper-ink-preview .ansi-blue-fg    { color: #93c5fd; }
+.paper-ink-preview .ansi-magenta-fg { color: #f0abfc; }
+.paper-ink-preview .ansi-cyan-fg    { color: #67e8f9; }
+.paper-ink-preview .ansi-white-fg   { color: #f9fafb; }
+.paper-ink-preview .ansi-bright-black-fg   { color: #6b7280; }
+.paper-ink-preview .ansi-bright-red-fg     { color: #fca5a5; }
+.paper-ink-preview .ansi-bright-green-fg   { color: #a7f3d0; }
+.paper-ink-preview .ansi-bright-yellow-fg  { color: #fde68a; }
+.paper-ink-preview .ansi-bright-blue-fg    { color: #bfdbfe; }
+.paper-ink-preview .ansi-bright-magenta-fg { color: #f5d0fe; }
+.paper-ink-preview .ansi-bright-cyan-fg    { color: #a5f3fc; }
+.paper-ink-preview .ansi-bright-white-fg   { color: #ffffff; }
+.paper-ink-preview .ansi-bold      { font-weight: 700; }
+.paper-ink-preview .ansi-italic    { font-style: italic; }
+.paper-ink-preview .ansi-underline { text-decoration: underline; }
+
+/* ===========================================================================
+ * Preview channel picker — chip + dropdown that replaces the v0.4 boolean
+ * Preview toggle. Mirrors .paper-export-menu's shape (button + popover that
+ * opens upward) so the two footer affordances look like siblings.
+ * =========================================================================== */
+.paper-preview-menu {
+  position: relative;
+}
+.paper-preview-menu__popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 30;
+}
+.paper-preview-menu__item {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  font-family: var(--paper-font-sans);
+  font-size: 13px;
+  color: var(--paper-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.paper-preview-menu__item:hover {
+  background: var(--paper-rule-soft);
+}
+.paper-preview-menu__item[aria-checked="true"] {
+  font-weight: 600;
+}
+.paper-preview-menu__item:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: -2px;
+}
+
+/* ===========================================================================
  * Margin diagnostics (A10) — calm margin notes in the right gutter.
  *
  * Replaces v0.3's red-dot inline diagnostics with soft notes positioned
