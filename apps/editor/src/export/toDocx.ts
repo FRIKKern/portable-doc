@@ -1426,7 +1426,259 @@ export async function toDocxBlob(
   });
 
   const blob = await Packer.toBlob(document);
-  return await embedEnvelope(blob, doc, docUuid);
+  // C5 — escape docx@9.6.1's single-weight font-embed limitation. The library
+  // writes four `<w:font w:name="Source Serif 4">` blocks (one per FontOptions
+  // entry) each with a lone `<w:embedRegular>` ref, all four pointing at a
+  // single de-duped `word/fonts/Source Serif 4.odttf` file containing only
+  // the LAST input weight (BoldItalic). Word + Pages then render italic / bold
+  // / bold-italic runs by synthesising slants and emboldening off that single
+  // face — visibly wrong vs the editor. We post-process the OPC ZIP to
+  // collapse the four blocks into a single `<w:font>` with all four
+  // `embed{Regular,Italic,Bold,BoldItalic}` refs, write four obfuscated
+  // `.odttf` parts (one per weight), and rewrite the fontTable rels. See
+  // `injectItalicBoldFontEmbeds` below for the byte-level mechanics.
+  const patchedBlob =
+    embeddedFonts.length === 4
+      ? await injectItalicBoldFontEmbeds(blob, embeddedFonts)
+      : blob;
+  return await embedEnvelope(patchedBlob, doc, docUuid);
+}
+
+// ---------------------------------------------------------------------------
+// C5 — italic / bold / bold-italic font embeds
+//
+// dolanmiu/docx@9.6.1's public `FontOptions` is `{ name, data, characterSet? }`
+// — one TTF per font name in the surfaced API. Internally the library emits
+// one `<w:font w:name=...>` block per FontOptions entry, each with a lone
+// `<w:embedRegular>` ref. We pass four entries all named "Source Serif 4"
+// (regular, italic, bold, boldItalic in that order), so the produced zip ends
+// up with:
+//
+//   word/fontTable.xml             — 4× `<w:font w:name="Source Serif 4">`
+//                                    blocks, each with `<w:embedRegular>`
+//                                    pointing at rId1..rId4 (allocated by the
+//                                    library in input order).
+//   word/_rels/fontTable.xml.rels  — 4× Relationships, all four with the same
+//                                    Target `fonts/Source Serif 4.odttf`
+//                                    (the library de-duplicates the ZIP entry
+//                                    by font-name).
+//   word/fonts/Source Serif 4.odttf — a single obfuscated-font part holding
+//                                    the bytes of the LAST FontOptions entry
+//                                    (BoldItalic in our setup) — the library's
+//                                    de-dup keeps only one file under the
+//                                    shared name.
+//
+// Word and Pages see four Regular embeds → they pick the only declared weight
+// and synthesise italic / bold / bold-italic by slanting and emboldening that
+// face. Visibly wrong vs the editor (compressed cuts, no true italic forms).
+//
+// Fix: rewrite the OPC zip in place after `Packer.toBlob` returns —
+//
+//   1. Parse the four `<w:font>` blocks; capture their rIds in document order
+//      so we know which rId currently maps to which input weight (input[0]
+//      → first rId, input[1] → second, etc — confirmed empirically by
+//      inspecting the library output).
+//   2. Collapse them into ONE `<w:font w:name="Source Serif 4">` block with
+//      four embed children — `<w:embedRegular>`, `<w:embedItalic>`,
+//      `<w:embedBold>`, `<w:embedBoldItalic>` — reusing the four captured
+//      rIds in slot order. We keep the existing rIds (and their fontKeys)
+//      so the rels file's id values don't need renumbering.
+//   3. Re-encrypt the four font byte arrays with the OOXML obfuscation
+//      algorithm: first 32 bytes XOR'd with reverse(guidBytesBigEndian),
+//      applied twice (16 + 16). The fontKey GUID in the `<w:embed*>`
+//      attribute is the same one the library already generated for that rId.
+//      (Reverse-engineered from the library's own output — see
+//      `obfuscateFontPayload` below.)
+//   4. Write four distinct `word/fonts/SourceSerif4-{Regular,Italic,Bold,
+//      BoldItalic}.odttf` ZIP entries and DELETE the old single
+//      `word/fonts/Source Serif 4.odttf` part.
+//   5. Rewrite each of the four `<Relationship>` entries in
+//      `word/_rels/fontTable.xml.rels` so its Target points to the matching
+//      per-weight file.
+//
+// `[Content_Types].xml` already carries the `<Default Extension="odttf"
+// ContentType=".../obfuscatedFont"/>` row (the library writes it for the
+// Regular embed it thinks we have), so no Content_Types change is required.
+// ---------------------------------------------------------------------------
+
+/** Pack the GUID-as-written into 16 bytes, big-endian. The OOXML obfuscation
+ *  XOR mask is *those bytes reversed*, applied twice across the first 32
+ *  bytes of the font payload. Reverse-engineered by XOR'ing the library's
+ *  own obfuscated output against the source TTF and matching the resulting
+ *  32-byte pattern (period 16) against the `<w:fontKey>` attribute. */
+function parseFontKey(guidStr: string): Uint8Array {
+  const hex = guidStr.replace(/[{}\-]/g, '');
+  if (hex.length !== 32) {
+    throw new Error(`bad fontKey GUID: ${guidStr}`);
+  }
+  const b = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) {
+    b[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return b;
+}
+
+/** XOR-obfuscate the first 32 bytes of `ttfBytes` per the OOXML embedded-font
+ *  contract using the same mask the docx library uses internally. Returns
+ *  a fresh Uint8Array — the original is not mutated. */
+function obfuscateFontPayload(ttfBytes: Uint8Array, guidStr: string): Uint8Array {
+  const key = parseFontKey(guidStr);
+  const mask = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) mask[i] = key[15 - i]!;
+  const out = new Uint8Array(ttfBytes.length);
+  out.set(ttfBytes);
+  const n = Math.min(32, out.length);
+  for (let i = 0; i < n; i++) {
+    out[i] = out[i]! ^ mask[i % 16]!;
+  }
+  return out;
+}
+
+const SS4_WEIGHT_FILES = [
+  'fonts/SourceSerif4-Regular.odttf',
+  'fonts/SourceSerif4-Italic.odttf',
+  'fonts/SourceSerif4-Bold.odttf',
+  'fonts/SourceSerif4-BoldItalic.odttf',
+] as const;
+const SS4_EMBED_TAGS = [
+  'embedRegular',
+  'embedItalic',
+  'embedBold',
+  'embedBoldItalic',
+] as const;
+
+/** Post-process the OPC zip produced by `Packer.toBlob` to give Word real
+ *  italic / bold / bold-italic embeds instead of the single-weight collapse
+ *  the docx@9.6.1 public API forces. See the block comment above for the
+ *  step-by-step. `fonts` MUST be in input order [regular, italic, bold,
+ *  boldItalic] — the rId-to-weight mapping in the library's output tracks
+ *  the order of the FontOptions array passed to `new Document({...})`. */
+async function injectItalicBoldFontEmbeds(
+  blob: Blob,
+  fonts: FontEntryInput[],
+): Promise<Blob> {
+  if (fonts.length !== 4) return blob;
+  const buffer = await blob.arrayBuffer();
+  const zip = await JSZip.loadAsync(buffer);
+
+  const fontTablePath = 'word/fontTable.xml';
+  const fontRelsPath = 'word/_rels/fontTable.xml.rels';
+  const ftFile = zip.file(fontTablePath);
+  const frFile = zip.file(fontRelsPath);
+  if (!ftFile || !frFile) {
+    // No font table at all — the library skipped fonts entirely (empty
+    // FontOptions). Nothing to escalate; hand back the original blob.
+    return blob;
+  }
+
+  const ft = await ftFile.async('string');
+  const fr = await frFile.async('string');
+
+  // Each `<w:font w:name="Source Serif 4">…</w:font>` block in input order
+  // — capture rId + fontKey from its `<w:embedRegular>` child. We trust
+  // input order to match the FontOptions order (rId1=regular, rId2=italic,
+  // rId3=bold, rId4=boldItalic) — verified empirically against the library's
+  // packer. If the library's behaviour ever changes here, the structural-
+  // check pipeline will catch the mismatch (visible italic / bold runs
+  // rendering with Regular bytes).
+  const blockRe =
+    /<w:font\s+w:name="Source Serif 4">([\s\S]*?)<\/w:font>/g;
+  const blocks: { full: string; embedTag: string; rId: string; fontKey: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = blockRe.exec(ft)) !== null) {
+    const inner = m[1] ?? '';
+    const embedMatch = inner.match(
+      /<w:(embedRegular|embedItalic|embedBold|embedBoldItalic)\s+r:id="(rId\d+)"\s+w:fontKey="(\{[^}]+\})"\s*\/>/,
+    );
+    if (!embedMatch) {
+      // Unexpected shape — bail without mutating bytes. C5's contract:
+      // never ship corrupt fonts.
+      // TODO(C5-followup): If the library starts emitting `<w:embed*>` with
+      // attributes in a different order or namespace prefix, widen this
+      // regex. See backlog note in C5 research / research-note.
+      return blob;
+    }
+    blocks.push({
+      full: m[0],
+      embedTag: embedMatch[1]!,
+      rId: embedMatch[2]!,
+      fontKey: embedMatch[3]!,
+    });
+  }
+
+  // We expect exactly four `<w:font>` blocks (regular, italic, bold,
+  // boldItalic) — the contract this helper is built around. Anything else
+  // is an upstream change we'd rather notice loudly than paper over with
+  // broken output.
+  if (blocks.length !== 4) return blob;
+
+  // Build the collapsed single `<w:font>` block. The OOXML schema requires
+  // the family / pitch / sig children to precede the embed children — same
+  // ordering the library already emits, so we lift them from the first
+  // block's inner XML verbatim and append the four embed elements.
+  const firstInner = blocks[0]!.full.replace(
+    /<w:font\s+w:name="Source Serif 4">([\s\S]*?)<\/w:font>/,
+    '$1',
+  );
+  const prelude = firstInner.replace(
+    /<w:(embedRegular|embedItalic|embedBold|embedBoldItalic)[^/]*\/>/,
+    '',
+  );
+  const embedEls = blocks
+    .map(
+      (b, i) =>
+        `<w:${SS4_EMBED_TAGS[i]} r:id="${b.rId}" w:fontKey="${b.fontKey}"/>`,
+    )
+    .join('');
+  const collapsed = `<w:font w:name="Source Serif 4">${prelude}${embedEls}</w:font>`;
+
+  // Splice: replace the first block in-place with the collapsed one, drop
+  // the remaining three. (Replacing one block + deleting three preserves
+  // any surrounding whitespace / other-font blocks the library might add.)
+  let ftOut = ft.replace(blocks[0]!.full, collapsed);
+  for (let i = 1; i < 4; i++) {
+    ftOut = ftOut.replace(blocks[i]!.full, '');
+  }
+  zip.file(fontTablePath, ftOut);
+
+  // Rewrite the four rels Targets so each rId points at the right weight.
+  // The library emits all four with the same Target — we just rewrite each
+  // by id.
+  let frOut = fr;
+  for (let i = 0; i < 4; i++) {
+    const { rId } = blocks[i]!;
+    const target = SS4_WEIGHT_FILES[i];
+    // Match Id-first OR Type-first attribute orderings — be liberal in
+    // what we accept since the library's exact serialisation is its
+    // business. We rewrite only the Target attribute, leaving Id + Type
+    // untouched.
+    const relRe = new RegExp(
+      `(<Relationship\\s+[^>]*Id="${rId}"[^>]*Target=")[^"]+("[^>]*/?>)`,
+    );
+    frOut = frOut.replace(relRe, `$1${target}$2`);
+  }
+  zip.file(fontRelsPath, frOut);
+
+  // Write the four obfuscated odttf parts. Each is the source TTF with the
+  // first 32 bytes XOR'd with reverse(fontKey-as-bytes), applied twice.
+  // Word verifies the obfuscation against the fontKey attribute we just
+  // wrote into fontTable.xml — they must agree.
+  for (let i = 0; i < 4; i++) {
+    const obf = obfuscateFontPayload(fonts[i]!.data, blocks[i]!.fontKey);
+    zip.file(`word/${SS4_WEIGHT_FILES[i]}`, obf);
+  }
+
+  // Drop the old single de-duped odttf the library wrote — it's stale now
+  // and would cost ~190 KB of dead bytes. Best-effort: if the path doesn't
+  // exist for some reason, JSZip.remove is a no-op.
+  if (zip.file('word/fonts/Source Serif 4.odttf')) {
+    zip.remove('word/fonts/Source Serif 4.odttf');
+  }
+
+  return await zip.generateAsync({
+    type: 'blob',
+    mimeType: DOCX_MIME,
+  });
 }
 
 // ---------------------------------------------------------------------------
