@@ -55,7 +55,7 @@ function AppShell(): JSX.Element {
   // inside Editor. Union state replaces the v0.4 boolean: 'off' | 'docx'
   // | 'ink' — only one panel is visible at a time so they share the same
   // overlay region without overlap.
-  const [previewChannel, setPreviewChannel] = useState<'off' | 'docx' | 'ink' | 'epub'>('off');
+  const [previewChannel, setPreviewChannel] = useState<'off' | 'docx' | 'ink' | 'epub' | 'pdf'>('off');
   // ImageInsertDialog state — when the slash menu's "Image" command fires,
   // SlashCommand calls back through the `onImageRequest` option (wired via
   // an Editor prop) with the editor instance. We stash it here to open the

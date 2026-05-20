@@ -23,6 +23,7 @@ import type { Block, InlineNode, PortableDoc } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { toDocxBlob } from './export/toDocx.js';
 import { toEpubBlob } from './export/toEpub.js';
+import { toPdfBlob } from './export/toPdf.js';
 import { extractFromDocx } from './import/fromDocx.js';
 
 interface Props {
@@ -214,6 +215,12 @@ export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
     close();
   }, [doc, filenameBase, close]);
 
+  const onExportPdf = useCallback(async () => {
+    const blob = await toPdfBlob(doc);
+    downloadBlob(blob, `${filenameBase}.pdf`);
+    close();
+  }, [doc, filenameBase, close]);
+
   const onExportHtml = useCallback(() => {
     const inner = editor ? editor.getHTML() : '';
     const html = buildHtmlDocument(title, inner);
@@ -308,6 +315,17 @@ export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
             }}
           >
             EPUB (.epub)
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="paper-export-menu__item"
+            data-testid="footer-export-pdf"
+            onClick={() => {
+              void onExportPdf();
+            }}
+          >
+            PDF (.pdf)
           </button>
           <button
             type="button"

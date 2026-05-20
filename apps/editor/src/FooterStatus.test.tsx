@@ -465,6 +465,35 @@ describe('FooterStatus — preview channel picker', () => {
     );
   });
 
+  it('picking "PDF" calls onSetPreviewChannel with "pdf"', async () => {
+    probeMcp.mockResolvedValue(true);
+    const setChannel = vi.fn();
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={setChannel} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-pdf'));
+    });
+    expect(setChannel).toHaveBeenCalledWith('pdf');
+  });
+
+  it('shows "Preview · PDF" when channel=pdf', () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus
+        doc={validDoc}
+        previewChannel="pdf"
+        onSetPreviewChannel={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('footer-preview-toggle').textContent).toContain(
+      'Preview · PDF',
+    );
+  });
+
   it('picking "Off" calls onSetPreviewChannel with "off"', async () => {
     probeMcp.mockResolvedValue(true);
     const setChannel = vi.fn();

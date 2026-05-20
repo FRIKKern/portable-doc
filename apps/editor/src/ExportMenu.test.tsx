@@ -19,6 +19,14 @@ import {
   screen,
 } from '@testing-library/react';
 import type { PortableDoc } from '@portable-doc/core';
+// Mock the heavy serializers so ExportMenu specs don't pull pdfmake / docx
+// into the unit-test path. The menu only cares that the right handler fires
+// for the right menuitem; the artifact-level fidelity lives in the
+// dedicated toDocx.test.ts / toEpub.test.ts / toPdf.test.ts suites.
+vi.mock('./export/toPdf.js', () => ({
+  toPdfBlob: vi.fn(async () => new Blob(['%PDF-1.3 mock'], { type: 'application/pdf' })),
+}));
+
 import { ExportMenu, serializeMarkdown } from './ExportMenu.js';
 
 const minimalDoc: PortableDoc = {
@@ -74,7 +82,7 @@ describe('ExportMenu', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('opens the popover with six menuitems on click (Word, EPUB, HTML, Markdown, Print/PDF, Import)', () => {
+  it('opens the popover with seven menuitems on click (Word, EPUB, PDF, HTML, Markdown, Print/PDF, Import)', () => {
     render(<ExportMenu doc={minimalDoc} editor={stubEditor('<p>hi</p>')} />);
     fireEvent.click(screen.getByTestId('footer-export-trigger'));
     expect(
@@ -83,12 +91,13 @@ describe('ExportMenu', () => {
     expect(screen.getByTestId('footer-export-popover')).toBeTruthy();
     expect(screen.getByTestId('footer-export-docx')).toBeTruthy();
     expect(screen.getByTestId('footer-export-epub')).toBeTruthy();
+    expect(screen.getByTestId('footer-export-pdf')).toBeTruthy();
     expect(screen.getByTestId('footer-export-html')).toBeTruthy();
     expect(screen.getByTestId('footer-export-markdown')).toBeTruthy();
     expect(screen.getByTestId('footer-export-print')).toBeTruthy();
     expect(screen.getByTestId('footer-import-docx')).toBeTruthy();
     const items = screen.getAllByRole('menuitem');
-    expect(items).toHaveLength(6);
+    expect(items).toHaveLength(7);
   });
 
   it('closes on outside click', () => {
@@ -126,6 +135,18 @@ describe('ExportMenu', () => {
     fireEvent.click(screen.getByTestId('footer-export-markdown'));
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(capturedBlobs[0]?.type).toBe('text/markdown');
+  });
+
+  it('exports a PDF blob with type application/pdf', async () => {
+    render(<ExportMenu doc={minimalDoc} editor={stubEditor('<p>hi</p>')} />);
+    fireEvent.click(screen.getByTestId('footer-export-trigger'));
+    fireEvent.click(screen.getByTestId('footer-export-pdf'));
+    // toPdfBlob is async — flush microtasks before asserting.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(capturedBlobs[0]?.type).toBe('application/pdf');
   });
 
   it('calls window.print on Print / PDF', () => {
