@@ -2108,6 +2108,17 @@
   white-space: pre;
   margin: 0;
   color: #e5e7eb;
+  /* Win against browser <pre> defaults (Chrome/Safari paint a faint
+   * bg on <pre> in some user agents) and any leftover inline styles
+   * anser may attach. */
+  background: transparent;
+}
+.paper-ink-preview__body span {
+  /* Defensive: anser truecolor branches inject inline `background-color`
+   * on spans. We force ansi16 mode upstream so this rarely fires, but
+   * if a stray bg slips through it would paint over our dark surface
+   * — null it out per span. */
+  background-color: transparent !important;
 }
 
 /* Anser class-mapped output (use_classes: true). Standard 16-color names

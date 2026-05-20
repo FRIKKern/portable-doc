@@ -49,11 +49,18 @@ export function InkPreviewPanel({
         // into inline rgb() style spans, and class-mapped 16-color spans
         // for the named-color paths.
         // env: {} skips backend-ink's `process.env` lookup — Node-only,
-        // not defined in browsers. Passing colorDepth explicitly also keeps
-        // detectDepth() (which reads supports-color from stdout) out of the
-        // code path. Together these make the renderer browser-safe.
+        // not defined in browsers. colorDepth: 'ansi16' keeps backend-ink
+        // emitting the 16 named colors only; truecolor 24-bit codes (which
+        // backend-ink uses to paint the doc's paper-bg cream behind every
+        // block) become inline-style spans under anser and bleed cream
+        // across our dark terminal surface. With ansi16, anser maps every
+        // color to a `.ansi-<name>-fg` class we style ourselves — full
+        // control of the terminal palette + no surprise backgrounds.
+        // hyperlinks: false suppresses OSC 8 escape codes; anser doesn't
+        // translate them so the raw `\x1b]8;;URL` sequences would leak.
         const ansi = renderInk(composeDocument(doc), {
-          colorDepth: 'truecolor',
+          colorDepth: 'ansi16',
+          hyperlinks: false,
           env: {},
         });
         if (cancelled) return;
