@@ -14,6 +14,8 @@ import JSZip from 'jszip';
 import type { PortableDoc } from '@portable-doc/core';
 import { toDocxBlob } from '../export/toDocx.js';
 import { extractFromDocx } from './fromDocx.js';
+import exhaustiveFixture from '../../../../examples/exhaustive.json';
+import nestedCalloutsFixture from '../../../../examples/nested-callouts.json';
 
 describe('extractFromDocx', () => {
   it('round-trips: export → extract recovers the AST verbatim', async () => {
@@ -222,6 +224,31 @@ ${JSON.stringify({ version: 'not-semver', exporter: 'x' })}
         },
       ],
     };
+    const blob = await toDocxBlob(original);
+    const buf = await blob.arrayBuffer();
+    const envelope = await extractFromDocx(buf);
+    expect(envelope).not.toBeNull();
+    expect(envelope!.ast).toEqual(original);
+  });
+
+  it('round-trips the exhaustive fixture (21 variants intact)', async () => {
+    // The envelope path carries the full AST verbatim regardless of how
+    // the rendered DOCX surfaces it — so every callout tone × emphasis,
+    // every action priority, every section variant, every code lang, and
+    // every table-merge survives a docx → extract round-trip byte-for-byte.
+    const original = exhaustiveFixture as PortableDoc;
+    const blob = await toDocxBlob(original);
+    const buf = await blob.arrayBuffer();
+    const envelope = await extractFromDocx(buf);
+    expect(envelope).not.toBeNull();
+    expect(envelope!.ast).toEqual(original);
+  });
+
+  it('round-trips the nested-callouts fixture (section depth 3 intact)', async () => {
+    // Companion to the depth-5 procedural case: this one drives the
+    // real on-disk fixture used by the structural-check matrix, so a
+    // regression there shows up here too.
+    const original = nestedCalloutsFixture as PortableDoc;
     const blob = await toDocxBlob(original);
     const buf = await blob.arrayBuffer();
     const envelope = await extractFromDocx(buf);

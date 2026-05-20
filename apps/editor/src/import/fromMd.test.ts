@@ -17,6 +17,7 @@ import {
   serializeMarkdown,
 } from '../ExportMenu.js';
 import { extractFromMd } from './fromMd.js';
+import exhaustiveFixture from '../../../../examples/exhaustive.json';
 
 /** Gzip + base64-encode an arbitrary JSON string into the comment shape the
  *  extractor recognises. Used by the schema-invalid case so we can plant a
@@ -91,6 +92,28 @@ describe('extractFromMd', () => {
     const comment = await commentFromJson(badJson);
     const md = `# Title\n\n${comment}\n\nbody text\n`;
     expect(await extractFromMd(md)).toBeNull();
+  });
+
+  it('round-trips the exhaustive fixture via the envelope comment', async () => {
+    // SURVIVING: every field of the AST. The envelope rides as gzip+base64
+    // inside an HTML comment, so the extractor recovers the AST verbatim
+    // regardless of what the rendered markdown surface can express.
+    //
+    // LOST (in the *visible* markdown body — not exercised here):
+    //   • callout tone/emphasis collapse to a generic blockquote
+    //   • action priority/size/href collapse to a single-line bullet
+    //   • table cell merges (rowspan/colspan) are not representable
+    //   • section variant.density is not representable
+    // The structural-check matrix and the round-trip-check harness document
+    // those visible-surface losses. THIS test asserts only the envelope path,
+    // which is lossless by construction.
+    const original = exhaustiveFixture as PortableDoc;
+    const md = serializeMarkdown(original);
+    const comment = await encodeEnvelopeComment(original);
+    const withEnvelope = injectEnvelopeIntoMarkdown(md, comment);
+    const envelope = await extractFromMd(withEnvelope);
+    expect(envelope).not.toBeNull();
+    expect(envelope!.ast).toEqual(original);
   });
 
   it('returns null when the gzip payload is truncated', async () => {
