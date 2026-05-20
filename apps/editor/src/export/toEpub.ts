@@ -458,17 +458,15 @@ aside.paper-callout-danger-subtle  { border-left-color: #b91c1c; background: #fe
 aside.paper-callout-danger-bold    { border-left-color: #b91c1c; background: #fef2f2; border-left-width: 6px; }
 aside.paper-callout-neutral-subtle { border-left-color: #374151; background: #f3f4f6; }
 aside.paper-callout-neutral-bold   { border-left-color: #374151; background: #f3f4f6; border-left-width: 6px; }
+/* Action blocks render as plain underlined warm-rust links — matches the
+ * editor's link aesthetic. Previous filled-button styling made "Open
+ * workspace" look like a Material button instead of a Papir link. */
 p.paper-action a {
-  display: inline-block;
-  padding: 0.4em 0.9em;
-  border: 1px solid #a23925;
-  border-radius: 4px;
-  text-decoration: none;
   color: #a23925;
+  text-decoration: underline;
 }
 p.paper-action-primary a {
-  background: #a23925;
-  color: #fbfaf6;
+  font-weight: 600;
 }
 table.paper-table {
   border-collapse: collapse;

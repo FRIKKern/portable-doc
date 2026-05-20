@@ -70,6 +70,15 @@ const vfsMap: Record<string, string> =
   (pdfFonts as unknown as Record<string, string>);
 (pdfMake as unknown as { vfs: Record<string, string> }).vfs = vfsMap;
 
+// TODO(fidelity): swap Roboto sans → a serif body to match the editor's
+// Iowan/Charter character. Tried Times (PDF Core 14, no embed needed) but
+// pdfmake's vfs doesn't bundle the Adobe Font Metrics (.afm) files Core 14
+// fonts require for layout measurement — pdfmake throws "File 'data/Times-
+// Bold.afm' not found in virtual file system". Real fix: bundle a Google
+// Fonts serif (Source Serif 4 / Lora) as base64 in a custom vfs entry, or
+// vendor pdfmake's own afm files. Defer until we want the font win badly
+// enough to ship 100KB+ extra in the bundle.
+
 // ---------------------------------------------------------------------------
 // Palette — pinned to the Tailwind-50 tones used in toDocx so the three
 // channels (Word, EPUB, PDF) share the exact same callout colors. Hex pairs
@@ -328,14 +337,15 @@ function calloutNode(b: CalloutBlock): PdfNode {
 
 function actionNode(b: ActionBlock): PdfNode {
   // Actions render as a single warm-rust hyperlink — pdfmake doesn't draw
-  // button chrome (no native equivalent), so we lean on the inline link
-  // affordance + a chevron glyph. Stays calm on e-ink, clickable in any
-  // PDF viewer.
+  // button chrome (no native equivalent). The underlined + warm-rust
+  // treatment matches the editor's link aesthetic exactly. No trailing
+  // arrow glyph — the bundled Roboto vfs doesn't carry U+2192 (→) so
+  // it rendered as tofu/missing-glyph in the visual-check pipeline.
   const priority = b.priority ?? 'primary';
   return {
     text: [
       {
-        text: `${b.label ?? ''}  →`,
+        text: b.label ?? '',
         link: b.href ?? '#',
         color: LINK,
         decoration: 'underline',
