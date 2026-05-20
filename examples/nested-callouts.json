@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "title": "Nested callouts",
+  "preview": "Callouts wrapping paragraphs wrapping more callouts — recursive content path.",
+  "blocks": [
+    {
+      "id": "nc-heading",
+      "type": "heading",
+      "level": 1,
+      "text": "Nested callouts"
+    },
+    {
+      "id": "nc-intro",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "Callouts hold inline content, but a section can nest them to depth 2 and 3. This exercises the recursive content path that renderers must walk." }
+      ]
+    },
+    {
+      "id": "nc-depth1-section",
+      "type": "section",
+      "title": "Depth 1: a section holding a callout",
+      "variant": { "density": "comfortable" },
+      "blocks": [
+        {
+          "id": "nc-d1-callout",
+          "type": "callout",
+          "tone": "info",
+          "title": "Outer callout (depth 1)",
+          "variant": { "tone": "info", "emphasis": "subtle" },
+          "content": [
+            { "type": "text", "value": "This callout sits one level deep, inside a section." }
+          ]
+        },
+        {
+          "id": "nc-d1-paragraph",
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "value": "Paragraph between callouts, still at depth 1." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nc-depth2-section",
+      "type": "section",
+      "title": "Depth 2: section -> section -> callout",
+      "variant": { "density": "comfortable" },
+      "blocks": [
+        {
+          "id": "nc-d2-inner-section",
+          "type": "section",
+          "title": "Inner section",
+          "variant": { "density": "compact" },
+          "blocks": [
+            {
+              "id": "nc-d2-callout",
+              "type": "callout",
+              "tone": "warning",
+              "title": "Depth-2 callout",
+              "variant": { "tone": "warning", "emphasis": "bold" },
+              "content": [
+                { "type": "text", "value": "This callout is nested two sections deep." }
+              ]
+            },
+            {
+              "id": "nc-d2-paragraph",
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "value": "A paragraph alongside the depth-2 callout." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nc-depth3-section",
+      "type": "section",
+      "title": "Depth 3: section -> section -> section -> callout",
+      "variant": { "density": "spacious" },
+      "blocks": [
+        {
+          "id": "nc-d3-mid-section",
+          "type": "section",
+          "title": "Middle section",
+          "variant": { "density": "comfortable" },
+          "blocks": [
+            {
+              "id": "nc-d3-inner-section",
+              "type": "section",
+              "title": "Innermost section",
+              "variant": { "density": "compact" },
+              "blocks": [
+                {
+                  "id": "nc-d3-callout",
+                  "type": "callout",
+                  "tone": "danger",
+                  "title": "Depth-3 callout",
+                  "variant": { "tone": "danger", "emphasis": "bold" },
+                  "content": [
+                    { "type": "text", "value": "Deepest callout, three sections deep. Renderers that recurse correctly will format this exactly like the depth-1 callout above." }
+                  ]
+                },
+                {
+                  "id": "nc-d3-sibling-callout",
+                  "type": "callout",
+                  "tone": "success",
+                  "title": "Sibling at depth 3",
+                  "variant": { "tone": "success", "emphasis": "subtle" },
+                  "content": [
+                    { "type": "text", "value": "A second callout at the same deep level confirms sibling iteration works." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nc-outro",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "If you can see all four nested callouts above, recursion is intact." }
+      ]
+    }
+  ]
+}

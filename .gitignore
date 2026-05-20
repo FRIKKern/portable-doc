@@ -18,5 +18,9 @@ coverage/
 # Visual-goldens artifacts (regenerable via `pnpm visual-goldens`)
 goldens/
 
+# Structural-check harness output (regenerable via `pnpm -C apps/editor check:structural`)
+.papir-check/
+apps/editor/.papir-check/
+
 # paperflow workflow state (per-instance pointers, not for distribution)
 .paperflow/

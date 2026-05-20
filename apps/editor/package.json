@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:structural": "tsx scripts/structural-check.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

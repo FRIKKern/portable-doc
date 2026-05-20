@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "title": "Tables and code",
+  "preview": "A 5-column table and three code blocks across typescript, xml, and bash.",
+  "blocks": [
+    {
+      "id": "tc-heading",
+      "type": "heading",
+      "level": 1,
+      "text": "Tables and code"
+    },
+    {
+      "id": "tc-intro",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "Tables and code blocks diverge the most across renderers. This fixture pins down the canonical shape." }
+      ]
+    },
+    {
+      "id": "tc-h2-table",
+      "type": "heading",
+      "level": 2,
+      "text": "5-column x 4-row table"
+    },
+    {
+      "id": "tc-table",
+      "type": "table",
+      "surfaces": ["web", "native"],
+      "rows": [
+        [
+          [{ "type": "strong", "children": [{ "type": "text", "value": "Service" }] }],
+          [{ "type": "strong", "children": [{ "type": "text", "value": "Region" }] }],
+          [{ "type": "strong", "children": [{ "type": "text", "value": "Status" }] }],
+          [{ "type": "strong", "children": [{ "type": "text", "value": "Latency (p99)" }] }],
+          [{ "type": "strong", "children": [{ "type": "text", "value": "Owner" }] }]
+        ],
+        [
+          [{ "type": "text", "value": "api-gateway" }],
+          [{ "type": "text", "value": "eu-north-1" }],
+          [{ "type": "text", "value": "healthy" }],
+          [{ "type": "text", "value": "42 ms" }],
+          [{ "type": "text", "value": "platform" }]
+        ],
+        [
+          [{ "type": "text", "value": "billing" }],
+          [{ "type": "text", "value": "us-east-1" }],
+          [{ "type": "text", "value": "degraded" }],
+          [{ "type": "text", "value": "310 ms" }],
+          [{ "type": "text", "value": "payments" }]
+        ],
+        [
+          [{ "type": "text", "value": "search" }],
+          [{ "type": "text", "value": "ap-southeast-2" }],
+          [{ "type": "text", "value": "healthy" }],
+          [{ "type": "text", "value": "78 ms" }],
+          [{ "type": "text", "value": "discovery" }]
+        ]
+      ]
+    },
+    {
+      "id": "tc-after-table",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "First row is the header — backends should treat it as <th>, native list dividers, or a bolded row depending on surface." }
+      ]
+    },
+    {
+      "id": "tc-h2-code",
+      "type": "heading",
+      "level": 2,
+      "text": "Three code blocks, three languages"
+    },
+    {
+      "id": "tc-code-ts",
+      "type": "code",
+      "lang": "typescript",
+      "value": "export function add(a: number, b: number): number {\n  return a + b;\n}\n\nconst sum = add(2, 3);\nconsole.log(sum);"
+    },
+    {
+      "id": "tc-between-1",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "Same prose, different syntax — the renderer's job is to keep them visually distinct." }
+      ]
+    },
+    {
+      "id": "tc-code-xml",
+      "type": "code",
+      "lang": "xml",
+      "value": "<root>\n  <service name=\"api-gateway\">\n    <region>eu-north-1</region>\n    <status>healthy</status>\n  </service>\n</root>"
+    },
+    {
+      "id": "tc-between-2",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "XML stresses the renderer's angle-bracket escaping path." }
+      ]
+    },
+    {
+      "id": "tc-code-bash",
+      "type": "code",
+      "lang": "bash",
+      "value": "#!/usr/bin/env bash\nset -euo pipefail\n\nfor svc in api-gateway billing search; do\n  curl -sf \"https://status.example.com/$svc\" || echo \"$svc DOWN\"\ndone"
+    },
+    {
+      "id": "tc-outro",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "Each block declares its lang so highlighters can dispatch correctly." }
+      ]
+    }
+  ]
+}

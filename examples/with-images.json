@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "title": "Images fixture",
+  "preview": "Three images: data: URI, https URL, and wide-aspect — all with alt text.",
+  "blocks": [
+    {
+      "id": "img-heading",
+      "type": "heading",
+      "level": 1,
+      "text": "Images fixture"
+    },
+    {
+      "id": "img-intro",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "This fixture exercises the image block across three source types. Every image carries alt text so the validator's image-alt rule is satisfied." }
+      ]
+    },
+    {
+      "id": "img-h2-data",
+      "type": "heading",
+      "level": 2,
+      "text": "Inline data: URI"
+    },
+    {
+      "id": "img-before-data",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "A 1x1 transparent PNG encoded as a data URI. Useful for placeholders and email-friendly inline assets." }
+      ]
+    },
+    {
+      "id": "img-data",
+      "type": "image",
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "alt": "1 by 1 transparent pixel encoded as a PNG data URI",
+      "width": 1,
+      "height": 1,
+      "surfaces": ["web", "native"]
+    },
+    {
+      "id": "img-after-data",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "The pixel is intentionally invisible — the assertion is that the renderer accepts the data URI source." }
+      ]
+    },
+    {
+      "id": "img-h2-https",
+      "type": "heading",
+      "level": 2,
+      "text": "Remote https URL"
+    },
+    {
+      "id": "img-before-https",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "A generic placeholder served over https. Renderers fetch it; sandbox tests can mock the response." }
+      ]
+    },
+    {
+      "id": "img-https",
+      "type": "image",
+      "src": "https://placehold.co/600x400/png",
+      "alt": "Generic 600 by 400 placeholder image fetched over https",
+      "width": 600,
+      "height": 400,
+      "surfaces": ["web", "native"]
+    },
+    {
+      "id": "img-after-https",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "Width and height are declared so layout can reserve space before the bytes arrive." }
+      ]
+    },
+    {
+      "id": "img-h2-wide",
+      "type": "heading",
+      "level": 2,
+      "text": "Wide aspect ratio"
+    },
+    {
+      "id": "img-before-wide",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "An image whose width-to-height ratio exceeds 2:1. Layout code that special-cases banners should treat this differently from the square-ish images above." }
+      ]
+    },
+    {
+      "id": "img-wide",
+      "type": "image",
+      "src": "https://placehold.co/1600x400/png",
+      "alt": "Wide banner placeholder, 1600 by 400, aspect ratio 4 to 1",
+      "width": 1600,
+      "height": 400,
+      "surfaces": ["web", "native"]
+    },
+    {
+      "id": "img-after-wide",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "Aspect ratio is 4:1 — well past the 2:1 threshold this fixture promises." }
+      ]
+    }
+  ]
+}

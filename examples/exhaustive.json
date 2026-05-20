@@ -1,0 +1,274 @@
+{
+  "version": 1,
+  "title": "Exhaustive fixture",
+  "preview": "Every block type and every variant axis exercised at least once.",
+  "blocks": [
+    {
+      "id": "ex-h1",
+      "type": "heading",
+      "level": 1,
+      "text": "Exhaustive fixture"
+    },
+    {
+      "id": "ex-intro",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "This document touches every block type and every named variant axis. Inline marks too: " },
+        { "type": "strong", "children": [{ "type": "text", "value": "bold" }] },
+        { "type": "text", "value": ", " },
+        { "type": "em", "children": [{ "type": "text", "value": "italic" }] },
+        { "type": "text", "value": ", " },
+        { "type": "code", "value": "monospace" },
+        { "type": "text", "value": ", and " },
+        { "type": "link", "href": "https://example.com", "children": [{ "type": "text", "value": "a link" }] },
+        { "type": "text", "value": "." }
+      ]
+    },
+    { "id": "ex-h2", "type": "heading", "level": 2, "text": "Headings two through six" },
+    { "id": "ex-h3", "type": "heading", "level": 3, "text": "Level three" },
+    { "id": "ex-h4", "type": "heading", "level": 4, "text": "Level four" },
+    { "id": "ex-h5", "type": "heading", "level": 5, "text": "Level five" },
+    { "id": "ex-h6", "type": "heading", "level": 6, "text": "Level six" },
+    {
+      "id": "ex-list-ul",
+      "type": "list",
+      "ordered": false,
+      "items": [
+        [{ "type": "text", "value": "Unordered item one" }],
+        [{ "type": "text", "value": "Unordered item two" }]
+      ]
+    },
+    {
+      "id": "ex-list-ol",
+      "type": "list",
+      "ordered": true,
+      "items": [
+        [{ "type": "text", "value": "Ordered item one" }],
+        [{ "type": "text", "value": "Ordered item two" }]
+      ]
+    },
+    { "id": "ex-h2-callouts", "type": "heading", "level": 2, "text": "Callouts: 5 tones x 2 emphases" },
+    {
+      "id": "ex-callout-info-subtle",
+      "type": "callout",
+      "tone": "info",
+      "title": "Info subtle",
+      "variant": { "tone": "info", "emphasis": "subtle" },
+      "content": [{ "type": "text", "value": "Informational callout, subtle emphasis." }]
+    },
+    {
+      "id": "ex-callout-info-bold",
+      "type": "callout",
+      "tone": "info",
+      "title": "Info bold",
+      "variant": { "tone": "info", "emphasis": "bold" },
+      "content": [{ "type": "text", "value": "Informational callout, bold emphasis." }]
+    },
+    {
+      "id": "ex-callout-success-subtle",
+      "type": "callout",
+      "tone": "success",
+      "title": "Success subtle",
+      "variant": { "tone": "success", "emphasis": "subtle" },
+      "content": [{ "type": "text", "value": "Success callout, subtle emphasis." }]
+    },
+    {
+      "id": "ex-callout-success-bold",
+      "type": "callout",
+      "tone": "success",
+      "title": "Success bold",
+      "variant": { "tone": "success", "emphasis": "bold" },
+      "content": [{ "type": "text", "value": "Success callout, bold emphasis." }]
+    },
+    {
+      "id": "ex-callout-warning-subtle",
+      "type": "callout",
+      "tone": "warning",
+      "title": "Warning subtle",
+      "variant": { "tone": "warning", "emphasis": "subtle" },
+      "content": [{ "type": "text", "value": "Warning callout, subtle emphasis." }]
+    },
+    {
+      "id": "ex-callout-warning-bold",
+      "type": "callout",
+      "tone": "warning",
+      "title": "Warning bold",
+      "variant": { "tone": "warning", "emphasis": "bold" },
+      "content": [{ "type": "text", "value": "Warning callout, bold emphasis." }]
+    },
+    {
+      "id": "ex-callout-danger-subtle",
+      "type": "callout",
+      "tone": "danger",
+      "title": "Danger subtle",
+      "variant": { "tone": "danger", "emphasis": "subtle" },
+      "content": [{ "type": "text", "value": "Danger callout, subtle emphasis." }]
+    },
+    {
+      "id": "ex-callout-danger-bold",
+      "type": "callout",
+      "tone": "danger",
+      "title": "Danger bold",
+      "variant": { "tone": "danger", "emphasis": "bold" },
+      "content": [{ "type": "text", "value": "Danger callout, bold emphasis." }]
+    },
+    {
+      "id": "ex-callout-neutral-subtle",
+      "type": "callout",
+      "tone": "neutral",
+      "title": "Neutral subtle",
+      "variant": { "tone": "neutral", "emphasis": "subtle" },
+      "content": [{ "type": "text", "value": "Neutral callout, subtle emphasis." }]
+    },
+    {
+      "id": "ex-callout-neutral-bold",
+      "type": "callout",
+      "tone": "neutral",
+      "title": "Neutral bold",
+      "variant": { "tone": "neutral", "emphasis": "bold" },
+      "content": [{ "type": "text", "value": "Neutral callout, bold emphasis." }]
+    },
+    { "id": "ex-div-1", "type": "divider" },
+    { "id": "ex-h2-actions", "type": "heading", "level": 2, "text": "Actions: 2 priorities x 2 sizes" },
+    {
+      "id": "ex-action-pri-med",
+      "type": "action",
+      "label": "Primary medium",
+      "href": "https://example.com/a",
+      "priority": "primary",
+      "variant": { "priority": "primary", "size": "medium" }
+    },
+    {
+      "id": "ex-action-pri-lrg",
+      "type": "action",
+      "label": "Primary large",
+      "href": "https://example.com/b",
+      "priority": "primary",
+      "variant": { "priority": "primary", "size": "large" }
+    },
+    {
+      "id": "ex-action-sec-med",
+      "type": "action",
+      "label": "Secondary medium",
+      "href": "https://example.com/c",
+      "priority": "secondary",
+      "variant": { "priority": "secondary", "size": "medium" }
+    },
+    {
+      "id": "ex-action-sec-lrg",
+      "type": "action",
+      "label": "Secondary large",
+      "href": "https://example.com/d",
+      "priority": "secondary",
+      "variant": { "priority": "secondary", "size": "large" }
+    },
+    { "id": "ex-div-2", "type": "divider" },
+    { "id": "ex-h2-sections", "type": "heading", "level": 2, "text": "Sections: 3 densities" },
+    {
+      "id": "ex-section-compact",
+      "type": "section",
+      "title": "Compact section",
+      "variant": { "density": "compact" },
+      "blocks": [
+        {
+          "id": "ex-section-compact-p",
+          "type": "paragraph",
+          "content": [{ "type": "text", "value": "Compact-density section content." }]
+        }
+      ]
+    },
+    {
+      "id": "ex-section-comfortable",
+      "type": "section",
+      "title": "Comfortable section",
+      "variant": { "density": "comfortable" },
+      "blocks": [
+        {
+          "id": "ex-section-comfortable-p",
+          "type": "paragraph",
+          "content": [{ "type": "text", "value": "Comfortable-density section content." }]
+        }
+      ]
+    },
+    {
+      "id": "ex-section-spacious",
+      "type": "section",
+      "title": "Spacious section",
+      "variant": { "density": "spacious" },
+      "blocks": [
+        {
+          "id": "ex-section-spacious-p",
+          "type": "paragraph",
+          "content": [{ "type": "text", "value": "Spacious-density section content." }]
+        }
+      ]
+    },
+    { "id": "ex-h2-code", "type": "heading", "level": 2, "text": "Code: 2 themes x 2 densities" },
+    {
+      "id": "ex-code-light-normal",
+      "type": "code",
+      "lang": "typescript",
+      "value": "// light + normal\nexport const ok = true;",
+      "variant": { "theme": "light", "density": "normal" }
+    },
+    {
+      "id": "ex-code-light-compact",
+      "type": "code",
+      "lang": "typescript",
+      "value": "// light + compact\nexport const ok = true;",
+      "variant": { "theme": "light", "density": "compact" }
+    },
+    {
+      "id": "ex-code-dark-normal",
+      "type": "code",
+      "lang": "typescript",
+      "value": "// dark + normal\nexport const ok = true;",
+      "variant": { "theme": "dark", "density": "normal" }
+    },
+    {
+      "id": "ex-code-dark-compact",
+      "type": "code",
+      "lang": "typescript",
+      "value": "// dark + compact\nexport const ok = true;",
+      "variant": { "theme": "dark", "density": "compact" }
+    },
+    { "id": "ex-h2-escape", "type": "heading", "level": 2, "text": "Escape-hatch blocks" },
+    {
+      "id": "ex-image",
+      "type": "image",
+      "src": "https://placehold.co/600x400/png",
+      "alt": "Generic placeholder image",
+      "width": 600,
+      "height": 400,
+      "surfaces": ["web", "native"]
+    },
+    {
+      "id": "ex-table",
+      "type": "table",
+      "surfaces": ["web", "native"],
+      "rows": [
+        [
+          [{ "type": "text", "value": "Col A" }],
+          [{ "type": "text", "value": "Col B" }],
+          [{ "type": "text", "value": "Col C" }]
+        ],
+        [
+          [{ "type": "text", "value": "a1" }],
+          [{ "type": "text", "value": "b1" }],
+          [{ "type": "text", "value": "c1" }]
+        ],
+        [
+          [{ "type": "text", "value": "a2" }],
+          [{ "type": "text", "value": "b2" }],
+          [{ "type": "text", "value": "c2" }]
+        ]
+      ]
+    },
+    { "id": "ex-final-divider", "type": "divider" },
+    {
+      "id": "ex-outro",
+      "type": "paragraph",
+      "content": [{ "type": "text", "value": "End of exhaustive fixture." }]
+    }
+  ]
+}
