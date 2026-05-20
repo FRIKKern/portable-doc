@@ -48,7 +48,14 @@ export function InkPreviewPanel({
         // Truecolor depth — Anser maps the resulting 24-bit ANSI escapes
         // into inline rgb() style spans, and class-mapped 16-color spans
         // for the named-color paths.
-        const ansi = renderInk(composeDocument(doc), { colorDepth: 'truecolor' });
+        // env: {} skips backend-ink's `process.env` lookup — Node-only,
+        // not defined in browsers. Passing colorDepth explicitly also keeps
+        // detectDepth() (which reads supports-color from stdout) out of the
+        // code path. Together these make the renderer browser-safe.
+        const ansi = renderInk(composeDocument(doc), {
+          colorDepth: 'truecolor',
+          env: {},
+        });
         if (cancelled) return;
         // anser's class-mapped output uses `ansi-<name>-fg/bg` class names
         // we style in paper.css; bold + italic + underline drop in as
