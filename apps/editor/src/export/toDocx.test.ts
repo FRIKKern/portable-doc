@@ -241,7 +241,7 @@ describe('toDocxBlob — embedded envelope (Goal B P1)', () => {
 });
 
 describe('toDocxBlob — heading + body vertical rhythm', () => {
-  it('emits H1 with before=0 after=210 in styles.xml', async () => {
+  it('emits H1 with before=480 after=120 in styles.xml (spec §"Heading spacing")', async () => {
     const doc: PortableDoc = {
       version: 1,
       blocks: [{ id: 'h1', type: 'heading', level: 1, text: 'X' }],
@@ -257,11 +257,11 @@ describe('toDocxBlob — heading + body vertical rhythm', () => {
     );
     expect(heading1Block).not.toBeNull();
     const spacing = heading1Block![0];
-    expect(spacing).toContain('w:before="0"');
-    expect(spacing).toContain('w:after="210"');
+    expect(spacing).toContain('w:before="480"');
+    expect(spacing).toContain('w:after="120"');
   });
 
-  it('emits Normal default with spacing.after=330', async () => {
+  it('emits Normal default with spacing.before=240 / after=0 / line=372 (spec body row)', async () => {
     const doc: PortableDoc = {
       version: 1,
       blocks: [{ id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'x' }] }],
@@ -269,7 +269,9 @@ describe('toDocxBlob — heading + body vertical rhythm', () => {
     const blob = await toDocxBlob(doc);
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
     const styles = await zip.file('word/styles.xml')!.async('string');
-    expect(styles).toContain('w:after="330"');
+    expect(styles).toContain('w:before="240"');
+    expect(styles).toContain('w:after="0"');
+    expect(styles).toContain('w:line="372"');
   });
 });
 
@@ -386,7 +388,7 @@ describe('toDocxBlob — dual-embed (customXml + docProps fallback)', () => {
 });
 
 describe('toDocxBlob — divider styling', () => {
-  it('divider uses warm-stone color D8D1BF and 560/560 spacing', async () => {
+  it('divider uses warm-stone color D8D1BF + 0.75pt border (size=6 eighths)', async () => {
     const doc: PortableDoc = {
       version: 1,
       blocks: [{ id: 'd1', type: 'divider' }],
@@ -395,8 +397,10 @@ describe('toDocxBlob — divider styling', () => {
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
     const documentXml = await zip.file('word/document.xml')!.async('string');
     expect(documentXml).toContain('D8D1BF');
-    expect(documentXml).toContain('w:before="560"');
-    expect(documentXml).toContain('w:after="560"');
+    // Spec §"Divider": 0.75pt = 6 eighths of a point in OOXML border.
+    expect(documentXml).toMatch(/w:sz="6"/);
+    // Vertical rhythm matches body-paragraph "before" (240 twips = 12pt).
+    expect(documentXml).toContain('w:before="240"');
   });
 });
 

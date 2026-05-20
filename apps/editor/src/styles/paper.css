@@ -29,7 +29,7 @@
 
 :root {
   /* ---------------------- T1 typography (12 vars) ---------------------- */
-  --paper-font-serif: 'Iowan Old Style', 'Constantia', 'Charter', Georgia, serif;
+  --paper-font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
   --paper-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --paper-font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
   --paper-font-size-body: 18px;
@@ -37,7 +37,12 @@
   --paper-font-size-h2: 24px;
   --paper-font-size-h3: 20px;
   --paper-font-size-small: 14px;
-  --paper-line-height-body: 1.7;
+  /* Body line-height locked to 1.55 by the spacing-translation spec
+   * (~/docs/paperflow/specs/2026-05-20-spacing-translation.html). Same
+   * number flows into DOCX (line=372 twips = 240 × 1.55), EPUB CSS,
+   * inline HTML CSS, and pdfmake (lineHeight: 1.55) so every channel
+   * lands the same line-box height. */
+  --paper-line-height-body: 1.55;
   --paper-line-height-heading: 1.3;
   --paper-letter-spacing-body: 0.005em;
 
@@ -93,17 +98,43 @@
 }
 
 /* ===========================================================================
- * @font-face — non-blocking WOFF2 fallback for the canonical body face
- * (T1 §"The WOFF2 strategy"). The file lives at apps/editor/public/fonts/
- * and is wired in by A1 so the path is reproducible; macOS still wins via
- * the system entry in --paper-font-serif before this ever fetches.
+ * @font-face — Source Serif 4 is the canonical body face across every
+ * portable-doc channel (editor, DOCX, EPUB, HTML export, PDF). The TTFs
+ * live at apps/editor/public/fonts/ and Vite serves them at /fonts/ in
+ * both dev and after `vite build`. Bound spec:
+ *   ~/docs/paperflow/specs/2026-05-20-channel-embed.html §1
+ * `font-display: swap` accepts a brief FOUT in Georgia / Times New Roman
+ * during the first cold-cache load; the swap is one click of friction at
+ * most and any subsequent visit hits the disk cache.
  * =========================================================================== */
 
 @font-face {
-  font-family: 'Iowan Old Style';
-  src: url('/fonts/iowan-old-style.woff2') format('woff2');
-  font-weight: 400 700;
-  font-display: optional;
+  font-family: 'Source Serif 4';
+  src: url('/fonts/SourceSerif4-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('/fonts/SourceSerif4-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('/fonts/SourceSerif4-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('/fonts/SourceSerif4-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
 }
 
 /* ===========================================================================
@@ -134,7 +165,7 @@
   line-height: var(--paper-line-height-body);
   letter-spacing: var(--paper-letter-spacing-body);
   color: var(--paper-ink);
-  /* Premium serif rendering. Iowan Old Style with OLD-STYLE NUMERALS
+  /* Premium serif rendering. Source Serif 4 with OLD-STYLE NUMERALS
    * (the `onum` feature) is the unmistakable "this is a typeset page"
    * cue — figures sit on the baseline with descenders like body letters
    * rather than standing tall as lining numerals. `kern` + `liga` fire
@@ -164,18 +195,22 @@
   font-weight: 600;
   color: var(--paper-ink);
 }
+/* Heading margins below come from the spacing-translation spec
+ * (~/docs/paperflow/specs/2026-05-20-spacing-translation.html §"Heading
+ * spacing"). Same values flow into DOCX twips, EPUB CSS, inline HTML CSS,
+ * and pdfmake — one number per heading-edge, four renderers. */
 .paper-column h1 {
   font-size: var(--paper-font-size-h1);
   letter-spacing: -0.01em;
-  margin: 0 0 14px;
+  margin: 24pt 0 6pt;
 }
 .paper-column h2 {
   font-size: var(--paper-font-size-h2);
-  margin: 38px 0 14px;
+  margin: 18pt 0 4pt;
 }
 .paper-column h3 {
   font-size: var(--paper-font-size-h3);
-  margin: 28px 0 10px;
+  margin: 12pt 0 2pt;
 }
 .paper-column h4 {
   font-size: 18px;
@@ -194,8 +229,12 @@
   text-transform: uppercase;
   color: var(--paper-ink-soft);
 }
+/* Body paragraph rhythm locked by the spacing-translation spec:
+ * 12pt before / 0pt after. Top-of-paragraph anchors the rhythm so the
+ * gap between consecutive paragraphs is the same as the gap between a
+ * paragraph and a divider / heading following it. */
 .paper-column p {
-  margin: 0 0 22px;
+  margin: 12pt 0 0;
   /* Optional hyphenation at the column edge. Long-form writing on a
    * 680px column reads better when the browser is allowed to break a
    * 14-letter word rather than leave a 100px hole in the rag. The
@@ -214,8 +253,11 @@
   margin: 0 0 24px;
   padding-left: 24px;
 }
+/* List items use a per-channel override: 4pt top (tighter than body's
+ * 12pt) — spec §"List spacing". DOCX takes 60 twips (3pt) on the same
+ * row; EPUB / HTML / pdfmake stay at 4pt. */
 .paper-column li {
-  margin: 0 0 8px;
+  margin: 4pt 0 0;
 }
 /* `.paper-column blockquote` has class+element specificity (0,1,1);
  * `.ProseMirror > .paper-block` has class+class (0,2,0) and would
@@ -223,11 +265,11 @@
  * the doubled class form so this rule lands at 0,2,1 and reliably
  * applies the generous inner padding. */
 .paper-column blockquote.paper-block {
-  margin: 0 0 24px;
-  /* Generous inner padding — content shouldn't kiss the left border
-   * bar or the top edge. 20px vertical reads as one comfortable line
-   * of breathing room around the heading + body. */
-  padding: 20px 28px 20px 32px;
+  margin: 12pt 0 0;
+  /* Callout padding locked to 12pt vertical × 16pt horizontal by the
+   * spacing-translation spec — same numbers as DOCX nested-table
+   * margins (240 / 320 twips), EPUB CSS, and pdfmake stack margin. */
+  padding: 12pt 16pt;
   border-left: 4px solid var(--paper-tone-info);
   background: rgba(59, 110, 143, 0.07);
   border-radius: 2px;
@@ -261,10 +303,13 @@
   margin: 0 0 22px;
   overflow-x: auto;
 }
+/* Divider: 0.75pt hairline in warm-stone (#D8D1BF) — same rule weight
+ * + color as DOCX's BorderStyle.SINGLE size=6 eighths, EPUB CSS, and
+ * pdfmake canvas. Vertical rhythm matches body-paragraph "before". */
 .paper-column hr {
   border: 0;
-  border-top: 1px solid var(--paper-rule);
-  margin: 28px 0;
+  border-top: 0.75pt solid #D8D1BF;
+  margin: 12pt 0 0;
 }
 
 /* CodeBlockLowlight — `.hljs-*` spans emitted inside <pre><code>.
@@ -1987,7 +2032,7 @@
   box-shadow: none;
 }
 
-/* Body font fallback — when Iowan/Georgia aren't in the system fonts,
+/* Body font fallback — when Source Serif 4 / Georgia aren't loaded yet,
  * fall back to the editor's serif stack instead of Times/whatever. */
 .paper-docx-preview .docx-wrapper {
   font-family: Georgia, var(--paper-font-serif), serif;

@@ -46,6 +46,99 @@ import type {
 } from '@portable-doc/core';
 import JSZip from 'jszip';
 import { buildEnvelope, generateDocUuid } from '@portable-doc/core';
+import {
+  SOURCE_SERIF_4_REGULAR_B64,
+  SOURCE_SERIF_4_BOLD_B64,
+  SOURCE_SERIF_4_ITALIC_B64,
+  SOURCE_SERIF_4_BOLDITALIC_B64,
+} from './sourceSerif4';
+
+// ---------------------------------------------------------------------------
+// Font bundling — Source Serif 4 (four weights) shipped inside the EPUB.
+//
+// Per the channel-embed spec (2026-05-20-channel-embed.html §3), every
+// generated .epub ships its own copy of Source Serif 4 so the reader's
+// rendering matches the editor regardless of host fonts. The four TTFs
+// land at, exactly:
+//   OPS/fonts/SourceSerif4-Regular.ttf
+//   OPS/fonts/SourceSerif4-Italic.ttf
+//   OPS/fonts/SourceSerif4-Bold.ttf
+//   OPS/fonts/SourceSerif4-BoldItalic.ttf
+// and the @font-face block lives in OPS/styles/fonts.css — both are
+// declared in content.opf's manifest with media-type
+// application/vnd.ms-opentype.
+//
+// Binary resolution mirrors the image-embedding pattern: base64 → Uint8Array
+// via decodeBase64 → JSZip binary entry. The base64 strings themselves are
+// imported from ./sourceSerif4 which is shared with toPdf.ts so the two
+// channels stay in lockstep on the actual font bytes.
+// ---------------------------------------------------------------------------
+
+interface BundledFont {
+  /** Final filename inside OPS/fonts/ — also referenced by manifest hrefs. */
+  file: string;
+  /** OPF manifest item id — referenced from content.opf and fonts.css comments. */
+  manifestId: string;
+  /** Base64-encoded TTF payload, decoded at zip-build time. */
+  b64: string;
+  /** CSS weight (400 = regular, 700 = bold). */
+  weight: 400 | 700;
+  /** CSS style (normal | italic). */
+  style: 'normal' | 'italic';
+}
+
+const SOURCE_SERIF_4_FONTS: BundledFont[] = [
+  {
+    file: 'SourceSerif4-Regular.ttf',
+    manifestId: 'font-ss4-regular',
+    b64: SOURCE_SERIF_4_REGULAR_B64,
+    weight: 400,
+    style: 'normal',
+  },
+  {
+    file: 'SourceSerif4-Italic.ttf',
+    manifestId: 'font-ss4-italic',
+    b64: SOURCE_SERIF_4_ITALIC_B64,
+    weight: 400,
+    style: 'italic',
+  },
+  {
+    file: 'SourceSerif4-Bold.ttf',
+    manifestId: 'font-ss4-bold',
+    b64: SOURCE_SERIF_4_BOLD_B64,
+    weight: 700,
+    style: 'normal',
+  },
+  {
+    file: 'SourceSerif4-BoldItalic.ttf',
+    manifestId: 'font-ss4-bold-italic',
+    b64: SOURCE_SERIF_4_BOLDITALIC_B64,
+    weight: 700,
+    style: 'italic',
+  },
+];
+
+/** EPUB-standard media type for embedded TrueType / OpenType fonts.
+ *  Some EPUB readers accept `font/ttf` as well, but vnd.ms-opentype is
+ *  the spec-blessed value and matches what epubcheck expects. */
+const FONT_MEDIA_TYPE = 'application/vnd.ms-opentype';
+
+/** Build the OPS/styles/fonts.css contents from the four-weight table.
+ *  font-display: swap is intentionally omitted — EPUB readers ignore it
+ *  and a few warn about non-standard at-rule descriptors. The trailing
+ *  `body { font-family: ... }` line ensures every paragraph inherits the
+ *  family even if the chapter XHTML forgets to link the stylesheet. */
+function buildFontsCss(): string {
+  const faces = SOURCE_SERIF_4_FONTS.map(
+    (f) => `@font-face {
+  font-family: 'Source Serif 4';
+  src: url('../fonts/${f.file}') format('truetype');
+  font-weight: ${f.weight};
+  font-style: ${f.style};
+}`,
+  ).join('\n');
+  return `${faces}\nbody { font-family: 'Source Serif 4', Georgia, serif; }\n`;
+}
 
 // ---------------------------------------------------------------------------
 // XHTML escape + small helpers
@@ -427,6 +520,15 @@ function buildOpf(
     )
     .join('\n');
   const imagesSection = imageItems ? `\n${imageItems}` : '';
+  // Font manifest items — four TTFs + the fonts.css that references them.
+  // Per the channel-embed spec §3, media-type is application/vnd.ms-opentype
+  // for the TTFs and text/css for the stylesheet. Order matches the
+  // SOURCE_SERIF_4_FONTS table so structural-check diffs stay deterministic.
+  const fontItems = SOURCE_SERIF_4_FONTS.map(
+    (f) =>
+      `    <item id="${escapeAttr(f.manifestId)}" href="fonts/${escapeAttr(f.file)}" media-type="${FONT_MEDIA_TYPE}"/>`,
+  ).join('\n');
+  const fontsCssItem = `    <item id="style-fonts" href="styles/fonts.css" media-type="text/css"/>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf"
          xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -452,6 +554,8 @@ function buildOpf(
     <item id="nav"       href="nav.xhtml"           media-type="application/xhtml+xml" properties="nav"/>
     <item id="ncx"       href="ncx.xml"             media-type="application/x-dtbncx+xml"/>
     <item id="css-paper" href="styles/paper.css"    media-type="text/css"/>
+${fontsCssItem}
+${fontItems}
     <item id="ch-1"      href="chapters/chapter-1.xhtml" media-type="application/xhtml+xml"/>${imagesSection}
   </manifest>
   <spine toc="ncx">
@@ -532,14 +636,20 @@ ${points}
  *  not the editing surface, so no chrome, no floating UI, no focus
  *  rings. Variant classes for callouts/actions follow the P3 mapping. */
 function buildReaderCss(): string {
+  // Reader-CSS spacing is the EPUB-channel column of the spacing-translation
+  // spec — body 12pt before / 0 after / line-height 1.55, heading scale
+  // 28/22/18pt with locked top + bottom margins. List items get the 4pt
+  // per-channel override. Same numbers travel into toHtml.ts (inline CSS),
+  // toDocx.ts (twips), paper.css (editor canvas), and toPdf.ts (pdfmake).
   return `/* Papir EPUB reader stylesheet — minimal book typography. */
 html, body {
   margin: 0;
   padding: 0;
-  font-family: Georgia, "Iowan Old Style", serif;
+  font-family: 'Source Serif 4', Georgia, serif;
   color: #1f1a14;
   background: #fbfaf6;
-  line-height: 1.6;
+  font-size: 11pt;
+  line-height: 1.55;
 }
 body {
   max-width: 36em;
@@ -547,20 +657,19 @@ body {
   padding: 1.5em 1em 3em;
 }
 h1, h2, h3, h4, h5, h6 {
-  font-family: Georgia, "Iowan Old Style", serif;
+  font-family: 'Source Serif 4', Georgia, serif;
   font-weight: 700;
   line-height: 1.25;
-  margin: 1.6em 0 0.6em;
   color: #1f1a14;
 }
-h1 { font-size: 1.625em; margin-top: 0.6em; }
-h2 { font-size: 1.25em; }
-h3 { font-size: 1.125em; }
-h4 { font-size: 1em; }
-h5 { font-size: 0.95em; }
-h6 { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; }
+h1 { font-size: 28pt; margin: 24pt 0 6pt; }
+h2 { font-size: 22pt; margin: 18pt 0 4pt; }
+h3 { font-size: 18pt; margin: 12pt 0 2pt; }
+h4 { font-size: 13pt; margin: 10pt 0 2pt; }
+h5 { font-size: 12pt; margin: 8pt 0 2pt; }
+h6 { font-size: 11pt; margin: 8pt 0 2pt; text-transform: uppercase; letter-spacing: 0.04em; }
 p {
-  margin: 0 0 1em;
+  margin: 12pt 0 0;
   /* Left-aligned ragged (no justify) — matches the editor. Justified text
    * with hyphenation creates wavy word-spacing that diverges from the
    * editor's straight left edge + tight rhythm. */
@@ -571,14 +680,14 @@ a {
   text-decoration: underline;
 }
 ul, ol {
-  margin: 0 0 1em 1.6em;
+  margin: 12pt 0 0 1.6em;
   padding: 0;
 }
-li { margin: 0 0 0.3em; }
+li { margin: 4pt 0 0; }
 hr {
   border: 0;
-  border-bottom: 1px solid #d8d1bf;
-  margin: 2em 0;
+  border-top: 0.75pt solid #d8d1bf;
+  margin: 12pt 0 0;
 }
 pre.paper-code {
   background: #f5f2e9;
@@ -601,8 +710,9 @@ code {
 aside.paper-callout {
   border-left: 4px solid #374151;
   background: #f3f4f6;
-  padding: 0.8em 1em;
-  margin: 1.2em 0;
+  /* Callout padding 12pt vertical / 16pt horizontal — locked by spec. */
+  padding: 12pt 16pt;
+  margin: 12pt 0 0;
   border-radius: 0 4px 4px 0;
 }
 aside.paper-callout p { margin: 0 0 0.5em; }
@@ -671,6 +781,7 @@ function buildChapterXhtml(doc: PortableDoc, language: string, images: ImageRegi
 <head>
   <meta charset="utf-8"/>
   <title>${escapeXml(title)}</title>
+  <link rel="stylesheet" type="text/css" href="../styles/fonts.css"/>
   <link rel="stylesheet" type="text/css" href="../styles/paper.css"/>
 </head>
 <body>
@@ -734,12 +845,20 @@ export async function toEpubBlob(
   zip.file('OPS/nav.xhtml', buildNavXhtml(doc, toc, language));
   zip.file('OPS/ncx.xml', buildNcx(doc, docUuid, toc, language));
   zip.file('OPS/styles/paper.css', buildReaderCss());
+  zip.file('OPS/styles/fonts.css', buildFontsCss());
   zip.file('OPS/chapters/chapter-1.xhtml', buildChapterXhtml(doc, language, images));
 
   // Image binaries — one entry per resolved image, named to match the OPF
   // manifest hrefs (images/imageN.<ext>) and the chapter <img src=...>.
   for (const img of images.values()) {
     zip.file(`OPS/images/image${img.slot}.${img.ext}`, img.bytes);
+  }
+
+  // Font binaries — four Source Serif 4 weights at OPS/fonts/SourceSerif4-*.ttf,
+  // base64 → Uint8Array via the same decodeBase64 helper used for image
+  // payloads. Order matches SOURCE_SERIF_4_FONTS for diff-stable output.
+  for (const f of SOURCE_SERIF_4_FONTS) {
+    zip.file(`OPS/fonts/${f.file}`, decodeBase64(f.b64));
   }
 
   return await zip.generateAsync({

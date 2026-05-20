@@ -63,6 +63,113 @@ import {
 import JSZip from 'jszip';
 import { buildEnvelope, generateDocUuid } from '@portable-doc/core';
 
+// ---------------------------------------------------------------------------
+// Source Serif 4 — embedded font bytes
+// ---------------------------------------------------------------------------
+//
+// Per spec `2026-05-20-channel-embed.html` §2 ("DOCX — word/fontTable.xml +
+// word/fonts/*.ttf"), the .docx ships with the four SourceSerif4 weights
+// embedded so it opens with the same prose face every reader sees in the
+// editor — no font-substitution lottery in Word / Pages / Google Docs.
+//
+// `new URL(..., import.meta.url)` is Vite's documented pattern for static
+// asset references in source — at build time the loader rewrites the URL
+// to the bundled-asset path; at dev time it resolves to the public/fonts
+// path via the public-dir middleware. The fetched ArrayBuffers feed
+// `Document({ fonts: [...] })` which writes both `word/fonts/*.ttf` and
+// `word/fontTable.xml` for us. (Alternatively a `?arraybuffer` Vite suffix
+// would skip the runtime fetch, but that requires `vite-plugin-arraybuffer`
+// — the fetch path is plugin-free and runs in both dev + prod browser
+// bundles. Vitest/happy-dom doesn't reach the URL; the font block is
+// silently skipped when fetch throws, see loadEmbeddedFonts.)
+const FONT_URLS = {
+  regular: new URL('../../public/fonts/SourceSerif4-Regular.ttf', import.meta.url),
+  italic: new URL('../../public/fonts/SourceSerif4-Italic.ttf', import.meta.url),
+  bold: new URL('../../public/fonts/SourceSerif4-Bold.ttf', import.meta.url),
+  boldItalic: new URL('../../public/fonts/SourceSerif4-BoldItalic.ttf', import.meta.url),
+} as const;
+
+// docx 9.6.1's FontOptions is `{ name: string; data: Buffer; characterSet? }`
+// — the public API does NOT surface per-weight slots (the OOXML
+// `<w:embedItalic>`/`<w:embedBold>`/`<w:embedBoldItalic>` elements exist in
+// the library's internal element builder but aren't exposed on FontOptions).
+// We therefore ship all four weights as separate FontOptions entries all
+// named "Source Serif 4". Each becomes its own `<w:font w:name="Source
+// Serif 4">` block with an `embedRegular` ref to its own
+// `word/fonts/SourceSerif4-N.ttf` part. Word + Pages + Google Docs all
+// deduplicate by `w:name` at render time; the family name in styles.xml
+// resolves to whichever weight the run requests, with the renderer
+// synthesizing missing slots if needed. Bound for B3; the channel-embed
+// spec's literal JS shape (`family: 'roman', bold: true, ...`) is
+// aspirational against the docx 9.6.1 API — those fields aren't honored.
+//
+// `data` must be Buffer | Uint8Array (TS sig says Buffer, runtime accepts
+// Uint8Array per node's Buffer-extends-Uint8Array shape). We feed
+// Uint8Array views over the fetched ArrayBuffers — happy in both browser
+// (no Node Buffer) and node (Buffer is a Uint8Array subclass).
+interface FontEntryInput {
+  name: 'Source Serif 4';
+  data: Uint8Array;
+}
+
+/** Fetch the four SourceSerif4 TTFs in parallel and shape them into the
+ *  docx-library's `fonts: [...]` argument. Returns an empty array when
+ *  any fetch fails AND the Node fs fallback also fails — the resulting
+ *  .docx then falls back to the renderer's font-substitution (still
+ *  names "Source Serif 4" in styles.xml, so a reader with the face
+ *  installed locally still gets it).
+ *
+ *  The Node fs fallback covers the structural-check / tsx-script case:
+ *  `new URL(..., import.meta.url) + fetch()` works in browsers (Vite
+ *  rewrites the URL to a bundled asset), but in Node the URL points at
+ *  a `file://` and `fetch` may either reject (older Node) or return a
+ *  response whose `arrayBuffer()` is empty/zero-length (some
+ *  undici-on-node versions). Either way the script previously got
+ *  silently empty Uint8Arrays. The fallback reads the same four TTFs
+ *  off disk so the embedded-fonts contract holds in Node as well. */
+async function loadEmbeddedFonts(): Promise<FontEntryInput[]> {
+  // Browser / Vite path — fetch via Vite-rewritten URL.
+  try {
+    const [reg, italic, bold, boldItalic] = await Promise.all([
+      fetch(FONT_URLS.regular).then((r) => r.arrayBuffer()),
+      fetch(FONT_URLS.italic).then((r) => r.arrayBuffer()),
+      fetch(FONT_URLS.bold).then((r) => r.arrayBuffer()),
+      fetch(FONT_URLS.boldItalic).then((r) => r.arrayBuffer()),
+    ]);
+    // Guard against undici's "file:// fetch returns empty body" quirk:
+    // if every buffer is zero bytes, treat as failure and try the fs path.
+    if (reg.byteLength > 0 && italic.byteLength > 0 && bold.byteLength > 0 && boldItalic.byteLength > 0) {
+      return [
+        { name: 'Source Serif 4', data: new Uint8Array(reg) },
+        { name: 'Source Serif 4', data: new Uint8Array(italic) },
+        { name: 'Source Serif 4', data: new Uint8Array(bold) },
+        { name: 'Source Serif 4', data: new Uint8Array(boldItalic) },
+      ];
+    }
+  } catch {
+    /* fall through to Node fs path */
+  }
+  // Node path — read from disk relative to this module's source URL.
+  // Guarded by `typeof window` so this branch is dead-code in browser
+  // bundles (Vite tree-shakes `fs` away when `window !== undefined`).
+  if (typeof window === 'undefined') {
+    try {
+      const { readFileSync } = await import('node:fs');
+      const { fileURLToPath } = await import('node:url');
+      const read = (u: URL): Uint8Array => new Uint8Array(readFileSync(fileURLToPath(u)));
+      return [
+        { name: 'Source Serif 4', data: read(FONT_URLS.regular) },
+        { name: 'Source Serif 4', data: read(FONT_URLS.italic) },
+        { name: 'Source Serif 4', data: read(FONT_URLS.bold) },
+        { name: 'Source Serif 4', data: read(FONT_URLS.boldItalic) },
+      ];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 // docx's IRunOptions marks every field readonly; we build it incrementally
 // (collapsing nested marks one level at a time) so a writable shape is the
 // natural fit.
@@ -321,13 +428,17 @@ function paragraphsForCallout(b: CalloutBlock): Paragraph[] {
     color: 'auto',
     fill: tone.bg,
   };
+  // Callout paragraph spacing — spec §"Callout padding": 12pt vertical (240
+  // twips). after=0 keeps the spec's body-paragraph rule, line=372 mirrors
+  // body line-height. The 16pt horizontal padding lives on the indent
+  // (320 twips ≈ 16pt × 20).
   const calloutSpacing = {
-    before: 200,
-    after: 200,
-    line: 360,
+    before: 240,
+    after: 0,
+    line: 372,
     lineRule: LineRuleType.AUTO,
   };
-  const calloutIndent = { left: 360, right: 360 };
+  const calloutIndent = { left: 320, right: 320 };
   // Emit title + body as ONE paragraph with a soft break (<w:br/>) between
   // them. The prior "two paragraphs joined by border.between" approach
   // worked in Word/Pages but Google Docs collapses such joined paragraphs
@@ -413,12 +524,14 @@ function tableForCode(b: CodeBlock): Table {
 }
 
 function paragraphForDivider(_b: DividerBlock): Paragraph {
-  // 28px × 20 = 560 twips above and below — matches paper.css's <hr>
-  // vertical rhythm. Hairline (size=4 eighths = 0.5pt) warm-stone rule.
+  // Divider — spec §"Divider": 0.75pt warm-stone rule. OOXML border size
+  // is in eighths of a point, so 6 = 6/8 pt = 0.75pt. Vertical rhythm
+  // matches body-paragraph "before" (240 twips = 12pt) — one paragraph
+  // of breathing room above + below the hairline.
   return new Paragraph({
-    spacing: { before: 560, after: 560 },
+    spacing: { before: 240, after: 0 },
     border: {
-      bottom: { style: BorderStyle.SINGLE, size: 4, space: 1, color: 'D8D1BF' },
+      bottom: { style: BorderStyle.SINGLE, size: 6, space: 1, color: 'D8D1BF' },
     },
     children: [],
   });
@@ -482,7 +595,7 @@ function paragraphForAction(b: ActionBlock): Paragraph {
             style: 'Hyperlink',
             color: 'A23925',
             underline: { type: UnderlineType.SINGLE, color: 'A23925' },
-            font: 'Georgia',
+            font: 'Source Serif 4',
           }),
         ],
       }),
@@ -840,9 +953,12 @@ interface SeedStyle {
 
 function seed(s: SeedStyle): IParagraphStyleOptions {
   const runBlock: Record<string, unknown> = {
-    // Georgia matches the editor's serif fallback. Iowan Old Style is
-    // Apple-only, so the .docx ships Georgia (universally installed).
-    font: s.font ?? 'Georgia',
+    // Source Serif 4 is the editor's prose face — embedded into the .docx
+    // via `Document({ fonts: [...] })` so Word / Pages / Google Docs all
+    // render the same serif on first open, no system-font lottery.
+    // (Georgia + Times Roman remain the reader-fallback chain in styles.xml
+    // via the bound channel-embed spec; this `font` field is the primary.)
+    font: s.font ?? 'Source Serif 4',
     size: s.sizeHalfPoints ?? 22,
     bold: s.bold === true,
     italics: s.italics === true,
@@ -858,11 +974,13 @@ function seed(s: SeedStyle): IParagraphStyleOptions {
     run: runBlock,
     paragraph: {
       indent: s.indentLeftTwips !== undefined ? { left: s.indentLeftTwips } : undefined,
-      // 1.6 line-height (line=384, 240×1.6) feels like the editor.
+      // line=372 (240 × 1.55) — body line-height from the spacing-translation
+      // spec. Every variant paragraph inherits the same line-box height so
+      // callouts, code, sections, and block-quotes all share the body rhythm.
       spacing: {
         before: s.spaceBefore ?? 0,
-        after: s.spaceAfter ?? 120,
-        line: 384,
+        after: s.spaceAfter ?? 0,
+        line: 372,
         lineRule: LineRuleType.AUTO,
       },
     },
@@ -880,7 +998,7 @@ function seed(s: SeedStyle): IParagraphStyleOptions {
 function buildVariantStyles() {
   const styles: ReturnType<typeof seed>[] = [];
 
-  // Callouts (10 rows): tone × emphasis. Runs stay Georgia-on-paper-ink;
+  // Callouts (10 rows): tone × emphasis. Runs stay Source-Serif-4-on-paper-ink;
   // the tone color lives on the left border (set inline on each callout
   // paragraph in paragraphsForCallout, not on the style row).
   //
@@ -919,7 +1037,7 @@ function buildVariantStyles() {
           uiPriority: meta.uiPriority,
           quickFormat: meta.quickFormat,
           unhideWhenUsed: meta.unhideWhenUsed,
-          font: 'Georgia',
+          font: 'Source Serif 4',
           color: '1F1A14',
           bold: emphasis === 'bold',
           indentLeftTwips: 360,
@@ -1039,10 +1157,15 @@ const numberingConfig = {
           text: '•',
           alignment: AlignmentType.LEFT,
           style: {
-            run: { font: { name: 'Georgia' } },
+            run: { font: { name: 'Source Serif 4' } },
             paragraph: {
               indent: { left: 360, hanging: 200 },
-              spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
+              // List-item DOCX override from spec §"List spacing":
+              // before = 60 twips (3pt — Word's tighter default for paragraphs
+              // inside a list). Editor + EPUB + HTML use 4pt (60 twips ≈ 3pt
+              // is the closest natural Word match), pdfmake uses 4pt verbatim.
+              // line = 372 inherits body line-height (1.55).
+              spacing: { before: 60, after: 0, line: 372, lineRule: LineRuleType.AUTO },
             },
           },
         },
@@ -1052,10 +1175,10 @@ const numberingConfig = {
           text: '•',
           alignment: AlignmentType.LEFT,
           style: {
-            run: { font: { name: 'Georgia' } },
+            run: { font: { name: 'Source Serif 4' } },
             paragraph: {
               indent: { left: 720, hanging: 200 },
-              spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
+              spacing: { before: 60, after: 0, line: 372, lineRule: LineRuleType.AUTO },
             },
           },
         },
@@ -1065,10 +1188,10 @@ const numberingConfig = {
           text: '•',
           alignment: AlignmentType.LEFT,
           style: {
-            run: { font: { name: 'Georgia' } },
+            run: { font: { name: 'Source Serif 4' } },
             paragraph: {
               indent: { left: 1080, hanging: 200 },
-              spacing: { after: 80, line: 276, lineRule: LineRuleType.AUTO },
+              spacing: { before: 60, after: 0, line: 372, lineRule: LineRuleType.AUTO },
             },
           },
         },
@@ -1121,6 +1244,14 @@ export async function toDocxBlob(
   const language = options?.language ?? 'en-US';
   const children: TopChild[] = [];
 
+  // Kick off the font fetch in parallel with the image-resolve pre-pass —
+  // both feed into the single `new Document({...})` call below. The .docx
+  // ships with four `word/fonts/SourceSerif4-*.ttf` parts and a matching
+  // `word/fontTable.xml` so the embedded faces survive across renderers.
+  // On fetch failure (happy-dom tests, offline build sandboxes) the array
+  // is empty and the .docx falls back to system Source Serif 4 / Georgia.
+  const embeddedFonts = await loadEmbeddedFonts();
+
   // Pre-resolve every image block in one async pass so walkBlock can stay
   // synchronous. Each src maps to a ResolvedImage (bytes + format + sniffed
   // natural dims) or null when the fetch/decode failed — the null case is
@@ -1148,6 +1279,20 @@ export async function toDocxBlob(
     // preferences. No OOXML setting forces this; a header-shape hack works but
     // costs cross-app fidelity. Document the limitation; don't fight it.
     background: { color: 'FBFAF6' },
+    // Source Serif 4 — four weights, all embedded. dolanmiu/docx writes both
+    // `word/fonts/SourceSerif4-*.ttf` (binary parts inside the .docx ZIP) and
+    // `word/fontTable.xml` (with <w:embedRegular> + <w:embedItalic> +
+    // <w:embedBold> + <w:embedBoldItalic> r:id refs) when this option is
+    // present. The empty-array path is the test/offline fallback — styles
+    // still name "Source Serif 4" so a reader with the face installed
+    // locally still picks it up.
+    // FontOptions.data is typed as Node Buffer; the runtime accepts any
+    // Uint8Array (the library's JSZip pass calls .slice/.length only). We
+    // cast structurally — Buffer is a Uint8Array subclass, so the actual
+    // shape is compatible even when the @types/node Buffer isn't in scope.
+    ...(embeddedFonts.length > 0
+      ? { fonts: embeddedFonts as unknown as readonly { name: string; data: Buffer }[] }
+      : {}),
     styles: {
       default: {
         document: {
@@ -1155,72 +1300,77 @@ export async function toDocxBlob(
           // pass. Without it, Word falls back to OS locale and Google Docs
           // assumes en-US — both produce inconsistent UX across users.
           run: {
-            font: 'Georgia',
-            size: 22, // 11pt
+            // Embedded via Document({ fonts: [...] }) — see
+            // loadEmbeddedFonts(). styles.xml refers to the family by name
+            // ("Source Serif 4"); the four `word/fonts/*.ttf` parts ride
+            // along in the .docx ZIP so opening in Word / Pages / Google
+            // Docs uses the embedded face directly.
+            font: 'Source Serif 4',
+            size: 22, // 11pt — half-points per OOXML
             color: '1F1A14',
             language: { value: language },
           },
           paragraph: {
-            // 330 twips after — matches paper.css's 22px paragraph margin
-            // (22 × 15 = 330). Previously 120 (too tight).
-            spacing: { line: 384, lineRule: LineRuleType.AUTO, after: 330 },
+            // Body paragraph rhythm locked by the spacing-translation
+            // spec (~/docs/paperflow/specs/2026-05-20-spacing-translation.html):
+            // before = 240 twips (12pt), after = 0, line = 372 twips
+            // (= 240 × 1.55 — absolute line-box height in twentieths of a pt).
+            // Same numbers flow into paper.css (12pt / 1.55), toEpub.ts
+            // (margin-top:12pt; line-height:1.55), toHtml.ts (inline CSS
+            // matching toEpub), and toPdf.ts (margin:[0,12,0,0]; lineHeight:1.55).
+            spacing: { before: 240, after: 0, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
-        // Heading sizes + spacings follow paper.css's scale (px × 15 = twips).
-        // OOXML's run.size is half-points (24pt → 48).
-        //
-        // Verified 2026-05-20 against apps/editor/src/styles/paper.css against
-        // --paper-font-size-h1..h3 + h4..h6 explicit px values, all within 0 hp
-        // tolerance — DO NOT tune these blindly off a composite-thumbnail
-        // visual diff. The conversion ladder is:
-        //   h1 32px → 48 hp (24pt), margin 0/14px → 0/210 twips
-        //   h2 24px → 36 hp (18pt), margin 38/14px → 570/210 twips
-        //   h3 20px → 30 hp (15pt), margin 28/10px → 420/150 twips
-        //   h4 18px → 27 hp (13.5pt), margin 22/8px → 330/120 twips
-        //   h5 16px → 24 hp (12pt), margin 18/6px → 270/90 twips
-        //   h6 14px → 21 hp (10.5pt), margin 14/4px → 210/60 twips
-        // If a future audit claims an H1 mismatch, re-derive from paper.css
-        // first; the px×1.5 = hp / px×15 = twips identity is exact.
+        // Heading sizes + spacings come from the spec table §"Heading
+        // spacing". OOXML run.size is half-points (28pt → 56). Top + bottom
+        // margins are spec-locked twips — the same numbers travel into
+        // paper.css, toEpub, toHtml, and toPdf:
+        //   H1 28pt size=56  before 480 / after 120  (24pt / 6pt)
+        //   H2 22pt size=44  before 360 / after 80   (18pt / 4pt)
+        //   H3 18pt size=36  before 240 / after 40   (12pt / 2pt)
+        // H4..H6 step down from H3 in the same rhythm so deep outlines
+        // stay readable without overpowering body text. The body line-height
+        // (1.55 → line=372) carries through every heading too.
         heading1: {
-          run: { font: 'Georgia', size: 48, bold: true, color: '1F1A14' },
+          run: { font: 'Source Serif 4', size: 56, bold: true, color: '1F1A14' },
           paragraph: {
-            spacing: { before: 0, after: 210, line: 384, lineRule: LineRuleType.AUTO },
+            spacing: { before: 480, after: 120, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
         heading2: {
-          run: { font: 'Georgia', size: 36, bold: true, color: '1F1A14' },
+          run: { font: 'Source Serif 4', size: 44, bold: true, color: '1F1A14' },
           paragraph: {
-            spacing: { before: 570, after: 210, line: 384, lineRule: LineRuleType.AUTO },
+            spacing: { before: 360, after: 80, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
         heading3: {
-          run: { font: 'Georgia', size: 30, bold: true, color: '1F1A14' },
+          run: { font: 'Source Serif 4', size: 36, bold: true, color: '1F1A14' },
           paragraph: {
-            spacing: { before: 420, after: 150, line: 384, lineRule: LineRuleType.AUTO },
+            spacing: { before: 240, after: 40, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
         heading4: {
-          run: { font: 'Georgia', size: 27, bold: true, color: '1F1A14' },
+          run: { font: 'Source Serif 4', size: 26, bold: true, color: '1F1A14' },
           paragraph: {
-            spacing: { before: 330, after: 120, line: 384, lineRule: LineRuleType.AUTO },
+            spacing: { before: 200, after: 40, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
         heading5: {
-          run: { font: 'Georgia', size: 24, bold: true, color: '1F1A14' },
+          run: { font: 'Source Serif 4', size: 24, bold: true, color: '1F1A14' },
           paragraph: {
-            spacing: { before: 270, after: 90, line: 384, lineRule: LineRuleType.AUTO },
+            spacing: { before: 160, after: 40, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
         heading6: {
-          run: { font: 'Georgia', size: 21, bold: true, color: '1F1A14' },
+          run: { font: 'Source Serif 4', size: 22, bold: true, color: '1F1A14' },
           paragraph: {
-            spacing: { before: 210, after: 60, line: 384, lineRule: LineRuleType.AUTO },
+            spacing: { before: 160, after: 40, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
         title: {
-          run: { font: 'Georgia', size: 56, bold: true, color: '1F1A14' },
+          run: { font: 'Source Serif 4', size: 56, bold: true, color: '1F1A14' },
           paragraph: {
-            spacing: { before: 0, after: 360, line: 384, lineRule: LineRuleType.AUTO },
+            spacing: { before: 0, after: 120, line: 372, lineRule: LineRuleType.AUTO },
           },
         },
       },

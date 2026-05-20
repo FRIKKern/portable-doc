@@ -1,0 +1,10 @@
+Source Serif 4 — vendored from Adobe (adobe-fonts/source-serif, release branch).
+
+Files (named to match spec 2026-05-20-font-bundle-spec.html):
+  SourceSerif4-Regular.ttf       (Adobe upstream: SourceSerif4-Regular.ttf)
+  SourceSerif4-Italic.ttf        (Adobe upstream: SourceSerif4-It.ttf — renamed locally)
+  SourceSerif4-Bold.ttf          (Adobe upstream: SourceSerif4-Bold.ttf)
+  SourceSerif4-BoldItalic.ttf    (Adobe upstream: SourceSerif4-BoldIt.ttf — renamed locally)
+
+License: SIL Open Font License 1.1 (see LICENSE.txt)
+Source: https://github.com/adobe-fonts/source-serif

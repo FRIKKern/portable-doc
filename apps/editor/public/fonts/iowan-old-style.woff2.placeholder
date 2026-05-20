@@ -1,5 +1,0 @@
-v0.4 typography pre-flight T1 — placeholder for the self-hosted Iowan Old Style WOFF2 fallback.
-
-The real file is not committed because Iowan Old Style is a licensed typeface (Bigelow & Holmes / Monotype). See README.md in this directory for the two acceptable paths to obtain the WOFF2 before v0.4.0 ships.
-
-`font-display: optional` means the @font-face block in paper.css will silently fail when this file is absent and fall through to the system serif stack — Mac users see Iowan from the OS, everyone else sees Constantia/Charter/Georgia. The placeholder exists only so the directory layout is reproducible from a fresh clone.
