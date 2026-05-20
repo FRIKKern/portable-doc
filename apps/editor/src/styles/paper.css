@@ -2111,8 +2111,19 @@
   /* Force the same dark as the panel itself — `background: transparent`
    * relied on the parent showing through, but some browsers paint a
    * default <pre> bg and any nested wrapper anser emits can break the
-   * inheritance. Setting #1a1a1a explicitly removes the uncertainty. */
-  background: #1a1a1a;
+   * inheritance. Setting #1a1a1a explicitly + !important removes the
+   * uncertainty against any inline-style or specificity surprise. */
+  background: #1a1a1a !important;
+}
+/* Belt and suspenders: every descendant inside the body inherits the
+ * dark surface — no element can paint its own bg over us. Combined
+ * with the runtime regex scrub of inline `background:` declarations,
+ * the terminal panel reads light-on-dark regardless of what anser /
+ * backend-ink emit. */
+.paper-ink-preview__body *,
+.paper-ink-preview pre,
+.paper-ink-preview pre * {
+  background: transparent !important;
 }
 .paper-ink-preview__body span {
   /* Defensive: anser truecolor branches inject inline `background-color`

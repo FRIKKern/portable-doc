@@ -68,12 +68,11 @@ export function InkPreviewPanel({
         // we style in paper.css; bold + italic + underline drop in as
         // `ansi-bold` etc. on the same spans.
         const raw = Anser.ansiToHtml(ansi, { use_classes: true });
-        // Defensive scrub: strip any inline background-color anser emitted
-        // (truecolor bg codes from backend-ink survive use_classes by going
-        // through anser's inline-style fallback). Our dark surface MUST
-        // show through — !important CSS isn't enough when the inline style
-        // sources from a different shadow tree or load-order quirk.
-        const converted = raw.replace(/background-color:[^;"]+;?/gi, '');
+        // Defensive scrub: strip ANY inline `background` declaration anser
+        // emitted (truecolor bg codes from backend-ink survive use_classes
+        // by going through anser's inline-style fallback). Both shorthand
+        // `background:` and longhand `background-color:` get scrubbed.
+        const converted = raw.replace(/background(-color)?:[^;"]*;?/gi, '');
         if (cancelled) return;
         setHtml(converted);
         setStatus('ready');
