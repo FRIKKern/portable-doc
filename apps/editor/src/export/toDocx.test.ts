@@ -400,6 +400,84 @@ describe('toDocxBlob — divider styling', () => {
   });
 });
 
+describe('toDocxBlob — table header row + empty-cell guard', () => {
+  it('marks the first row with tableHeader and wraps header runs in bold', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [
+        {
+          id: 't1',
+          type: 'table', surfaces: ['web','native'] as const,
+          rows: [
+            [
+              [{ type: 'text', value: 'A' }],
+              [{ type: 'text', value: 'B' }],
+            ],
+            [
+              [{ type: 'text', value: '1' }],
+              [{ type: 'text', value: '2' }],
+            ],
+          ],
+        },
+      ],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+
+    // Find every <w:tr>…</w:tr> in document order.
+    const rows = documentXml.match(/<w:tr\b[\s\S]*?<\/w:tr>/g);
+    expect(rows).not.toBeNull();
+    expect(rows!.length).toBeGreaterThanOrEqual(2);
+
+    // First row carries an active <w:tblHeader/> (typically nested under
+    // <w:trPr>). The docx serializer emits a self-closing tag with no val,
+    // or w:val="true"/"1" — never w:val="false" on the header row.
+    const firstHeader = rows![0].match(/<w:tblHeader\b[^/>]*\/?>/);
+    expect(firstHeader).not.toBeNull();
+    expect(firstHeader![0]).not.toMatch(/w:val="(false|0)"/);
+    // First row's runs include bold.
+    const firstRow = rows![0];
+    const secondRow = rows![1];
+    if (!firstRow || !secondRow) throw new Error('expected ≥2 rows');
+    expect(firstRow).toMatch(/<w:b\b/);
+    const secondHeader = secondRow.match(/<w:tblHeader\b[^/>]*\/?>/);
+    if (secondHeader) {
+      expect(secondHeader[0]).toMatch(/w:val="(false|0)"/);
+    }
+  });
+
+  it('emits at least one <w:p> in every <w:tc>, even for empty cells', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      blocks: [
+        {
+          id: 't1',
+          type: 'table', surfaces: ['web','native'] as const,
+          rows: [
+            [
+              [],
+              [{ type: 'text', value: 'filled' }],
+            ],
+          ],
+        },
+      ],
+    };
+    const blob = await toDocxBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+
+    const cells = documentXml.match(/<w:tc\b[\s\S]*?<\/w:tc>/g);
+    expect(cells).not.toBeNull();
+    expect(cells!.length).toBeGreaterThanOrEqual(2);
+    for (const cell of cells!) {
+      // Every table cell must contain at least one paragraph element —
+      // an empty <w:tc> is invalid OOXML and Word refuses to open it.
+      expect(cell).toMatch(/<w:p\b/);
+    }
+  });
+});
+
 describe('slug', () => {
   it('lowercases and replaces non-alphanum with -', () => {
     expect(slug('Hello World!')).toBe('hello-world');

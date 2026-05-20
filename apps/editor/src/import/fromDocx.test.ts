@@ -114,4 +114,153 @@ ${JSON.stringify({ version: 'not-semver', exporter: 'x' })}
     expect(envelope).not.toBeNull();
     expect(envelope!.ast).toEqual(original);
   });
+
+  it('returns null when docProps fallback fails sha256 verification', async () => {
+    // The fallback's tamper-detection branch is otherwise untested. Corrupt
+    // a single character in the middle of the papir-ast-3 chunk so the
+    // recomputed digest mismatches the stored sha. We also strip
+    // customXml/item1.xml so the importer is FORCED down the docProps path
+    // (otherwise the primary succeeds and the sha branch never runs).
+    const original: PortableDoc = {
+      version: 1,
+      title: 'Tamper-detection probe',
+      blocks: [
+        { id: 'h1', type: 'heading', level: 2, text: 'Header' },
+        {
+          id: 'p1',
+          type: 'paragraph',
+          // Enough text to guarantee at least 3 base64 chunks of 240 chars.
+          content: [
+            {
+              type: 'text',
+              value: 'x'.repeat(2000),
+            },
+          ],
+        },
+      ],
+    };
+    const blob = await toDocxBlob(original);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    zip.remove('customXml/item1.xml');
+    const customXml = await zip.file('docProps/custom.xml')!.async('string');
+    // Locate papir-ast-3's vt:lpwstr value and flip one character in the
+    // middle. The regex captures the entire opening tag run + value so we
+    // can replace just the value's middle character.
+    const re = /(<property[^>]*name="papir-ast-3"[^>]*><vt:lpwstr>)([^<]+)(<\/vt:lpwstr>)/;
+    const match = customXml.match(re);
+    if (!match) throw new Error('test fixture missing papir-ast-3 chunk');
+    const value = match[2]!;
+    const mid = Math.floor(value.length / 2);
+    // Flip 'A' <-> 'B' (both valid base64 chars) to keep the encoding
+    // shape but break the digest. Fall back to a different swap if the
+    // middle char happens not to be either.
+    const ch = value.charAt(mid);
+    const flipped = ch === 'A' ? 'B' : ch === 'B' ? 'A' : ch === '/' ? '+' : 'A';
+    const corruptedValue =
+      value.slice(0, mid) + flipped + value.slice(mid + 1);
+    const corruptedXml = customXml.replace(
+      re,
+      `$1${corruptedValue}$3`,
+    );
+    zip.file('docProps/custom.xml', corruptedXml);
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+    const envelope = await extractFromDocx(buf);
+    expect(envelope).toBeNull();
+  });
+
+  it('round-trips Unicode (emoji + Arabic + ZWJ family) byte-for-byte', async () => {
+    const greeting = 'Hello \u{1F44B} مرحبا بالعالم \u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466}';
+    const original: PortableDoc = {
+      version: 1,
+      title: 'Unicode round-trip',
+      blocks: [
+        {
+          id: 'p1',
+          type: 'paragraph',
+          content: [{ type: 'text', value: greeting }],
+        },
+      ],
+    };
+    const blob = await toDocxBlob(original);
+    const buf = await blob.arrayBuffer();
+    const envelope = await extractFromDocx(buf);
+    expect(envelope).not.toBeNull();
+    // envelope.ast is `unknown` at the schema level — narrow via the
+    // PortableDoc shape we authored.
+    const ast = envelope!.ast as PortableDoc;
+    const firstBlock = ast.blocks[0];
+    if (!firstBlock) throw new Error('expected ≥1 block');
+    expect(firstBlock.type).toBe('paragraph');
+    const firstInline =
+      firstBlock.type === 'paragraph' ? firstBlock.content[0] : null;
+    expect(firstInline).not.toBeNull();
+    if (!firstInline || firstInline.type !== 'text') {
+      throw new Error('expected first inline to be a text node');
+    }
+    // Byte-for-byte equality — emoji, Arabic, and the four-person ZWJ
+    // family all survive unchanged.
+    expect(firstInline.value).toBe(greeting);
+  });
+
+  // KNOWN ISSUE: toDocx wraps the envelope JSON in a single CDATA section.
+  // When the AST payload contains the literal `]]>` (e.g. a code block whose
+  // `value` includes raw XML/CDATA fragments), the embedded CDATA closes
+  // early and the customXml part becomes malformed — the primary extract
+  // path's CDATA regex either matches a truncated payload or fails to match
+  // at all. The docProps fallback (base64) is immune, but the customXml
+  // primary path is the one Word + Pages use. Fix is to split `]]>` across
+  // CDATA sections in toDocx (`]]]]><![CDATA[>`), tracked as a follow-up.
+  // Marked .skip until the toDocx-side fix lands.
+  it.skip('round-trips a code block whose value contains literal "]]>"', async () => {
+    const original: PortableDoc = {
+      version: 1,
+      title: 'CDATA escape probe',
+      blocks: [
+        {
+          id: 'c1',
+          type: 'code',
+          lang: 'xml',
+          value: '<![CDATA[ raw payload ]]> some xml after',
+        },
+      ],
+    };
+    const blob = await toDocxBlob(original);
+    const buf = await blob.arrayBuffer();
+    const envelope = await extractFromDocx(buf);
+    expect(envelope).not.toBeNull();
+    expect(envelope!.ast).toEqual(original);
+  });
+
+  it('round-trips deeply nested sections (depth 5)', async () => {
+    // Build a 5-deep section pyramid. Each level contains a heading + a
+    // paragraph plus the next-level section. The innermost section's
+    // `blocks` array is just heading + paragraph (no further nesting).
+    const buildSection = (depth: number): PortableDoc['blocks'][number] => {
+      const inner: PortableDoc['blocks'][number][] = [
+        { id: `h-${depth}`, type: 'heading', level: 3, text: `Heading at depth ${depth}` },
+        {
+          id: `p-${depth}`,
+          type: 'paragraph',
+          content: [{ type: 'text', value: `body text at depth ${depth}` }],
+        },
+      ];
+      if (depth < 5) inner.push(buildSection(depth + 1));
+      return {
+        id: `s-${depth}`,
+        type: 'section',
+        title: `Section ${depth}`,
+        blocks: inner,
+      };
+    };
+    const original: PortableDoc = {
+      version: 1,
+      title: 'Deep section nesting',
+      blocks: [buildSection(1)],
+    };
+    const blob = await toDocxBlob(original);
+    const buf = await blob.arrayBuffer();
+    const envelope = await extractFromDocx(buf);
+    expect(envelope).not.toBeNull();
+    expect(JSON.stringify(envelope!.ast)).toBe(JSON.stringify(original));
+  });
 });

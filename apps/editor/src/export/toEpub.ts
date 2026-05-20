@@ -391,12 +391,12 @@ h1, h2, h3, h4, h5, h6 {
   margin: 1.6em 0 0.6em;
   color: #1f1a14;
 }
-h1 { font-size: 2em; margin-top: 0.6em; }
-h2 { font-size: 1.5em; }
-h3 { font-size: 1.25em; }
-h4 { font-size: 1.1em; }
-h5 { font-size: 1em; }
-h6 { font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.04em; }
+h1 { font-size: 1.625em; margin-top: 0.6em; }
+h2 { font-size: 1.25em; }
+h3 { font-size: 1.125em; }
+h4 { font-size: 1em; }
+h5 { font-size: 0.95em; }
+h6 { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; }
 p {
   margin: 0 0 1em;
   /* Left-aligned ragged (no justify) — matches the editor. Justified text
@@ -460,6 +460,16 @@ aside.paper-callout-danger-subtle  { border-left-color: #b91c1c; background: #fe
 aside.paper-callout-danger-bold    { border-left-color: #b91c1c; background: #fef2f2; border-left-width: 6px; }
 aside.paper-callout-neutral-subtle { border-left-color: #374151; background: #f3f4f6; }
 aside.paper-callout-neutral-bold   { border-left-color: #374151; background: #f3f4f6; border-left-width: 6px; }
+aside.paper-callout-info-subtle .paper-callout__title,
+aside.paper-callout-info-bold .paper-callout__title { color: #1d4ed8; }
+aside.paper-callout-success-subtle .paper-callout__title,
+aside.paper-callout-success-bold .paper-callout__title { color: #047857; }
+aside.paper-callout-warning-subtle .paper-callout__title,
+aside.paper-callout-warning-bold .paper-callout__title { color: #92400e; }
+aside.paper-callout-danger-subtle .paper-callout__title,
+aside.paper-callout-danger-bold .paper-callout__title { color: #b91c1c; }
+aside.paper-callout-neutral-subtle .paper-callout__title,
+aside.paper-callout-neutral-bold .paper-callout__title { color: #374151; }
 /* Action blocks render as plain underlined warm-rust links — matches the
  * editor's link aesthetic. Previous filled-button styling made "Open
  * workspace" look like a Material button instead of a Papir link. */

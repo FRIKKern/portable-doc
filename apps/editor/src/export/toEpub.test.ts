@@ -173,4 +173,77 @@ describe('toEpubBlob', () => {
     const opf = await zip.file('OPS/package.opf')!.async('string');
     expect(opf).toContain('urn:uuid:11111111-2222-3333-4444-555555555555');
   });
+
+  // Depth-shifted heading level math: headingToXhtml computes the emitted
+  // tag as `b.level + min(depth, 2)` clamped to [1, 6]. A top-level H1
+  // stays H1; an H1 nested one section deep becomes H2; nested two deep
+  // becomes H3. Depth saturates at 2 so the bump cannot exceed +2 levels.
+  it('shifts heading levels by section nesting depth', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      title: 'Depth shifts',
+      blocks: [
+        // Top-level H1 — should emit as <h1>.
+        { id: 'top', type: 'heading', level: 1, text: 'Top' },
+        // One section deep — inner H1 should shift to <h2>.
+        {
+          id: 's1',
+          type: 'section',
+          blocks: [
+            { id: 'inner', type: 'heading', level: 1, text: 'Inner' },
+            // Section in section — inner-inner H1 should shift to <h3>.
+            {
+              id: 's2',
+              type: 'section',
+              blocks: [
+                { id: 'innermost', type: 'heading', level: 1, text: 'Innermost' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const blob = await toEpubBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const chapter = await zip.file('OPS/chapters/chapter-1.xhtml')!.async('string');
+    expect(chapter).toContain('<h1 id="top">Top</h1>');
+    expect(chapter).toContain('<h2 id="inner">Inner</h2>');
+    expect(chapter).toContain('<h3 id="innermost">Innermost</h3>');
+  });
+
+  // ncx.xml is EPUB 2 backwards-compat navigation — older readers still
+  // look for it even though EPUB 3 nav.xhtml is the canonical TOC. We
+  // assert the wrapping `<ncx>` root, the `<navMap>` block, and that at
+  // least one `<navPoint>` with `playOrder="1"` carries the first
+  // heading's text inside its `<text>` label.
+  it('writes OPS/ncx.xml with a navMap of navPoints for top-level headings', async () => {
+    const doc: PortableDoc = {
+      version: 1,
+      title: 'NCX shape',
+      blocks: [
+        { id: 'alpha', type: 'heading', level: 1, text: 'Alpha' },
+        { id: 'p1', type: 'paragraph', content: [{ type: 'text', value: 'a' }] },
+        { id: 'beta', type: 'heading', level: 1, text: 'Beta' },
+      ],
+    };
+    const blob = await toEpubBlob(doc);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const ncxEntry = zip.file('OPS/ncx.xml');
+    expect(ncxEntry).toBeTruthy();
+    const ncx = await ncxEntry!.async('string');
+    // Root element + namespace anchor.
+    expect(ncx).toContain('<ncx ');
+    expect(ncx).toContain('xmlns="http://www.daisy.org/z3986/2005/ncx/"');
+    // navMap container.
+    expect(ncx).toContain('<navMap>');
+    expect(ncx).toContain('</navMap>');
+    // First navPoint carries playOrder="1" and the first heading's text.
+    expect(ncx).toMatch(/<navPoint id="navpoint-1" playOrder="1">/);
+    // Pull out the first navPoint chunk and assert its <text> label.
+    const firstNavPoint = ncx.match(
+      /<navPoint id="navpoint-1"[\s\S]*?<\/navPoint>/,
+    );
+    expect(firstNavPoint).toBeTruthy();
+    expect(firstNavPoint![0]).toContain('<text>Alpha</text>');
+  });
 });

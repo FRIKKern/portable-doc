@@ -177,4 +177,20 @@ describe('PdfPreviewPanel', () => {
     fireEvent.click(screen.getByTestId('pdf-preview-close'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('revokes the minted blob URL on unmount', async () => {
+    const { unmount } = render(
+      <PdfPreviewPanel doc={docA} visible={true} />,
+    );
+    await flushDebounce();
+    // createObjectURL has minted exactly one URL and stashed it in state.
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const mintedUrl = createObjectURL.mock.results[0]?.value as string;
+    expect(mintedUrl).toMatch(/^blob:mock-pdf-/);
+    // Cleanup branch: unmount must revoke the stashed URL so the underlying
+    // Blob is not leaked across an editing session.
+    expect(revokeObjectURL).not.toHaveBeenCalledWith(mintedUrl);
+    unmount();
+    expect(revokeObjectURL).toHaveBeenCalledWith(mintedUrl);
+  });
 });

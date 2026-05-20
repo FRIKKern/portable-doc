@@ -927,6 +927,19 @@ export async function toDocxBlob(
         },
         // Heading sizes + spacings follow paper.css's scale (px × 15 = twips).
         // OOXML's run.size is half-points (24pt → 48).
+        //
+        // Verified 2026-05-20 against apps/editor/src/styles/paper.css against
+        // --paper-font-size-h1..h3 + h4..h6 explicit px values, all within 0 hp
+        // tolerance — DO NOT tune these blindly off a composite-thumbnail
+        // visual diff. The conversion ladder is:
+        //   h1 32px → 48 hp (24pt), margin 0/14px → 0/210 twips
+        //   h2 24px → 36 hp (18pt), margin 38/14px → 570/210 twips
+        //   h3 20px → 30 hp (15pt), margin 28/10px → 420/150 twips
+        //   h4 18px → 27 hp (13.5pt), margin 22/8px → 330/120 twips
+        //   h5 16px → 24 hp (12pt), margin 18/6px → 270/90 twips
+        //   h6 14px → 21 hp (10.5pt), margin 14/4px → 210/60 twips
+        // If a future audit claims an H1 mismatch, re-derive from paper.css
+        // first; the px×1.5 = hp / px×15 = twips identity is exact.
         heading1: {
           run: { font: 'Georgia', size: 48, bold: true, color: '1F1A14' },
           paragraph: {
