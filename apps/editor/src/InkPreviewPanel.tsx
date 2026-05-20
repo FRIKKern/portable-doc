@@ -67,7 +67,13 @@ export function InkPreviewPanel({
         // anser's class-mapped output uses `ansi-<name>-fg/bg` class names
         // we style in paper.css; bold + italic + underline drop in as
         // `ansi-bold` etc. on the same spans.
-        const converted = Anser.ansiToHtml(ansi, { use_classes: true });
+        const raw = Anser.ansiToHtml(ansi, { use_classes: true });
+        // Defensive scrub: strip any inline background-color anser emitted
+        // (truecolor bg codes from backend-ink survive use_classes by going
+        // through anser's inline-style fallback). Our dark surface MUST
+        // show through — !important CSS isn't enough when the inline style
+        // sources from a different shadow tree or load-order quirk.
+        const converted = raw.replace(/background-color:[^;"]+;?/gi, '');
         if (cancelled) return;
         setHtml(converted);
         setStatus('ready');

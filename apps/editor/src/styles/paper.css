@@ -2108,10 +2108,11 @@
   white-space: pre;
   margin: 0;
   color: #e5e7eb;
-  /* Win against browser <pre> defaults (Chrome/Safari paint a faint
-   * bg on <pre> in some user agents) and any leftover inline styles
-   * anser may attach. */
-  background: transparent;
+  /* Force the same dark as the panel itself — `background: transparent`
+   * relied on the parent showing through, but some browsers paint a
+   * default <pre> bg and any nested wrapper anser emits can break the
+   * inheritance. Setting #1a1a1a explicitly removes the uncertainty. */
+  background: #1a1a1a;
 }
 .paper-ink-preview__body span {
   /* Defensive: anser truecolor branches inject inline `background-color`
