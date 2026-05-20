@@ -22,6 +22,7 @@ import {
 import type { Block, InlineNode, PortableDoc } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
 import { toDocxBlob } from './export/toDocx.js';
+import { toEpubBlob } from './export/toEpub.js';
 import { extractFromDocx } from './import/fromDocx.js';
 
 interface Props {
@@ -207,6 +208,12 @@ export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
     close();
   }, [doc, filenameBase, close]);
 
+  const onExportEpub = useCallback(async () => {
+    const blob = await toEpubBlob(doc);
+    downloadBlob(blob, `${filenameBase}.epub`);
+    close();
+  }, [doc, filenameBase, close]);
+
   const onExportHtml = useCallback(() => {
     const inner = editor ? editor.getHTML() : '';
     const html = buildHtmlDocument(title, inner);
@@ -290,6 +297,17 @@ export function ExportMenu({ doc, editor, onImport }: Props): JSX.Element {
             }}
           >
             Word (.docx)
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="paper-export-menu__item"
+            data-testid="footer-export-epub"
+            onClick={() => {
+              void onExportEpub();
+            }}
+          >
+            EPUB (.epub)
           </button>
           <button
             type="button"
