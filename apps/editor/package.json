@@ -46,6 +46,7 @@
     "anser": "^2.3.5",
     "docx": "^9.6.1",
     "docx-preview": "^0.3.7",
+    "epubjs": "^0.3.93",
     "jszip": "^3.10.1",
     "lowlight": "^3.3.0",
     "nanoid": "^3.3.12",

@@ -2157,6 +2157,94 @@
 .paper-ink-preview .ansi-underline { text-decoration: underline; }
 
 /* ===========================================================================
+ * EPUB preview panel — Book channel sibling of .paper-docx-preview.
+ *
+ * Same fixed-overlay region (top:60px, right:24px, width:820px) so only one
+ * channel is visible at a time. epub.js mounts its own iframe inside the
+ * body slot; we hand it a measurable flex region with no padding (padding
+ * here interferes with the renderer's iframe-size calculations). The
+ * bundled paper.css inside the .epub itself styles the body content.
+ * =========================================================================== */
+.paper-epub-preview {
+  position: fixed;
+  top: 60px;
+  right: 24px;
+  width: var(--paper-docx-preview-width);
+  max-height: calc(100vh - 120px);
+  height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-rule);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  z-index: 25;
+  padding: 0;
+  font-family: var(--paper-font-sans);
+  display: flex;
+  flex-direction: column;
+}
+.paper-epub-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--paper-rule);
+  background: var(--paper-bg);
+  flex: 0 0 auto;
+}
+.paper-epub-preview__title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+  font-weight: 600;
+}
+.paper-epub-preview__close {
+  background: transparent;
+  border: 0;
+  color: var(--paper-ink-faint);
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 160ms ease-out, background 160ms ease-out;
+}
+.paper-epub-preview__close:hover {
+  color: var(--paper-accent-warm-rust);
+  background: var(--paper-rule-soft);
+}
+.paper-epub-preview__close:focus-visible {
+  outline: 2px solid var(--paper-accent-warm-rust);
+  outline-offset: 2px;
+}
+.paper-epub-preview__loading,
+.paper-epub-preview__error {
+  padding: 24px 12px;
+  color: var(--paper-ink-faint);
+  font-size: 13px;
+  text-align: center;
+}
+.paper-epub-preview__error {
+  color: var(--paper-accent-warm-rust);
+}
+.paper-epub-preview__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+.paper-epub-preview__body iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0;
+  display: block;
+}
+
+/* ===========================================================================
  * Preview channel picker — chip + dropdown that replaces the v0.4 boolean
  * Preview toggle. Mirrors .paper-export-menu's shape (button + popover that
  * opens upward) so the two footer affordances look like siblings.

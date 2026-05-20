@@ -436,6 +436,35 @@ describe('FooterStatus — preview channel picker', () => {
     expect(setChannel).toHaveBeenCalledWith('ink');
   });
 
+  it('picking "EPUB" calls onSetPreviewChannel with "epub"', async () => {
+    probeMcp.mockResolvedValue(true);
+    const setChannel = vi.fn();
+    renderWithMcp(
+      <FooterStatus doc={validDoc} onSetPreviewChannel={setChannel} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-toggle'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('footer-preview-epub'));
+    });
+    expect(setChannel).toHaveBeenCalledWith('epub');
+  });
+
+  it('shows "Preview · EPUB" when channel=epub', () => {
+    probeMcp.mockResolvedValue(true);
+    renderWithMcp(
+      <FooterStatus
+        doc={validDoc}
+        previewChannel="epub"
+        onSetPreviewChannel={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('footer-preview-toggle').textContent).toContain(
+      'Preview · EPUB',
+    );
+  });
+
   it('picking "Off" calls onSetPreviewChannel with "off"', async () => {
     probeMcp.mockResolvedValue(true);
     const setChannel = vi.fn();

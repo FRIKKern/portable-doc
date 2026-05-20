@@ -38,7 +38,7 @@ import { useEditorState } from '@tiptap/react';
 import { useMcp } from './McpProvider.js';
 import { ExportMenu } from './ExportMenu.js';
 
-export type PreviewChannel = 'off' | 'docx' | 'ink';
+export type PreviewChannel = 'off' | 'docx' | 'ink' | 'epub';
 
 interface Props {
   doc: PortableDoc;
@@ -383,7 +383,9 @@ export function FooterStatus({
                 ? 'Pick preview channel'
                 : previewChannel === 'docx'
                   ? 'Preview channel: Word'
-                  : 'Preview channel: Terminal'
+                  : previewChannel === 'ink'
+                    ? 'Preview channel: Terminal'
+                    : 'Preview channel: EPUB'
             }
             onClick={() => setPreviewMenuOpen((v) => !v)}
           >
@@ -393,7 +395,9 @@ export function FooterStatus({
                 ? 'Preview'
                 : previewChannel === 'docx'
                   ? 'Preview · Word'
-                  : 'Preview · Terminal'}
+                  : previewChannel === 'ink'
+                    ? 'Preview · Terminal'
+                    : 'Preview · EPUB'}
             </span>
             <span aria-hidden="true">▾</span>
           </button>
@@ -433,6 +437,16 @@ export function FooterStatus({
                 onClick={() => pickChannel('ink')}
               >
                 Terminal (TUI)
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="paper-preview-menu__item"
+                data-testid="footer-preview-epub"
+                aria-checked={previewChannel === 'epub'}
+                onClick={() => pickChannel('epub')}
+              >
+                EPUB
               </button>
             </div>
           )}

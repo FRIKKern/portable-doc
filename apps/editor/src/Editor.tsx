@@ -46,8 +46,9 @@ import { MarginDiagnostics } from './MarginDiagnostics.js';
 import { FloatingBlockChrome } from './FloatingBlockChrome.js';
 import { DocxPreviewPanel } from './DocxPreviewPanel.js';
 import { InkPreviewPanel } from './InkPreviewPanel.js';
+import { EpubPreviewPanel } from './EpubPreviewPanel.js';
 
-export type PreviewChannel = 'off' | 'docx' | 'ink';
+export type PreviewChannel = 'off' | 'docx' | 'ink' | 'epub';
 
 interface EditorProps {
   /** PortableDoc rendered into the editor. Re-syncs via `setContent`
@@ -314,6 +315,11 @@ export function Editor({
       <InkPreviewPanel
         doc={doc}
         visible={previewChannel === 'ink'}
+        onClose={onSetPreviewChannel ? () => onSetPreviewChannel('off') : undefined}
+      />
+      <EpubPreviewPanel
+        doc={doc}
+        visible={previewChannel === 'epub'}
         onClose={onSetPreviewChannel ? () => onSetPreviewChannel('off') : undefined}
       />
       {/* CW5 — single floating chrome cluster that tracks the currently-
