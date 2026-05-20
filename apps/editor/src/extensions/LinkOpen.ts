@@ -21,7 +21,10 @@ export interface LinkOpenStorage {
  *  is `Record<string, any>`, so a helper is cheaper than module
  *  augmentation for a single private storage slot. */
 export function linkOpenStorage(editor: Editor): LinkOpenStorage {
-  return (editor.storage as unknown as Record<string, LinkOpenStorage>)
+  // addStorage() below guarantees the slot exists, so a typed view with
+  // a present key (not Record<string,T> which strictNullChecks treats as
+  // possibly-undefined) is the safe shape.
+  return (editor.storage as unknown as { linkOpen: LinkOpenStorage })
     .linkOpen;
 }
 

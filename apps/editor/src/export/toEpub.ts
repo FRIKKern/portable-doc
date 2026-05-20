@@ -399,8 +399,10 @@ h5 { font-size: 1em; }
 h6 { font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.04em; }
 p {
   margin: 0 0 1em;
-  text-align: justify;
-  hyphens: auto;
+  /* Left-aligned ragged (no justify) — matches the editor. Justified text
+   * with hyphenation creates wavy word-spacing that diverges from the
+   * editor's straight left edge + tight rhythm. */
+  text-align: left;
 }
 a {
   color: #a23925;

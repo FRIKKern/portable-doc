@@ -59,7 +59,10 @@ export function InkPreviewPanel({
         // hyperlinks: false suppresses OSC 8 escape codes; anser doesn't
         // translate them so the raw `\x1b]8;;URL` sequences would leak.
         const ansi = renderInk(composeDocument(doc), {
-          colorDepth: 'ansi16',
+          // backend-ink's ColorDepth union is '16' | '256' | 'truecolor' | 'mono'.
+          // '16' is the 16 named ANSI colors path — anser maps them to .ansi-*-fg
+          // classes we style ourselves.
+          colorDepth: '16',
           hyperlinks: false,
           env: {},
         });

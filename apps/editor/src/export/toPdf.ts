@@ -285,11 +285,15 @@ function paragraphNode(b: ParagraphBlock): PdfNode {
 }
 
 function listNode(b: ListBlock): PdfNode {
+  // Tight bullet column — match the editor's compact list rhythm.
+  // line-height 1.3 (down from 1.4) + 2pt bottom margin per item kills
+  // the airy default pdfmake list spacing that diverged from editor.
   const items = b.items.map((item) => ({
     text: inlineToRuns(item),
     fontSize: FONT_BODY,
     color: INK,
-    lineHeight: 1.4,
+    lineHeight: 1.3,
+    margin: [0, 0, 0, 2] as [number, number, number, number],
   }));
   return b.ordered === true
     ? { ol: items, margin: [0, 0, 0, 8] }
@@ -385,11 +389,13 @@ function dividerNode(_b: DividerBlock): PdfNode {
         y1: 4,
         x2: 515, // ~A4 width − 2 × 22mm margins, in PDF points
         y2: 4,
-        lineWidth: 0.5,
+        // 0.75pt is more visible against the cream bg than 0.5pt
+        // (a hairline at 0.5pt nearly vanishes at typical viewing zoom)
+        lineWidth: 0.75,
         lineColor: RULE_HAIRLINE,
       },
     ],
-    margin: [0, 6, 0, 14],
+    margin: [0, 4, 0, 14],
   };
 }
 

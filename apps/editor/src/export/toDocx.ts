@@ -332,7 +332,10 @@ function paragraphsForCallout(b: CalloutBlock): Paragraph[] {
   // and body always sit on separate visual lines, regardless of importer.
   const children: ParagraphChild[] = [];
   if (b.title) {
-    children.push(new TextRun({ text: b.title, bold: true, color: tone.border }));
+    // Title color is INK (#1F1A14) not the tone border — editor renders
+    // callout titles in body-color bold, not tinted. Tone color stays on
+    // the left border + subtle bg, which is plenty signal.
+    children.push(new TextRun({ text: b.title, bold: true, color: '1F1A14' }));
     children.push(new TextRun({ break: 1 }));
   }
   children.push(...inlineToRuns(b.content));
