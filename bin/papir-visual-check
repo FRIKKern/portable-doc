@@ -4,16 +4,27 @@
 # Word/Pages/Docs output. See docs/visual-fidelity-workflow.md.
 set -euo pipefail
 
-QUIET=0; FIXTURE=""
+QUIET=0; FIXTURE=""; ALL_CHANNELS=0
 for arg in "$@"; do
   case "$arg" in
     --quiet) QUIET=1 ;;
-    -h|--help) echo "usage: bin/papir-visual-check [fixture.json] [--quiet]"; exit 0 ;;
+    --all-channels) ALL_CHANNELS=1 ;;
+    -h|--help) echo "usage: bin/papir-visual-check [fixture.json] [--quiet] [--all-channels]"; exit 0 ;;
     *) FIXTURE="$arg" ;;
   esac
 done
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Multi-channel path delegates to the TS orchestrator. The docx-only legacy
+# path below stays as the default for back-compat with existing agent loops.
+if [ "$ALL_CHANNELS" = "1" ]; then
+  ARGS=()
+  [ -n "$FIXTURE" ] && ARGS+=("$FIXTURE")
+  ARGS+=("--all-channels")
+  [ "$QUIET" = "1" ] && ARGS+=("--quiet")
+  exec npx tsx "$ROOT/apps/editor/scripts/visual-check.ts" "${ARGS[@]}"
+fi
 [ -z "$FIXTURE" ] && FIXTURE="$ROOT/examples/welcome.json"
 if [ ! -f "$FIXTURE" ]; then
   echo "fixture not found: $FIXTURE" >&2

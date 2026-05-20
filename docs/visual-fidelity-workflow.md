@@ -97,19 +97,111 @@ roadmap — agents can branch on `tools_available.playwright` later.
 4. Make the smallest change that closes the gap; re-run; repeat.
 5. When it lands, commit and move to the next fixture.
 
-## Phase 2 roadmap (not yet implemented)
+## Multi-channel agent loop (`--all-channels`)
 
-- **Editor screenshot** — Playwright drives the dev server, navigates to
-  the fixture, captures `apps/editor`'s rendered DOM at the same DPI as
-  the PDF PNG. Lands in `artifacts.editor_png`.
-- **Pixel diff** — `pixelmatch` (or ImageMagick `compare -metric AE`)
-  produces a per-pixel delta image plus a normalized score; lands in
-  `artifacts.side_by_side_png` and `artifacts.diff_score`.
-- **CI gate** — hook the pipeline into `pnpm test` for a small set of
-  golden fixtures, fail the build on score regressions beyond a budget.
+Phase 2 of this pipeline is live. One command renders all three output
+channels plus the editor truth and pixel-diffs them in one shot:
 
-Tools needed: `playwright`, `pixelmatch`, `pngjs`. Add as devDeps in a
-follow-up task; do not pull them in for v1.
+```bash
+pnpm visual-check --all-channels --quiet | jq .
+```
+
+Or, via the bash wrapper directly (no `pnpm run` preamble polluting
+stdout — recommended for agent jq parsing):
+
+```bash
+bin/papir-visual-check --all-channels --quiet | jq .
+```
+
+What it does:
+
+1. Serializes the fixture into `.docx`, `.pdf`, `.epub` in parallel.
+2. Boots `vite preview` on port 5174 against `apps/editor/dist`
+   (auto-runs `pnpm build` if `dist/` is missing).
+3. Launches Playwright headless Chromium, navigates to the preview,
+   screenshots `[data-testid="paper-column"]` — the truth PNG.
+4. Renders each format to PNG:
+   - `.docx` → `soffice --headless --convert-to pdf` → `pdftoppm`
+   - `.pdf`  → `pdftoppm` (no LibreOffice — we already make real PDFs)
+   - `.epub` → JSZip + epub.js inside the same headless Chrome,
+     served from a tiny in-process static server
+5. Normalizes all four PNGs to 820 px wide via `sharp` (top-anchored).
+6. Pixel-diffs each format against the editor PNG via `pixelmatch`;
+   partitions the diff PNG into 4 horizontal bands and reports the
+   band with the most non-zero pixels as `worst_region`.
+7. Composes a 4-up image (`Editor | Word | PDF | EPUB`) with a header
+   strip, writes it to `<work-dir>/comparison-4up.png`.
+8. Emits the JSON below to stdout; opens the composite in `Preview.app`
+   unless `--quiet`.
+
+### Multi-channel JSON output shape
+
+```json
+{
+  "ok": true,
+  "fixture": "/abs/path/welcome.json",
+  "work_dir": "/tmp/papir-visual-<ts>",
+  "editor_png": "/tmp/.../editor.png",
+  "channels": {
+    "docx": { "rendered_png": "...", "diff_png": "...",
+              "diff_score": 0.048, "worst_region": "bottom quarter (footer / actions)" },
+    "pdf":  { "rendered_png": "...", "diff_png": "...",
+              "diff_score": 0.049, "worst_region": "..." },
+    "epub": { "rendered_png": "...", "diff_png": "...",
+              "diff_score": 0.057, "worst_region": "..." }
+  },
+  "composite_png": "/tmp/.../comparison-4up.png",
+  "elapsed_ms_per_step": { "...": 100 },
+  "elapsed_ms_total": 4800,
+  "recommendation": "EPUB has highest diff (0.0570) ... — inspect apps/editor/src/export/toEpub.ts"
+}
+```
+
+`diff_score` is the fraction of differing pixels (0..1, lower is better).
+`worst_region` is a 4-band coarse hint — top quarter = "heading / first
+paragraph", second = "callout / body", third = "list / divider", bottom
+= "footer / actions". Heuristic; iterate the serializer that owns the
+indicated band.
+
+### One-time setup
+
+The first run needs Playwright's Chromium build downloaded once
+(~260 MB):
+
+```bash
+pnpm -F editor exec playwright install chromium
+```
+
+The orchestrator does NOT auto-install — if the browser is missing, it
+errors with the exact command above and exits.
+
+### Example agent prompt
+
+> Read the JSON from `bin/papir-visual-check --all-channels --quiet`.
+> Identify the channel with the highest `diff_score`. Open
+> `composite_png` and the `diff_png` for that channel; correlate the
+> visual delta with the `worst_region` hint. Edit the responsible
+> serializer at `apps/editor/src/export/to{Docx,Pdf,Epub}.ts`. Re-run.
+
+### Implementation
+
+- Orchestrator: `apps/editor/scripts/visual-check.ts` (~420 LOC, tsx).
+- Wrapper: `bin/papir-visual-check` delegates here when
+  `--all-channels` is set; the docx-only legacy path is preserved when
+  the flag is absent.
+- Deps (in `apps/editor`): `playwright`, `pixelmatch`, `pngjs`, `sharp`.
+
+### Caveats (multi-channel)
+
+- Total wall-clock is ~5 s on a warm cache (Playwright launch dominates).
+  Cold first run after `playwright install` adds ~2 s.
+- Vite preview binds explicitly to `127.0.0.1` so the IPv4 fetch from
+  Playwright + waitForPort hits the same socket.
+- The EPUB render loads JSZip + epub.js from jsDelivr. Offline runs
+  will fail at the `epub-render` step — vendor the two scripts into
+  the workspace if that becomes a real constraint.
+- CI gate (fail the build on score regression beyond a budget) is the
+  obvious next step but is NOT wired in this commit. Manual loop only.
 
 ## Caveats
 
