@@ -52,6 +52,9 @@ export type { ValidationIssue, RuleId } from './validate.js';
 
 export { portableDocSchema, blockSchema, inlineNodeSchema } from './schemas.js';
 
+export { applyDocPatch } from './patch.js';
+export type { DocPatchOp, DocPatchError, DocPatchResult } from './patch.js';
+
 export {
   ENVELOPE_VERSION,
   envelopeSchema,
