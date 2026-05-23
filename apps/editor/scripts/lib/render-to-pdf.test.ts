@@ -30,7 +30,7 @@
  * If chromium can't launch, the funnel can't be exercised — the suite fails
  * loudly rather than faking a pass.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -42,6 +42,7 @@ import {
 import {
   renderEditorToPdf,
   renderHtmlChannelToPdf,
+  closeEditorServer,
 } from './render-to-pdf.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,12 @@ beforeAll(async () => {
     extractPdfGeometry(htmlPdf),
   ]);
 }, 120_000);
+
+// renderEditorToPdf boots a shared Vite dev server for the live editor app;
+// tear it down so vitest's worker can exit cleanly (pdoc-4pz).
+afterAll(async () => {
+  await closeEditorServer();
+});
 
 describe('render-to-pdf funnel (editor + HTML → PDF → geometry)', () => {
   it('renders both legs into a comparable number of blocks', () => {

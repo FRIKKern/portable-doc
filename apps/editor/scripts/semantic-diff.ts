@@ -39,7 +39,11 @@ import { promises as fs, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve as resolvePath, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PortableDoc } from '@portable-doc/core';
-import { renderEditorToPdf, renderHtmlChannelToPdf } from './lib/render-to-pdf.ts';
+import {
+  renderEditorToPdf,
+  renderHtmlChannelToPdf,
+  closeEditorServer,
+} from './lib/render-to-pdf.ts';
 import { extractPdfGeometry } from './lib/pdf-geometry.ts';
 import {
   pairBlocks,
@@ -179,6 +183,10 @@ process.stdout.write('─'.repeat(78) + '\n');
 process.stdout.write(
   `${results.length} fixture/channel runs · ${totalGating} gating failure(s) · output → ${outRoot}\n`,
 );
+
+// The editor leg boots a shared Vite dev server (render-to-pdf.ts); close it
+// so the run can exit promptly rather than waiting on the lingering socket.
+await closeEditorServer();
 
 if (hardError) {
   process.stderr.write('\nOne or more runs threw — see ERROR lines above.\n');

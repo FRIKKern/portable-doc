@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PortableDoc } from '@portable-doc/core';
 import type { Editor as TipTapEditor } from '@tiptap/react';
-import welcomeJson from '../../../examples/welcome.json';
+import { resolveFixtureFromUrl } from './lib/fixtures.js';
 import { Editor } from './Editor.js';
 import { FooterStatus } from './FooterStatus.js';
 import { ImageInsertDialog } from './ImageInsertDialog.js';
@@ -31,8 +31,6 @@ import { McpProvider } from './McpProvider.js';
 import { OutlineRail } from './OutlineRail.js';
 import { PreviewOverlay } from './PreviewOverlay.js';
 import './styles/paper.css';
-
-const welcome = welcomeJson as PortableDoc;
 
 export function App(): JSX.Element {
   return (
@@ -43,7 +41,11 @@ export function App(): JSX.Element {
 }
 
 function AppShell(): JSX.Element {
-  const [doc, setDoc] = useState<PortableDoc>(welcome);
+  // Boot doc resolves from (1) an injected window doc, (2) a `?fixture=` URL
+  // param, or (3) the welcome default — see lib/fixtures.ts. `welcome` stays
+  // the default so the normal app is unchanged; the funnel verifier drives an
+  // arbitrary fixture through paths (1)/(2) to render the LIVE editor.
+  const [doc, setDoc] = useState<PortableDoc>(resolveFixtureFromUrl);
   const [jsonModeOpen, setJsonModeOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   // A9 — outline rail toggle + editor instance handed up from Editor.tsx
@@ -136,7 +138,16 @@ function AppShell(): JSX.Element {
   }, [outlineOpen]);
 
   return (
-    <div className="paper-app" data-testid="paper-app">
+    <div
+      className="paper-app"
+      data-testid="paper-app"
+      // Deterministic ready signal for the funnel PDF renderer: flips to
+      // "true" once the TipTap editor instance has mounted and laid out the
+      // boot doc. The verifier waits on this attribute (plus a non-empty
+      // .ProseMirror) before calling page.pdf(), so it captures the real
+      // editor DOM, never a half-rendered frame.
+      data-fixture-ready={editor ? 'true' : 'false'}
+    >
       <main className="paper-column" data-testid="paper-column">
         <Editor
           doc={doc}

@@ -8,20 +8,30 @@
  * Chromium's `page.pdf(...)`. Both return a `Uint8Array` so the bytes pipe
  * straight into `extractPdfGeometry(input)`.
  *
- * Why headless setContent, not the live vite preview
- * --------------------------------------------------
- * `semantic-diff.ts` renders the editor by loading the live vite preview at
- * `/`, which is hardcoded to the `welcome` fixture (see App.tsx). To render an
- * ARBITRARY fixture — the brief mandates a hard list+table+callout fixture —
- * without touching the app, we render the editor-canvas DOM directly from the
- * PortableDoc and let Chromium lay it out under the editor's own `paper.css`.
- * The editor's TipTap stack emits standard semantic HTML for these node types
- * (h1..h6 / p / ul / ol / li / table / blockquote / pre); the custom
- * extensions (slash menu, block chrome, auto-joiner) DECORATE the canvas, they
- * do not restructure the block boxes, so they do not move geometry. The CSS
- * subset inlined here is lifted verbatim from `src/styles/paper.css` (the
- * `.paper-column` rules) so the editor side measures the same layout the app
- * ships.
+ * The editor leg renders the LIVE editor (pdoc-4pz)
+ * -------------------------------------------------
+ * `renderEditorToPdf` boots the REAL editor app — the same TipTap/ProseMirror
+ * stack the writer uses — and prints its canvas to PDF. It does NOT
+ * re-implement `paper.css` in a `setContent` string (the prior approximation,
+ * which the verifier could not trust because its divergences might have been
+ * artifacts of the re-implementation). The flow:
+ *
+ *     vite createServer(apps/editor)            // one shared dev server
+ *        │  (lazy singleton, reused across fixtures, torn down on exit)
+ *        ▼
+ *     page.addInitScript(window.__PAPERFLOW_FIXTURE_DOC__ = <doc>)
+ *        │  (lib/fixtures.ts reads this BEFORE React mounts)
+ *        ▼
+ *     page.goto('http://127.0.0.1:<port>/?fixture=<injected>')
+ *        ▼
+ *     wait [data-testid=paper-app][data-fixture-ready=true] + non-empty .ProseMirror
+ *        ▼
+ *     page.pdf(PDF_PAGE)                         // ACTUAL editor DOM+CSS
+ *
+ * The doc is injected through `window.__PAPERFLOW_FIXTURE_DOC__` rather than a
+ * `?fixture=<name>` lookup so the verifier can render an IN-MEMORY doc that may
+ * not exist on disk; the URL still carries `?fixture=injected` for traceability
+ * and so the human-facing URL-param path (lib/fixtures.ts) stays exercised.
  *
  * Geometry comparability
  * ----------------------
@@ -32,22 +42,23 @@
  * CSS) — that difference is exactly what the geometry gate measures; we hold
  * the PAGE geometry fixed so block-to-block deltas are the only variable.
  *
- * Pure-ish + typed. Each function launches its own short-lived browser and
- * closes it before returning, so callers don't manage browser lifecycle.
+ * Server lifecycle
+ * ----------------
+ * The first `renderEditorToPdf` call boots one Vite dev server for the editor
+ * app and caches it; later calls reuse it (booting per-fixture would dominate
+ * runtime). The server tears down automatically on process exit; tests can
+ * force teardown via `closeEditorServer()`.
  */
-import { chromium, type LaunchOptions } from 'playwright';
-import type {
-  Block,
-  CalloutBlock,
-  CodeBlock,
-  HeadingBlock,
-  InlineNode,
-  ListBlock,
-  ParagraphBlock,
-  PortableDoc,
-  TableBlock,
-} from '@portable-doc/core';
+import { dirname, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium, type Browser, type LaunchOptions } from 'playwright';
+import { createServer, type ViteDevServer } from 'vite';
+import type { PortableDoc } from '@portable-doc/core';
 import { toHtmlBlob } from '../../src/export/toHtml.ts';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// scripts/lib → apps/editor (the Vite project root with index.html).
+const editorAppRoot = resolvePath(__dirname, '..', '..');
 
 // ─── shared page geometry (identical for both render legs) ───────────────────
 
@@ -70,195 +81,158 @@ export interface RenderOptions {
   launch?: LaunchOptions;
 }
 
-// ─── inline → HTML (editor-canvas DOM shape) ─────────────────────────────────
+// ─── shared editor dev-server (lazy singleton) ───────────────────────────────
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+let serverPromise: Promise<ViteDevServer> | null = null;
 
-function escapeAttr(s: string): string {
-  return escapeHtml(s).replace(/"/g, '&quot;');
-}
-
-/** PortableDoc inline subtree → the HTML the editor's ProseMirror DOM emits
- *  (nested <strong>/<em>/<a>, inline <code>). Mirrors the shape
- *  `tiptap-to-portable-doc.ts` round-trips against. */
-function inlineToHtml(nodes: InlineNode[] | undefined): string {
-  if (!nodes) return '';
-  let out = '';
-  for (const n of nodes) {
-    switch (n.type) {
-      case 'text':
-        out += escapeHtml(n.value);
-        break;
-      case 'strong':
-        out += `<strong>${inlineToHtml(n.children)}</strong>`;
-        break;
-      case 'em':
-        out += `<em>${inlineToHtml(n.children)}</em>`;
-        break;
-      case 'code':
-        out += `<code>${escapeHtml(n.value)}</code>`;
-        break;
-      case 'link':
-        out += `<a href="${escapeAttr(n.href)}">${inlineToHtml(n.children)}</a>`;
-        break;
-    }
+/** Boot (once) the editor app's Vite dev server and return it. */
+async function getEditorServer(): Promise<ViteDevServer> {
+  if (!serverPromise) {
+    serverPromise = (async () => {
+      const server = await createServer({
+        root: editorAppRoot,
+        // The repo vite.config is picked up from `root`; we only override the
+        // server knobs the funnel needs. A fixed loopback host keeps the URL
+        // stable; port 0 lets the OS pick a free port so parallel runs / the
+        // dev server proper don't collide.
+        configFile: undefined,
+        server: { host: '127.0.0.1', port: 0, strictPort: false },
+        // Quiet: the funnel summary is the signal, not Vite's banner.
+        logLevel: 'warn',
+        clearScreen: false,
+      });
+      await server.listen();
+      return server;
+    })();
   }
-  return out;
+  return serverPromise;
 }
 
-// ─── block → editor-canvas HTML ──────────────────────────────────────────────
-
-function headingHtml(b: HeadingBlock): string {
-  const level = Math.min(6, Math.max(1, b.level));
-  return `<h${level}>${escapeHtml(b.text)}</h${level}>`;
-}
-
-function paragraphHtml(b: ParagraphBlock): string {
-  return `<p>${inlineToHtml(b.content)}</p>`;
-}
-
-function listHtml(b: ListBlock): string {
-  const tag = b.ordered === true ? 'ol' : 'ul';
-  const items = b.items.map((it) => `<li><p>${inlineToHtml(it)}</p></li>`).join('');
-  return `<${tag}>${items}</${tag}>`;
-}
-
-function calloutHtml(b: CalloutBlock): string {
-  // The editor renders a callout as a ProseMirror blockquote carrying the
-  // `paper-block` class (see paper.css `.paper-column blockquote.paper-block`).
-  // An optional title is a bold prefix + hard break on the first paragraph —
-  // the exact shape `portable-doc-to-tiptap-json.ts` emits.
-  const titlePrefix = b.title
-    ? `<strong>${escapeHtml(b.title)}</strong><br>`
-    : '';
-  return `<blockquote class="paper-block"><p>${titlePrefix}${inlineToHtml(
-    b.content,
-  )}</p></blockquote>`;
-}
-
-function codeHtml(b: CodeBlock): string {
-  return `<pre><code>${escapeHtml(b.value ?? '')}</code></pre>`;
-}
-
-function tableHtml(b: TableBlock): string {
-  const rows = b.rows
-    .map((row, rowIdx) => {
-      const tag = rowIdx === 0 ? 'th' : 'td';
-      const cells = row.map((cell) => `<${tag}><p>${inlineToHtml(cell)}</p></${tag}>`).join('');
-      return `<tr>${cells}</tr>`;
-    })
-    .join('');
-  return `<table><tbody>${rows}</tbody></table>`;
-}
-
-function blockToEditorHtml(b: Block): string {
-  switch (b.type) {
-    case 'heading':
-      return headingHtml(b);
-    case 'paragraph':
-      return paragraphHtml(b);
-    case 'list':
-      return listHtml(b);
-    case 'callout':
-      return calloutHtml(b);
-    case 'action':
-      // Editor renders an action as a paragraph wrapping a link run.
-      return `<p><a href="${escapeAttr(b.href)}">${escapeHtml(b.label)}</a></p>`;
-    case 'section': {
-      const heading = b.title
-        ? `<h2>${escapeHtml(b.title)}</h2>`
-        : '';
-      return heading + b.blocks.map(blockToEditorHtml).join('');
-    }
-    case 'divider':
-      return '<hr>';
-    case 'code':
-      return codeHtml(b);
-    case 'image':
-      return `<p><img src="${escapeAttr(b.src)}" alt="${escapeAttr(b.alt)}"></p>`;
-    case 'table':
-      return tableHtml(b);
-    default:
-      return '';
+/** Resolve the dev server's base URL (e.g. http://127.0.0.1:5173). */
+function serverUrl(server: ViteDevServer): string {
+  const addr = server.httpServer?.address();
+  if (!addr || typeof addr === 'string') {
+    throw new Error('editor dev server has no resolvable address');
   }
+  const host = addr.address === '::' || addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address;
+  return `http://${host}:${addr.port}`;
 }
 
 /**
- * Editor-canvas CSS — the `.paper-column` subset of `src/styles/paper.css`
- * that governs BLOCK GEOMETRY (font sizes, margins, list/callout/table
- * spacing). Lifted verbatim so the editor render leg measures the same
- * layout the app ships. Chrome/headless has no 'Source Serif 4' installed,
- * so the family falls through to its serif fallbacks — the same fallback the
- * HTML export takes in a no-font environment, keeping the two legs on equal
- * footing.
+ * Tear down the shared editor dev server. Idempotent. Tests call this in an
+ * `afterAll` so vitest can exit; in the CLI the process-exit hook below covers
+ * it. No-op if the server was never booted.
  */
-const EDITOR_CANVAS_CSS = `
-  :root { --paper-ink: #1f1a14; --paper-tone-info: #3b6e8f; }
-  html, body { margin: 0; padding: 0; }
-  .paper-column {
-    font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-    font-size: 18px;
-    line-height: 1.55;
-    letter-spacing: 0.005em;
-    color: var(--paper-ink);
+export async function closeEditorServer(): Promise<void> {
+  if (!serverPromise) return;
+  const p = serverPromise;
+  serverPromise = null;
+  try {
+    const server = await p;
+    await server.close();
+  } catch {
+    // Best-effort teardown — a server that already crashed is fine to ignore.
   }
-  .paper-column h1, .paper-column h2, .paper-column h3,
-  .paper-column h4, .paper-column h5, .paper-column h6 {
-    font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-    line-height: 1.3; font-weight: 600; color: var(--paper-ink);
-  }
-  .paper-column h1 { font-size: 32px; letter-spacing: -0.01em; margin: 24pt 0 6pt; }
-  .paper-column h2 { font-size: 24px; margin: 18pt 0 4pt; }
-  .paper-column h3 { font-size: 20px; margin: 12pt 0 2pt; }
-  .paper-column h4 { font-size: 18px; margin: 22px 0 8px; }
-  .paper-column h5 { font-size: 16px; margin: 18px 0 6px; font-weight: 700; }
-  .paper-column h6 { font-size: 14px; margin: 14px 0 4px; font-weight: 700; }
-  .paper-column p { margin: 12pt 0 0; }
-  .paper-column a { color: #a23925; text-decoration: none; border-bottom: 1px solid rgba(162,57,37,0.10); }
-  .paper-column ul, .paper-column ol { margin: 0 0 24px; padding-left: 24px; }
-  .paper-column li { margin: 4pt 0 0; }
-  .paper-column li > p { margin: 0; }
-  .paper-column blockquote.paper-block {
-    margin: 12pt 0 0; padding: 12pt 16pt;
-    border-left: 4px solid var(--paper-tone-info);
-    background: rgba(59,110,143,0.07); border-radius: 2px; font-style: normal;
-  }
-  .paper-column blockquote > :first-child { margin-top: 0; }
-  .paper-column blockquote > :last-child { margin-bottom: 0; }
-  .paper-column code { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 0.92em; }
-  .paper-column pre {
-    font-family: 'JetBrains Mono', Menlo, monospace; font-size: 14px; line-height: 1.5;
-    background: #f5f2e9; border: 1px solid rgba(31,26,20,0.08); border-radius: 4px;
-    padding: 14px 16px; margin: 0 0 22px;
-  }
-  .paper-column hr { border: 0; border-top: 0.75pt solid #D8D1BF; margin: 12pt 0 0; }
-  .paper-column table { border-collapse: collapse; width: 100%; margin: 12pt 0 0; }
-  .paper-column th, .paper-column td {
-    border: 1px solid rgba(31,26,20,0.12); padding: 6px 10px; text-align: left; vertical-align: top;
-  }
-  .paper-column th p, .paper-column td p { margin: 0; }
-`;
-
-/**
- * Build the full editor-canvas HTML document for a fixture: the PortableDoc
- * blocks projected into the editor's ProseMirror DOM shape, wrapped in
- * `.paper-column .ProseMirror` and styled by the inlined canvas CSS.
- */
-function buildEditorCanvasHtml(doc: PortableDoc): string {
-  const body = doc.blocks.map(blockToEditorHtml).join('\n');
-  return (
-    `<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n` +
-    `<style>${EDITOR_CANVAS_CSS}</style></head>\n` +
-    `<body><main class="paper-column"><div class="ProseMirror">\n${body}\n` +
-    `</div></main></body></html>\n`
-  );
 }
+
+// Belt-and-suspenders: if a CLI run forgets to close, don't leak the server
+// past process exit. (Tests use the explicit closeEditorServer() above.)
+process.once('exit', () => {
+  // `exit` can't await; fire-and-forget close. The OS reclaims the socket
+  // regardless, this just hastens it for long-lived parents.
+  void closeEditorServer();
+});
 
 // ─── render legs ─────────────────────────────────────────────────────────────
 
-async function htmlToPdf(html: string, options?: RenderOptions): Promise<Uint8Array> {
+/**
+ * Render the EDITOR CANVAS of a fixture to PDF by driving the LIVE editor app.
+ * Boots (or reuses) the editor's Vite dev server, injects the doc into the
+ * page before React mounts, waits for the real TipTap editor to lay it out,
+ * then prints the canvas to PDF with the shared page geometry. Returns the PDF
+ * bytes — feed straight into `extractPdfGeometry`.
+ */
+export async function renderEditorToPdf(
+  doc: PortableDoc,
+  options?: RenderOptions,
+): Promise<Uint8Array> {
+  const server = await getEditorServer();
+  const baseUrl = serverUrl(server);
+
+  const browser: Browser = await chromium.launch({ headless: true, ...options?.launch });
+  try {
+    const page = await browser.newPage();
+    // Inject the doc BEFORE any app script runs. lib/fixtures.ts reads
+    // window.__PAPERFLOW_FIXTURE_DOC__ in resolveFixtureFromUrl(), so the
+    // editor boots straight onto this doc with no flash of the welcome
+    // fixture and no on-disk fixture required.
+    await page.addInitScript((injected) => {
+      (window as unknown as { __PAPERFLOW_FIXTURE_DOC__: unknown }).__PAPERFLOW_FIXTURE_DOC__ =
+        injected;
+    }, doc as unknown);
+
+    await page.goto(`${baseUrl}/?fixture=injected`, { waitUntil: 'load' });
+
+    // Deterministic ready gate (App.tsx sets data-fixture-ready once the
+    // TipTap instance mounts). Then wait for the ProseMirror surface to carry
+    // actual text so we never print a blank or half-laid-out frame.
+    await page.waitForSelector('[data-testid="paper-app"][data-fixture-ready="true"]', {
+      timeout: 30_000,
+    });
+    await page.waitForFunction(
+      () => {
+        const pm = document.querySelector('.paper-editor [contenteditable="true"], .ProseMirror');
+        return !!pm && (pm.textContent ?? '').trim().length > 0;
+      },
+      undefined,
+      { timeout: 30_000 },
+    );
+    // Hide the editor's app CHROME so the PDF captures the DOCUMENT canvas
+    // only — the rendered blocks, not the surrounding UI. The footer status
+    // strip, margin-diagnostics gutter, floating block-chrome cluster, and the
+    // preview side-panels are editor affordances, not document content; left
+    // visible they segment into extra PDF blocks (e.g. the footer's "✓ valid /
+    // saved just now" strip) that have no counterpart in any export channel
+    // and would mis-pair against the closing paragraph. We render the real
+    // .ProseMirror layout under the editor's own paper.css; only the chrome is
+    // suppressed.
+    await page.addStyleTag({
+      content: `
+        .paper-footer,
+        .paper-margin-diagnostics,
+        .paper-floating-chrome,
+        .paper-block__side-handle,
+        [data-testid="paper-block-side-handle"],
+        [data-testid="margin-diagnostics"],
+        [data-testid="docx-preview-panel"],
+        [data-testid="ink-preview-panel"],
+        [data-testid="epub-preview-panel"],
+        [data-testid="pdf-preview-panel"] { display: none !important; }
+      `,
+    });
+
+    // Let fonts settle so glyph metrics (and thus block geometry) are stable.
+    await page.evaluate(() => (document as Document & { fonts?: FontFaceSet }).fonts?.ready);
+
+    const buf = await page.pdf(PDF_PAGE);
+    return new Uint8Array(buf);
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * Render the HTML EXPORT of a fixture to PDF. Produces the channel via the
+ * real `toHtmlBlob` serializer (the same bytes a writer would export), then
+ * prints that document to PDF with the shared page geometry. Returns the PDF
+ * bytes — feed straight into `extractPdfGeometry`. (Unchanged by pdoc-4pz.)
+ */
+export async function renderHtmlChannelToPdf(
+  doc: PortableDoc,
+  options?: RenderOptions,
+): Promise<Uint8Array> {
+  const blob = await toHtmlBlob(doc);
+  const html = Buffer.from(await blob.arrayBuffer()).toString('utf8');
   const browser = await chromium.launch({ headless: true, ...options?.launch });
   try {
     const page = await browser.newPage();
@@ -268,32 +242,4 @@ async function htmlToPdf(html: string, options?: RenderOptions): Promise<Uint8Ar
   } finally {
     await browser.close();
   }
-}
-
-/**
- * Render the EDITOR CANVAS of a fixture to PDF. The fixture's blocks are
- * projected into the editor's ProseMirror DOM shape and laid out under the
- * editor's `paper.css` subset, then printed to PDF with the shared page
- * geometry. Returns the PDF bytes — feed straight into `extractPdfGeometry`.
- */
-export async function renderEditorToPdf(
-  doc: PortableDoc,
-  options?: RenderOptions,
-): Promise<Uint8Array> {
-  return htmlToPdf(buildEditorCanvasHtml(doc), options);
-}
-
-/**
- * Render the HTML EXPORT of a fixture to PDF. Produces the channel via the
- * real `toHtmlBlob` serializer (the same bytes a writer would export), then
- * prints that document to PDF with the shared page geometry. Returns the PDF
- * bytes — feed straight into `extractPdfGeometry`.
- */
-export async function renderHtmlChannelToPdf(
-  doc: PortableDoc,
-  options?: RenderOptions,
-): Promise<Uint8Array> {
-  const blob = await toHtmlBlob(doc);
-  const html = Buffer.from(await blob.arrayBuffer()).toString('utf8');
-  return htmlToPdf(html, options);
 }
