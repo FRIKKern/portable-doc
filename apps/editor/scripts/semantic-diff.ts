@@ -42,6 +42,9 @@ import type { PortableDoc } from '@portable-doc/core';
 import {
   renderEditorToPdf,
   renderHtmlChannelToPdf,
+  renderPdfChannelToPdf,
+  renderDocxChannelToPdf,
+  renderEpubChannelToPdf,
   closeEditorServer,
 } from './lib/render-to-pdf.ts';
 import { extractPdfGeometry } from './lib/pdf-geometry.ts';
@@ -49,6 +52,7 @@ import {
   pairBlocks,
   computeVerdicts,
   isGatingFailure,
+  gateLevelForChannel,
   type Channel,
   type VerdictRecord,
 } from './lib/layout-match.ts';
@@ -72,8 +76,26 @@ const fixtures =
         .map((f) => basename(f, '.json'))
         .sort();
 
-// This task runs the HTML channel only; T4 adds 'docx' to this list.
-const CHANNELS: Channel[] = ['html'];
+// All wired channels (T4). Per bound decision #7 the GATE level differs by
+// channel (see `gateLevelForChannel` in layout-match.ts):
+//   html / pdf / docx → geometry tier (a gating failure blocks CI; DOCX runs
+//                        at the looser reflow-sanity tolerance, decision #12),
+//   epub             → structural tier — geometry runs but is INFORMATIONAL
+//                        (reflowable; never gates),
+//   markdown         → structural-only with NO geometry render at all (there
+//                        is no Markdown exporter and no fixed layout to
+//                        measure), surfaced as a structural NOTE below.
+// Markdown is intentionally absent from this list — it has no fixed-layout
+// render leg; see MARKDOWN_STRUCTURAL_NOTE.
+const CHANNELS: Channel[] = ['html', 'pdf', 'docx', 'epub'];
+
+// Markdown carries no fixed layout and the editor ships no Markdown exporter,
+// so there is nothing to render to PDF and nothing to geometry-gate. Per the
+// bound channel-tier decision (#7) Markdown is structural-only; we surface it
+// as a one-line NOTE in the summary rather than running (and gating) a
+// geometry leg that would have to be faked.
+const MARKDOWN_STRUCTURAL_NOTE =
+  'markdown: structural-only (no fixed-layout render, no geometry gate) — reflowable text channel; no Markdown exporter to render';
 
 type FixtureChannelResult = {
   fixture: string;
@@ -81,15 +103,29 @@ type FixtureChannelResult = {
   records: VerdictRecord[];
   counts: Record<string, number>;
   gatingFailures: number;
+  /** Wall-clock ms for the channel render leg — surfaces soffice (DOCX) cost. */
+  renderMs: number;
 };
 
-/** Render one channel's PDF bytes for a fixture. */
+/** Render one channel's PDF bytes for a fixture. Every channel ultimately
+ *  yields PDF bytes for `extractPdfGeometry`:
+ *    html → toHtmlBlob → chromium page.pdf
+ *    pdf  → toPdfBlob bytes DIRECTLY (already a PDF; no re-render)
+ *    docx → toDocxBlob → soffice --convert-to pdf → bytes
+ *    epub → toEpubBlob → unzip → chromium page.pdf of the chapter XHTML
+ *  Markdown never reaches here (it has no render leg — see CHANNELS). */
 async function renderChannel(channel: Channel, doc: PortableDoc): Promise<Uint8Array> {
   switch (channel) {
     case 'html':
       return renderHtmlChannelToPdf(doc);
+    case 'pdf':
+      return renderPdfChannelToPdf(doc);
+    case 'docx':
+      return renderDocxChannelToPdf(doc);
+    case 'epub':
+      return renderEpubChannelToPdf(doc);
     default:
-      throw new Error(`channel '${channel}' not wired in T3 (HTML only; DOCX is T4)`);
+      throw new Error(`channel '${channel}' has no render leg wired`);
   }
 }
 
@@ -111,10 +147,15 @@ async function runFixtureChannel(
   channel: Channel,
   doc: PortableDoc,
 ): Promise<FixtureChannelResult> {
+  // Time the CHANNEL leg specifically so DOCX (soffice — slow + serial) cost
+  // is visible in the summary. The editor leg runs in parallel; we attribute
+  // the channel render's own wall-clock by timing it independently.
+  const channelStart = Date.now();
   const [editorPdf, channelPdf] = await Promise.all([
     renderEditorToPdf(doc),
     renderChannel(channel, doc),
   ]);
+  const renderMs = Date.now() - channelStart;
   const [editorGeom, channelGeom] = await Promise.all([
     extractPdfGeometry(editorPdf),
     extractPdfGeometry(channelPdf),
@@ -141,7 +182,7 @@ async function runFixtureChannel(
 
   const counts = tally(records);
   const gatingFailures = records.filter(isGatingFailure).length;
-  return { fixture, channel, records, counts, gatingFailures };
+  return { fixture, channel, records, counts, gatingFailures, renderMs };
 }
 
 // ─── orchestrate ────────────────────────────────────────────────────────────
@@ -175,18 +216,40 @@ let totalGating = 0;
 for (const r of results) {
   totalGating += r.gatingFailures;
   const c = r.counts;
-  const flag = r.gatingFailures > 0 ? 'FAIL' : c.warn || c.orphan ? 'WARN' : 'PASS';
+  const tier = gateLevelForChannel(r.channel);
+  // geometry (editor/HTML/PDF) AND reflow-sanity (DOCX) GATE — DOCX is a full
+  // geometry gate at a looser threshold (bound #7/#12, parity-trust-boundary).
+  // Only `structural` (EPUB / Markdown — reflowable) is informational; an EPUB
+  // with warns/fails reads as INFO, never FAIL. Mirror isGatingFailure exactly.
+  const gates = tier === 'geometry' || tier === 'reflow-sanity';
+  const flag = gates
+    ? r.gatingFailures > 0
+      ? 'FAIL'
+      : c.warn || c.orphan
+        ? 'WARN'
+        : 'PASS'
+    : 'INFO';
   process.stdout.write(
-    `[${flag}] ${r.fixture}/${r.channel}: ` +
+    `[${flag}] ${r.fixture}/${r.channel} (${tier}, ${gates ? 'gating' : 'informational'}): ` +
       `${r.records.length} blocks · ` +
-      `pass ${c.pass} · warn ${c.warn} · fail ${c.fail} · orphan ${c.orphan} · no-text ${c['no-text']} · degenerate ${c.degenerate}\n`,
+      `pass ${c.pass} · warn ${c.warn} · fail ${c.fail} · orphan ${c.orphan} · no-text ${c['no-text']} · degenerate ${c.degenerate} · ` +
+      `render ${(r.renderMs / 1000).toFixed(1)}s\n`,
   );
   // Name the offending blocks so an agent sees them without opening the JSON.
+  // On a non-gating (structural/informational) channel these are diagnostics,
+  // not failures — label them so the EPUB tier reads honestly.
   for (const v of r.records) {
-    if (isGatingFailure(v)) process.stdout.write(`         ↳ ${v.verdict.toUpperCase()}: ${v.reason}\n`);
+    if (isGatingFailure(v)) {
+      process.stdout.write(`         ↳ ${v.verdict.toUpperCase()}: ${v.reason}\n`);
+    } else if (!gates && (v.verdict === 'fail' || v.verdict === 'no-text' || v.verdict === 'degenerate')) {
+      process.stdout.write(`         ↳ (info, non-gating) ${v.verdict.toUpperCase()}: ${v.reason}\n`);
+    }
   }
 }
 process.stdout.write('─'.repeat(78) + '\n');
+// Structural-only channels with no render leg (Markdown) get a documented note
+// rather than a faked geometry run.
+process.stdout.write(`note · ${MARKDOWN_STRUCTURAL_NOTE}\n`);
 process.stdout.write(
   `${results.length} fixture/channel runs · ${totalGating} gating failure(s) · output → ${outRoot}\n`,
 );

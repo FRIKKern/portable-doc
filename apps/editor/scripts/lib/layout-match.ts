@@ -750,12 +750,20 @@ export function computeVerdicts(
 }
 
 /** A verdict counts as a CI-blocking failure when it's a `fail`, `no-text`, or
- *  `degenerate` on a geometry-tier channel. `degenerate` covers both a
- *  non-finite block (FIX 2) and a blank / all-orphan render (FIX 3) — a blank
- *  render must go RED, never silently pass. Plain `orphan` (a localized
- *  insert/delete amid real pairs) and `warn` surface but do not block. */
+ *  `degenerate` on a GATING channel. Two tiers gate (T4, bound decision #7 +
+ *  #12 + the parity-trust-boundary doc, which lists DOCX as a "full geometry
+ *  gate (looser reflow-sanity threshold)"):
+ *    - `geometry`      — editor/HTML/PDF, strict 0.5/1.0 LH bands;
+ *    - `reflow-sanity` — DOCX, the SAME verdict set but a looser 1.5 LH fail
+ *                        edge (the looseness lives in DOCX_THRESHOLDS, not here)
+ *                        because LibreOffice is the oracle, not Word.
+ *  Only `structural` (EPUB / Markdown — reflowable, no fixed layout) is
+ *  informational and never blocks. `degenerate` covers both a non-finite block
+ *  (FIX 2) and a blank / all-orphan render (FIX 3) — a blank render must go
+ *  RED, never silently pass. Plain `orphan` and `warn` surface but do not
+ *  block. */
 export function isGatingFailure(r: VerdictRecord): boolean {
-  if (r.gateLevel !== 'geometry') return false;
+  if (r.gateLevel !== 'geometry' && r.gateLevel !== 'reflow-sanity') return false;
   return (
     r.verdict === 'fail' ||
     r.verdict === 'no-text' ||
