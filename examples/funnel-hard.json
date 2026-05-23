@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "title": "Funnel hard fixture",
+  "preview": "A deliberately hard fixture for the universal-PDF funnel proof: a multi-item list, a table, and a callout in one document so non-1:1 block pairing surfaces.",
+  "blocks": [
+    {
+      "id": "h-intro",
+      "type": "heading",
+      "level": 1,
+      "text": "Funnel hard fixture"
+    },
+    {
+      "id": "p-intro",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "This document exists to stress the universal-PDF funnel verifier. It mixes a list, a table, and a callout so block pairing must survive structures that do not collapse to a single block." }
+      ]
+    },
+    {
+      "id": "h-list",
+      "type": "heading",
+      "level": 2,
+      "text": "Steps to reproduce"
+    },
+    {
+      "id": "list-steps",
+      "type": "list",
+      "ordered": true,
+      "items": [
+        [{ "type": "text", "value": "Render the editor canvas of this fixture to PDF." }],
+        [{ "type": "text", "value": "Render the HTML export of this fixture to PDF." }],
+        [{ "type": "text", "value": "Extract per-block geometry from both PDFs." }],
+        [{ "type": "text", "value": "Pair blocks by document order and compare continuous-y." }],
+        [{ "type": "text", "value": "Assert the list does not collapse to a single block." }]
+      ]
+    },
+    {
+      "id": "h-table",
+      "type": "heading",
+      "level": 2,
+      "text": "Channel matrix"
+    },
+    {
+      "id": "table-channels",
+      "type": "table",
+      "surfaces": ["web", "native"],
+      "rows": [
+        [
+          [{ "type": "text", "value": "Channel" }],
+          [{ "type": "text", "value": "Gate level" }],
+          [{ "type": "text", "value": "Tier" }]
+        ],
+        [
+          [{ "type": "text", "value": "Editor" }],
+          [{ "type": "text", "value": "Geometry" }],
+          [{ "type": "text", "value": "Full" }]
+        ],
+        [
+          [{ "type": "text", "value": "HTML" }],
+          [{ "type": "text", "value": "Geometry" }],
+          [{ "type": "text", "value": "Full" }]
+        ],
+        [
+          [{ "type": "text", "value": "Markdown" }],
+          [{ "type": "text", "value": "Structural" }],
+          [{ "type": "text", "value": "Order + presence" }]
+        ]
+      ]
+    },
+    {
+      "id": "callout-note",
+      "type": "callout",
+      "tone": "info",
+      "title": "Why this is hard",
+      "content": [
+        { "type": "text", "value": "A list with five items, a four-row table, and a callout each segment into multiple PDF blocks. If pairing assumed one block per AST node the rows would cascade out of alignment. This fixture proves they do not." }
+      ]
+    },
+    {
+      "id": "p-close",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "If the editor and HTML channels segment into a comparable number of blocks and paired blocks sit close in continuous-y, the funnel works end-to-end." }
+      ]
+    }
+  ]
+}
