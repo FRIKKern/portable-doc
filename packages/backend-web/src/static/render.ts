@@ -8,6 +8,8 @@
  */
 
 import { tonePalette } from '@portable-doc/core';
+import type { Block } from '@portable-doc/core';
+import { composeBlock } from '@portable-doc/primitives';
 import type {
   PdBoxNode,
   PdButtonNode,
@@ -49,6 +51,26 @@ export function renderHtml(root: PdNode, opts: HtmlRenderOptions = {}): string {
     body +
     '</body></html>'
   );
+}
+
+/**
+ * Render a single block to a bare HTML fragment — no `<!doctype>`, no `<html>`,
+ * no container `<div max-width>`.
+ *
+ * Bypasses `composeDocument`'s `PdContainer` wrap by composing the block
+ * directly via `composeBlock`, and suppresses the document chrome via
+ * `doctype:false`. The emitted string is byte-identical to the corresponding
+ * fragment inside a full-document `renderHtml` run for the same block.
+ *
+ * Note: a `section` block still carries its own leading/trailing `PdHr` rules —
+ * those live inside the block's own composed sub-tree, not in the document
+ * chrome, so they survive here by design.
+ */
+export function renderBlockHtml(
+  block: Block,
+  opts: HtmlRenderOptions = {},
+): string {
+  return renderHtml(composeBlock(block), { ...opts, doctype: false });
 }
 
 function walk(n: PdNode, width: number): string {
