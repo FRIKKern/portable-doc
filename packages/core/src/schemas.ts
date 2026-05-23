@@ -155,6 +155,50 @@ export const blockSchema: z.ZodType<unknown> = z.lazy(() =>
   ]),
 );
 
+// ---------------------------------------------------------------------------
+// Draft-mode block schema
+// ---------------------------------------------------------------------------
+
+/**
+ * Draft variant of `blockSchema`: every member is `.partial()` so missing
+ * required content fields (heading.text, action.label/href/priority,
+ * callout.tone, code.value, image.src/alt, paragraph.content, …) no longer
+ * fail the parse — but the discriminant `type` literal is re-required on each
+ * member so the discriminatedUnion can still resolve which block it is. Used
+ * by `validateDoc(doc, {mode:'draft'})` for the **last** top-level block only;
+ * its parse issues are downgraded to `severity:'warning'`. Earlier blocks
+ * still parse against the strict `blockSchema`.
+ *
+ * The four per-block walkers (prop-allowlist, content-constraint, url-safety,
+ * variant-allowlist) run regardless of mode, so allowlist / url-safety /
+ * content / variant violations stay HARD even on the draft block.
+ */
+// `.partial()` loosens every field; re-asserting `type` keeps the literal
+// required so `z.discriminatedUnion('type', …)` still has a discriminant.
+const draftHeadingSchema = headingSchema.partial().extend({ type: z.literal('heading') });
+const draftParagraphSchema = paragraphSchema.partial().extend({ type: z.literal('paragraph') });
+const draftListSchema = listSchema.partial().extend({ type: z.literal('list') });
+const draftCalloutSchema = calloutSchema.partial().extend({ type: z.literal('callout') });
+const draftActionSchema = actionSchema.partial().extend({ type: z.literal('action') });
+const draftSectionSchema = sectionSchema.partial().extend({ type: z.literal('section') });
+const draftDividerSchema = dividerSchema.partial().extend({ type: z.literal('divider') });
+const draftCodeSchema = codeSchema.partial().extend({ type: z.literal('code') });
+const draftImageSchema = imageSchema.partial().extend({ type: z.literal('image') });
+const draftTableSchema = tableSchema.partial().extend({ type: z.literal('table') });
+
+export const draftBlockSchema: z.ZodType<unknown> = z.discriminatedUnion('type', [
+  draftHeadingSchema,
+  draftParagraphSchema,
+  draftListSchema,
+  draftCalloutSchema,
+  draftActionSchema,
+  draftSectionSchema,
+  draftDividerSchema,
+  draftCodeSchema,
+  draftImageSchema,
+  draftTableSchema,
+]);
+
 export const portableDocSchema = z
   .object({
     version: z.literal(1),

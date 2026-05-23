@@ -21,9 +21,10 @@
  * `validateDoc` never throws. It returns a (possibly empty) array.
  */
 
+import { z } from 'zod';
 import type { Block, InlineNode, PortableDoc, Surface } from './ast.js';
 import { toneNames } from './tokens.js';
-import { portableDocSchema } from './schemas.js';
+import { portableDocSchema, blockSchema, draftBlockSchema } from './schemas.js';
 import { VARIANT_CATALOG } from '@portable-doc/variants';
 
 export type RuleId =
@@ -38,6 +39,24 @@ export interface ValidationIssue {
   surface?: Surface;
   rule: RuleId;
   message: string;
+}
+
+/**
+ * Validation mode.
+ *
+ *   - `strict` (default): today's behavior. The doc parses against the
+ *     `.strict()` root schema and every block against the strict
+ *     `blockSchema`; any shape error early-returns before the walkers run.
+ *   - `draft`: relaxes ONLY the **last** top-level block's missing-required
+ *     fields to `severity:'warning'`, and never early-returns on shape errors
+ *     so the walker rules still run on every block. Every earlier block stays
+ *     HARD; prop-allowlist / url-safety / content-constraint / variant-allowlist
+ *     stay HARD even on the draft block.
+ */
+export type ValidateMode = 'strict' | 'draft';
+
+export interface ValidateOptions {
+  mode?: ValidateMode;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,7 +195,7 @@ function walkBlockForPropLeaks(block: Block, issues: ValidationIssue[]): void {
       });
     }
   }
-  if (block.type === 'section') {
+  if (block.type === 'section' && Array.isArray(block.blocks)) {
     for (const child of block.blocks) {
       walkBlockForPropLeaks(child, issues);
     }
@@ -193,6 +212,7 @@ const MAX_LIST_ITEM_LEN = 200;
 const MAX_ACTION_LABEL_LEN = 48;
 
 function flattenInline(nodes: InlineNode[]): string {
+  if (!Array.isArray(nodes)) return '';
   let out = '';
   for (const n of nodes) {
     switch (n.type) {
@@ -223,9 +243,13 @@ function checkBlockContent(block: Block, issues: ValidationIssue[]): void {
     });
   }
 
+  // Field accesses below are defensive: in draft mode the trailing block can
+  // reach this walker with required fields still missing (already reported as
+  // a parse warning). A missing field is not a content-constraint violation —
+  // only check the constraint when the field is present and the right type.
   switch (block.type) {
     case 'heading':
-      if (block.text.length > MAX_HEADING_LEN) {
+      if (typeof block.text === 'string' && block.text.length > MAX_HEADING_LEN) {
         issues.push({
           severity: 'error',
           blockId: block.id,
@@ -236,21 +260,23 @@ function checkBlockContent(block: Block, issues: ValidationIssue[]): void {
       break;
 
     case 'list':
-      block.items.forEach((item, idx) => {
-        const flat = flattenInline(item);
-        if (flat.length > MAX_LIST_ITEM_LEN) {
-          issues.push({
-            severity: 'error',
-            blockId: block.id,
-            rule: 'content-constraint',
-            message: `list item ${idx} is ${flat.length} chars (max ${MAX_LIST_ITEM_LEN})`,
-          });
-        }
-      });
+      if (Array.isArray(block.items)) {
+        block.items.forEach((item, idx) => {
+          const flat = flattenInline(item);
+          if (flat.length > MAX_LIST_ITEM_LEN) {
+            issues.push({
+              severity: 'error',
+              blockId: block.id,
+              rule: 'content-constraint',
+              message: `list item ${idx} is ${flat.length} chars (max ${MAX_LIST_ITEM_LEN})`,
+            });
+          }
+        });
+      }
       break;
 
     case 'callout':
-      if (!(toneNames as readonly string[]).includes(block.tone)) {
+      if (block.tone !== undefined && !(toneNames as readonly string[]).includes(block.tone)) {
         issues.push({
           severity: 'error',
           blockId: block.id,
@@ -261,7 +287,10 @@ function checkBlockContent(block: Block, issues: ValidationIssue[]): void {
       break;
 
     case 'action':
-      if (block.label.length === 0 || block.label.length > MAX_ACTION_LABEL_LEN) {
+      if (
+        typeof block.label === 'string' &&
+        (block.label.length === 0 || block.label.length > MAX_ACTION_LABEL_LEN)
+      ) {
         issues.push({
           severity: 'error',
           blockId: block.id,
@@ -272,6 +301,7 @@ function checkBlockContent(block: Block, issues: ValidationIssue[]): void {
       break;
 
     case 'code': {
+      if (typeof block.value !== 'string') break;
       const lines = block.value.split('\n');
       lines.forEach((line, idx) => {
         if (line.length > MAX_CODE_LINE) {
@@ -304,8 +334,10 @@ function checkBlockContent(block: Block, issues: ValidationIssue[]): void {
       break;
 
     case 'section':
-      for (const child of block.blocks) {
-        checkBlockContent(child, issues);
+      if (Array.isArray(block.blocks)) {
+        for (const child of block.blocks) {
+          checkBlockContent(child, issues);
+        }
       }
       break;
 
@@ -353,6 +385,7 @@ function checkUrl(href: string, blockId: string, issues: ValidationIssue[], cont
 }
 
 function walkInlineForUrls(nodes: InlineNode[], blockId: string, issues: ValidationIssue[]): void {
+  if (!Array.isArray(nodes)) return;
   for (const n of nodes) {
     switch (n.type) {
       case 'link':
@@ -376,26 +409,33 @@ function walkBlockForUrls(block: Block, issues: ValidationIssue[]): void {
       walkInlineForUrls(block.content, block.id, issues);
       break;
     case 'list':
-      for (const item of block.items) walkInlineForUrls(item, block.id, issues);
+      if (Array.isArray(block.items)) {
+        for (const item of block.items) walkInlineForUrls(item, block.id, issues);
+      }
       break;
     case 'callout':
       walkInlineForUrls(block.content, block.id, issues);
       break;
     case 'action':
-      checkUrl(block.href, block.id, issues, 'action.href');
+      if (block.href !== undefined) checkUrl(block.href, block.id, issues, 'action.href');
       break;
     case 'image':
-      checkUrl(block.src, block.id, issues, 'image.src');
+      if (block.src !== undefined) checkUrl(block.src, block.id, issues, 'image.src');
       break;
     case 'table':
-      for (const row of block.rows) {
-        for (const cell of row) {
-          walkInlineForUrls(cell, block.id, issues);
+      if (Array.isArray(block.rows)) {
+        for (const row of block.rows) {
+          if (!Array.isArray(row)) continue;
+          for (const cell of row) {
+            walkInlineForUrls(cell, block.id, issues);
+          }
         }
       }
       break;
     case 'section':
-      for (const child of block.blocks) walkBlockForUrls(child, issues);
+      if (Array.isArray(block.blocks)) {
+        for (const child of block.blocks) walkBlockForUrls(child, issues);
+      }
       break;
     default:
       break;
@@ -409,7 +449,7 @@ function walkBlockForUrls(block: Block, issues: ValidationIssue[]): void {
 function checkVariants(block: Block, issues: ValidationIssue[]): void {
   const variant = block.variant;
   // Recurse into sections regardless — children may carry their own variants.
-  if (block.type === 'section') {
+  if (block.type === 'section' && Array.isArray(block.blocks)) {
     for (const child of block.blocks) checkVariants(child, issues);
   }
   if (variant === undefined) return;
@@ -471,7 +511,7 @@ function collectIds(block: Block, seen: Map<string, number>, issues: ValidationI
       });
     }
   }
-  if (block.type === 'section') {
+  if (block.type === 'section' && Array.isArray(block.blocks)) {
     for (const child of block.blocks) collectIds(child, seen, issues);
   }
 }
@@ -480,7 +520,31 @@ function collectIds(block: Block, seen: Map<string, number>, issues: ValidationI
 // Public entrypoint
 // ---------------------------------------------------------------------------
 
-export function validateDoc(doc: unknown): ValidationIssue[] {
+/** Run the four per-block walkers + id collection against one block. */
+function runBlockWalkers(
+  block: Block,
+  seenIds: Map<string, number>,
+  issues: ValidationIssue[],
+): void {
+  collectIds(block, seenIds, issues);
+  walkBlockForPropLeaks(block, issues);
+  checkBlockContent(block, issues);
+  walkBlockForUrls(block, issues);
+  checkVariants(block, issues);
+}
+
+export function validateDoc(doc: unknown, opts?: ValidateOptions): ValidationIssue[] {
+  const mode: ValidateMode = opts?.mode ?? 'strict';
+
+  if (mode === 'strict') {
+    return validateDocStrict(doc);
+  }
+  return validateDocDraft(doc);
+}
+
+// --- strict mode: unchanged from the original single-arg behavior ----------
+
+function validateDocStrict(doc: unknown): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   const parsed = portableDocSchema.safeParse(doc);
@@ -499,12 +563,125 @@ export function validateDoc(doc: unknown): ValidationIssue[] {
 
   const seenIds = new Map<string, number>();
   for (const block of typedDoc.blocks) {
-    collectIds(block, seenIds, issues);
-    walkBlockForPropLeaks(block, issues);
-    checkBlockContent(block, issues);
-    walkBlockForUrls(block, issues);
-    checkVariants(block, issues);
+    runBlockWalkers(block, seenIds, issues);
   }
 
+  return issues;
+}
+
+// --- draft mode ------------------------------------------------------------
+
+/**
+ * Draft mode: never early-returns.
+ *
+ *   - The root envelope (version/title/preview) parses strict — a bad version
+ *     or an extra root key still errors.
+ *   - blocks[0..n-2] parse against the strict `blockSchema`; their shape issues
+ *     stay errors.
+ *   - The trailing block is the in-progress one. We parse it against the strict
+ *     `blockSchema` to *discover* what's still missing/wrong, but downgrade
+ *     every one of those issues to `severity:'warning'` — so a half-finished
+ *     last block warns instead of blocking the save. `draftBlockSchema` is the
+ *     relaxed shape used to confirm the block still resolves as a partial of a
+ *     known type (its discriminant `type` is intact); when even that fails the
+ *     trailing block's issues still surface, as warnings.
+ *
+ * The four walkers then run on every block regardless of parse outcome, so
+ * prop / url / content / variant rules stay HARD throughout — including on the
+ * trailing draft block.
+ */
+function validateDocDraft(doc: unknown): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  // Validate the envelope shape (everything but the per-block contents) so a
+  // bad version/extra-root-key still errors, without letting the strict block
+  // schema reject the intentionally-incomplete trailing block.
+  const envelope = portableDocSchema
+    .omit({ blocks: true })
+    .extend({ blocks: z.array(z.unknown()) })
+    .safeParse(doc);
+  if (!envelope.success) {
+    for (const err of envelope.error.issues) {
+      issues.push({
+        severity: 'error',
+        rule: 'content-constraint',
+        message: `${err.path.join('.') || '<root>'}: ${err.message}`,
+      });
+    }
+    // Without a recognisable blocks array there is nothing further to walk.
+    if (!Array.isArray((doc as { blocks?: unknown } | null)?.blocks)) {
+      return issues;
+    }
+  }
+
+  const rawBlocks = (doc as { blocks?: unknown[] }).blocks ?? [];
+  const lastIdx = rawBlocks.length - 1;
+
+  const seenIds = new Map<string, number>();
+  rawBlocks.forEach((raw, idx) => {
+    const isLast = idx === lastIdx;
+
+    // Always diagnose against the STRICT block schema so missing required
+    // fields are surfaced. For the trailing block we keep the diagnosis but
+    // downgrade it to a warning; for earlier blocks it stays an error.
+    const strict = blockSchema.safeParse(raw);
+    if (!strict.success) {
+      for (const err of strict.error.issues) {
+        issues.push({
+          // Earlier blocks stay HARD; the trailing draft block downgrades to a
+          // warning so an in-progress block doesn't block the save.
+          severity: isLast ? 'warning' : 'error',
+          blockId: blockIdOf(raw),
+          rule: 'content-constraint',
+          message: `blocks.${idx}.${err.path.join('.') || '<block>'}: ${err.message}`,
+        });
+      }
+    }
+
+    // Choose the object the walkers inspect. The trailing block parses against
+    // the relaxed `draftBlockSchema` (missing-required fields allowed, the
+    // `type` discriminant intact) so the walkers see a normalized partial;
+    // earlier blocks use the strict-parsed object when it resolved. Either way
+    // we fall back to `raw` so the HARD per-block rules always run.
+    const draft = isLast ? draftBlockSchema.safeParse(raw) : undefined;
+    const walkTarget =
+      (draft?.success ? draft.data : undefined) ??
+      (strict.success ? strict.data : undefined) ??
+      raw;
+
+    if (walkTarget !== null && typeof walkTarget === 'object') {
+      runBlockWalkers(walkTarget as Block, seenIds, issues);
+    }
+  });
+
+  return issues;
+}
+
+function blockIdOf(raw: unknown): string | undefined {
+  if (raw !== null && typeof raw === 'object') {
+    const id = (raw as { id?: unknown }).id;
+    if (typeof id === 'string' && id.length > 0) return id;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Single-block validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the four per-block walkers against a single block with a fresh seenIds
+ * map. Pure walker pass — does NOT run the Zod shape parse (use `validateDoc`
+ * for that). `opts` is accepted for symmetry / forward-compat; mode does not
+ * change which walkers fire (all four are always HARD per block).
+ */
+export function validateBlock(block: Block, _opts?: ValidateOptions): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const seenIds = new Map<string, number>();
+  collectIds(block, seenIds, issues);
+  walkBlockForPropLeaks(block, issues);
+  checkBlockContent(block, issues);
+  walkBlockForUrls(block, issues);
+  checkVariants(block, issues);
   return issues;
 }
