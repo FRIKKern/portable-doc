@@ -54,7 +54,7 @@ export function composeDocument(
 // Block dispatch
 // ---------------------------------------------------------------------------
 
-function composeBlock(block: Block): PdNode {
+export function composeBlock(block: Block): PdNode {
   switch (block.type) {
     case 'heading':
       return composeHeading(block);

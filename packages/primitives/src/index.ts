@@ -22,5 +22,5 @@ export type {
   PdTextNode,
 } from './pd.js';
 
-export { composeDocument } from './kernel.js';
+export { composeBlock, composeDocument } from './kernel.js';
 export type { ComposeOptions } from './kernel.js';

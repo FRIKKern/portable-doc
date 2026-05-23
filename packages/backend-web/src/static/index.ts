@@ -5,5 +5,5 @@
  * NOT react-native-web (that's the rnw subpath's job per spec §6 / grill Q5).
  */
 
-export { renderHtml } from './render.js';
+export { renderBlockHtml, renderHtml } from './render.js';
 export type { HtmlRenderOptions } from './render.js';
