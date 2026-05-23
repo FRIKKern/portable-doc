@@ -248,52 +248,95 @@ export async function composeOverlayPng(
 // ─── geometry → overlay boxes ───────────────────────────────────────────────────
 
 /**
- * Map per-block PDF geometry + the captured PNG dimensions to overlay boxes,
- * preserving the geometry block index as the overlay number.
+ * The fixed pt→px map that ties geometry coordinates to the captured PNG
+ * (pdoc-7fq fix). The PNG is captured at a viewport width pinned to the PDF
+ * page width and at `deviceScaleFactor: 1`, so a single uniform scale converts
+ * PDF user-space points to screenshot CSS pixels. `render-to-png.ts` derives
+ * these from `PDF_PAGE` and exports them as `RASTER`; the defaults here are the
+ * US-Letter / 1-inch-margin values so the pure unit test can construct a map
+ * without importing the render module.
+ */
+export type RasterMap = {
+  /** CSS px per PDF point (96 DPI screenshot / 72 DPI PDF). */
+  pxPerPt: number;
+  /** Page top/bottom margin in points — the per-page slack the screenshot does
+   *  NOT reinsert at page breaks, so it is removed during de-pagination. */
+  marginPt: number;
+  /** PDF page height in points (Letter = 792). */
+  pageHeightPt: number;
+  /** The screenshot's measured CONTENT ORIGIN in pixels (top-left of the first
+   *  laid out content element). The overlay map is anchored here so a surface's
+   *  own body padding — which differs from the PDF's 1-inch margin — does not
+   *  bias the boxes. Defaults to the nominal margin corner when unmeasured. */
+  contentOrigin?: { x: number; y: number };
+};
+
+export const DEFAULT_RASTER_MAP: RasterMap = {
+  pxPerPt: 96 / 72,
+  marginPt: 72,
+  pageHeightPt: 792,
+};
+
+/** De-paginate a stacked-page document-y to a continuous-flow document-y:
+ *  every page break re-inserted one bottom-margin + one top-margin
+ *  (`2·marginPt`) the continuous screenshot never had, so strip them. */
+function depaginate(documentY: number, pageIndex: number, marginPt: number): number {
+  return documentY - pageIndex * 2 * marginPt;
+}
+
+/**
+ * Map per-block PDF geometry to overlay boxes in the captured PNG's pixel
+ * space, preserving the geometry block index as the overlay number.
  *
- * The geometry blocks live on a CONTINUOUS document-y axis (stitched across PDF
- * pages, top-left origin, in PDF user-space points). The PNG is a single
- * full-page screenshot in CSS pixels. We map the geometry's content-y range
- * onto the PNG's pixel height by a uniform affine fit (the document content is
- * the same in both; only the units and the page margins differ), and x by the
- * geometry's content-x range onto the PNG width. This is APPROXIMATE by design
- * — the overlay is a human-orientation aid, not a measurement; the geometry
- * INDEX (the number) is the load-bearing part, and that is exact.
+ * The geometry blocks live on a STACKED-PAGE document-y axis: page p's content
+ * occupies document-y `[p·H, (p+1)·H]` (top-left origin, PDF points), and each
+ * page carries top+bottom margins (`marginPt` each). A `page.pdf()` PAGINATES
+ * the flow; the full-page screenshot captures that SAME flow as ONE continuous
+ * column with NO page breaks and NO repeated margins.
+ *
+ * The map is built RELATIVE to the first block, anchored to the screenshot's
+ * MEASURED content origin (`raster.contentOrigin`):
+ *   - de-paginate each block's document-y (strip the page-break margin slack),
+ *   - express it as an offset from the FIRST block's de-paginated top-left,
+ *   - scale that offset by `pxPerPt`, and add the measured content origin.
+ *
+ * This is EXACT, not a stretch-to-fit: block widths/heights scale by the fixed
+ * pt→px ratio (so the rectangles bound the blocks tightly), and the per-surface
+ * body-padding bias (the editor canvas vs. the portable reader use different
+ * leading, so neither sits exactly at the PDF's 1-inch margin) is removed by
+ * anchoring block 0 to its measured pixel position. When `contentOrigin` is
+ * absent, we fall back to the nominal margin corner (`marginPt · pxPerPt`),
+ * which is what the pure unit test exercises. Boxes are clamped to the raster by
+ * `buildOverlaySvg` downstream; the geometry INDEX (the number) is exact.
  */
 export function geometryToOverlayBoxes(
   geom: PdfGeometry,
   dims: PngDims,
+  raster: RasterMap = DEFAULT_RASTER_MAP,
 ): OverlayBox[] {
   const blocks = geom.blocks;
   if (blocks.length === 0 || dims.width === 0 || dims.height === 0) return [];
 
-  // Content bounds in geometry (PDF point) space.
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const b of blocks) {
-    minX = Math.min(minX, b.x);
-    maxX = Math.max(maxX, b.x + b.w);
-    minY = Math.min(minY, b.y);
-    maxY = Math.max(maxY, b.y + b.h);
-  }
-  const spanX = maxX - minX || 1;
-  const spanY = maxY - minY || 1;
-  // Fit the content box into 96% of the PNG with a small inset so edge blocks
-  // keep their badge on-image.
-  const inset = 0.02;
-  const sx = (dims.width * (1 - 2 * inset)) / spanX;
-  const sy = (dims.height * (1 - 2 * inset)) / spanY;
+  const { pxPerPt, marginPt } = raster;
+  const first = blocks[0]!;
+  // Geometry-space anchor = the first block's top-left (de-paginated y).
+  const anchorPtX = first.x;
+  const anchorPtY = depaginate(first.y, first.pageIndex, marginPt);
+  // Pixel-space anchor = the measured content origin, or the nominal margin
+  // corner when unmeasured (pure-unit fallback).
+  const originPx = raster.contentOrigin ?? { x: marginPt * pxPerPt, y: marginPt * pxPerPt };
 
-  return blocks.map((b: PdfBlock) => ({
-    n: b.idx,
-    x: dims.width * inset + (b.x - minX) * sx,
-    y: dims.height * inset + (b.y - minY) * sy,
-    w: b.w * sx,
-    h: b.h * sy,
-    textSnippet: b.textSnippet,
-  }));
+  return blocks.map((b: PdfBlock) => {
+    const depagY = depaginate(b.y, b.pageIndex, marginPt);
+    return {
+      n: b.idx,
+      x: originPx.x + (b.x - anchorPtX) * pxPerPt,
+      y: originPx.y + (depagY - anchorPtY) * pxPerPt,
+      w: b.w * pxPerPt,
+      h: b.h * pxPerPt,
+      textSnippet: b.textSnippet,
+    };
+  });
 }
 
 // ─── bundle assembly (pure) ─────────────────────────────────────────────────────
@@ -555,11 +598,20 @@ export async function runVisionVerify(
   doc: PortableDoc,
   geometryContext: VerdictRecord[],
 ): Promise<VisionRenderResult> {
-  const [{ renderEditorToPng, renderHtmlChannelToPng }, { extractPdfGeometry }] =
+  const [{ renderEditorToPng, renderHtmlChannelToPng, RASTER }, { extractPdfGeometry }] =
     await Promise.all([
       import('./render-to-png.ts'),
       import('./pdf-geometry.ts'),
     ]);
+
+  // The pt→px map derived from the shared PDF_PAGE geometry — both legs are
+  // captured under it (same width, deviceScaleFactor 1). The contentOrigin is
+  // per-side (each surface's body padding differs), so each leg gets its own.
+  const baseRaster = {
+    pxPerPt: RASTER.pxPerPt,
+    marginPt: RASTER.marginPt,
+    pageHeightPt: RASTER.pageHeightPt,
+  };
 
   const [editorRender, channelRender] = await Promise.all([
     renderEditorToPng(doc),
@@ -573,8 +625,14 @@ export async function runVisionVerify(
     extractPdfGeometry(channelRender.pdf),
   ]);
 
-  const editorBoxes = geometryToOverlayBoxes(editorGeom, editorRender.dims);
-  const channelBoxes = geometryToOverlayBoxes(channelGeom, channelRender.dims);
+  const editorBoxes = geometryToOverlayBoxes(editorGeom, editorRender.dims, {
+    ...baseRaster,
+    contentOrigin: editorRender.contentOrigin,
+  });
+  const channelBoxes = geometryToOverlayBoxes(channelGeom, channelRender.dims, {
+    ...baseRaster,
+    contentOrigin: channelRender.contentOrigin,
+  });
 
   const [editorPng, channelPng] = await Promise.all([
     composeOverlayPng(editorRender.png, editorBoxes),

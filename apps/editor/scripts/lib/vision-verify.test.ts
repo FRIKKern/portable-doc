@@ -27,6 +27,7 @@ import {
   buildOverlaySvg,
   composeOverlayPng,
   geometryToOverlayBoxes,
+  DEFAULT_RASTER_MAP,
   assembleBundle,
   bundleManifest,
   parseFindings,
@@ -62,7 +63,8 @@ const GEOMETRY_CONTEXT: VerdictRecord[] = [
   },
 ];
 
-const DIMS = { width: 600, height: 800 };
+// Letter page at 96 DPI: 612pt × 4/3 = 816px wide, 792pt × 4/3 = 1056px per page.
+const DIMS = { width: 816, height: 1200 };
 
 describe('vision-verify overlay numbering (shared vocabulary with geometry)', () => {
   it('maps each geometry block to an overlay box that KEEPS its geometry idx', () => {
@@ -77,6 +79,43 @@ describe('vision-verify overlay numbering (shared vocabulary with geometry)', ()
     }
     // Document order is preserved: block 0 sits above block 2.
     expect(boxes[0]!.y).toBeLessThan(boxes[2]!.y);
+  });
+
+  it('maps PDF points to screenshot pixels by the EXACT fixed scale (not stretch-to-fit)', () => {
+    const boxes = geometryToOverlayBoxes(GEOM, DIMS);
+    const s = DEFAULT_RASTER_MAP.pxPerPt; // 4/3
+    // Block 0 is at x=72, y=72, w=400, h=24 in points, page 0 (no pagination
+    // slack) → straight scale by pxPerPt. This is the load-bearing fix: the box
+    // must TIGHTLY bound the block, so the geometry pt × scale lands exactly.
+    expect(boxes[0]!.x).toBeCloseTo(72 * s, 6);
+    expect(boxes[0]!.y).toBeCloseTo(72 * s, 6);
+    expect(boxes[0]!.w).toBeCloseTo(400 * s, 6);
+    expect(boxes[0]!.h).toBeCloseTo(24 * s, 6);
+    // Block 1 at y=110 (page 0) → 110 × scale, no slack subtracted.
+    expect(boxes[1]!.y).toBeCloseTo(110 * s, 6);
+  });
+
+  it('de-paginates document-y so a page-2 block lands on the continuous screenshot column', () => {
+    const { marginPt, pageHeightPt, pxPerPt } = DEFAULT_RASTER_MAP;
+    // A block on page 1 (the SECOND page): its stacked document-y carries one
+    // page's worth of slack (pageHeightPt) plus its own 72pt top inset. The
+    // continuous screenshot has NO page break, so the box must sit at the
+    // de-paginated offset = (documentY − 1·2·marginPt) × pxPerPt.
+    const docY = pageHeightPt + marginPt; // top of page 2 content, document-y pt.
+    const twoPage: PdfGeometry = {
+      blocks: [
+        { idx: 0, x: 72, y: 72, w: 400, h: 24, fontSize: 24, textSnippet: 'p1', pageIndex: 0 },
+        { idx: 1, x: 72, y: docY, w: 400, h: 24, fontSize: 11, textSnippet: 'p2', pageIndex: 1 },
+      ],
+      meta: { pageCount: 2, measuredLineHeight: 14, groupingGapPt: 8.4 },
+    };
+    const boxes = geometryToOverlayBoxes(twoPage, { width: 816, height: 4000 });
+    const expectedY = (docY - 1 * 2 * marginPt) * pxPerPt;
+    expect(boxes[1]!.y).toBeCloseTo(expectedY, 6);
+    // And the page-2 block's continuous-y is just one usable content height
+    // (792 − 144 = 648pt) below the page-1 top inset — proving the margins were
+    // removed, not the raw stacked offset used.
+    expect(boxes[1]!.y).toBeCloseTo((648 + 72) * pxPerPt, 6);
   });
 
   it('draws the geometry index as the badge number in the overlay SVG', () => {
