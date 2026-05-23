@@ -46,10 +46,32 @@ drift is kept as a non-gating diagnostic). This is the only thing that
 actually looks at where the pixels land, so it is the authority for any claim
 about layout or visual fidelity.
 
-Geometry thresholds (bound decision #8): pass `< 8.5pt`, warn `8.5–17pt`,
-fail `> 17pt` (a fail blocks CI). DOCX uses a looser `> 1.5 line-heights` fail
-under a `reflow-sanity` gate level. SSIM is a warn-only floor (~0.92) that
-never blocks CI. All tolerances live in one constants file.
+The metric is the **line-height-normalized inter-block whitespace gap**
+(`deltaLH`): the gap from the bottom of the previous block to the top of this
+one, divided by that side's own measured line height. Dividing by line height
+makes it scale-invariant, so the editor canvas's ~18px body and the export's
+11pt body cancel out — a uniform display-vs-print zoom is not a defect.
+
+Geometry thresholds (bound decision #8), expressed in line-heights:
+pass `< 0.5LH`, warn `0.5–1.0LH`, fail `> 1.0LH` (a fail blocks CI). DOCX
+widens the fail edge to `1.5LH` under a `reflow-sanity` gate level. All
+tolerances live in one constants file (`layout-match.ts`:
+`DEFAULT_THRESHOLDS` / `DOCX_THRESHOLDS`).
+
+**Height parity is advisory, never gating.** A block's own height delta
+(`heightDeltaLH`) is computed and reported for debuggability, but it never
+flips a verdict: the two sides' measured line-heights legitimately diverge by
+the display-vs-print scale, so the raw height ratio is an unvalidated parity
+signal. The scale-invariant whitespace gap is the sole gate.
+
+**Images and other containers are first-class geometry blocks.** An image is
+extracted as its own block from the PDF's image-XObject placement (it carries
+position + size with an empty text snippet) — so its box height no longer
+leaks into the whitespace gap of the following block, and image↔image pairs get
+their own size/position parity check (a divergent width/height gates above a
+generous line-height band). Lists, tables, and callouts are each collapsed into
+ONE container block by the inter-run gap rule, so the two block streams line up
+1:1 by document order in the common case.
 
 ## structural-check A1..A23 own structure
 
@@ -92,19 +114,23 @@ separate axis from both geometry and structure.
 Not every channel gets the full geometry gate. Each channel records a
 `gateLevel`:
 
-| Channel | Gate |
-|---|---|
-| editor | full geometry gate |
-| HTML | full geometry gate |
-| PDF | full geometry gate |
-| DOCX | full geometry gate (looser `reflow-sanity` threshold) |
-| EPUB | **structural-only** (order + presence); geometry informational |
-| Markdown | **structural-only** (order + presence); geometry informational |
+| Channel | `gateLevel` | Gate |
+|---|---|---|
+| editor | `geometry` | strict geometry gate (`0.5 / 1.0LH` bands) |
+| HTML | `geometry` | strict geometry gate (`0.5 / 1.0LH` bands) |
+| PDF | `geometry` | strict geometry gate (`0.5 / 1.0LH` bands) |
+| DOCX | `reflow-sanity` | geometry gate at a looser `1.5LH` fail edge |
+| EPUB | `structural` | geometry runs but is **informational** — never gates |
+| Markdown | `structural` | **structural-only**: no render leg at all, surfaced as a note |
 
-EPUB and Markdown reflow by design (reader-controlled font size, no fixed
-page), so absolute geometry parity is not a meaningful target there — they are
-gated on structure and presence, with geometry kept as an informational
-diagnostic only.
+The `geometry` tier (editor / HTML / PDF) hard-gates CI on the strict bands.
+DOCX runs the SAME verdict set at the looser `reflow-sanity` edge because
+LibreOffice — not Word — is the rendering oracle (decision #12); a DOCX fail
+still blocks. EPUB and Markdown reflow by design (reader-controlled font size,
+no fixed page), so absolute geometry parity is not a meaningful target there.
+EPUB still renders real geometry but the result is an informational diagnostic
+that never blocks; Markdown has no fixed-layout exporter to render, so it has
+no geometry leg at all and is judged on structure and presence only.
 
 ## Caveat: LibreOffice ≠ Microsoft Word (bound decision #12)
 

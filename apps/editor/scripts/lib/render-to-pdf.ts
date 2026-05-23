@@ -63,6 +63,7 @@ import { toHtmlBlob } from '../../src/export/toHtml.ts';
 import { toPdfBlob } from '../../src/export/toPdf.ts';
 import { toDocxBlob } from '../../src/export/toDocx.ts';
 import { toEpubBlob } from '../../src/export/toEpub.ts';
+import { injectFixtureDoc, waitForEditorReady, waitForFonts } from './editor-page.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // scripts/lib → apps/editor (the Vite project root with index.html).
@@ -181,57 +182,12 @@ export async function renderEditorToPdf(
   const browser: Browser = await chromium.launch({ headless: true, ...options?.launch });
   try {
     const page = await browser.newPage();
-    // Inject the doc BEFORE any app script runs. lib/fixtures.ts reads
-    // window.__PAPERFLOW_FIXTURE_DOC__ in resolveFixtureFromUrl(), so the
-    // editor boots straight onto this doc with no flash of the welcome
-    // fixture and no on-disk fixture required.
-    await page.addInitScript((injected) => {
-      (window as unknown as { __PAPERFLOW_FIXTURE_DOC__: unknown }).__PAPERFLOW_FIXTURE_DOC__ =
-        injected;
-    }, doc as unknown);
-
+    // Inject the doc BEFORE any app script runs, then load + wait through the
+    // shared ready/chrome/font gate (editor-page.ts) — the byte-identical setup
+    // the PNG vision leg also uses, so both come off the same DOM.
+    await injectFixtureDoc(page, doc);
     await page.goto(`${baseUrl}/?fixture=injected`, { waitUntil: 'load' });
-
-    // Deterministic ready gate (App.tsx sets data-fixture-ready once the
-    // TipTap instance mounts). Then wait for the ProseMirror surface to carry
-    // actual text so we never print a blank or half-laid-out frame.
-    await page.waitForSelector('[data-testid="paper-app"][data-fixture-ready="true"]', {
-      timeout: 30_000,
-    });
-    await page.waitForFunction(
-      () => {
-        const pm = document.querySelector('.paper-editor [contenteditable="true"], .ProseMirror');
-        return !!pm && (pm.textContent ?? '').trim().length > 0;
-      },
-      undefined,
-      { timeout: 30_000 },
-    );
-    // Hide the editor's app CHROME so the PDF captures the DOCUMENT canvas
-    // only — the rendered blocks, not the surrounding UI. The footer status
-    // strip, margin-diagnostics gutter, floating block-chrome cluster, and the
-    // preview side-panels are editor affordances, not document content; left
-    // visible they segment into extra PDF blocks (e.g. the footer's "✓ valid /
-    // saved just now" strip) that have no counterpart in any export channel
-    // and would mis-pair against the closing paragraph. We render the real
-    // .ProseMirror layout under the editor's own paper.css; only the chrome is
-    // suppressed.
-    await page.addStyleTag({
-      content: `
-        .paper-footer,
-        .paper-margin-diagnostics,
-        .paper-floating-chrome,
-        .paper-block__side-handle,
-        [data-testid="paper-block-side-handle"],
-        [data-testid="margin-diagnostics"],
-        [data-testid="docx-preview-panel"],
-        [data-testid="ink-preview-panel"],
-        [data-testid="epub-preview-panel"],
-        [data-testid="pdf-preview-panel"] { display: none !important; }
-      `,
-    });
-
-    // Let fonts settle so glyph metrics (and thus block geometry) are stable.
-    await page.evaluate(() => (document as Document & { fonts?: FontFaceSet }).fonts?.ready);
+    await waitForEditorReady(page);
 
     const buf = await page.pdf(PDF_PAGE);
     return new Uint8Array(buf);
@@ -579,7 +535,7 @@ export async function renderEpubChannelToPdf(
     await page.goto(`http://127.0.0.1:${started.port}/${chapterRel}`, {
       waitUntil: 'networkidle',
     });
-    await page.evaluate(() => (document as Document & { fonts?: FontFaceSet }).fonts?.ready);
+    await waitForFonts(page);
     const buf = await page.pdf(PDF_PAGE);
     return new Uint8Array(buf);
   } finally {

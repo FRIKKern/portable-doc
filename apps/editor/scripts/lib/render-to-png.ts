@@ -30,6 +30,7 @@ import {
   getEditorServerUrl,
   type RenderOptions,
 } from './render-to-pdf.ts';
+import { injectFixtureDoc, waitForEditorReady, waitForFonts } from './editor-page.ts';
 
 /**
  * Raster constants for the human-eye PNG leg, DERIVED from `PDF_PAGE` so the
@@ -84,19 +85,6 @@ export type PngRender = {
    *  removes that bias so box N tightly bounds block N. */
   contentOrigin: { x: number; y: number };
 };
-
-const CHROME_HIDE_CSS = `
-  .paper-footer,
-  .paper-margin-diagnostics,
-  .paper-floating-chrome,
-  .paper-block__side-handle,
-  [data-testid="paper-block-side-handle"],
-  [data-testid="margin-diagnostics"],
-  [data-testid="docx-preview-panel"],
-  [data-testid="ink-preview-panel"],
-  [data-testid="epub-preview-panel"],
-  [data-testid="pdf-preview-panel"] { display: none !important; }
-`;
 
 /** Read a captured PNG's true raster dimensions from its IHDR header so `dims`
  *  reflects the actual bytes (not a viewport guess). A PNG starts with an
@@ -177,24 +165,11 @@ export async function renderEditorToPng(
       viewport: { width: RASTER.pageWidthPx, height: 1024 },
       deviceScaleFactor: RASTER.deviceScaleFactor,
     });
-    await page.addInitScript((injected) => {
-      (window as unknown as { __PAPERFLOW_FIXTURE_DOC__: unknown }).__PAPERFLOW_FIXTURE_DOC__ =
-        injected;
-    }, doc as unknown);
+    // Same shared fixture/ready/chrome/font gate as the geometry PDF leg
+    // (editor-page.ts) so the screenshot and the PDF come off an identical DOM.
+    await injectFixtureDoc(page, doc);
     await page.goto(`${baseUrl}/?fixture=injected`, { waitUntil: 'load' });
-    await page.waitForSelector('[data-testid="paper-app"][data-fixture-ready="true"]', {
-      timeout: 30_000,
-    });
-    await page.waitForFunction(
-      () => {
-        const pm = document.querySelector('.paper-editor [contenteditable="true"], .ProseMirror');
-        return !!pm && (pm.textContent ?? '').trim().length > 0;
-      },
-      undefined,
-      { timeout: 30_000 },
-    );
-    await page.addStyleTag({ content: CHROME_HIDE_CSS });
-    await page.evaluate(() => (document as Document & { fonts?: FontFaceSet }).fonts?.ready);
+    await waitForEditorReady(page);
     const pdf = new Uint8Array(await page.pdf(PDF_PAGE));
     return await capturePng(page, pdf);
   } finally {
@@ -223,7 +198,7 @@ export async function renderHtmlChannelToPng(
       deviceScaleFactor: RASTER.deviceScaleFactor,
     });
     await page.setContent(html, { waitUntil: 'networkidle' });
-    await page.evaluate(() => (document as Document & { fonts?: FontFaceSet }).fonts?.ready);
+    await waitForFonts(page);
     const pdf = new Uint8Array(await page.pdf(PDF_PAGE));
     return await capturePng(page, pdf);
   } finally {
