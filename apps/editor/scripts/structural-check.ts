@@ -1,20 +1,34 @@
 /**
- * structural-check — the truth metric that replaces pixelmatch as the
- * fidelity oracle. Loads every fixture, runs all four exporters, then
- * fires 23 boolean assertions (paragraph counts, heading sequences, tone
- * classes, OOXML font references, EPUB OPF manifest entries, source-CSS
- * @font-face shapes, ...). Persists artifacts under .papir-check/<fix>/
- * for debugging; emits a results table + structural-check.json.
+ * structural-check — the STRUCTURE/content/font oracle. Loads every fixture,
+ * runs all four exporters, then fires boolean assertions over the real
+ * emitted bytes (paragraph counts, heading sequences, tone classes, OOXML
+ * font references, EPUB OPF manifest entries, source-CSS @font-face shapes,
+ * ...). Persists artifacts under .papir-check/<fix>/ for debugging; emits a
+ * results table + structural-check.json.
  *
  * Spec: ~/docs/paperflow/specs/2026-05-20-structural-assertions.html
+ * Trust boundary: docs/parity-trust-boundary.md (authority hierarchy).
  *
  * Usage:
  *   pnpm check:structural
  *   tsx scripts/structural-check.ts
  *
- * Exit 0 iff every assertion passes, else 1.
+ * AUTHORITY TIERS (gateLevel) — see docs/parity-trust-boundary.md:
+ *  - A1..A23  gateLevel="authoritative"      — structure/content/font over
+ *    real emitted bytes. These HARD-FAIL the run (exit 1).
+ *  - A24..A27 gateLevel="preflight-estimate" — fast (<1s) arithmetic spacing
+ *    hint. They ESTIMATE block positions from cumulative margin math; they
+ *    never render anything. SUPERSEDED for layout truth by rendered geometry
+ *    (`pnpm check:geometry` → layout-match.ts / pdf-geometry.ts), which
+ *    extracts exact glyph coordinates from real PDFs. A24..A27 deltas are
+ *    ADVISORY ONLY — they print WARN, never FAIL, and do NOT change the exit
+ *    code. Green here means "the spacing math agrees," NOT "the pixels agree."
+ *  - A28      gateLevel="deferred"           — no-op stub. PDF layout is now
+ *    owned end-to-end by rendered geometry; this slot is kept only so the
+ *    A-sequence stays whole. Always passes; never gates.
  *
- * C6 (2026-05-21) sub-em A24..A27 known limits:
+ * C6 (2026-05-21) sub-em A24..A27 known limits (arithmetic-only; for the
+ * authoritative layout verdict use rendered geometry, not these):
  *  - parsePtValue accepts pt, em (1em = 11pt body baseline), px (0.75pt).
  *    Other units (%, auto, calc()) still return 0 — fine for the spec lock.
  *  - paragraphCountForBlock now matches the DOCX exporter's actual shape:
@@ -25,7 +39,8 @@
  *  - editorCumulativePts recurses into section.blocks so A27 totals match
  *    the channel's actual document height. Per-block A24..A26 stay
  *    top-level; section.blocks contribute only to A27's editorTotal.
- *  - A28 (PDF segmentation) remains deliberately deferred — see
+ *  - A28 (PDF segmentation) is deferred here because rendered geometry
+ *    (T1–T3) now does it for real — see docs/parity-trust-boundary.md and
  *    ~/docs/paperflow/notes/2026-05-20-parity-research-note.html #2.
  */
 import { promises as fs, readFileSync } from 'node:fs';
@@ -76,11 +91,19 @@ interface ExportArtifacts {
 
 type RunOutcome = { pass: true } | { pass: false; detail: string };
 
+/** Authority tier for an assertion — see docs/parity-trust-boundary.md.
+ *  Only "authoritative" failures gate the run (exit 1). "preflight-estimate"
+ *  failures are advisory (WARN, no exit effect); "deferred" never fails. */
+type GateLevel = 'authoritative' | 'preflight-estimate' | 'deferred';
+
 interface Assertion {
   id: string;
   name: string;
   channel: 'all' | 'docx' | 'epub' | 'html' | 'css' | 'pdf' | 'ast';
   fixtures: FixtureName[] | 'all';
+  /** Defaults to "authoritative" when omitted (A1..A23). A24..A27 set
+   *  "preflight-estimate"; A28 sets "deferred". */
+  gateLevel?: GateLevel;
   run: (fixture: LoadedFixture, artifacts: ExportArtifacts, source: SourceCss) => RunOutcome;
 }
 
@@ -88,6 +111,9 @@ interface Result {
   fixture: FixtureName;
   assertion: string;
   pass: boolean;
+  /** Authority tier (mirrors the assertion's gateLevel). New in T6; existing
+   *  consumers that key on {fixture,assertion,pass,detail} are unaffected. */
+  gateLevel: GateLevel;
   detail?: string;
 }
 
@@ -740,9 +766,19 @@ function compareCumulative(
 
 // ---------------------------------------------------------------------------
 // Assertion implementations — A1..A28. Each returns { pass } or
-// { pass:false, detail } with a one-line failure breadcrumb. Failures here
-// are diagnostic; B10 owns making any failing assertion green. A24..A27
-// add sub-em layout equivalence; A28 is reserved as a deferred PDF gate.
+// { pass:false, detail } with a one-line failure breadcrumb.
+//
+// A1..A23 (gateLevel "authoritative") verify the real emitted bytes —
+// structure, content, fonts — and HARD-FAIL the run on a miss.
+//
+// A24..A27 (gateLevel "preflight-estimate") are a fast arithmetic spacing
+// HINT, not a layout gate: they estimate per-block cumulative positions from
+// CSS/OOXML margin math without rendering a single glyph. Rendered geometry
+// (`pnpm check:geometry`) is the authority for layout/visual parity; a
+// preflight-estimate miss prints WARN and never changes the exit code.
+//
+// A28 (gateLevel "deferred") is a no-op stub — PDF layout is now owned by
+// rendered geometry. See docs/parity-trust-boundary.md.
 // ---------------------------------------------------------------------------
 
 // Callout tone appears in the emitted class as `paper-callout-{tone}-{emphasis}`,
@@ -1300,8 +1336,9 @@ const assertions: Assertion[] = [
   },
   {
     id: 'A24',
-    name: 'DOCX per-block cumulative position within 1 line-height of editor',
+    name: '[preflight hint] DOCX per-block spacing-math within 1 line-height of editor (rendered geometry is authoritative)',
     channel: 'docx',
+    gateLevel: 'preflight-estimate',
     fixtures: SUBEM_FIXTURES_PER_BLOCK,
     run: (fixture, artifacts) => {
       const xml = artifacts.docxText.get('word/document.xml') ?? '';
@@ -1320,8 +1357,9 @@ const assertions: Assertion[] = [
   },
   {
     id: 'A25',
-    name: 'EPUB per-block cumulative position within 1 line-height of editor',
+    name: '[preflight hint] EPUB per-block spacing-math within 1 line-height of editor (rendered geometry is authoritative)',
     channel: 'epub',
+    gateLevel: 'preflight-estimate',
     fixtures: SUBEM_FIXTURES_PER_BLOCK,
     run: (fixture, artifacts) => {
       const chapterPath = Array.from(artifacts.epubText.keys()).find((p) =>
@@ -1356,8 +1394,9 @@ const assertions: Assertion[] = [
   },
   {
     id: 'A26',
-    name: 'HTML per-block cumulative position within 1 line-height of editor',
+    name: '[preflight hint] HTML per-block spacing-math within 1 line-height of editor (rendered geometry is authoritative)',
     channel: 'html',
+    gateLevel: 'preflight-estimate',
     fixtures: SUBEM_FIXTURES_PER_BLOCK,
     run: (fixture, artifacts) => {
       const html = artifacts.htmlString;
@@ -1380,8 +1419,9 @@ const assertions: Assertion[] = [
   },
   {
     id: 'A27',
-    name: 'Total document height within ±10% of editor (DOCX, EPUB, HTML)',
+    name: '[preflight hint] Total document height-math within ±10% of editor (DOCX, EPUB, HTML; rendered geometry is authoritative)',
     channel: 'all',
+    gateLevel: 'preflight-estimate',
     fixtures: SUBEM_FIXTURES_PER_BLOCK,
     run: (fixture, artifacts) => {
       const blocks = fixture.doc.blocks;
@@ -1442,12 +1482,15 @@ const assertions: Assertion[] = [
   },
   {
     id: 'A28',
-    name: 'PDF sub-em layout equivalence (deferred — see backlog #2)',
+    name: '[deferred] PDF sub-em layout equivalence — superseded by rendered geometry (pnpm check:geometry)',
     channel: 'pdf',
-    // No fixtures — A28 is a deliberate skip. PDF segmentation is harder
-    // than XML/CSS walking; documented in 2026-05-20-parity-research-note
-    // .html backlog item #2. Listed here so the spec sequence stays whole
-    // and a future task can replace the empty fixture list to enable it.
+    gateLevel: 'deferred',
+    // No-op stub. PDF layout equivalence is now done for real by rendered
+    // geometry (T1–T3: render-to-pdf.ts → pdf-geometry.ts → layout-match.ts,
+    // run via `pnpm check:geometry`), which extracts exact glyph coordinates
+    // and computes per-block verdicts. This slot is kept only so the
+    // A-sequence stays whole; it always passes and never gates.
+    // See docs/parity-trust-boundary.md.
     fixtures: [],
     run: () => ({ pass: true }),
   },
@@ -1496,6 +1539,7 @@ async function main(): Promise<void> {
           fixture: f.name,
           assertion: a.id,
           pass: false,
+          gateLevel: a.gateLevel ?? 'authoritative',
           detail: `export step crashed: ${msg.slice(0, 80)}`,
         });
       }
@@ -1528,6 +1572,7 @@ async function main(): Promise<void> {
         fixture: f.name,
         assertion: a.id,
         pass: outcome.pass,
+        gateLevel: a.gateLevel ?? 'authoritative',
         ...(outcome.pass ? {} : { detail: outcome.detail }),
       });
     }
@@ -1550,25 +1595,55 @@ async function main(): Promise<void> {
 
   const passes = results.filter((r) => r.pass).length;
   const fails = results.length - passes;
+  // Only "authoritative" (A1..A23) misses gate the run. preflight-estimate
+  // (A24..A27) misses are advisory — they're an arithmetic spacing hint that
+  // rendered geometry (`pnpm check:geometry`) supersedes — and "deferred"
+  // (A28) never fails. See docs/parity-trust-boundary.md.
+  const failingResults = results.filter((r) => !r.pass);
+  const gatingFails = failingResults.filter(
+    (r) => (r.gateLevel ?? 'authoritative') === 'authoritative',
+  ).length;
+  const advisoryFails = failingResults.length - gatingFails;
   process.stderr.write(
     `\n${passes} pass / ${fails} fail across ${FIXTURE_NAMES.length} fixtures × ${assertions.length} assertions (${results.length} rows total)\n`,
   );
+  process.stderr.write(
+    `  authoritative (A1..A23) fails: ${gatingFails} — these gate the run\n`,
+  );
+  process.stderr.write(
+    `  preflight-estimate (A24..A27) WARN: ${advisoryFails} — advisory only; ` +
+      `rendered geometry (pnpm check:geometry) is the layout authority\n`,
+  );
 
-  process.exit(fails > 0 ? 1 : 0);
+  // Exit is driven solely by authoritative failures. A green run can still
+  // carry preflight-estimate WARNs; that means the spacing math drifted but
+  // says nothing about the rendered pixels — run check:geometry for that.
+  process.exit(gatingFails > 0 ? 1 : 0);
+}
+
+/** Status token for the table — derives from pass + gateLevel. A failing
+ *  preflight-estimate assertion reads WARN (advisory), never FAIL, so the
+ *  table can't be mistaken for an authoritative layout verdict. */
+function statusToken(r: Result): string {
+  if (r.pass) return 'PASS';
+  return (r.gateLevel ?? 'authoritative') === 'authoritative' ? 'FAIL' : 'WARN';
 }
 
 function printTable(results: Result[]): void {
   const widths = {
     fixture: Math.max(7, ...results.map((r) => r.fixture.length)),
     assertion: 4,
-    pass: 4,
+    status: 4,
+    gate: 18,
   };
   const header =
     pad('FIXTURE', widths.fixture) +
     '  ' +
     pad('ID', widths.assertion) +
     '  ' +
-    pad('OK', widths.pass) +
+    pad('OK', widths.status) +
+    '  ' +
+    pad('GATE', widths.gate) +
     '  DETAIL';
   process.stdout.write(header + '\n');
   process.stdout.write('-'.repeat(header.length) + '\n');
@@ -1578,7 +1653,9 @@ function printTable(results: Result[]): void {
       '  ' +
       pad(r.assertion, widths.assertion) +
       '  ' +
-      pad(r.pass ? 'PASS' : 'FAIL', widths.pass) +
+      pad(statusToken(r), widths.status) +
+      '  ' +
+      pad(r.gateLevel ?? 'authoritative', widths.gate) +
       '  ' +
       (r.detail ? r.detail.slice(0, 100) : '');
     process.stdout.write(row + '\n');
