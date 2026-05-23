@@ -276,7 +276,9 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
 async function loadInlineFontFaces(): Promise<string> {
   // Helper: shape one resolved ArrayBuffer/Uint8Array into a @font-face rule.
   const renderFace = (buf: ArrayBuffer | Uint8Array, spec: FontFaceSpec): string => {
-    const ab = buf instanceof Uint8Array ? buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) : buf;
+    // `view.buffer` is typed `ArrayBuffer | SharedArrayBuffer` (TS 5.7+); copy
+    // the viewed bytes into a fresh, provably-plain `ArrayBuffer` instead.
+    const ab = buf instanceof Uint8Array ? new Uint8Array(buf).slice().buffer : buf;
     const b64 = arrayBufferToBase64(ab);
     return (
       `@font-face {\n` +
