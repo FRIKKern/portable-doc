@@ -139,6 +139,9 @@ function alignKey(b: PdfBlock, bodySize: number): string {
   // the aligner pairs image↔image by type + order and never substitutes an
   // image for a text block (or vice versa).
   if (b.kind === 'image') return 'img';
+  // Container-box blocks (pdoc-alu) likewise carry no glyphs — own bucket so the
+  // aligner pairs box↔box by kind + order, never box-for-text or box-for-image.
+  if (b.kind === 'box') return 'box';
   const ratio = bodySize > 0 ? b.fontSize / bodySize : 1;
   // Three buckets, deliberately coarse: heading (clearly larger than body),
   // small (clearly smaller — captions, fine print), body (everything else).
@@ -150,9 +153,10 @@ function alignKey(b: PdfBlock, bodySize: number): string {
 /** The dominant (most-common, rounded) font size on a side — the body text
  *  size. Headings/captions are the minority, so the mode lands on body. */
 function bodyFontSize(blocks: PdfBlock[]): number {
-  // Image blocks (pdoc-evn) have fontSize 0 — exclude them so they don't drag
-  // the body mode toward zero and mis-bucket real text as 'heading'.
-  const textBlocks = blocks.filter((b) => b.kind !== 'image');
+  // Image (pdoc-evn) and box (pdoc-alu) blocks have fontSize 0 — exclude them so
+  // they don't drag the body mode toward zero and mis-bucket real text as
+  // 'heading'.
+  const textBlocks = blocks.filter((b) => b.kind === 'text');
   if (textBlocks.length === 0) return 12;
   const counts = new Map<number, number>();
   for (const b of textBlocks) {
@@ -171,8 +175,9 @@ function bodyFontSize(blocks: PdfBlock[]): number {
 }
 
 function medianFontSize(blocks: PdfBlock[]): number {
-  // Exclude image blocks (fontSize 0) so the median tracks real text only.
-  const textBlocks = blocks.filter((b) => b.kind !== 'image');
+  // Exclude image (pdoc-evn) and box (pdoc-alu) blocks (fontSize 0) so the
+  // median tracks real text only.
+  const textBlocks = blocks.filter((b) => b.kind === 'text');
   if (textBlocks.length === 0) return 12;
   const sorted = textBlocks.map((b) => b.fontSize).sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -251,6 +256,7 @@ const TEXT_MATCH_FLOOR = 0.34;
 const TAG_BONUS = 0.2; // weak pull toward same-kind blocks when text is silent.
 
 const IMAGE_PAIR_SCORE = 0.9; // image↔image is a strong, content-free pairing.
+const BOX_PAIR_SCORE = 0.9; // box↔box (pdoc-alu) is a strong, content-free pairing.
 
 function pairScore(e: PdfBlock, c: PdfBlock, ekKey: string, ckKey: string): number {
   // Image blocks (pdoc-evn) have no text — pair them image↔image by kind +
@@ -259,6 +265,12 @@ function pairScore(e: PdfBlock, c: PdfBlock, ekKey: string, ckKey: string): numb
   // 0 so an image is never force-substituted for a paragraph or vice versa.
   if (e.kind === 'image' || c.kind === 'image') {
     return e.kind === 'image' && c.kind === 'image' ? IMAGE_PAIR_SCORE : 0;
+  }
+  // Container-box blocks (pdoc-alu) also carry no text — pair box↔box by kind +
+  // order, the same content-free pairing as images. A kind mismatch (box vs
+  // text/image) scores 0 so a box never substitutes for another kind.
+  if (e.kind === 'box' || c.kind === 'box') {
+    return e.kind === 'box' && c.kind === 'box' ? BOX_PAIR_SCORE : 0;
   }
   const sim = textSimilarity(e.textSnippet, c.textSnippet);
   if (sim >= TEXT_MATCH_FLOOR) {
@@ -366,10 +378,22 @@ export function pairBlocks(
       j--;
       continue;
     }
-    // Fallback: a zero-score diagonal is the only move left on the path.
-    out.push({ editor: editorBlocks[i - 1]!, channel: channelBlocks[j - 1]! });
-    i--;
-    j--;
+    // Fallback: a zero-score diagonal is the only move left on the path. Never
+    // CROSS KINDS here (pdoc-alu / pdoc-evn) — a box/image must not be force-
+    // paired with a text block (it would mis-fire the no-text rule and pollute
+    // parity). When the two remaining blocks are different kinds, emit them as
+    // two orphans (channel first so reading order is preserved on reverse); only
+    // a same-kind residue takes the zero-score diagonal.
+    const eB = i > 0 ? editorBlocks[i - 1]! : null;
+    const cB = j > 0 ? channelBlocks[j - 1]! : null;
+    if (i > 0 && j > 0 && eB!.kind !== cB!.kind) {
+      out.push({ editor: null, channel: cB! });
+      j--;
+      continue;
+    }
+    out.push({ editor: eB, channel: cB });
+    if (i > 0) i--;
+    if (j > 0) j--;
   }
   out.reverse();
   return out;
@@ -423,8 +447,10 @@ function classify(deltaLH: number, t: Thresholds): Verdict {
 const HEIGHT_ADVISORY_LH = 2.0;
 
 function blockTypeOf(b: PdfBlock, medianSize: number): string {
-  // Image blocks (pdoc-evn) are their own kind — never heading/body.
+  // Image (pdoc-evn) and box (pdoc-alu) blocks are their own kinds — never
+  // heading/body.
   if (b.kind === 'image') return 'image';
+  if (b.kind === 'box') return 'box';
   return b.fontSize >= medianSize + 2 ? 'heading' : 'body';
 }
 
@@ -455,6 +481,17 @@ function imageParityLH(
  *  image is a real block. Set generously so faithful renders (the dominant case)
  *  pass while a real aspect/scale break still surfaces. */
 const IMAGE_PARITY_FAIL_LH = 4.0;
+
+/** Container-box size divergence band, in line-heights (pdoc-alu). Reuses the
+ *  image size-parity machinery: a box whose own width/height diverges from its
+ *  editor counterpart by more than this surfaces as the box's OWN localized
+ *  fail, while the spacing gate to its neighbours now reads correctly because
+ *  the box is a real block measured from its own bottom. Boxes legitimately
+ *  reflow more than images (a callout's width tracks the column; LibreOffice
+ *  reflows code/table boxes), so the band is set LOOSER than images so a
+ *  faithful reflow of the wrapper doesn't false-fail — the gap-leak fix, not box
+ *  size policing, is the goal of this task. */
+const BOX_PARITY_FAIL_LH = 6.0;
 
 function blockIdOf(b: PdfBlock, channel: Channel): string {
   return `${channel}-block-${b.idx}`;
@@ -586,8 +623,13 @@ export function computeVerdicts(
         reason,
         gateLevel,
       });
-      if (editor) prevEditor = editor;
-      else prevChannel = chBlk;
+      // pdoc-alu: a BOX orphan is also transparent to the spacing chain — it
+      // must not become the predecessor (the absorbed text block already owns
+      // the box bottom). Only a TEXT/IMAGE orphan advances prev.
+      if (present.kind !== 'box') {
+        if (editor) prevEditor = editor;
+        else prevChannel = chBlk;
+      }
       continue;
     }
 
@@ -626,13 +668,19 @@ export function computeVerdicts(
     // Image pairs (pdoc-evn) have no text; the aligner already guaranteed they
     // pair image↔image. A human-readable label for the reason string.
     const isImagePair = editor.kind === 'image' && chBlk.kind === 'image';
-    const label = isImagePair ? '[image]' : `'${chBlk.textSnippet}'`;
-    const editorLabel = isImagePair ? '[image]' : `'${editor.textSnippet}'`;
+    // Box pairs (pdoc-alu) — callout / code / table container boxes — also carry
+    // no text and pair box↔box; treated like images for sizing + parity.
+    const isBoxPair = editor.kind === 'box' && chBlk.kind === 'box';
+    // Either kind is a content-free, no-glyph pair (no Jaccard, no no-text rule).
+    const isGlyphlessPair = isImagePair || isBoxPair;
+    const glyphlessLabel = isImagePair ? '[image]' : '[box]';
+    const label = isGlyphlessPair ? glyphlessLabel : `'${chBlk.textSnippet}'`;
+    const editorLabel = isGlyphlessPair ? glyphlessLabel : `'${editor.textSnippet}'`;
 
     // ── no-text: channel dropped a block's text the editor had ───────────
-    // Image blocks legitimately carry NO text on both sides, so the no-text
-    // rule (a dropped/rasterized TEXT block) must not fire for them.
-    const editorHasText = !isImagePair && editor.textSnippet.trim().length > 0;
+    // Image + box blocks legitimately carry NO text on both sides, so the
+    // no-text rule (a dropped/rasterized TEXT block) must not fire for them.
+    const editorHasText = !isGlyphlessPair && editor.textSnippet.trim().length > 0;
     const channelHasText = chBlk.textSnippet.trim().length > 0;
     if (editorHasText && !channelHasText) {
       records.push({
@@ -663,16 +711,39 @@ export function computeVerdicts(
       ? `height parity ${heightDeltaLH.toFixed(2)}LH (ADVISORY ONLY — exceeds ${HEIGHT_ADVISORY_LH}LH but height is non-gating; per-side line-heights diverge by display-vs-print scale, so this is unvalidated)`
       : `height parity ${heightDeltaLH.toFixed(2)}LH (advisory)`;
 
-    // Image size/position parity (pdoc-evn) — gating for image pairs only. The
-    // spacing gate covers vertical PLACEMENT; this catches a divergent
-    // width/height (aspect or scale break) on the image's own box. For text
-    // blocks it stays 0 / non-gating (height is the advisory-only signal there).
-    const imgParityLH = isImagePair
+    // Image / box size parity (pdoc-evn / pdoc-alu), reusing the same scale-
+    // invariant `imageParityLH` machinery. The spacing gate covers vertical
+    // PLACEMENT; this catches a divergent width/height (aspect or scale break)
+    // on the rect's OWN box.
+    //
+    //   - IMAGE pairs: a divergent size GATES (IMAGE_PARITY_FAIL_LH) — an image
+    //     rendered at the wrong aspect/scale is a real, localized defect.
+    //   - BOX pairs (pdoc-alu): size parity is ADVISORY ONLY, never gates. The
+    //     two renderers draw a callout/code/table WRAPPER with materially
+    //     different geometry by design (LibreOffice reflows the box, HTML tracks
+    //     the column, the editor pads differently) — and the two sides capture
+    //     different box COUNTS, so a box's own width/height is an UNVALIDATED
+    //     parity signal exactly like block height (HEIGHT_ADVISORY_LH). This
+    //     task's goal is the GAP-LEAK fix (the box owning its bottom so the next
+    //     block's spacing reads correctly), NOT policing wrapper size. A real
+    //     box-size divergence is REPORTED in the reason but must not gate, or it
+    //     would re-introduce the very false-fails this task removes.
+    const sizeParityLH = isGlyphlessPair
       ? imageParityLH(editor, chBlk, lhEditor, lhChannel)
       : 0;
-    const imgParityFail = isImagePair && imgParityLH > IMAGE_PARITY_FAIL_LH;
-    const imgNote = isImagePair
-      ? `; image size parity ${imgParityLH.toFixed(2)}LH${imgParityFail ? ` (FAIL — exceeds ${IMAGE_PARITY_FAIL_LH}LH; image rendered at a divergent size)` : ' (within tolerance)'}`
+    const sizeParityBand = isBoxPair ? BOX_PARITY_FAIL_LH : IMAGE_PARITY_FAIL_LH;
+    const sizeParityOver = isGlyphlessPair && sizeParityLH > sizeParityBand;
+    // Only an IMAGE size divergence GATES; a box size divergence is advisory.
+    const imgParityFail = isImagePair && sizeParityOver;
+    const parityKind = isImagePair ? 'image' : 'box';
+    const imgNote = isGlyphlessPair
+      ? `; ${parityKind} size parity ${sizeParityLH.toFixed(2)}LH${
+          sizeParityOver
+            ? isImagePair
+              ? ` (FAIL — exceeds ${sizeParityBand}LH; ${parityKind} rendered at a divergent size)`
+              : ` (ADVISORY ONLY — exceeds ${sizeParityBand}LH but box size is non-gating; the two renderers draw the wrapper at divergent geometry by design, so this is unvalidated)`
+            : ' (within tolerance)'
+        }`
       : '';
 
     // ── metric: line-height-normalized inter-block WHITESPACE gap delta ──
@@ -695,8 +766,11 @@ export function computeVerdicts(
         reason,
         gateLevel,
       });
-      prevEditor = editor;
-      prevChannel = chBlk;
+      // Box pairs stay transparent to the spacing chain (see below).
+      if (!isBoxPair) {
+        prevEditor = editor;
+        prevChannel = chBlk;
+      }
       continue;
     }
 
@@ -718,14 +792,23 @@ export function computeVerdicts(
     // an image rendered at the wrong scale surfaces as its OWN localized fail —
     // distinct from the spacing rhythm, which now reads correctly because the
     // image is a real block measured from its own bottom.
-    const spacingVerdict: Verdict = classify(deltaLH, threshold);
+    const rawSpacingVerdict: Verdict = classify(deltaLH, threshold);
+    // pdoc-alu: a BOX block's OWN spacing never GATES. Box capture is renderer-
+    // divergent (the two sides paint different fill/stroke patterns and merge to
+    // different box counts), so a box's own gap-to-predecessor is an unvalidated
+    // signal — its VALUE is owning its bottom so the NEXT text block's gap reads
+    // correctly, not policing its own placement. A box that would gate-fail on
+    // spacing is downgraded to a (visible, non-blocking) `warn`; a clean box
+    // stays a pass. This mirrors why box size parity is advisory.
+    const spacingVerdict: Verdict =
+      isBoxPair && rawSpacingVerdict === 'fail' ? 'warn' : rawSpacingVerdict;
     const verdict: Verdict =
       imgParityFail && spacingVerdict !== 'fail' ? 'fail' : spacingVerdict;
 
     const spacingClause =
       spacingVerdict === 'pass'
         ? `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — within ${threshold.pass}LH)`
-        : `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${spacingVerdict === 'fail' ? `exceeds ${threshold.fail}LH` : `over ${threshold.pass}LH`})`;
+        : `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${rawSpacingVerdict === 'fail' ? (isBoxPair ? `exceeds ${threshold.fail}LH (box spacing non-gating → warn)` : `exceeds ${threshold.fail}LH`) : `over ${threshold.pass}LH`})`;
     const reason = `${blockType} ${label} ${spacingClause}; ${heightNote}${imgNote}`;
 
     records.push({
@@ -742,8 +825,16 @@ export function computeVerdicts(
       gateLevel,
     });
 
-    prevEditor = editor;
-    prevChannel = chBlk;
+    // pdoc-alu: a BOX pair is TRANSPARENT to the spacing chain. The leak fix
+    // already extended the wrapped TEXT block's bottom to the box bottom in
+    // extraction, so the box exists only for diagnostics + advisory parity — it
+    // must NOT become the predecessor, or the text block sorted just after it
+    // (its own wrapped content) would measure a corrupt (negative) gap against
+    // the box. Keep prev pointing at the last TEXT/IMAGE pair.
+    if (!isBoxPair) {
+      prevEditor = editor;
+      prevChannel = chBlk;
+    }
   }
 
   return records;

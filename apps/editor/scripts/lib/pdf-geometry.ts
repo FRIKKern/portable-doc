@@ -111,8 +111,21 @@ export type PdfBlock = {
    * real blocks stops their box-height leaking into the whitespace gap of the
    * FOLLOWING block (the gap is now measured from the image's BOTTOM), and lets
    * the comparison pair image↔image for position/size parity.
+   *
+   * `"box"` is a first-class CONTAINER block (pdoc-alu): the filled/stroked
+   * background or border rectangle that a callout, code block, or table cell
+   * draws AROUND its text. Like images these carry no glyphs (`getTextContent()`
+   * never sees them) — their geometry comes from the operator-list's
+   * `OPS.constructPath` fill/stroke ops mapped through the current CTM. A padded
+   * container's visual box is TALLER than the glyph extent it wraps, and under
+   * glyph-only extraction that excess height leaked into the FOLLOWING block's
+   * whitespace gap (the Info/Success/Neutral callout, code block, and table-row
+   * false-fails). Synthesizing the box as a real block, merged into document
+   * order by y, makes the next block's gap measure from the box's BOTTOM — the
+   * true visual bottom — so the leak disappears and a genuine box size/position
+   * divergence surfaces as the box's OWN localized verdict (like images).
    */
-  kind: 'text' | 'image';
+  kind: 'text' | 'image' | 'box';
 };
 
 export type PdfGeometryMeta = {
@@ -167,6 +180,24 @@ type ImageRect = {
   /** 0-based page index. */
   pageIndex: number;
   /** Cumulative content height of all pages before this image's page, points. */
+  pagePriorHeight: number;
+};
+
+/** A positioned CONTAINER box, harvested from the operator-list graphics state
+ *  (pdoc-alu): the filled/stroked background or border of a callout / code
+ *  block / table cell. Same continuous-document-y space as text + image. */
+type BoxRect = {
+  /** Page-local left, points. */
+  x: number;
+  /** Page-local TOP-left y (flipped from PDF bottom-left), points. */
+  topY: number;
+  /** Width, points. */
+  w: number;
+  /** Height, points. */
+  h: number;
+  /** 0-based page index. */
+  pageIndex: number;
+  /** Cumulative content height of all pages before this box's page, points. */
   pagePriorHeight: number;
 };
 
@@ -273,6 +304,223 @@ async function extractImageRects(
   return rects;
 }
 
+/**
+ * Map a path-bbox `[minX, minY, maxX, maxY]` (path-local user space) through a
+ * CTM and flip to top-left y, exactly as the image corner-mapping does. pdf.js
+ * 5.x hands `OPS.constructPath` its bbox as the third arg — a length-4
+ * array-LIKE (numeric-indexed; not necessarily `Array.isArray`), so we read
+ * indices directly rather than gating on `Array.isArray`. Returns null on a
+ * non-finite / degenerate result so one bad path can't poison the stream.
+ */
+function pathBBoxToRect(
+  bbox: ArrayLike<number>,
+  ctm: number[],
+  pageHeight: number,
+): { x: number; topY: number; w: number; h: number } | null {
+  const minX = bbox[0],
+    minY = bbox[1],
+    maxX = bbox[2],
+    maxY = bbox[3];
+  if (
+    minX === undefined ||
+    minY === undefined ||
+    maxX === undefined ||
+    maxY === undefined
+  ) {
+    return null;
+  }
+  const a = ctm[0] ?? 0,
+    b = ctm[1] ?? 0,
+    c = ctm[2] ?? 0,
+    d = ctm[3] ?? 0,
+    e = ctm[4] ?? 0,
+    f = ctm[5] ?? 0;
+  const corners: Array<[number, number]> = [
+    [minX, minY],
+    [maxX, minY],
+    [maxX, maxY],
+    [minX, maxY],
+  ];
+  const xs = corners.map(([px, py]) => a * px + c * py + e);
+  const ys = corners.map(([px, py]) => b * px + d * py + f);
+  const x0 = Math.min(...xs);
+  const x1 = Math.max(...xs);
+  const y0 = Math.min(...ys);
+  const y1 = Math.max(...ys);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const topY = pageHeight - y1;
+  if (
+    !Number.isFinite(x0) ||
+    !Number.isFinite(topY) ||
+    !Number.isFinite(w) ||
+    !Number.isFinite(h)
+  ) {
+    return null;
+  }
+  return { x: x0, topY, w, h };
+}
+
+/**
+ * Pull every filled / stroked CONTAINER box off a page's operator list
+ * (pdoc-alu). Callout backgrounds, code-block backgrounds, and table cell /
+ * border boxes are drawn as `OPS.constructPath` ops whose FIRST arg is the
+ * paint op (`OPS.fill` / `eoFill` / `stroke` / `fillStroke` / …) and whose THIRD
+ * arg is the path bounding box in user space. We map that bbox through the
+ * current CTM (the same save/restore/transform stack the image walk uses) to
+ * recover the box's top-left rect, then keep only the boxes that are plausibly
+ * a CONTAINER — not page-chrome, hairlines, or glyph-fill noise:
+ *
+ *   1. min-size floor — `w` and `h` both ≥ MIN_BOX_PT drops underlines / rules
+ *      / table gridlines (h≈1pt) and the thin left-edge accent stripes
+ *      (w≈4pt) callouts draw; those are decoration, not containers.
+ *   2. container-height floor — `h` ≥ MIN_BOX_H_PT (more than one text line)
+ *      keeps only boxes tall enough to WRAP content. A single-line-tall fill is
+ *      either a highlight or a glyph drawn as a path (chromium renders some
+ *      monospace glyphs as fills — those show one-line heights and absurd /
+ *      negative widths), never a padded container.
+ *   3. on-page-x guard — the box's left and right edges must lie within the
+ *      page (`x ≥ -EPS` and `x + w ≤ pageWidth + EPS`). The glyph-fill noise
+ *      from (2) frequently lands far off-page (negative x, width > page); a real
+ *      container sits inside the margins.
+ *   4. full-page-background drop — a fill spanning ≥ FULL_PAGE_FRACTION of the
+ *      page height is the page / body background, not a content container, and
+ *      would otherwise swallow the whole stream.
+ *
+ * Heuristic choice (table gridlines vs container): we do NOT emit one block per
+ * gridline. Per-cell fills (a table row renders 3–5 short same-`topY` fills) and
+ * a fill+stroke pair at identical geometry (a bordered code block) are both
+ * collapsed downstream by `mergeOverlappingBoxes` into ONE union box — the OUTER
+ * container — so a table contributes a single row/box block, not a block per
+ * cell or per border line. Nested callouts likewise merge inner→outer.
+ */
+async function extractBoxRects(
+  page: {
+    getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[] }>;
+  },
+  ops: {
+    save: number;
+    restore: number;
+    transform: number;
+    constructPath: number;
+    rectangle: number;
+    paintOps: Set<number>;
+  },
+  pageHeight: number,
+  pageWidth: number,
+  pageIndex: number,
+  pagePriorHeight: number,
+): Promise<BoxRect[]> {
+  const opList = await page.getOperatorList();
+  const rects: BoxRect[] = [];
+  let ctm: number[] = [1, 0, 0, 1, 0, 0];
+  const stack: number[][] = [];
+  const EPS = 2; // on-page slack, points.
+
+  for (let i = 0; i < opList.fnArray.length; i++) {
+    const fn = opList.fnArray[i];
+    if (fn === ops.save) {
+      stack.push(ctm.slice());
+    } else if (fn === ops.restore) {
+      ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+    } else if (fn === ops.transform) {
+      const a = opList.argsArray[i] as number[];
+      if (Array.isArray(a) && a.length >= 6) ctm = matMul(ctm, a);
+    } else if (fn === ops.constructPath) {
+      // pdf.js 5.x: argsArray[i] = [paintOp, pathData, bbox]. We only want a
+      // PAINTED path (fill/stroke), never a clip / endPath (paint op `endPath`).
+      const a = opList.argsArray[i] as [number, unknown, ArrayLike<number>];
+      if (!Array.isArray(a)) continue;
+      const paintOp = a[0];
+      const bbox = a[2];
+      if (!ops.paintOps.has(paintOp) || bbox == null) continue;
+      const r = pathBBoxToRect(bbox, ctm, pageHeight);
+      if (r === null) continue;
+      // (1) min-size floor + (2) container-height floor.
+      if (r.w < MIN_BOX_PT || r.h < MIN_BOX_H_PT) continue;
+      // (3) on-page-x guard — drop off-page glyph-fill noise.
+      if (r.x < -EPS || r.x + r.w > pageWidth + EPS) continue;
+      // (4) full-page background drop.
+      if (r.h >= FULL_PAGE_FRACTION * pageHeight) continue;
+      rects.push({
+        x: r.x,
+        topY: r.topY,
+        w: r.w,
+        h: r.h,
+        pageIndex,
+        pagePriorHeight,
+      });
+    }
+  }
+  return mergeOverlappingBoxes(rects);
+}
+
+// Per-side slack (points) for treating two boxes as part of the SAME container:
+// they merge when the gap between them is under 2× this. Table cells / rows are
+// drawn as boxes that TOUCH (a shared edge → 0 gap) or sit a hairline apart, so
+// they coalesce into ONE table container instead of one block per cell/row (the
+// "don't explode every gridline" rule); a fill+stroke pair at identical geometry
+// likewise merges. It is kept SMALL (gap < 3pt) so two SEPARATE callouts — a
+// real inter-callout margin (several pt) apart — stay distinct blocks.
+const BOX_MERGE_SLACK_PT = 1.5;
+
+/**
+ * Collapse overlapping / adjacent container boxes on a page into their union
+ * (pdoc-alu). This is the "prefer the OUTER container, not every gridline" rule:
+ *   - a fill + a stroke at identical geometry (a bordered code block) → one box;
+ *   - a column of per-cell / per-row table fills that touch or sit a hairline
+ *     apart → ONE table (or row) container box;
+ *   - a nested callout's inner box inside its outer box → the outer box.
+ * Two boxes merge when their rectangles overlap OR are within BOX_MERGE_SLACK_PT
+ * of touching in both axes; the survivor is their bounding union. Iterates to a
+ * fixed point so a chain (cell→cell→cell) collapses fully. Boxes a real margin
+ * apart (two separate callouts) stay distinct.
+ */
+function mergeOverlappingBoxes(rects: BoxRect[]): BoxRect[] {
+  if (rects.length <= 1) return rects;
+  let boxes = rects.map((r) => ({ ...r }));
+  let merged = true;
+  while (merged) {
+    merged = false;
+    const next: BoxRect[] = [];
+    for (const b of boxes) {
+      let absorbed = false;
+      for (const acc of next) {
+        if (boxesAdjacentOrOverlap(acc, b)) {
+          const x0 = Math.min(acc.x, b.x);
+          const y0 = Math.min(acc.topY, b.topY);
+          const x1 = Math.max(acc.x + acc.w, b.x + b.w);
+          const y1 = Math.max(acc.topY + acc.h, b.topY + b.h);
+          acc.x = x0;
+          acc.topY = y0;
+          acc.w = x1 - x0;
+          acc.h = y1 - y0;
+          absorbed = true;
+          merged = true;
+          break;
+        }
+      }
+      if (!absorbed) next.push({ ...b });
+    }
+    boxes = next;
+  }
+  return boxes;
+}
+
+/** Two top-left rects belong to the same container when, after expanding by
+ *  BOX_MERGE_SLACK_PT, they intersect in BOTH axes — i.e. they overlap, touch,
+ *  or sit a hairline apart (table rows / cells, fill+stroke pairs, nested
+ *  callouts). A genuine inter-callout margin exceeds the slack, so distinct
+ *  callouts do NOT merge. */
+function boxesAdjacentOrOverlap(a: BoxRect, b: BoxRect): boolean {
+  const s = BOX_MERGE_SLACK_PT;
+  const ax1 = a.x + a.w + s,
+    ay1 = a.topY + a.h + s;
+  const bx1 = b.x + b.w + s,
+    by1 = b.topY + b.h + s;
+  return a.x - s < bx1 && b.x - s < ax1 && a.topY - s < by1 && b.topY - s < ay1;
+}
+
 /** The 6-float affine matrix pdfjs attaches to each text item. */
 function fontSizeFromTransform(transform: number[]): number {
   const c = transform[2] ?? 0;
@@ -298,6 +546,24 @@ const SNIPPET_LEN = 40;
 // a real content block. Below this it is a hairline / transparent-spacer
 // artifact (a 1×1 PNG paints sub-point) — layout noise, not content.
 const MIN_IMAGE_PT = 3;
+// pdoc-alu: a container box must clear these floors to be kept (see
+// extractBoxRects). MIN_BOX_PT drops hairline rules / table gridlines (h≈1pt)
+// and thin accent stripes (w≈4pt). MIN_BOX_H_PT additionally requires the box
+// to be TALLER than a single text line — a real padded container wraps content,
+// while a one-line-tall fill is a highlight or a glyph drawn as a path (layout
+// noise). 22pt ≈ comfortably over one ~12–18pt body line but well under any
+// padded callout/code/table-row box (those run 26pt+ in the fixtures).
+const MIN_BOX_PT = 8;
+const MIN_BOX_H_PT = 22;
+// A fill spanning at least this fraction of the page height is the page / body
+// background (the editor + channels paint a full-content-area background that
+// runs the whole text column — ~648pt of a 792pt page once the 72pt margins are
+// removed, i.e. ~0.82). It is page chrome, not a content container, and would
+// otherwise swallow the whole stream with a single block taller than every gap.
+// The tallest REAL container in the fixtures (a multi-line code block) is ~110pt
+// (~0.14 of the page), so a 0.55 cutoff drops the background with wide margin
+// while keeping every genuine callout / code / table box.
+const FULL_PAGE_FRACTION = 0.55;
 
 /**
  * Compute the run-to-run vertical gaps (points) used both to self-tune the
@@ -417,9 +683,31 @@ export async function extractPdfGeometry(
     paintInlineImageXObject: OPS.paintInlineImageXObject!,
     paintImageMaskXObject: OPS.paintImageMaskXObject!,
   };
+  // pdoc-alu: the paint ops whose `OPS.constructPath` paths are CONTAINER boxes
+  // (a filled or stroked rectangle). `endPath` (clip / no-paint) is excluded so
+  // clipping rects never become blocks.
+  const boxOps = {
+    save: OPS.save!,
+    restore: OPS.restore!,
+    transform: OPS.transform!,
+    constructPath: OPS.constructPath!,
+    rectangle: OPS.rectangle!,
+    paintOps: new Set<number>(
+      [
+        OPS.fill,
+        OPS.eoFill,
+        OPS.stroke,
+        OPS.closeStroke,
+        OPS.fillStroke,
+        OPS.eoFillStroke,
+        OPS.closeFillStroke,
+      ].filter((v): v is number => typeof v === 'number'),
+    ),
+  };
 
   const runs: Run[] = [];
   const imageRects: ImageRect[] = [];
+  const boxRects: BoxRect[] = [];
   let priorHeight = 0;
 
   for (let p = 0; p < doc.numPages; p++) {
@@ -439,6 +727,19 @@ export async function extractPdfGeometry(
       priorHeight,
     );
     for (const r of pageImages) imageRects.push(r);
+
+    // Container boxes (callout / code / table backgrounds + borders) carry no
+    // glyphs either — harvest their filled/stroked rects from the SAME
+    // operator-list walk (pdoc-alu), per-page merged to the outer container.
+    const pageBoxes = await extractBoxRects(
+      page,
+      boxOps,
+      pageHeight,
+      viewport.width,
+      p,
+      priorHeight,
+    );
+    for (const r of pageBoxes) boxRects.push(r);
 
     for (const item of content.items) {
       // Skip TextMarkedContent entries — they carry no transform/str.
@@ -598,10 +899,81 @@ export async function extractPdfGeometry(
     kind: 'image',
   }));
 
-  const merged = [...blocks, ...imageBlocks].sort((a, b) => {
+  // ─── apply CONTAINER-BOX blocks (pdoc-alu) ───────────────────────────────
+  // A padded callout / code / table draws a background/border box that is
+  // TALLER than the glyph run it wraps; under glyph-only extraction that excess
+  // height leaked into the FOLLOWING block's whitespace gap (the gap was
+  // measured from the inner text's bottom, far above the box bottom). The fix
+  // has TWO halves, applied in order:
+  //
+  //   1. ABSORB the box bottom into the text it wraps. We extend the LAST text
+  //      block the box overlaps so its bottom reaches the box bottom. This is
+  //      what makes the leak fix SYMMETRIC and robust to the two sides
+  //      segmenting text differently: the gap to the next block is then measured
+  //      from each side's own box bottom regardless of which kind of block
+  //      happens to be the predecessor. A box whose bottom does NOT extend past
+  //      the text it wraps (a flush highlight) changes nothing.
+  //   2. EMIT the box as a first-class `kind:"box"` block, interleaved by TOP-y.
+  //      It carries the container's true position + size for box↔box parity
+  //      (advisory; layout-match excludes it from font sizing and gates it like
+  //      an image but looser). Sorting by TOP — not bottom — keeps the box from
+  //      DISPLACING the text spacing chain: the next text block still measures
+  //      its gap from the (now box-bottom-extended) text block, while the box
+  //      block sits adjacent for diagnostics.
+  //
+  // Boxes that merely DUPLICATE a text block's extent (no material bottom past
+  // the glyphs) are dropped — they would add a redundant block with no leak to
+  // fix.
+  const keptBoxRects = boxRects.filter((r) => !boxDuplicatesText(r, blocks));
+
+  // (1) Absorb: extend the text block this box wraps so its bottom reaches the
+  // box bottom. The owner is the BOTTOM-MOST text block the box covers — either
+  // one whose top is INSIDE the box (the common callout/code case) or one that
+  // sits immediately ABOVE the box with no text of its own inside it (a callout
+  // box continued onto the next page, or a box whose text the segmenter merged
+  // into the preceding block). We pick the text block with the largest `y` whose
+  // top precedes the box bottom AND whose bottom is no further than one line
+  // above the box top — i.e. it is the content this box belongs to, not an
+  // unrelated paragraph far above.
+  for (const r of keptBoxRects) {
+    const boxTop = r.pagePriorHeight + r.topY;
+    const boxBottom = boxTop + r.h;
+    let target: PdfBlock | null = null;
+    for (const b of blocks) {
+      if (b.kind !== 'text') continue;
+      const bBottom = b.y + b.h;
+      const startsBeforeBoxEnds = b.y < boxBottom;
+      const reachesBox = bBottom >= boxTop - measuredLineHeight;
+      if (startsBeforeBoxEnds && reachesBox) {
+        if (target === null || b.y > target.y) target = b;
+      }
+    }
+    if (target !== null) {
+      const targetBottom = target.y + target.h;
+      if (boxBottom > targetBottom) target.h = boxBottom - target.y;
+    }
+  }
+
+  // (2) Emit box blocks, interleaved by top-y.
+  const boxBlocks: PdfBlock[] = keptBoxRects.map((r) => ({
+    idx: 0,
+    x: r.x,
+    y: r.pagePriorHeight + r.topY,
+    w: r.w,
+    h: r.h,
+    fontSize: 0, // boxes have no glyphs; excluded from body/font sizing.
+    textSnippet: '',
+    pageIndex: r.pageIndex,
+    kind: 'box' as const,
+  }));
+
+  const merged = [...blocks, ...imageBlocks, ...boxBlocks].sort((a, b) => {
     if (a.y !== b.y) return a.y - b.y;
-    // Tie on top-y: the image sits visually first (text wraps around / below).
-    if (a.kind !== b.kind) return a.kind === 'image' ? -1 : 1;
+    // Tie on top-y: image/box sit visually first (text wraps around / below).
+    if (a.kind !== b.kind) {
+      const rank = (k: PdfBlock['kind']) => (k === 'text' ? 1 : 0);
+      return rank(a.kind) - rank(b.kind);
+    }
     return 0;
   });
   merged.forEach((b, i) => {
@@ -616,4 +988,40 @@ export async function extractPdfGeometry(
       groupingGapPt,
     },
   };
+}
+
+/**
+ * Does a captured container box merely DUPLICATE a text block's bounds rather
+ * than wrap it with materially more height (pdoc-alu)? A box that is
+ * co-extensive with a single text run (a highlight tight around the glyphs)
+ * adds no bottom padding to "own", so synthesizing it as a block is pure noise.
+ * We keep a box only when it MATERIALLY exceeds the glyph extent it overlaps:
+ * its bottom must sit at least DUP_SLACK_PT below the bottom of every text block
+ * it vertically contains, OR it must contain NO text block at all (a box around
+ * an image / empty cell still represents real height). A box that wraps text
+ * AND extends past it (the padded callout / code / table case — the leak) is
+ * kept; a box flush with its text is dropped.
+ */
+const DUP_SLACK_PT = 6;
+
+function boxDuplicatesText(box: BoxRect, textBlocks: PdfBlock[]): boolean {
+  const boxTop = box.pagePriorHeight + box.topY;
+  const boxBottom = boxTop + box.h;
+  let containsText = false;
+  let maxContainedTextBottom = -Infinity;
+  for (const t of textBlocks) {
+    if (t.kind !== 'text') continue;
+    const tTop = t.y;
+    const tBottom = t.y + t.h;
+    // "Vertically contained": the text's top sits within the box's span (the
+    // text is inside this container, not a neighbour above/below it).
+    if (tTop >= boxTop - DUP_SLACK_PT && tTop <= boxBottom) {
+      containsText = true;
+      if (tBottom > maxContainedTextBottom) maxContainedTextBottom = tBottom;
+    }
+  }
+  if (!containsText) return false; // box around an image / empty cell — keep.
+  // Keep only if the box bottom is materially below the wrapped text's bottom
+  // (real bottom padding to own); otherwise it just duplicates the text.
+  return boxBottom <= maxContainedTextBottom + DUP_SLACK_PT;
 }

@@ -226,3 +226,115 @@ describe('extractPdfGeometry — image blocks (pdoc-evn)', () => {
     expect(gapFromImage).toBeGreaterThan(0);
   });
 });
+
+/**
+ * pdoc-alu — padded CONTAINER boxes (callout / code / table backgrounds) become
+ * first-class `kind:"box"` blocks. We render a fixture with a PADDED box (a div
+ * with a background + generous vertical padding, like a callout) wrapping a
+ * single short line, followed by a paragraph. We prove (1) the box is captured
+ * as its OWN block with real geometry from the operator-list fill — it has zero
+ * glyphs, so glyph-only extraction never saw the background — and (2) the block
+ * AFTER the callout measures its whitespace gap from the BOX's bottom (its true
+ * visual bottom), not from the inner text's bottom: under the old glyph-only
+ * extraction the box's bottom padding leaked into the following block's gap.
+ */
+describe('extractPdfGeometry — container-box blocks (pdoc-alu)', () => {
+  const BODY_PT = 14;
+  const PAD_PX = 40; // generous vertical padding → box bottom well below glyphs.
+
+  // A callout = a padded, background-filled div around ONE short line. The
+  // bottom padding makes the box materially TALLER than the glyph extent it
+  // wraps — exactly the leak this captures. A trailing paragraph follows.
+  const BOX_HTML = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  @page { size: 612px 792px; margin: 48px; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Georgia, "Times New Roman", serif; color: #000; }
+  p { font-size: ${BODY_PT}px; line-height: 1.5; margin: 0 0 14px 0; }
+  .callout {
+    font-size: ${BODY_PT}px; line-height: 1.5;
+    background: #eef; border: 1px solid #99c;
+    padding: ${PAD_PX}px 16px; margin: 0 0 14px 0;
+  }
+</style></head><body>
+  <p>This paragraph sits above the callout and is intentionally long so that it
+     wraps across several visual lines, giving the segmentation engine a real
+     run-to-run cadence to self-tune the measured line height from before it
+     ever reaches the padded container that follows it on the page.</p>
+  <div class="callout">Single short callout line with lots of padding above and
+     below it so the background box is materially taller than this one line.</div>
+  <p>This paragraph sits directly below the callout and is also written long
+     enough to wrap over several lines. Its whitespace gap must be measured from
+     the callout BOX bottom, not from the callout's inner text bottom, which is
+     the leak this container-box capture exists to remove from the verifier.</p>
+</body></html>`;
+
+  let boxGeom: PdfGeometry;
+
+  beforeAll(async () => {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setContent(BOX_HTML, { waitUntil: 'networkidle' });
+    const pdfBuffer = await page.pdf({
+      width: '612px',
+      height: '792px',
+      printBackground: true,
+      margin: { top: '48px', bottom: '48px', left: '48px', right: '48px' },
+    });
+    await page.close();
+    await browser.close();
+    boxGeom = await extractPdfGeometry(new Uint8Array(pdfBuffer));
+  }, 60_000);
+
+  it('captures the padded callout background as a kind:"box" block with empty text and a real size', () => {
+    const boxes = boxGeom.blocks.filter((b) => b.kind === 'box');
+    expect(boxes.length).toBeGreaterThanOrEqual(1);
+    const box = boxes[0]!;
+    expect(box.textSnippet).toBe('');
+    expect(box.fontSize).toBe(0);
+    // A real container: wide (the column) and materially taller than one line
+    // (the two padding bands + the glyph line).
+    expect(box.w).toBeGreaterThan(100);
+    expect(box.h).toBeGreaterThan(boxGeom.meta.measuredLineHeight * 2);
+  });
+
+  it('the block AFTER the callout measures its gap from the BOX bottom, not the callout text bottom', () => {
+    const above = boxGeom.blocks.find((b) =>
+      b.textSnippet.startsWith('This paragraph sits above'),
+    )!;
+    const below = boxGeom.blocks.find((b) =>
+      b.textSnippet.startsWith('This paragraph sits directly below'),
+    )!;
+    const box = boxGeom.blocks.find((b) => b.kind === 'box')!;
+    const calloutText = boxGeom.blocks.find((b) =>
+      b.textSnippet.startsWith('Single short callout line'),
+    )!;
+    expect(above).toBeDefined();
+    expect(below).toBeDefined();
+    expect(box).toBeDefined();
+
+    // The callout's box bottom sits BELOW its inner text bottom (the bottom
+    // padding) — that is the height that used to leak. The leak fix absorbs the
+    // box bottom into the wrapped text block, so the wrapped text now reaches
+    // (at least) the box bottom and the following paragraph measures from there.
+    const boxBottom = box.y + box.h;
+    expect(boxBottom).toBeGreaterThan(calloutText.y); // box wraps the text
+    // The wrapped callout text block now extends to the box bottom (the fix).
+    expect(calloutText.y + calloutText.h).toBeGreaterThanOrEqual(
+      boxBottom - 2,
+    );
+
+    // The gap below the callout, measured from the callout block bottom (= box
+    // bottom), is a SMALL CSS margin — a fraction of a line height, NOT the
+    // multi-line phantom that the leaked bottom padding would have produced.
+    const gapAfterCallout = below.y - (calloutText.y + calloutText.h);
+    expect(gapAfterCallout).toBeGreaterThan(0);
+    expect(gapAfterCallout).toBeLessThan(boxGeom.meta.measuredLineHeight * 2);
+
+    // Sanity: had we (wrongly) measured from the callout's GLYPH bottom before
+    // absorption, the gap would have included the whole bottom padding band —
+    // far larger than the real margin we now measure.
+    const phantomGap = below.y - calloutText.y - boxGeom.meta.measuredLineHeight;
+    expect(gapAfterCallout).toBeLessThan(phantomGap);
+  });
+});

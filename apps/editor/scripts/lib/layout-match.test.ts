@@ -687,3 +687,182 @@ describe('layout-match — pdoc-evn image blocks', () => {
     expect(records.filter(isGatingFailure)).toHaveLength(1);
   });
 });
+
+/**
+ * pdoc-alu — container-box blocks. A padded callout / code / table draws a
+ * background/border BOX taller than the glyph run it wraps; under glyph-only
+ * extraction that excess height leaked into the FOLLOWING block's whitespace
+ * gap. Extraction now (a) extends the wrapped text block's bottom to the box
+ * bottom (the symmetric leak fix) and (b) emits the box as a `kind:"box"` block
+ * that pairs box↔box. layout-match must: pair box↔box (no text Jaccard),
+ * exclude boxes from body/font sizing, keep the box TRANSPARENT to the text
+ * spacing chain, and treat a box's own spacing + size as ADVISORY (never gate) —
+ * box capture is renderer-divergent. The CORE win proven here: the block AFTER a
+ * callout keeps a clean gap because the wrapped text now owns the box bottom,
+ * and a divergent box does NOT cascade a gating fail onto its neighbour.
+ */
+describe('layout-match — pdoc-alu container-box blocks', () => {
+  // Build a doc: heading → body → CALLOUT (wrapped-text + box) → body. The
+  // callout's wrapped-text block is EXTENDED to the box bottom by extraction
+  // (the leak fix), and a separate box block carries the container geometry.
+  // `gapsLH` are the normalized WHITESPACE gaps (top-of-this − bottom-of-prev).
+  function makeBoxGeometry(opts: {
+    lh: number;
+    x0: number;
+    boxHeight: number;
+    boxWidth: number;
+  }): PdfGeometry {
+    const { lh, x0, boxHeight, boxWidth } = opts;
+    const gapsLH = [0, 1.0, 1.2, 1.0]; // anchor, body, callout, after
+    type Spec = { h: number; fontSize: number; snippet: string; kind: 'text' | 'box' };
+    // The callout contributes TWO co-located blocks: the wrapped TEXT (already
+    // extended to the box bottom → h = boxHeight) and the BOX (same top/extent).
+    const specs: Spec[] = [
+      { h: 1.3 * lh, fontSize: 28, snippet: 'Callout section heading', kind: 'text' },
+      { h: 1.0 * lh, fontSize: 14, snippet: 'A paragraph above the callout box', kind: 'text' },
+      { h: boxHeight, fontSize: 14, snippet: 'Callout body text inside the box', kind: 'text' },
+      { h: 1.0 * lh, fontSize: 14, snippet: 'A paragraph right after the callout', kind: 'text' },
+    ];
+    const blocks: PdfBlock[] = [];
+    let y = 72;
+    for (let i = 0; i < specs.length; i++) {
+      if (i > 0) {
+        const prev = blocks[i - 1]!;
+        // The callout (i===2) sits gapsLH[2] below the body's bottom; the body
+        // height for the gap is the body block's OWN h (not the box).
+        y = prev.y + prev.h + gapsLH[i]! * lh;
+      }
+      const s = specs[i]!;
+      blocks.push({
+        idx: blocks.length,
+        x: x0,
+        y,
+        w: 400,
+        h: s.h,
+        fontSize: s.fontSize,
+        textSnippet: s.snippet,
+        pageIndex: 0,
+        kind: 'text',
+      });
+    }
+    // The BOX block: same top + extent as the wrapped callout text (idx 2).
+    const calloutText = blocks[2]!;
+    const boxBlock: PdfBlock = {
+      idx: blocks.length,
+      x: x0,
+      y: calloutText.y,
+      w: boxWidth,
+      h: boxHeight,
+      fontSize: 0,
+      textSnippet: '',
+      pageIndex: 0,
+      kind: 'box',
+    };
+    // Interleave by top-y (box sorts adjacent to its wrapped text, before it on
+    // ties), mirroring extraction's merge.
+    const merged = [...blocks, boxBlock].sort((a, b) => {
+      if (a.y !== b.y) return a.y - b.y;
+      const rank = (k: PdfBlock['kind']) => (k === 'text' ? 1 : 0);
+      return rank(a.kind) - rank(b.kind);
+    });
+    merged.forEach((b, i) => (b.idx = i));
+    return { blocks: merged, meta: { pageCount: 1, measuredLineHeight: lh, groupingGapPt: 0.6 * lh } };
+  }
+
+  it('captures the box as its OWN block that pairs box↔box, and the block AFTER the callout keeps a clean gap (no leaked box height)', () => {
+    // Editor: 120pt-tall callout box. Channel: faithful render — same normalized
+    // rhythm, box scaled to the channel's line-height. Under glyph-only
+    // extraction the box height leaked into 'A paragraph right after'; with the
+    // wrapped text extended to the box bottom its gap is now a clean ~1 LH.
+    const editor = makeBoxGeometry({ lh: 28, x0: 72, boxHeight: 120, boxWidth: 400 });
+    const scale = 17 / 28;
+    const channel = makeBoxGeometry({
+      lh: 17,
+      x0: 72 * scale,
+      boxHeight: 120 * scale,
+      boxWidth: 400 * scale,
+    });
+
+    const records = matchLayout(editor, channel, HTML);
+
+    // The box is a paired block of its OWN kind.
+    const boxRec = records.find((r) => r.blockType === 'box');
+    expect(boxRec).toBeDefined();
+    expect(boxRec!.verdict).not.toBe('orphan');
+    expect(boxRec!.reason).toContain('box size parity');
+
+    // The paragraph AFTER the callout keeps a clean gap → no leaked box height.
+    const after = records.find((r) => r.textSnippet.startsWith('A paragraph right after'))!;
+    expect(after).toBeDefined();
+    expect(after.deltaLH).not.toBeNull();
+    expect(after.deltaLH!).toBeLessThan(0.5);
+    expect(after.verdict).toBe('pass');
+
+    // The whole faithful render has zero gating failures.
+    expect(records.some(isGatingFailure)).toBe(false);
+  });
+
+  it('a divergent box SIZE is ADVISORY ONLY — it never gates, and never cascades onto the neighbour', () => {
+    // Same faithful rhythm, but the channel renders the wrapper box at a wildly
+    // divergent size (LibreOffice/HTML reflow the wrapper differently than the
+    // editor). Box size parity is advisory: the box block must NOT gate-fail,
+    // and the block after the callout still keeps a clean gap.
+    const editor = makeBoxGeometry({ lh: 28, x0: 72, boxHeight: 120, boxWidth: 400 });
+    const scale = 17 / 28;
+    const channel = makeBoxGeometry({
+      lh: 17,
+      x0: 72 * scale,
+      boxHeight: 120 * scale,
+      boxWidth: 40, // wildly divergent wrapper width
+    });
+
+    const records = matchLayout(editor, channel, HTML);
+    const boxRec = records.find((r) => r.blockType === 'box')!;
+    expect(boxRec).toBeDefined();
+    // Reported, but advisory — never a gating failure.
+    expect(boxRec.reason).toContain('box size parity');
+    expect(boxRec.verdict).not.toBe('fail');
+    expect(isGatingFailure(boxRec)).toBe(false);
+
+    // The divergence stays localized: the paragraph after the callout does NOT
+    // fail, and the whole render has no gating failure (boxes never gate).
+    const after = records.find((r) => r.textSnippet.startsWith('A paragraph right after'))!;
+    expect(after.verdict).not.toBe('fail');
+    expect(records.some(isGatingFailure)).toBe(false);
+  });
+
+  it('excludes box blocks from body/font sizing so real text is still bucketed correctly', () => {
+    // A box has fontSize 0; it must not drag the body mode to 0 and mis-bucket a
+    // heading. We prove the heading still reads as a heading (font-size 'h'
+    // bucket) by confirming it pairs cleanly (not orphaned) and is not box-typed.
+    const editor = makeBoxGeometry({ lh: 28, x0: 72, boxHeight: 120, boxWidth: 400 });
+    const scale = 17 / 28;
+    const channel = makeBoxGeometry({ lh: 17, x0: 72 * scale, boxHeight: 120 * scale, boxWidth: 400 * scale });
+    const records = matchLayout(editor, channel, HTML);
+    const heading = records.find((r) => r.textSnippet.startsWith('Callout section heading'))!;
+    expect(heading).toBeDefined();
+    expect(heading.blockType).toBe('heading');
+    expect(heading.verdict).not.toBe('orphan');
+  });
+
+  it('a box NEVER force-pairs with a text block (kinds never cross)', () => {
+    // Editor has a box where the channel has none (a render that drew no
+    // background). The box must ORPHAN, never substitute for a text block (which
+    // would mis-fire the no-text rule). No box→text cross-pairing, no gating
+    // fail from the missing box.
+    const editor = makeBoxGeometry({ lh: 28, x0: 72, boxHeight: 120, boxWidth: 400 });
+    const scale = 17 / 28;
+    const channel = makeBoxGeometry({ lh: 17, x0: 72 * scale, boxHeight: 120 * scale, boxWidth: 400 * scale });
+    // Strip the box from the channel side entirely.
+    channel.blocks = channel.blocks.filter((b) => b.kind !== 'box');
+    channel.blocks.forEach((b, i) => (b.idx = i));
+    const records = matchLayout(editor, channel, HTML);
+    // The editor box orphans; NOTHING is mistyped as a box-vs-text no-text fail.
+    expect(records.some((r) => r.verdict === 'no-text')).toBe(false);
+    const boxRec = records.find((r) => r.blockType === 'box');
+    if (boxRec) expect(boxRec.verdict).toBe('orphan');
+    // The block after the callout still passes (box transparent to the chain).
+    const after = records.find((r) => r.textSnippet.startsWith('A paragraph right after'))!;
+    expect(after.verdict).toBe('pass');
+  });
+});
