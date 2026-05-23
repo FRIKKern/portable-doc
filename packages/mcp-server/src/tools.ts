@@ -16,6 +16,7 @@
 import type {
   Block,
   BlockType,
+  DocPatchOp,
   PortableDoc,
   Surface,
   ValidationIssue,
@@ -23,6 +24,11 @@ import type {
 import { applyDocPatch, blockContracts, validateBlock, validateDoc } from '@portable-doc/core';
 import { composeDocument } from '@portable-doc/primitives';
 import { suggestFixes } from './suggestFixes.js';
+import {
+  forwardOp,
+  resolveBarkparkTarget,
+  type BarkparkForwardResult,
+} from './barkpark.js';
 
 // ---------------------------------------------------------------------------
 // Tool: doc_validate
@@ -258,6 +264,19 @@ export interface DocAppendBlockInput {
   document: PortableDoc;
   /** The block to append — MAY be a draft (partial) block. */
   block: Block;
+  /**
+   * Optional Barkpark paper slug. When set AND the `BARKPARK_INGEST_URL` /
+   * `BARKPARK_INGEST_TOKEN` env vars are configured, the applied
+   * `append-block` op is forwarded to that paper's Barkpark block-ops endpoint
+   * so it streams into the live LiveView paper. Omit it (or leave the env
+   * unset) for local-only behaviour — forwarding is purely additive.
+   */
+  barkparkSlug?: string;
+  /**
+   * Injectable `fetch` for tests so the network can be stubbed. Defaults to
+   * the global `fetch`. Not exposed as an MCP tool input.
+   */
+  fetchImpl?: typeof fetch;
 }
 
 export interface DocAppendBlockResult {
@@ -272,6 +291,18 @@ export interface DocAppendBlockResult {
    * out of this tool.
    */
   fragment: string | null;
+  /**
+   * The outcome of forwarding the applied op to a live Barkpark paper. Present
+   * only when forwarding was attempted or explicitly skipped:
+   *   - omitted          → no Barkpark target was configured at all (slug
+   *                        absent); pure local behaviour, no network.
+   *   - `not-configured` → a slug was passed but the ingest URL/token env was
+   *                        missing, so nothing was forwarded.
+   *   - `forwarded:true` → the op streamed into the live paper.
+   *   - `error`          → forwarding failed (network/non-2xx). The LOCAL
+   *                        append still succeeded; this is informational only.
+   */
+  forward?: BarkparkForwardResult;
 }
 
 /**
@@ -289,6 +320,12 @@ export interface DocAppendBlockResult {
  *      a caller can stream just the new block. A valid-but-incomplete draft
  *      block (missing a required content field) can't be rendered yet — the
  *      fragment degrades to `null` and the append still succeeds.
+ *   4. OPTIONALLY forward the applied `append-block` op to a live Barkpark
+ *      paper. This happens only after the local apply has succeeded AND a
+ *      Barkpark target is fully configured (slug + ingest URL + token). With
+ *      no target the tool behaves exactly as before — no network. A
+ *      forwarding failure is logged and surfaced in `result.forward` but never
+ *      fails the local append (see {@link forwardOp}).
  */
 export async function docAppendBlock(
   input: DocAppendBlockInput,
@@ -299,7 +336,8 @@ export async function docAppendBlock(
     throw new DocAppendBlockError('block failed draft validation', errors);
   }
 
-  const result = applyDocPatch(input.document, { op: 'append-block', block: input.block });
+  const op: DocPatchOp = { op: 'append-block', block: input.block };
+  const result = applyDocPatch(input.document, op);
   if (!result.applied) {
     throw new DocAppendBlockError(
       `append-block could not be applied: ${result.error ?? 'unknown'}`,
@@ -321,7 +359,19 @@ export async function docAppendBlock(
   } catch {
     fragment = null;
   }
-  return { document: result.doc, fragment };
+
+  // Optional, additive, defensive: forward the applied op to a live Barkpark
+  // paper only when a slug was given. With no slug at all we return exactly
+  // what we always have (no `forward` field, no network). When a slug is given
+  // but the ingest env is unset we report `not-configured` rather than guess.
+  const out: DocAppendBlockResult = { document: result.doc, fragment };
+  if (input.barkparkSlug !== undefined) {
+    const target = resolveBarkparkTarget(input.barkparkSlug);
+    out.forward = target
+      ? await forwardOp(target, op, input.fetchImpl)
+      : { forwarded: false, reason: 'not-configured' };
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -419,7 +469,7 @@ export const TOOL_DESCRIPTORS: ToolDescriptor[] = [
   {
     name: 'doc_append_block',
     description:
-      'Append a single block (may be a draft/partial block) to the end of a PortableDoc. Validates the block in draft mode; on an error-severity issue returns a structured error carrying the issues. Returns the updated document plus an inline-styled HTML fragment for just the appended block so callers can stream it.',
+      'Append a single block (may be a draft/partial block) to the end of a PortableDoc. Validates the block in draft mode; on an error-severity issue returns a structured error carrying the issues. Returns the updated document plus an inline-styled HTML fragment for just the appended block so callers can stream it. Optionally, when `barkpark_slug` is set and the BARKPARK_INGEST_URL / BARKPARK_INGEST_TOKEN env vars are configured, forwards the applied op to that live Barkpark paper so the block streams in with no reload; a forwarding failure is reported but never fails the local append.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -430,6 +480,11 @@ export const TOOL_DESCRIPTORS: ToolDescriptor[] = [
         block: {
           type: 'object',
           description: 'The block to append. MAY be a draft (partial) block.',
+        },
+        barkpark_slug: {
+          type: 'string',
+          description:
+            'Optional. Slug of a live Barkpark paper to stream the appended block into. Requires BARKPARK_INGEST_URL + BARKPARK_INGEST_TOKEN env to be set; otherwise forwarding is skipped (reported as not-configured). Omit for local-only behaviour.',
         },
       },
       required: ['document', 'block'],
@@ -457,6 +512,8 @@ export async function dispatchTool(name: string, args: unknown): Promise<unknown
       return docAppendBlock({
         document: a['document'] as PortableDoc,
         block: a['block'] as Block,
+        barkparkSlug:
+          a['barkpark_slug'] === undefined ? undefined : String(a['barkpark_slug']),
       });
     default:
       throw new Error(`Unknown tool: ${name}`);
