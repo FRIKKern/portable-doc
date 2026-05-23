@@ -119,6 +119,17 @@ function serverUrl(server: ViteDevServer): string {
 }
 
 /**
+ * Boot (or reuse) the shared editor dev server and return its base URL. The
+ * advisory render-to-png leg (T7) uses this so the whole funnel — geometry and
+ * vision tiers — shares ONE dev server and the single `closeEditorServer()`
+ * tears down everything.
+ */
+export async function getEditorServerUrl(): Promise<string> {
+  const server = await getEditorServer();
+  return serverUrl(server);
+}
+
+/**
  * Tear down the shared editor dev server. Idempotent. Tests call this in an
  * `afterAll` so vitest can exit; in the CLI the process-exit hook below covers
  * it. No-op if the server was never booted.

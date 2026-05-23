@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "check:structural": "tsx scripts/structural-check.ts",
     "check:geometry": "tsx scripts/semantic-diff.ts",
+    "check:vision": "tsx scripts/vision-check.ts",
     "check:roundtrip": "tsx scripts/round-trip-check.ts"
   },
   "dependencies": {
