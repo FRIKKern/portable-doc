@@ -50,8 +50,11 @@ import type { PdfBlock, PdfGeometry } from './pdf-geometry.ts';
  *  channel-agnostic; the only channel-specific knob is the tolerance band. */
 export type Channel = 'html' | 'docx' | 'epub' | 'markdown' | 'pdf';
 
-/** Per-block outcome, the agent-facing unit (bound #9). */
-export type Verdict = 'pass' | 'warn' | 'fail' | 'orphan' | 'no-text';
+/** Per-block outcome, the agent-facing unit (bound #9). `degenerate` is an
+ *  EXPLICIT diagnostic for a block whose geometry is non-finite (NaN/∞ y / h /
+ *  fontSize) — a gating failure that names the breakage rather than letting
+ *  `classify(NaN)` collapse it to a silent `fail` (pdoc-vxn FIX 2). */
+export type Verdict = 'pass' | 'warn' | 'fail' | 'orphan' | 'no-text' | 'degenerate';
 
 /** Where this verdict sits in the gate hierarchy (bound #7). `geometry` rows
  *  hard-gate CI; `reflow-sanity` (DOCX, T4) and `structural` are looser. */
@@ -77,11 +80,17 @@ export type VerdictRecord = {
    *  previous block, each side normalized by its own line height). null for
    *  orphans (no pair to measure against). This is what the verdict gates on. */
   deltaLH: number | null;
-  /** SEPARATE per-block signal (pdoc-sur root cause #1): |this block's own
-   *  height vs its paired editor block's height|, each normalized by its side's
-   *  line height. A container (image / table / code) that legitimately renders
-   *  at a different height flags HERE — localized to itself — instead of
-   *  cascading a fake spacing fail onto the NEXT block. null for orphans. */
+  /** ADVISORY ONLY — non-gating (pdoc-vxn FIX 1). |this block's own height vs
+   *  its paired editor block's height|, each normalized by THAT side's own
+   *  self-tuned line height. This number is UNVALIDATED as a parity signal: the
+   *  two sides' `measuredLineHeight` diverge in practice (welcome: editor ~33pt
+   *  vs channel ~21pt, the legitimate display-vs-print scale), so a faithful
+   *  block can show a large `heightDeltaLH` (welcome body block: 6.71LH) purely
+   *  from that scale split — a FALSE RED — and the symmetric case can mask a
+   *  real divergence as a FALSE GREEN. Until height parity is normalized against
+   *  a shared reference it is reported for debuggability but NEVER gates the
+   *  verdict. The scale-invariant whitespace-gap `deltaLH` is the sole gate.
+   *  null for orphans. */
   heightDeltaLH: number | null;
   /** DIAGNOSTIC ONLY (non-gating): absolute whitespace-gap delta in points.
    *  Carries the raw zoom-inflated drift T2 saw, kept for debuggability. */
@@ -369,25 +378,30 @@ export function gateLevelForChannel(channel: Channel): GateLevel {
 }
 
 function classify(deltaLH: number, t: Thresholds): Verdict {
+  // FIX 2: a non-finite delta must NOT collapse to a silent 'fail'. The
+  // extraction guard + the block-level guard in computeVerdicts catch this
+  // first, but classify stays defensive: a NaN/∞ here is an explicit
+  // `degenerate`, never a fabricated numeric verdict.
+  if (!Number.isFinite(deltaLH)) return 'degenerate';
   if (deltaLH < t.pass) return 'pass';
   if (deltaLH <= t.fail) return 'warn';
   return 'fail';
 }
 
 /**
- * Height-parity fail edge, in line-heights (pdoc-sur root cause #1). A block's
- * OWN height divergence is a SEPARATE signal from inter-block spacing — a tall
- * container (image / table / code) often renders at a legitimately different
- * height in the editor vs a channel, and that must NOT read as a defect at the
- * strict spacing band. So the height gate is deliberately LOOSE: a divergence
- * is only a fail when it exceeds this many line-heights, which catches a
- * grossly dropped or exploded container while tolerating the routine
- * container-height jitter that previously cascaded fake spacing fails onto the
- * NEXT block. The spacing gate keeps the strict 0.5/1.0 bands; this is the only
- * place container-height drift can produce a verdict, and it's localized to the
- * diverging block itself.
+ * Height-parity ADVISORY edge, in line-heights (pdoc-vxn FIX 1, demoting the
+ * pdoc-sur root-cause-#1 gate). `heightParityLH` divides each block's height by
+ * THAT side's own self-tuned `measuredLineHeight`, and those line-heights
+ * diverge across sides in practice (welcome: editor ~33pt vs channel ~21pt — a
+ * legitimate display-vs-print scale, NOT a derivation bug). A faithful block
+ * therefore shows a large `heightDeltaLH` purely from the scale split (welcome
+ * body block: 6.71LH → spurious FAIL), and the symmetric case can mask a real
+ * divergence (FALSE GREEN). Because the signal is UNVALIDATED, height NEVER
+ * gates the verdict — `heightDeltaLH` is reported for debuggability and a
+ * block whose height divergence exceeds this edge merely earns an advisory NOTE
+ * in its reason. The scale-invariant whitespace-gap `deltaLH` is the sole gate.
  */
-const HEIGHT_FAIL_LH = 2.0;
+const HEIGHT_ADVISORY_LH = 2.0;
 
 function blockTypeOf(b: PdfBlock, medianSize: number): string {
   return b.fontSize >= medianSize + 2 ? 'heading' : 'body';
@@ -465,6 +479,25 @@ export function computeVerdicts(
   const medEditor = medianFontSize(editorBlocks);
   const medChannel = medianFontSize(channelBlocks);
 
+  // ── FIX 3: blank / failed render is a FALSE GREEN unless we gate it ──
+  // If one side extracted ZERO blocks while the other has many, the document
+  // failed to render on that side — today every resulting orphan is non-gating
+  // so the run would exit GREEN. A pairing where ONE side is empty while the
+  // other carries real content, OR a pairing that produced ZERO real pairs (an
+  // all-orphan run) with content on both sides, is a structural breakage: we
+  // mark each orphan in that scenario as a GATING `degenerate` so a blank or
+  // wholly-unpaired render goes RED. A handful of orphans amid real pairs is
+  // still a localized insert/delete and stays non-gating.
+  const editorEmpty = editorBlocks.length === 0;
+  const channelEmpty = channelBlocks.length === 0;
+  const realPairs = pairs.filter((p) => p.editor && p.channel).length;
+  const oneSideBlank =
+    (editorEmpty && channelBlocks.length > 0) ||
+    (channelEmpty && editorBlocks.length > 0);
+  const allOrphan =
+    realPairs === 0 && editorBlocks.length > 0 && channelBlocks.length > 0;
+  const renderBroken = oneSideBlank || allOrphan;
+
   const records: VerdictRecord[] = [];
 
   // Track the previous PAIRED block on each side so an orphan in between does
@@ -482,6 +515,15 @@ export function computeVerdicts(
       const side = editor ? 'editor' : channel;
       const med = editor ? medEditor : medChannel;
       const blockType = blockTypeOf(present, med);
+      // FIX 3: in a broken render (one side blank, or zero real pairs) every
+      // orphan is GATING — a blank/failed render must go RED, not silently
+      // pass. A localized orphan amid real pairs stays the non-gating `orphan`.
+      const verdict: Verdict = renderBroken ? 'degenerate' : 'orphan';
+      const reason = renderBroken
+        ? (oneSideBlank
+            ? `${blockType} '${present.textSnippet || '∅'}' — the ${editor ? channel : 'editor'} side extracted ZERO blocks while the ${side} side has ${editor ? editorBlocks.length : channelBlocks.length}; a blank/failed render is a gating failure, not a silent pass`
+            : `${blockType} '${present.textSnippet || '∅'}' — NO blocks paired across the two sides (all-orphan render); the document failed to align at all and is a gating failure`)
+        : `${blockType} '${present.textSnippet || '∅'}' exists only on the ${side} side — no counterpart to pair against`;
       records.push({
         blockId: editor ? `editor-block-${present.idx}` : blockIdOf(present, channel),
         channel,
@@ -489,14 +531,45 @@ export function computeVerdicts(
         heightDeltaLH: null,
         dyPtAbs: null,
         threshold,
-        verdict: 'orphan',
+        verdict,
         blockType,
         textSnippet: present.textSnippet,
-        reason: `${blockType} '${present.textSnippet || '∅'}' exists only on the ${side} side — no counterpart to pair against`,
+        reason,
         gateLevel,
       });
       if (editor) prevEditor = editor;
       else prevChannel = chBlk;
+      continue;
+    }
+
+    // ── FIX 2: degenerate geometry guard (defense in depth) ──────────────
+    // Extraction (pdf-geometry.ts) already drops non-finite RUNS, but if a
+    // block still reaches here with a non-finite y / h / fontSize on either
+    // side, emit an EXPLICIT diagnostic — never let it flow into classify,
+    // where `classify(NaN)`/`classify(∞)` would silently return 'fail'.
+    if (
+      !Number.isFinite(editor.y) ||
+      !Number.isFinite(editor.h) ||
+      !Number.isFinite(editor.fontSize) ||
+      !Number.isFinite(chBlk.y) ||
+      !Number.isFinite(chBlk.h) ||
+      !Number.isFinite(chBlk.fontSize)
+    ) {
+      records.push({
+        blockId: blockIdOf(chBlk, channel),
+        channel,
+        deltaLH: null,
+        heightDeltaLH: null,
+        dyPtAbs: null,
+        threshold,
+        verdict: 'degenerate',
+        blockType: blockTypeOf(chBlk, medChannel),
+        textSnippet: chBlk.textSnippet || editor.textSnippet,
+        reason: `block '${chBlk.textSnippet || editor.textSnippet || '∅'}' has non-finite geometry (y/h/fontSize NaN or ∞) — degenerate glyph transform; cannot measure parity, flagged explicitly rather than collapsing to a silent numeric fail`,
+        gateLevel,
+      });
+      prevEditor = editor;
+      prevChannel = chBlk;
       continue;
     }
 
@@ -524,18 +597,22 @@ export function computeVerdicts(
       continue;
     }
 
-    // Height parity is computable for any pair (needs no predecessor).
+    // Height parity is computable for any pair (needs no predecessor). FIX 1:
+    // it is ADVISORY ONLY — `heightAdvisory` adds a NOTE to the reason but never
+    // flips the verdict (the per-side line-heights diverge by legit scale, so
+    // this number is an unvalidated parity signal — see HEIGHT_ADVISORY_LH).
     const heightDeltaLH = heightParityLH(editor, chBlk, lhEditor, lhChannel);
-    const heightFails = heightDeltaLH > HEIGHT_FAIL_LH;
+    const heightAdvisory = heightDeltaLH > HEIGHT_ADVISORY_LH;
+    const heightNote = heightAdvisory
+      ? `height parity ${heightDeltaLH.toFixed(2)}LH (ADVISORY ONLY — exceeds ${HEIGHT_ADVISORY_LH}LH but height is non-gating; per-side line-heights diverge by display-vs-print scale, so this is unvalidated)`
+      : `height parity ${heightDeltaLH.toFixed(2)}LH (advisory)`;
 
     // ── metric: line-height-normalized inter-block WHITESPACE gap delta ──
     if (!prevEditor || !prevChannel) {
       // First paired block — no previous block to measure a whitespace gap
-      // against. Anchor its SPACING at 0, but its height parity still gates.
-      const verdict: Verdict = heightFails ? 'fail' : 'pass';
-      const reason = heightFails
-        ? `${blockType} '${chBlk.textSnippet}' is the first paired block (spacing anchor) but its own height diverges ${heightDeltaLH.toFixed(2)}LH (> ${HEIGHT_FAIL_LH}LH) — likely a container rendered at a very different height`
-        : `${blockType} '${chBlk.textSnippet}' is the first paired block (anchor) — gap measured from here on; height parity ${heightDeltaLH.toFixed(2)}LH`;
+      // against. Anchor its SPACING at 0; height parity is advisory, not a gate.
+      const verdict: Verdict = 'pass';
+      const reason = `${blockType} '${chBlk.textSnippet}' is the first paired block (anchor) — gap measured from here on; ${heightNote}`;
       records.push({
         blockId: blockIdOf(chBlk, channel),
         channel,
@@ -564,18 +641,17 @@ export function computeVerdicts(
     const deltaLH = Math.abs(gapNormChannel - gapNormEditor);
     const dyPtAbs = Math.abs(gapChannelPt - gapEditorPt);
 
-    // The spacing band gives the primary verdict; a LARGE height divergence can
-    // independently push to fail (localized to THIS block — no downstream cascade).
-    const spacingVerdict = classify(deltaLH, threshold);
-    const verdict: Verdict = heightFails ? 'fail' : spacingVerdict;
+    // FIX 1: the scale-invariant spacing band is the SOLE gate. Height is
+    // advisory only — a large `heightDeltaLH` adds a note but never flips the
+    // verdict, because the per-side line-heights diverge by legit scale and the
+    // raw height ratio is therefore unvalidated as a parity signal.
+    const verdict: Verdict = classify(deltaLH, threshold);
 
     const spacingClause =
-      spacingVerdict === 'pass'
+      verdict === 'pass'
         ? `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — within ${threshold.pass}LH)`
-        : `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${spacingVerdict === 'fail' ? `exceeds ${threshold.fail}LH` : `over ${threshold.pass}LH`})`;
-    const reason = heightFails
-      ? `${blockType} '${chBlk.textSnippet}' OWN HEIGHT diverges ${heightDeltaLH.toFixed(2)}LH (> ${HEIGHT_FAIL_LH}LH) — container rendered at a very different height; whitespace ${spacingClause}`
-      : `${blockType} '${chBlk.textSnippet}' ${spacingClause}; height parity ${heightDeltaLH.toFixed(2)}LH`;
+        : `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${verdict === 'fail' ? `exceeds ${threshold.fail}LH` : `over ${threshold.pass}LH`})`;
+    const reason = `${blockType} '${chBlk.textSnippet}' ${spacingClause}; ${heightNote}`;
 
     records.push({
       blockId: blockIdOf(chBlk, channel),
@@ -598,11 +674,18 @@ export function computeVerdicts(
   return records;
 }
 
-/** A verdict counts as a CI-blocking failure when it's a fail or no-text on a
- *  geometry-tier channel. `orphan` and `warn` surface but do not block. */
+/** A verdict counts as a CI-blocking failure when it's a `fail`, `no-text`, or
+ *  `degenerate` on a geometry-tier channel. `degenerate` covers both a
+ *  non-finite block (FIX 2) and a blank / all-orphan render (FIX 3) — a blank
+ *  render must go RED, never silently pass. Plain `orphan` (a localized
+ *  insert/delete amid real pairs) and `warn` surface but do not block. */
 export function isGatingFailure(r: VerdictRecord): boolean {
   if (r.gateLevel !== 'geometry') return false;
-  return r.verdict === 'fail' || r.verdict === 'no-text';
+  return (
+    r.verdict === 'fail' ||
+    r.verdict === 'no-text' ||
+    r.verdict === 'degenerate'
+  );
 }
 
 /**

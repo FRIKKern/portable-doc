@@ -19,6 +19,7 @@ import {
   pairBlocks,
   computeVerdicts,
   matchLayout,
+  isGatingFailure,
   type Channel,
 } from './layout-match.ts';
 import type { PdfBlock, PdfGeometry } from './pdf-geometry.ts';
@@ -285,13 +286,17 @@ describe('layout-match — pdoc-sur denoising (root causes #1 + #2)', () => {
     expect(after.deltaLH!).toBeLessThan(0.5);
     expect(after.verdict).not.toBe('fail');
 
-    // The container ITSELF carries the height divergence as its own signal,
-    // localized to itself — 110pt over a 17pt LH ≈ 6.5 LH, well past the gate.
+    // The container's height divergence is still REPORTED as its own signal
+    // (localized to itself — 110pt over a 17pt LH ≈ 6.5 LH), but per pdoc-vxn
+    // FIX 1 height is ADVISORY ONLY: it must NOT gate. The container's spacing
+    // is clean, so its verdict is a pass, with the divergence noted in reason.
     const container = records.find((r) => r.textSnippet === 'A large diagram figure container')!;
     expect(container.heightDeltaLH).not.toBeNull();
     expect(container.heightDeltaLH!).toBeGreaterThan(2.0);
-    expect(container.verdict).toBe('fail');
-    expect(container.reason).toContain('HEIGHT');
+    expect(container.verdict).not.toBe('fail'); // advisory, never gates
+    expect(container.reason).toContain('ADVISORY');
+    // And nothing in this faithful (only-height-diverges) render is a gating fail.
+    expect(records.some((r) => r.verdict === 'fail' || r.verdict === 'degenerate')).toBe(false);
   });
 
   it('ROOT CAUSE #2: block sets that segment slightly differently still PAIR by text instead of orphaning', () => {
@@ -344,5 +349,216 @@ describe('layout-match — pdoc-sur denoising (root causes #1 + #2)', () => {
     expect(heading!.verdict).not.toBe('orphan');
     expect(trailing).toBeDefined();
     expect(trailing!.verdict).not.toBe('orphan');
+  });
+});
+
+/**
+ * pdoc-vxn trust fixes — de-circularizes the self-test and proves the three
+ * gating-correctness changes. The HARD RULE: denoise by being MORE correct,
+ * never by hiding a real divergence. Height goes advisory because it is
+ * UNVALIDATED (per-side line-heights legitimately diverge), the spacing gate
+ * stays strict, and a blank/degenerate render goes RED.
+ */
+describe('layout-match — pdoc-vxn trust fixes (FIX 1/2/3/4)', () => {
+  // The real editor/channel line-heights from .papir-check/geometry/welcome
+  // (editor ~33pt, channel ~21pt — a ~1.57× display-vs-print scale split, NOT a
+  // derivation bug). The OLD self-test held both sides at a matched 28/17 so the
+  // height ratio cancelled by construction — the exact variable that breaks on
+  // real PDFs was held fixed. These cases tune the two sides INDEPENDENTLY.
+  const LH_EDITOR_REAL = 33;
+  const LH_CHANNEL_REAL = 21;
+
+  it('FIX 1 + FIX 4 (de-circularized known-good): INDEPENDENT per-side line-heights with a real height divergence → NO gating fail', () => {
+    // Faithful render: same WHITESPACE rhythm on both sides (each block sits the
+    // same NORMALIZED gap below the previous block's bottom), but the two sides
+    // have independently-tuned line-heights AND block heights that do NOT scale
+    // proportionally — mimicking welcome, where the editor body block reads
+    // 6.71 line-heights taller than its channel counterpart purely from the
+    // scale split. Under the OLD gating-height logic this faithful render
+    // false-FAILED; with height demoted to advisory it must be all-pass.
+    const snippets = [
+      'Welcome to Atlas',
+      'Your workspace is ready. Atlas keeps',
+      "What's next",
+      'Browse the documentation to learn how',
+    ];
+    // Editor side: heights chosen so block 1 is much "taller in LH" than the
+    // channel will be (the welcome 6.71LH effect), spacing gaps are a clean
+    // rhythm. Editor LH = 33.
+    const editorHeights = [40, 230, 28, 60]; // block 1 is a tall multi-line body run
+    const editorGapsLH = [0, 1.0, 1.6, 0.9]; // normalized whitespace gaps (block 0 is anchor)
+    const editorBlocks: PdfBlock[] = [];
+    let ey = 72;
+    for (let i = 0; i < 4; i++) {
+      if (i > 0) {
+        const prev = editorBlocks[i - 1]!;
+        ey = prev.y + prev.h + editorGapsLH[i]! * LH_EDITOR_REAL;
+      }
+      editorBlocks.push({
+        idx: i,
+        x: 72,
+        y: ey,
+        w: 400,
+        h: editorHeights[i]!,
+        fontSize: i === 0 ? 28 : i === 2 ? 22 : 14,
+        textSnippet: snippets[i]!,
+        pageIndex: 0,
+      });
+    }
+    const editor: PdfGeometry = {
+      blocks: editorBlocks,
+      meta: { pageCount: 1, measuredLineHeight: LH_EDITOR_REAL, groupingGapPt: 0.6 * LH_EDITOR_REAL },
+    };
+    // Channel side: SAME normalized gaps (faithful spacing), but heights are NOT
+    // a proportional scale of the editor's — block 1 renders far shorter in LH,
+    // so heightParityLH(block 1) is large (a would-be false fail under the old
+    // gate). Channel LH = 21, independent of the editor's.
+    const channelHeights = [26, 90, 18, 38]; // block 1: 90/21≈4.3 LH vs editor 230/33≈7.0 LH → ~2.7LH delta
+    const channelGapsLH = [0, 1.0, 1.6, 0.9]; // identical normalized rhythm → spacing Δ ≈ 0
+    const channelBlocks: PdfBlock[] = [];
+    let cy = 60;
+    for (let i = 0; i < 4; i++) {
+      if (i > 0) {
+        const prev = channelBlocks[i - 1]!;
+        cy = prev.y + prev.h + channelGapsLH[i]! * LH_CHANNEL_REAL;
+      }
+      channelBlocks.push({
+        idx: i,
+        x: 60,
+        y: cy,
+        w: 320,
+        h: channelHeights[i]!,
+        fontSize: i === 0 ? 18 : i === 2 ? 14 : 9,
+        textSnippet: snippets[i]!,
+        pageIndex: 0,
+      });
+    }
+    const channel: PdfGeometry = {
+      blocks: channelBlocks,
+      meta: { pageCount: 1, measuredLineHeight: LH_CHANNEL_REAL, groupingGapPt: 0.6 * LH_CHANNEL_REAL },
+    };
+
+    const records = matchLayout(editor, channel, HTML);
+    expect(records).toHaveLength(4);
+
+    // The block whose height diverges most must NOT gate-fail — height advisory.
+    const tall = records.find((r) => r.textSnippet.startsWith('Your workspace'))!;
+    expect(tall.heightDeltaLH).not.toBeNull();
+    expect(tall.heightDeltaLH!).toBeGreaterThan(2.0); // real divergence, still REPORTED
+    expect(tall.verdict).not.toBe('fail');
+    expect(tall.reason).toContain('ADVISORY');
+
+    // NO block is a gating failure on this faithful render — the welcome
+    // height false-fail is gone, and the spacing gate (the sound, scale-
+    // invariant one) stays clean across the LH divergence.
+    expect(records.some((r) => r.verdict === 'fail' || r.verdict === 'degenerate' || r.verdict === 'no-text')).toBe(false);
+    for (const r of records) {
+      if (r.deltaLH !== null) expect(r.deltaLH).toBeLessThan(0.5);
+    }
+  });
+
+  it('FIX 1 (height stays advisory, spacing stays strict): the +30pt perturbation STILL fails exactly the perturbed block', () => {
+    // Regression guard: demoting height must not weaken the spacing gate. Re-run
+    // the bound-#10 discrimination case and confirm the perturbed block still
+    // fails on SPACING alone.
+    const editor = makeEditorGeometry();
+    const html = cloneGeometry(makeFaithfulHtmlGeometry(editor));
+    const PERTURBED = html.blocks.length - 1;
+    html.blocks[PERTURBED]!.y += 30;
+    const records = computeVerdicts(
+      pairBlocks(editor.blocks, html.blocks),
+      HTML,
+      editor.meta,
+      html.meta,
+    );
+    const fails = records.filter((r) => r.verdict === 'fail');
+    expect(fails.map((r) => r.blockId)).toEqual([`html-block-${PERTURBED}`]);
+    // It fails on SPACING (deltaLH past the fail edge), not on a height gate.
+    expect(fails[0]!.deltaLH!).toBeGreaterThan(1.0);
+  });
+
+  it('FIX 3: a blank render — one side has 0 blocks while the other has many — is a GATING failure, not a silent green', () => {
+    const editor = makeEditorGeometry(); // 6 real blocks
+    const blankChannel: PdfGeometry = {
+      blocks: [], // channel rendered nothing — a blank / failed render
+      meta: { pageCount: 1, measuredLineHeight: LINE_HEIGHT_HTML, groupingGapPt: 0.6 * LINE_HEIGHT_HTML },
+    };
+    const records = matchLayout(editor, blankChannel, HTML);
+    // Every editor block becomes a gating `degenerate` orphan → run goes RED.
+    expect(records.length).toBe(editor.blocks.length);
+    expect(records.every((r) => r.verdict === 'degenerate')).toBe(true);
+    expect(records.some(isGatingFailure)).toBe(true);
+    expect(records.filter(isGatingFailure).length).toBe(editor.blocks.length);
+    expect(records[0]!.reason).toContain('ZERO blocks');
+  });
+
+  it('FIX 3: an all-orphan pairing (content on both sides but ZERO real pairs) is a GATING failure', () => {
+    // The TAG_BONUS tie-break pairs same-bucket blocks even with no text overlap,
+    // so a TOTAL all-orphan rarely survives the aligner with running text on both
+    // sides — but the gating contract must still hold for the degenerate alignment
+    // that DOES produce it (e.g. a render that segmented into wholly disjoint
+    // buckets). We assert the gating logic directly on a hand-built all-orphan
+    // pairing — exactly what such an alignment emits — so the contract is proven
+    // without contriving an unreachable fixture for the aligner itself.
+    const editorMeta = { pageCount: 1, measuredLineHeight: LINE_HEIGHT_EDITOR, groupingGapPt: 0.6 * LINE_HEIGHT_EDITOR };
+    const channelMeta = { pageCount: 1, measuredLineHeight: LINE_HEIGHT_HTML, groupingGapPt: 0.6 * LINE_HEIGHT_HTML };
+    const eBlk = (idx: number, snip: string): PdfBlock => ({ idx, x: 72, y: 72 + idx * 60, w: 400, h: 24, fontSize: 18, textSnippet: snip, pageIndex: 0 });
+    const cBlk = (idx: number, snip: string): PdfBlock => ({ idx, x: 60, y: 60 + idx * 40, w: 320, h: 12, fontSize: 9, textSnippet: snip, pageIndex: 0 });
+    // Interleaved orphans on both sides, ZERO real pairs (no pair has both set).
+    const allOrphanPairs = [
+      { editor: eBlk(0, 'alpha bravo'), channel: null },
+      { editor: null, channel: cBlk(0, 'zulu yankee') },
+      { editor: eBlk(1, 'delta echo'), channel: null },
+      { editor: null, channel: cBlk(1, 'whiskey victor') },
+    ];
+    const records = computeVerdicts(allOrphanPairs, HTML, editorMeta, channelMeta);
+    expect(records.length).toBe(4);
+    // No real pair survived → every record is a gating `degenerate`.
+    expect(records.every((r) => r.verdict === 'degenerate')).toBe(true);
+    expect(records.some(isGatingFailure)).toBe(true);
+    expect(records.some((r) => r.reason.includes('all-orphan'))).toBe(true);
+  });
+
+  it('FIX 2: a degenerate block (non-finite height) yields an explicit `degenerate` verdict, NEVER a silent fail', () => {
+    const editor = makeEditorGeometry();
+    const html = cloneGeometry(makeFaithfulHtmlGeometry(editor));
+    // Inject a degenerate glyph transform on one channel block (∞ height).
+    html.blocks[2]!.h = Infinity;
+    const records = computeVerdicts(
+      pairBlocks(editor.blocks, html.blocks),
+      HTML,
+      editor.meta,
+      html.meta,
+    );
+    // The ∞-height block is degenerate; its bottom (y + ∞) also poisons the
+    // WHITESPACE gap of the FOLLOWING block, which the classify guard likewise
+    // catches as degenerate (defense in depth) — both surface EXPLICITLY rather
+    // than as a silent numeric 'fail'. That cascade is honest: a non-finite
+    // height genuinely makes the next gap unmeasurable.
+    const degenerate = records.filter((r) => r.verdict === 'degenerate');
+    expect(degenerate.length).toBeGreaterThanOrEqual(1);
+    expect(degenerate.some((r) => r.reason.includes('non-finite'))).toBe(true);
+    // Every degenerate verdict gates — not a silent numeric 'fail'.
+    expect(degenerate.every(isGatingFailure)).toBe(true);
+    // And NOTHING masqueraded as a spacing 'fail'.
+    expect(records.some((r) => r.verdict === 'fail')).toBe(false);
+  });
+
+  it('FIX 2 (classify guard): classify(NaN) and classify(∞) return `degenerate`, never `fail`', () => {
+    // Direct guard on the metric: a NaN delta must surface explicitly. We prove
+    // it through computeVerdicts by feeding a NaN y that the block-level guard
+    // catches as degenerate (defense in depth — extraction drops it first).
+    const editor = makeEditorGeometry();
+    const html = cloneGeometry(makeFaithfulHtmlGeometry(editor));
+    html.blocks[3]!.y = NaN;
+    const records = computeVerdicts(
+      pairBlocks(editor.blocks, html.blocks),
+      HTML,
+      editor.meta,
+      html.meta,
+    );
+    const bad = records.find((r) => r.verdict === 'degenerate');
+    expect(bad).toBeDefined();
+    expect(records.some((r) => r.verdict === 'fail')).toBe(false);
   });
 });

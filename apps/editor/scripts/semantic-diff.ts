@@ -94,7 +94,14 @@ async function renderChannel(channel: Channel, doc: PortableDoc): Promise<Uint8A
 }
 
 function tally(records: VerdictRecord[]): Record<string, number> {
-  const c: Record<string, number> = { pass: 0, warn: 0, fail: 0, orphan: 0, 'no-text': 0 };
+  const c: Record<string, number> = {
+    pass: 0,
+    warn: 0,
+    fail: 0,
+    orphan: 0,
+    'no-text': 0,
+    degenerate: 0,
+  };
   for (const r of records) c[r.verdict] = (c[r.verdict] ?? 0) + 1;
   return c;
 }
@@ -172,7 +179,7 @@ for (const r of results) {
   process.stdout.write(
     `[${flag}] ${r.fixture}/${r.channel}: ` +
       `${r.records.length} blocks · ` +
-      `pass ${c.pass} · warn ${c.warn} · fail ${c.fail} · orphan ${c.orphan} · no-text ${c['no-text']}\n`,
+      `pass ${c.pass} · warn ${c.warn} · fail ${c.fail} · orphan ${c.orphan} · no-text ${c['no-text']} · degenerate ${c.degenerate}\n`,
   );
   // Name the offending blocks so an agent sees them without opening the JSON.
   for (const v of r.records) {

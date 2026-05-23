@@ -303,6 +303,23 @@ export async function extractPdfGeometry(
       // (approximated by the glyph height) so topY is the visual top of the run.
       const topY = pageHeight - baselineY - h;
 
+      // Guard against degenerate glyph transforms (pdoc-vxn FIX 2): a NaN/∞ in
+      // any positional/size field would flow into measuredLineHeight and every
+      // downstream normalized delta, where `classify(NaN)`/`classify(∞)` would
+      // silently read as 'fail'. We drop the poisoned RUN here so a single bad
+      // glyph can't corrupt the whole side's metric; a block that ends up with
+      // NO finite runs surfaces as an explicit `degenerate` verdict in
+      // layout-match (block-level guard), never a silent numeric fail.
+      if (
+        !Number.isFinite(x) ||
+        !Number.isFinite(topY) ||
+        !Number.isFinite(h) ||
+        !Number.isFinite(fontSize) ||
+        !Number.isFinite(ti.width)
+      ) {
+        continue;
+      }
+
       runs.push({
         x,
         topY,
