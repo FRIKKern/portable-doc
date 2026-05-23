@@ -126,4 +126,103 @@ describe('extractPdfGeometry', () => {
     // Continuous-y means the page-2 heading lands below everything on page 1.
     expect(page2Heading.y).toBeGreaterThan(maxPage1Bottom);
   });
+
+  it('every text block carries kind:"text"', () => {
+    for (const b of geometry.blocks) expect(b.kind).toBe('text');
+  });
+});
+
+/**
+ * pdoc-evn — images become first-class blocks. We render a known fixture with
+ * an IMAGE sandwiched between two paragraphs and prove (1) the image is
+ * extracted as its OWN block with real geometry from the PDF's image-XObject
+ * placement (it has zero glyphs, so glyph-only extraction missed it entirely),
+ * and (2) the block AFTER the image measures its whitespace gap from the IMAGE's
+ * bottom — so the image height no longer leaks into the following block's gap.
+ */
+describe('extractPdfGeometry — image blocks (pdoc-evn)', () => {
+  // A real 1×1 PNG; rendered at a known box size so its placed rect is large.
+  const PNG_1x1 =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const IMG_H_PX = 90; // declared image box height, px → ~67.5pt placed.
+  const BODY_PT = 14;
+
+  const IMAGE_HTML = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  @page { size: 612px 792px; margin: 48px; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Georgia, "Times New Roman", serif; color: #000; }
+  p { font-size: ${BODY_PT}px; line-height: 1.5; margin: 0 0 14px 0; }
+  img { display: block; width: 200px; height: ${IMG_H_PX}px; margin: 0 0 14px 0; }
+</style></head><body>
+  <p>This paragraph sits above the image and is long enough to wrap across a
+     couple of lines so the line-height self-tunes from a real run cadence.</p>
+  <img src="${PNG_1x1}">
+  <p>This paragraph sits directly below the image. Its whitespace gap must be
+     measured from the IMAGE bottom, not from the paragraph above the image.</p>
+</body></html>`;
+
+  let imageGeom: PdfGeometry;
+
+  beforeAll(async () => {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setContent(IMAGE_HTML, { waitUntil: 'networkidle' });
+    const pdfBuffer = await page.pdf({
+      width: '612px',
+      height: '792px',
+      printBackground: true,
+      margin: { top: '48px', bottom: '48px', left: '48px', right: '48px' },
+    });
+    await page.close();
+    await browser.close();
+    imageGeom = await extractPdfGeometry(new Uint8Array(pdfBuffer));
+  }, 60_000);
+
+  it('extracts the image as a block with kind:"image", empty text, and a real size', () => {
+    const images = imageGeom.blocks.filter((b) => b.kind === 'image');
+    expect(images.length).toBe(1);
+    const img = images[0]!;
+    expect(img.textSnippet).toBe('');
+    // 200×90px at the 0.75 px→pt factor ≈ 150×67.5pt; assert a real, non-trivial
+    // box (not a stray hairline) with the expected wide-ish aspect.
+    expect(img.w).toBeGreaterThan(100);
+    expect(img.h).toBeGreaterThan(40);
+  });
+
+  it('orders the image between the two paragraphs by document-y', () => {
+    const above = imageGeom.blocks.find((b) =>
+      b.textSnippet.startsWith('This paragraph sits above'),
+    )!;
+    const img = imageGeom.blocks.find((b) => b.kind === 'image')!;
+    const below = imageGeom.blocks.find((b) =>
+      b.textSnippet.startsWith('This paragraph sits directly below'),
+    )!;
+    expect(above).toBeDefined();
+    expect(below).toBeDefined();
+    expect(img.y).toBeGreaterThan(above.y);
+    expect(below.y).toBeGreaterThan(img.y);
+  });
+
+  it('the block AFTER the image measures its gap from the IMAGE bottom, not from the paragraph above it', () => {
+    const above = imageGeom.blocks.find((b) =>
+      b.textSnippet.startsWith('This paragraph sits above'),
+    )!;
+    const img = imageGeom.blocks.find((b) => b.kind === 'image')!;
+    const below = imageGeom.blocks.find((b) =>
+      b.textSnippet.startsWith('This paragraph sits directly below'),
+    )!;
+    // Gap from the image bottom to the next paragraph is a SMALL whitespace
+    // margin (one CSS margin ≈ a fraction of a line height).
+    const gapFromImage = below.y - (img.y + img.h);
+    // Gap if we (wrongly) measured from the paragraph ABOVE the image: it would
+    // include the entire image height — the old leak. The fix makes the real gap
+    // FAR smaller than that phantom gap.
+    const phantomGap = below.y - (above.y + above.h);
+    expect(gapFromImage).toBeLessThan(phantomGap - img.h * 0.5);
+    // And the real gap is a sane sub-line-height-to-few-line-heights margin,
+    // never the multi-line phantom the leak produced.
+    expect(gapFromImage).toBeLessThan(imageGeom.meta.measuredLineHeight * 3);
+    expect(gapFromImage).toBeGreaterThan(0);
+  });
 });

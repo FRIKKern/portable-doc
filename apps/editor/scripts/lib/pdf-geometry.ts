@@ -103,6 +103,16 @@ export type PdfBlock = {
   textSnippet: string;
   /** 0-based page the block starts on. */
   pageIndex: number;
+  /**
+   * Block kind. `"text"` is a glyph-run block (the default — every prior
+   * block was implicitly this). `"image"` is a first-class IMAGE block whose
+   * geometry comes from the PDF's image-XObject placement (pdoc-evn), NOT from
+   * glyphs: it carries position + size but an EMPTY `textSnippet`. Making images
+   * real blocks stops their box-height leaking into the whitespace gap of the
+   * FOLLOWING block (the gap is now measured from the image's BOTTOM), and lets
+   * the comparison pair image↔image for position/size parity.
+   */
+  kind: 'text' | 'image';
 };
 
 export type PdfGeometryMeta = {
@@ -143,6 +153,126 @@ type Run = {
   pagePriorHeight: number;
 };
 
+/** A positioned IMAGE placement, harvested from the operator-list graphics
+ *  state (pdoc-evn). Same continuous-document-y space as text runs. */
+type ImageRect = {
+  /** Page-local left, points. */
+  x: number;
+  /** Page-local TOP-left y (flipped from PDF bottom-left), points. */
+  topY: number;
+  /** Width, points. */
+  w: number;
+  /** Height, points. */
+  h: number;
+  /** 0-based page index. */
+  pageIndex: number;
+  /** Cumulative content height of all pages before this image's page, points. */
+  pagePriorHeight: number;
+};
+
+/** Compose two PDF 6-float affine matrices: result = m ∘ n (apply n then m). */
+function matMul(m: number[], n: number[]): number[] {
+  const m0 = m[0] ?? 0,
+    m1 = m[1] ?? 0,
+    m2 = m[2] ?? 0,
+    m3 = m[3] ?? 0,
+    m4 = m[4] ?? 0,
+    m5 = m[5] ?? 0;
+  const n0 = n[0] ?? 0,
+    n1 = n[1] ?? 0,
+    n2 = n[2] ?? 0,
+    n3 = n[3] ?? 0,
+    n4 = n[4] ?? 0,
+    n5 = n[5] ?? 0;
+  return [
+    m0 * n0 + m2 * n1,
+    m1 * n0 + m3 * n1,
+    m0 * n2 + m2 * n3,
+    m1 * n2 + m3 * n3,
+    m0 * n4 + m2 * n5 + m4,
+    m1 * n4 + m3 * n5 + m5,
+  ];
+}
+
+/**
+ * Pull every IMAGE placement off a page's operator list (pdoc-evn). Images
+ * carry no glyphs, so `getTextContent()` never sees them — we instead walk the
+ * graphics-state transform stack (`OPS.save` / `OPS.restore` / `OPS.transform`)
+ * and, at each image-paint op, map the unit square [0,1]² through the CURRENT
+ * transform to recover the placed rect's bounding box in PDF user space. The
+ * unit-square corner mapping is robust to rotation/skew (pdfjs encodes a placed
+ * image as a unit-square scaled+translated by the CTM). We flip to top-left y
+ * exactly as text runs do (`topY = pageHeight − maxCornerY`).
+ */
+async function extractImageRects(
+  page: {
+    getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[] }>;
+  },
+  ops: { save: number; restore: number; transform: number; paintImageXObject: number; paintInlineImageXObject: number; paintImageMaskXObject: number },
+  pageHeight: number,
+  pageIndex: number,
+  pagePriorHeight: number,
+): Promise<ImageRect[]> {
+  const opList = await page.getOperatorList();
+  const rects: ImageRect[] = [];
+  let ctm: number[] = [1, 0, 0, 1, 0, 0];
+  const stack: number[][] = [];
+
+  for (let i = 0; i < opList.fnArray.length; i++) {
+    const fn = opList.fnArray[i];
+    if (fn === ops.save) {
+      stack.push(ctm.slice());
+    } else if (fn === ops.restore) {
+      ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+    } else if (fn === ops.transform) {
+      const a = opList.argsArray[i] as number[];
+      if (Array.isArray(a) && a.length >= 6) ctm = matMul(ctm, a);
+    } else if (
+      fn === ops.paintImageXObject ||
+      fn === ops.paintInlineImageXObject ||
+      fn === ops.paintImageMaskXObject
+    ) {
+      // Map the four corners of the unit square through the current transform.
+      const a = ctm[0] ?? 0,
+        b = ctm[1] ?? 0,
+        c = ctm[2] ?? 0,
+        d = ctm[3] ?? 0,
+        e = ctm[4] ?? 0,
+        f = ctm[5] ?? 0;
+      const xs = [e, a + e, c + e, a + c + e];
+      const ys = [f, b + f, d + f, b + d + f];
+      const x0 = Math.min(...xs);
+      const x1 = Math.max(...xs);
+      const y0 = Math.min(...ys);
+      const y1 = Math.max(...ys);
+      const w = x1 - x0;
+      const h = y1 - y0;
+      // PDF bottom-left → top-left: top edge is the page height minus the
+      // highest corner. Mirror the text-run guard: drop a degenerate placement
+      // (non-finite or zero-area) so one bad image can't poison the stream.
+      // The MIN_IMAGE_PT floor additionally drops hairline / sub-visible
+      // placements: a transparent 1×1 spacer PNG paints at < 1pt on one side
+      // and may round just over zero on the other (e.g. with-images: editor
+      // 0pt vs channel 0.7pt). Such a phantom is layout NOISE, not a content
+      // image — keeping it would create an orphan-image and disrupt the gap of
+      // the following block. A real content image is many points on a side.
+      const topY = pageHeight - y1;
+      if (
+        !Number.isFinite(x0) ||
+        !Number.isFinite(topY) ||
+        !Number.isFinite(w) ||
+        !Number.isFinite(h) ||
+        w < MIN_IMAGE_PT ||
+        h < MIN_IMAGE_PT
+      ) {
+        continue;
+      }
+      rects.push({ x: x0, topY, w, h, pageIndex, pagePriorHeight });
+    }
+  }
+  return rects;
+}
+
 /** The 6-float affine matrix pdfjs attaches to each text item. */
 function fontSizeFromTransform(transform: number[]): number {
   const c = transform[2] ?? 0;
@@ -164,6 +294,10 @@ function median(values: number[]): number {
 const FONT_JUMP_PT = 2; // bound rule #2: new block on font-size jump >= 2pt.
 const GAP_FRACTION = 0.6; // bound rule #2: split when gap >= 0.6 × lineHeight.
 const SNIPPET_LEN = 40;
+// pdoc-evn: minimum per-side extent (points) for an image placement to count as
+// a real content block. Below this it is a hairline / transparent-spacer
+// artifact (a 1×1 PNG paints sub-point) — layout noise, not content.
+const MIN_IMAGE_PT = 3;
 
 /**
  * Compute the run-to-run vertical gaps (points) used both to self-tune the
@@ -273,7 +407,19 @@ export async function extractPdfGeometry(
     useSystemFonts: false,
   }).promise;
 
+  // pdfjs OPS codes for the graphics-state + image ops we walk (pdoc-evn).
+  const OPS = (pdfjs as unknown as { OPS: Record<string, number> }).OPS;
+  const imageOps = {
+    save: OPS.save!,
+    restore: OPS.restore!,
+    transform: OPS.transform!,
+    paintImageXObject: OPS.paintImageXObject!,
+    paintInlineImageXObject: OPS.paintInlineImageXObject!,
+    paintImageMaskXObject: OPS.paintImageMaskXObject!,
+  };
+
   const runs: Run[] = [];
+  const imageRects: ImageRect[] = [];
   let priorHeight = 0;
 
   for (let p = 0; p < doc.numPages; p++) {
@@ -281,6 +427,18 @@ export async function extractPdfGeometry(
     const viewport = page.getViewport({ scale: 1 });
     const pageHeight = viewport.height;
     const content = await page.getTextContent();
+
+    // Images carry no glyphs, so harvest their placements from the operator
+    // list's graphics-state transform stack (pdoc-evn) — same page, same
+    // continuous-document-y space as the text runs collected just below.
+    const pageImages = await extractImageRects(
+      page,
+      imageOps,
+      pageHeight,
+      p,
+      priorHeight,
+    );
+    for (const r of pageImages) imageRects.push(r);
 
     for (const item of content.items) {
       // Skip TextMarkedContent entries — they carry no transform/str.
@@ -385,6 +543,7 @@ export async function extractPdfGeometry(
       fontSize,
       textSnippet: text.slice(0, SNIPPET_LEN),
       pageIndex: first.pageIndex,
+      kind: 'text',
     });
     cur = [];
   };
@@ -420,8 +579,37 @@ export async function extractPdfGeometry(
   }
   flush();
 
+  // ─── merge IMAGE blocks into the document-order stream (pdoc-evn) ────────
+  // Build an image PdfBlock per harvested rect (continuous-document-y, empty
+  // text), then interleave with the text blocks by document-y. Merging by
+  // y-position — rather than appending — means the whitespace gap to the block
+  // FOLLOWING an image is now measured from the image's BOTTOM, so an image no
+  // longer leaks its height into its successor's gap. Ties (an image whose top
+  // equals a text block's top) break image-first, the visual reading order.
+  const imageBlocks: PdfBlock[] = imageRects.map((r) => ({
+    idx: 0, // re-indexed below after the merge sorts the full stream.
+    x: r.x,
+    y: r.pagePriorHeight + r.topY,
+    w: r.w,
+    h: r.h,
+    fontSize: 0, // images have no glyphs; size is irrelevant for classification.
+    textSnippet: '',
+    pageIndex: r.pageIndex,
+    kind: 'image',
+  }));
+
+  const merged = [...blocks, ...imageBlocks].sort((a, b) => {
+    if (a.y !== b.y) return a.y - b.y;
+    // Tie on top-y: the image sits visually first (text wraps around / below).
+    if (a.kind !== b.kind) return a.kind === 'image' ? -1 : 1;
+    return 0;
+  });
+  merged.forEach((b, i) => {
+    b.idx = i;
+  });
+
   return {
-    blocks,
+    blocks: merged,
     meta: {
       pageCount: doc.numPages,
       measuredLineHeight,

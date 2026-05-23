@@ -134,6 +134,11 @@ export type Pair = {
  * stable reference a heading is defined relative to.
  */
 function alignKey(b: PdfBlock, bodySize: number): string {
+  // Image blocks (pdoc-evn) carry no glyphs — font-size buckets are meaningless
+  // and they have no text for the Jaccard pairing. They get their OWN bucket so
+  // the aligner pairs image↔image by type + order and never substitutes an
+  // image for a text block (or vice versa).
+  if (b.kind === 'image') return 'img';
   const ratio = bodySize > 0 ? b.fontSize / bodySize : 1;
   // Three buckets, deliberately coarse: heading (clearly larger than body),
   // small (clearly smaller — captions, fine print), body (everything else).
@@ -145,13 +150,16 @@ function alignKey(b: PdfBlock, bodySize: number): string {
 /** The dominant (most-common, rounded) font size on a side — the body text
  *  size. Headings/captions are the minority, so the mode lands on body. */
 function bodyFontSize(blocks: PdfBlock[]): number {
-  if (blocks.length === 0) return 12;
+  // Image blocks (pdoc-evn) have fontSize 0 — exclude them so they don't drag
+  // the body mode toward zero and mis-bucket real text as 'heading'.
+  const textBlocks = blocks.filter((b) => b.kind !== 'image');
+  if (textBlocks.length === 0) return 12;
   const counts = new Map<number, number>();
-  for (const b of blocks) {
+  for (const b of textBlocks) {
     const k = Math.round(b.fontSize);
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
-  let best = blocks[0]!.fontSize;
+  let best = textBlocks[0]!.fontSize;
   let bestCount = -1;
   for (const [size, count] of counts) {
     if (count > bestCount) {
@@ -163,8 +171,10 @@ function bodyFontSize(blocks: PdfBlock[]): number {
 }
 
 function medianFontSize(blocks: PdfBlock[]): number {
-  if (blocks.length === 0) return 12;
-  const sorted = blocks.map((b) => b.fontSize).sort((a, b) => a - b);
+  // Exclude image blocks (fontSize 0) so the median tracks real text only.
+  const textBlocks = blocks.filter((b) => b.kind !== 'image');
+  if (textBlocks.length === 0) return 12;
+  const sorted = textBlocks.map((b) => b.fontSize).sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1
     ? sorted[mid]!
@@ -240,7 +250,16 @@ const TEXT_MATCH_FLOOR = 0.34;
  */
 const TAG_BONUS = 0.2; // weak pull toward same-kind blocks when text is silent.
 
+const IMAGE_PAIR_SCORE = 0.9; // image↔image is a strong, content-free pairing.
+
 function pairScore(e: PdfBlock, c: PdfBlock, ekKey: string, ckKey: string): number {
+  // Image blocks (pdoc-evn) have no text — pair them image↔image by kind +
+  // order. A high fixed score keeps two images in document order paired (the
+  // aligner is order-preserving), while a kind MISMATCH (image vs text) scores
+  // 0 so an image is never force-substituted for a paragraph or vice versa.
+  if (e.kind === 'image' || c.kind === 'image') {
+    return e.kind === 'image' && c.kind === 'image' ? IMAGE_PAIR_SCORE : 0;
+  }
   const sim = textSimilarity(e.textSnippet, c.textSnippet);
   if (sim >= TEXT_MATCH_FLOOR) {
     // Content-confirmed. Nudge same-kind matches above near-identical text so a
@@ -404,8 +423,38 @@ function classify(deltaLH: number, t: Thresholds): Verdict {
 const HEIGHT_ADVISORY_LH = 2.0;
 
 function blockTypeOf(b: PdfBlock, medianSize: number): string {
+  // Image blocks (pdoc-evn) are their own kind — never heading/body.
+  if (b.kind === 'image') return 'image';
   return b.fontSize >= medianSize + 2 ? 'heading' : 'body';
 }
+
+/**
+ * Image position + size parity (pdoc-evn), in line-heights. For a paired
+ * image↔image block the spacing `deltaLH` already covers its VERTICAL placement
+ * relative to the previous block; this separate signal catches a genuine
+ * divergence in the image's own WIDTH or HEIGHT (e.g. the channel rendered it
+ * at a different aspect or scale than the editor). Each dimension is normalized
+ * by THAT side's line height so a uniform display-vs-print zoom cancels — the
+ * same scale-invariance the whitespace gap relies on. Returns the larger of the
+ * width- and height-deltas (the dominant divergence). */
+function imageParityLH(
+  editor: PdfBlock,
+  chBlk: PdfBlock,
+  lhEditor: number,
+  lhChannel: number,
+): number {
+  const wDelta = Math.abs(chBlk.w / lhChannel - editor.w / lhEditor);
+  const hDelta = Math.abs(chBlk.h / lhChannel - editor.h / lhEditor);
+  return Math.max(wDelta, hDelta);
+}
+
+/** Image size/position divergence band, in line-heights (pdoc-evn). An image
+ *  whose own width/height differs from its editor counterpart by more than this
+ *  (after scale-invariant normalization) is a genuine, LOCALIZED defect and
+ *  gates — distinct from the spacing gate, which now reads correctly because the
+ *  image is a real block. Set generously so faithful renders (the dominant case)
+ *  pass while a real aspect/scale break still surfaces. */
+const IMAGE_PARITY_FAIL_LH = 4.0;
 
 function blockIdOf(b: PdfBlock, channel: Channel): string {
   return `${channel}-block-${b.idx}`;
@@ -574,9 +623,16 @@ export function computeVerdicts(
     }
 
     const blockType = blockTypeOf(chBlk, medChannel);
+    // Image pairs (pdoc-evn) have no text; the aligner already guaranteed they
+    // pair image↔image. A human-readable label for the reason string.
+    const isImagePair = editor.kind === 'image' && chBlk.kind === 'image';
+    const label = isImagePair ? '[image]' : `'${chBlk.textSnippet}'`;
+    const editorLabel = isImagePair ? '[image]' : `'${editor.textSnippet}'`;
 
     // ── no-text: channel dropped a block's text the editor had ───────────
-    const editorHasText = editor.textSnippet.trim().length > 0;
+    // Image blocks legitimately carry NO text on both sides, so the no-text
+    // rule (a dropped/rasterized TEXT block) must not fire for them.
+    const editorHasText = !isImagePair && editor.textSnippet.trim().length > 0;
     const channelHasText = chBlk.textSnippet.trim().length > 0;
     if (editorHasText && !channelHasText) {
       records.push({
@@ -589,7 +645,7 @@ export function computeVerdicts(
         verdict: 'no-text',
         blockType,
         textSnippet: editor.textSnippet,
-        reason: `${blockType} '${editor.textSnippet}' has text in the editor but the ${channel} channel rendered no extractable text — likely a dropped or rasterized block`,
+        reason: `${blockType} ${editorLabel} has text in the editor but the ${channel} channel rendered no extractable text — likely a dropped or rasterized block`,
         gateLevel,
       });
       prevEditor = editor;
@@ -607,12 +663,25 @@ export function computeVerdicts(
       ? `height parity ${heightDeltaLH.toFixed(2)}LH (ADVISORY ONLY — exceeds ${HEIGHT_ADVISORY_LH}LH but height is non-gating; per-side line-heights diverge by display-vs-print scale, so this is unvalidated)`
       : `height parity ${heightDeltaLH.toFixed(2)}LH (advisory)`;
 
+    // Image size/position parity (pdoc-evn) — gating for image pairs only. The
+    // spacing gate covers vertical PLACEMENT; this catches a divergent
+    // width/height (aspect or scale break) on the image's own box. For text
+    // blocks it stays 0 / non-gating (height is the advisory-only signal there).
+    const imgParityLH = isImagePair
+      ? imageParityLH(editor, chBlk, lhEditor, lhChannel)
+      : 0;
+    const imgParityFail = isImagePair && imgParityLH > IMAGE_PARITY_FAIL_LH;
+    const imgNote = isImagePair
+      ? `; image size parity ${imgParityLH.toFixed(2)}LH${imgParityFail ? ` (FAIL — exceeds ${IMAGE_PARITY_FAIL_LH}LH; image rendered at a divergent size)` : ' (within tolerance)'}`
+      : '';
+
     // ── metric: line-height-normalized inter-block WHITESPACE gap delta ──
     if (!prevEditor || !prevChannel) {
       // First paired block — no previous block to measure a whitespace gap
       // against. Anchor its SPACING at 0; height parity is advisory, not a gate.
-      const verdict: Verdict = 'pass';
-      const reason = `${blockType} '${chBlk.textSnippet}' is the first paired block (anchor) — gap measured from here on; ${heightNote}`;
+      // An image's own size parity still gates here (needs no predecessor).
+      const verdict: Verdict = imgParityFail ? 'fail' : 'pass';
+      const reason = `${blockType} ${label} is the first paired block (anchor) — gap measured from here on; ${heightNote}${imgNote}`;
       records.push({
         blockId: blockIdOf(chBlk, channel),
         channel,
@@ -641,17 +710,23 @@ export function computeVerdicts(
     const deltaLH = Math.abs(gapNormChannel - gapNormEditor);
     const dyPtAbs = Math.abs(gapChannelPt - gapEditorPt);
 
-    // FIX 1: the scale-invariant spacing band is the SOLE gate. Height is
-    // advisory only — a large `heightDeltaLH` adds a note but never flips the
-    // verdict, because the per-side line-heights diverge by legit scale and the
-    // raw height ratio is therefore unvalidated as a parity signal.
-    const verdict: Verdict = classify(deltaLH, threshold);
+    // FIX 1: the scale-invariant spacing band is the SOLE gate for TEXT blocks.
+    // Height is advisory only — a large `heightDeltaLH` adds a note but never
+    // flips the verdict, because the per-side line-heights diverge by legit
+    // scale and the raw height ratio is therefore unvalidated as a parity
+    // signal. For IMAGE blocks (pdoc-evn) a divergent own-size ALSO gates, so
+    // an image rendered at the wrong scale surfaces as its OWN localized fail —
+    // distinct from the spacing rhythm, which now reads correctly because the
+    // image is a real block measured from its own bottom.
+    const spacingVerdict: Verdict = classify(deltaLH, threshold);
+    const verdict: Verdict =
+      imgParityFail && spacingVerdict !== 'fail' ? 'fail' : spacingVerdict;
 
     const spacingClause =
-      verdict === 'pass'
+      spacingVerdict === 'pass'
         ? `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — within ${threshold.pass}LH)`
-        : `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${verdict === 'fail' ? `exceeds ${threshold.fail}LH` : `over ${threshold.pass}LH`})`;
-    const reason = `${blockType} '${chBlk.textSnippet}' ${spacingClause}; ${heightNote}`;
+        : `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${spacingVerdict === 'fail' ? `exceeds ${threshold.fail}LH` : `over ${threshold.pass}LH`})`;
+    const reason = `${blockType} ${label} ${spacingClause}; ${heightNote}${imgNote}`;
 
     records.push({
       blockId: blockIdOf(chBlk, channel),

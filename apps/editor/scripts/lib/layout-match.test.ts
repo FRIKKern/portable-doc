@@ -50,6 +50,7 @@ function makeEditorGeometry(): PdfGeometry {
     fontSize: sizes[idx]!,
     textSnippet: snippets[idx]!,
     pageIndex: 0,
+    kind: 'text',
   }));
   return {
     blocks,
@@ -178,6 +179,7 @@ describe('layout-match — metric properties', () => {
       fontSize: 6 * (LINE_HEIGHT_HTML / LINE_HEIGHT_EDITOR),
       textSnippet: 'SPURIOUS inserted block',
       pageIndex: 0,
+      kind: 'text',
     };
     const withExtra: PdfGeometry = {
       blocks: [
@@ -222,12 +224,12 @@ describe('layout-match — pdoc-sur denoising (root causes #1 + #2)', () => {
     // following block and failed an innocent neighbour.
     const editor: PdfGeometry = {
       blocks: [
-        { idx: 0, x: 72, y: 72, w: 400, h: 40, fontSize: 32, textSnippet: 'Doc heading', pageIndex: 0 },
-        { idx: 1, x: 72, y: 130, w: 400, h: 24, fontSize: 18, textSnippet: 'Intro paragraph above the figure', pageIndex: 0 },
+        { idx: 0, x: 72, y: 72, w: 400, h: 40, fontSize: 32, textSnippet: 'Doc heading', pageIndex: 0, kind: 'text' },
+        { idx: 1, x: 72, y: 130, w: 400, h: 24, fontSize: 18, textSnippet: 'Intro paragraph above the figure', pageIndex: 0, kind: 'text' },
         // The TALL container: 200pt high on the editor side.
-        { idx: 2, x: 72, y: 170, w: 400, h: 200, fontSize: 18, textSnippet: 'A large diagram figure container', pageIndex: 0 },
+        { idx: 2, x: 72, y: 170, w: 400, h: 200, fontSize: 18, textSnippet: 'A large diagram figure container', pageIndex: 0, kind: 'text' },
         // Body block immediately after the container, one paragraph gap below it.
-        { idx: 3, x: 72, y: 398, w: 400, h: 24, fontSize: 18, textSnippet: 'Body text right after the figure', pageIndex: 0 },
+        { idx: 3, x: 72, y: 398, w: 400, h: 24, fontSize: 18, textSnippet: 'Body text right after the figure', pageIndex: 0, kind: 'text' },
       ],
       meta: {
         pageCount: 1,
@@ -266,6 +268,7 @@ describe('layout-match — pdoc-sur denoising (root causes #1 + #2)', () => {
         fontSize: editor.blocks[i]!.fontSize * scale,
         textSnippet: chTexts[i]!,
         pageIndex: 0,
+        kind: 'text',
       });
     }
     const channel: PdfGeometry = {
@@ -306,9 +309,9 @@ describe('layout-match — pdoc-sur denoising (root causes #1 + #2)', () => {
     // match must now pair them with no orphan and no fail.
     const editor: PdfGeometry = {
       blocks: [
-        { idx: 0, x: 72, y: 72, w: 400, h: 40, fontSize: 32, textSnippet: 'Release notes for the funnel tool', pageIndex: 0 },
-        { idx: 1, x: 72, y: 130, w: 400, h: 24, fontSize: 18, textSnippet: 'The verifier pairs editor and channel', pageIndex: 0 },
-        { idx: 2, x: 72, y: 175, w: 400, h: 24, fontSize: 18, textSnippet: 'Each block earns one verdict record', pageIndex: 0 },
+        { idx: 0, x: 72, y: 72, w: 400, h: 40, fontSize: 32, textSnippet: 'Release notes for the funnel tool', pageIndex: 0, kind: 'text' },
+        { idx: 1, x: 72, y: 130, w: 400, h: 24, fontSize: 18, textSnippet: 'The verifier pairs editor and channel', pageIndex: 0, kind: 'text' },
+        { idx: 2, x: 72, y: 175, w: 400, h: 24, fontSize: 18, textSnippet: 'Each block earns one verdict record', pageIndex: 0, kind: 'text' },
       ],
       meta: {
         pageCount: 1,
@@ -322,10 +325,10 @@ describe('layout-match — pdoc-sur denoising (root causes #1 + #2)', () => {
     // editor block 2 maps cleanly to channel block 2. 4 channel blocks vs 3.
     const channel: PdfGeometry = {
       blocks: [
-        { idx: 0, x: 72, y: 72 * scale, w: 400, h: 40 * scale, fontSize: 32 * scale, textSnippet: 'Release notes for the funnel tool', pageIndex: 0 },
-        { idx: 1, x: 72, y: 130 * scale, w: 400, h: 17, fontSize: 18 * scale, textSnippet: 'The verifier pairs editor and', pageIndex: 0 },
-        { idx: 2, x: 72, y: 152 * scale, w: 400, h: 17, fontSize: 18 * scale, textSnippet: 'channel blocks by content', pageIndex: 0 },
-        { idx: 3, x: 72, y: 175 * scale, w: 400, h: 24 * scale, fontSize: 18 * scale, textSnippet: 'Each block earns one verdict record', pageIndex: 0 },
+        { idx: 0, x: 72, y: 72 * scale, w: 400, h: 40 * scale, fontSize: 32 * scale, textSnippet: 'Release notes for the funnel tool', pageIndex: 0, kind: 'text' },
+        { idx: 1, x: 72, y: 130 * scale, w: 400, h: 17, fontSize: 18 * scale, textSnippet: 'The verifier pairs editor and', pageIndex: 0, kind: 'text' },
+        { idx: 2, x: 72, y: 152 * scale, w: 400, h: 17, fontSize: 18 * scale, textSnippet: 'channel blocks by content', pageIndex: 0, kind: 'text' },
+        { idx: 3, x: 72, y: 175 * scale, w: 400, h: 24 * scale, fontSize: 18 * scale, textSnippet: 'Each block earns one verdict record', pageIndex: 0, kind: 'text' },
       ],
       meta: {
         pageCount: 1,
@@ -403,6 +406,7 @@ describe('layout-match — pdoc-vxn trust fixes (FIX 1/2/3/4)', () => {
         fontSize: i === 0 ? 28 : i === 2 ? 22 : 14,
         textSnippet: snippets[i]!,
         pageIndex: 0,
+        kind: 'text',
       });
     }
     const editor: PdfGeometry = {
@@ -431,6 +435,7 @@ describe('layout-match — pdoc-vxn trust fixes (FIX 1/2/3/4)', () => {
         fontSize: i === 0 ? 18 : i === 2 ? 14 : 9,
         textSnippet: snippets[i]!,
         pageIndex: 0,
+        kind: 'text',
       });
     }
     const channel: PdfGeometry = {
@@ -502,8 +507,8 @@ describe('layout-match — pdoc-vxn trust fixes (FIX 1/2/3/4)', () => {
     // without contriving an unreachable fixture for the aligner itself.
     const editorMeta = { pageCount: 1, measuredLineHeight: LINE_HEIGHT_EDITOR, groupingGapPt: 0.6 * LINE_HEIGHT_EDITOR };
     const channelMeta = { pageCount: 1, measuredLineHeight: LINE_HEIGHT_HTML, groupingGapPt: 0.6 * LINE_HEIGHT_HTML };
-    const eBlk = (idx: number, snip: string): PdfBlock => ({ idx, x: 72, y: 72 + idx * 60, w: 400, h: 24, fontSize: 18, textSnippet: snip, pageIndex: 0 });
-    const cBlk = (idx: number, snip: string): PdfBlock => ({ idx, x: 60, y: 60 + idx * 40, w: 320, h: 12, fontSize: 9, textSnippet: snip, pageIndex: 0 });
+    const eBlk = (idx: number, snip: string): PdfBlock => ({ idx, x: 72, y: 72 + idx * 60, w: 400, h: 24, fontSize: 18, textSnippet: snip, pageIndex: 0, kind: 'text' });
+    const cBlk = (idx: number, snip: string): PdfBlock => ({ idx, x: 60, y: 60 + idx * 40, w: 320, h: 12, fontSize: 9, textSnippet: snip, pageIndex: 0, kind: 'text' });
     // Interleaved orphans on both sides, ZERO real pairs (no pair has both set).
     const allOrphanPairs = [
       { editor: eBlk(0, 'alpha bravo'), channel: null },
@@ -560,5 +565,125 @@ describe('layout-match — pdoc-vxn trust fixes (FIX 1/2/3/4)', () => {
     const bad = records.find((r) => r.verdict === 'degenerate');
     expect(bad).toBeDefined();
     expect(records.some((r) => r.verdict === 'fail')).toBe(false);
+  });
+});
+
+/**
+ * pdoc-evn — images are first-class blocks. An image carries position + size
+ * (from the PDF's image-XObject placement) but NO text, so it pairs image↔image
+ * by kind + order. The core win: the block AFTER an image measures its
+ * whitespace gap from the IMAGE's bottom, not from the previous text block, so
+ * the image height no longer leaks into its successor's gap (the with-images /
+ * exhaustive false-fails). A genuine image size divergence surfaces as the
+ * image's OWN localized fail, NOT as a spacing fail on a downstream block.
+ */
+describe('layout-match — pdoc-evn image blocks', () => {
+  // A doc: heading → body → IMAGE → body. The image is 120pt tall on the
+  // editor side. We build BOTH sides with the same faithful whitespace rhythm.
+  function makeImageGeometry(opts: {
+    lh: number;
+    x0: number;
+    imageHeight: number;
+    imageWidth: number;
+  }): PdfGeometry {
+    const { lh, x0, imageHeight, imageWidth } = opts;
+    const gapsLH = [0, 1.0, 1.2, 1.0]; // normalized whitespace gaps (block 0 anchor)
+    const specs: Array<{ h: number; fontSize: number; snippet: string; kind: 'text' | 'image' }> = [
+      { h: 1.3 * lh, fontSize: 28, snippet: 'Image section heading', kind: 'text' },
+      { h: 1.0 * lh, fontSize: 14, snippet: 'A paragraph above the image with words', kind: 'text' },
+      { h: imageHeight, fontSize: 0, snippet: '', kind: 'image' },
+      { h: 1.0 * lh, fontSize: 14, snippet: 'A paragraph right after the image', kind: 'text' },
+    ];
+    const blocks: PdfBlock[] = [];
+    let y = 72;
+    for (let i = 0; i < specs.length; i++) {
+      if (i > 0) {
+        const prev = blocks[i - 1]!;
+        y = prev.y + prev.h + gapsLH[i]! * lh;
+      }
+      const s = specs[i]!;
+      blocks.push({
+        idx: i,
+        x: x0,
+        y,
+        w: s.kind === 'image' ? imageWidth : 400,
+        h: s.h,
+        fontSize: s.fontSize,
+        textSnippet: s.snippet,
+        pageIndex: 0,
+        kind: s.kind,
+      });
+    }
+    return {
+      blocks,
+      meta: { pageCount: 1, measuredLineHeight: lh, groupingGapPt: 0.6 * lh },
+    };
+  }
+
+  it('extracts an image as its OWN block that pairs image↔image, and the block AFTER the image keeps a clean gap (no leaked image height)', () => {
+    // Editor: 120pt-tall image. Channel: faithful render — same normalized
+    // rhythm, image scaled to the channel's line-height (90pt at the smaller
+    // scale). The KEY assertion: under the old glyph-only extraction the image
+    // had NO block, so 'A paragraph right after the image' measured its gap from
+    // the PREVIOUS TEXT block and inherited the whole image height → a huge fake
+    // gap. With the image now a real block, its successor's gap is measured from
+    // the image bottom and reads as a clean ~1 line-height.
+    const editor = makeImageGeometry({ lh: 28, x0: 72, imageHeight: 120, imageWidth: 200 });
+    const scale = 17 / 28;
+    const channel = makeImageGeometry({
+      lh: 17,
+      x0: 72 * scale,
+      imageHeight: 120 * scale,
+      imageWidth: 200 * scale,
+    });
+
+    const records = matchLayout(editor, channel, HTML);
+    // The image is a paired block of its own.
+    const imageRec = records.find((r) => r.blockType === 'image');
+    expect(imageRec).toBeDefined();
+    expect(imageRec!.verdict).not.toBe('orphan');
+    expect(imageRec!.reason).toContain('image size parity');
+
+    // The paragraph AFTER the image keeps a clean gap → no leaked image height.
+    const after = records.find((r) => r.textSnippet.startsWith('A paragraph right after'))!;
+    expect(after).toBeDefined();
+    expect(after.deltaLH).not.toBeNull();
+    expect(after.deltaLH!).toBeLessThan(0.5);
+    expect(after.verdict).toBe('pass');
+
+    // The whole faithful render has zero gating failures — image was the
+    // dominant false-fail source before pdoc-evn.
+    expect(records.some(isGatingFailure)).toBe(false);
+  });
+
+  it('SELF-TEST: a divergent image SIZE surfaces as the IMAGE block`s OWN fail, not a downstream spacing fail', () => {
+    // Same faithful rhythm, but the channel renders the image at a wildly
+    // divergent size (a real aspect/scale break). The image block must fail on
+    // its own size parity; the block AFTER it still keeps a clean gap (the
+    // divergence stays localized to the image, no cascade).
+    const editor = makeImageGeometry({ lh: 28, x0: 72, imageHeight: 120, imageWidth: 200 });
+    const scale = 17 / 28;
+    // Image rendered far too small on the channel: width 40 vs 200, height 24 vs
+    // 120 (scaled). The faithful gap below it is preserved so spacing stays clean.
+    const channel = makeImageGeometry({
+      lh: 17,
+      x0: 72 * scale,
+      imageHeight: 24,
+      imageWidth: 40,
+    });
+
+    const records = matchLayout(editor, channel, HTML);
+    const imageRec = records.find((r) => r.blockType === 'image')!;
+    expect(imageRec).toBeDefined();
+    expect(imageRec.verdict).toBe('fail');
+    expect(imageRec.reason).toContain('image size parity');
+    expect(isGatingFailure(imageRec)).toBe(true);
+
+    // The divergence is localized: the paragraph after the image does NOT fail.
+    const after = records.find((r) => r.textSnippet.startsWith('A paragraph right after'))!;
+    expect(after.verdict).not.toBe('fail');
+
+    // Exactly ONE gating failure — the image — no cascade onto neighbours.
+    expect(records.filter(isGatingFailure)).toHaveLength(1);
   });
 });
