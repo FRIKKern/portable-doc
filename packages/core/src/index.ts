@@ -47,10 +47,10 @@ export type {
 export { blockContracts, isSupported } from './contracts.js';
 export type { BlockContracts } from './contracts.js';
 
-export { validateDoc } from './validate.js';
-export type { ValidationIssue, RuleId } from './validate.js';
+export { validateDoc, validateBlock } from './validate.js';
+export type { ValidationIssue, RuleId, ValidateMode, ValidateOptions } from './validate.js';
 
-export { portableDocSchema, blockSchema, inlineNodeSchema } from './schemas.js';
+export { portableDocSchema, blockSchema, draftBlockSchema, inlineNodeSchema } from './schemas.js';
 
 export { applyDocPatch } from './patch.js';
 export type { DocPatchOp, DocPatchError, DocPatchResult } from './patch.js';
