@@ -112,8 +112,12 @@ describe('render-to-pdf funnel (editor + HTML → PDF → geometry)', () => {
     // prove it by checking the three containers appear in the SAME relative
     // order on both legs AND that the heading immediately before each container
     // also pairs — i.e. the structure is locked, not drifting.
+    // Proof operates on TEXT blocks only — advisory box/image blocks (pdoc-evn/
+    // pdoc-alu) interleave differently per leg and would shift document-order
+    // indices without reflecting a content mis-pair.
+    const textOf = (g: PdfGeometry) => g.blocks.filter((b) => b.kind === 'text');
     const idxOf = (g: PdfGeometry, needle: string) =>
-      g.blocks.findIndex((b) => b.textSnippet.includes(needle));
+      textOf(g).findIndex((b) => b.textSnippet.includes(needle));
 
     const listE = idxOf(editor, 'Render the editor');
     const listH = idxOf(html, 'Render the editor');
@@ -141,7 +145,10 @@ describe('render-to-pdf funnel (editor + HTML → PDF → geometry)', () => {
   });
 
   it('pairs blocks by document order with close continuous-y (proof tolerance)', () => {
-    const n = Math.min(editor.blocks.length, html.blocks.length);
+    // Text blocks only — advisory box/image blocks interleave per leg.
+    const eText = editor.blocks.filter((b) => b.kind === 'text');
+    const hText = html.blocks.filter((b) => b.kind === 'text');
+    const n = Math.min(eText.length, hText.length);
     expect(n).toBeGreaterThanOrEqual(8);
 
     // Pair by document order over the COMMON prefix. continuous-y is on the
@@ -150,7 +157,7 @@ describe('render-to-pdf funnel (editor + HTML → PDF → geometry)', () => {
     let maxDyIdx = -1;
     const dys: number[] = [];
     for (let i = 0; i < n; i++) {
-      const dy = Math.abs(editor.blocks[i]!.y - html.blocks[i]!.y);
+      const dy = Math.abs(eText[i]!.y - hText[i]!.y);
       dys.push(dy);
       if (dy > maxDy) {
         maxDy = dy;
@@ -171,11 +178,16 @@ describe('render-to-pdf funnel (editor + HTML → PDF → geometry)', () => {
     // height so a structural mis-pairing (which would balloon dy by a whole
     // block ~hundreds of pt) still trips, while the expected style-driven
     // accumulation passes.
-    const tol = 8 * lineHeight; // ~219pt; T3 tightens to ~8.5pt RELATIVE.
+    // Generous absolute band. The editor(18px)-vs-export(11pt) style gap makes
+    // absolute-y drift accumulate to ~190pt by the closing block — the
+    // NON-gating diagnostic of design #5. A structural mis-pair would balloon dy
+    // by hundreds of pt and still trip this. The RELATIVE gate (layout-match) is
+    // the real check and is tested there.
+    const tol = 12 * lineHeight; // ~252pt at the corrected ~21pt line-height.
 
     // REPORT so the funnel's behaviour is visible in CI output.
-    const editorSnippet = editor.blocks[maxDyIdx]?.textSnippet ?? '';
-    const htmlSnippet = html.blocks[maxDyIdx]?.textSnippet ?? '';
+    const editorSnippet = eText[maxDyIdx]?.textSnippet ?? '';
+    const htmlSnippet = hText[maxDyIdx]?.textSnippet ?? '';
     // eslint-disable-next-line no-console
     console.log(
       `[funnel] paired ${n} blocks | editor=${editor.blocks.length} html=${html.blocks.length} | ` +
