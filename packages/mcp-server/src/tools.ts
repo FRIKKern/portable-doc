@@ -14,12 +14,13 @@
  * surface actually requested is imported.
  */
 import type {
+  Block,
   BlockType,
   PortableDoc,
   Surface,
   ValidationIssue,
 } from '@portable-doc/core';
-import { blockContracts, validateDoc } from '@portable-doc/core';
+import { applyDocPatch, blockContracts, validateBlock, validateDoc } from '@portable-doc/core';
 import { composeDocument } from '@portable-doc/primitives';
 import { suggestFixes } from './suggestFixes.js';
 
@@ -225,6 +226,105 @@ export function docSuggestFixes(input: DocSuggestFixesInput): DocSuggestFixesRes
 }
 
 // ---------------------------------------------------------------------------
+// Tool: doc_append_block
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown by `docAppendBlock` when the incoming block fails draft validation or
+ * the append cannot be applied. The `message` is a JSON payload so the
+ * structured issues survive the MCP server's `err.message` text channel
+ * (server.ts forwards only the message string on `isError`).
+ */
+export class DocAppendBlockError extends Error {
+  readonly issues: ValidationIssue[];
+  readonly patchError?: string;
+
+  constructor(message: string, issues: ValidationIssue[], patchError?: string) {
+    super(
+      JSON.stringify({
+        error: message,
+        ...(patchError ? { patchError } : {}),
+        issues,
+      }),
+    );
+    this.name = 'DocAppendBlockError';
+    this.issues = issues;
+    this.patchError = patchError;
+  }
+}
+
+export interface DocAppendBlockInput {
+  /** The current document the block is appended to. */
+  document: PortableDoc;
+  /** The block to append — MAY be a draft (partial) block. */
+  block: Block;
+}
+
+export interface DocAppendBlockResult {
+  /** The document with `block` appended as the last top-level block. */
+  document: PortableDoc;
+  /**
+   * Inline-styled HTML fragment for just the appended block (U3), or `null`
+   * when the block is too incomplete to render (a draft missing a required
+   * content field — e.g. `code.value`, `list.items`, `paragraph.content`,
+   * `heading.text`). The append still succeeds and `document` is returned; the
+   * caller can re-render once the draft fills in. The render path never throws
+   * out of this tool.
+   */
+  fragment: string | null;
+}
+
+/**
+ * Append a single block to the top of a PortableDoc's block list.
+ *
+ *   1. Validate the incoming block in DRAFT mode (U2 `validateBlock`). Only
+ *      `severity:'error'` issues block the append — a half-finished draft block
+ *      (missing required fields) is tolerated; allowlist / url-safety /
+ *      content / variant violations are HARD and reject. On any error issue we
+ *      throw {@link DocAppendBlockError} carrying the issues.
+ *   2. Apply an `append-block` {@link DocPatchOp} via `applyDocPatch` (U1).
+ *      `applyDocPatch` is pure and never throws; a failed apply (e.g. a
+ *      duplicate id) surfaces as a structured error here.
+ *   3. Render the appended block to an HTML fragment (U3 `renderBlockHtml`) so
+ *      a caller can stream just the new block. A valid-but-incomplete draft
+ *      block (missing a required content field) can't be rendered yet — the
+ *      fragment degrades to `null` and the append still succeeds.
+ */
+export async function docAppendBlock(
+  input: DocAppendBlockInput,
+): Promise<DocAppendBlockResult> {
+  const issues = validateBlock(input.block, { mode: 'draft' });
+  const errors = issues.filter((i) => i.severity === 'error');
+  if (errors.length > 0) {
+    throw new DocAppendBlockError('block failed draft validation', errors);
+  }
+
+  const result = applyDocPatch(input.document, { op: 'append-block', block: input.block });
+  if (!result.applied) {
+    throw new DocAppendBlockError(
+      `append-block could not be applied: ${result.error ?? 'unknown'}`,
+      [],
+      result.error,
+    );
+  }
+
+  const { renderBlockHtml } = await import('@portable-doc/backend-web/static');
+  // A draft block can be valid (no error-severity issues) yet still be missing
+  // a required content field the composer/renderer dereferences (code.value,
+  // list.items, paragraph.content, heading.text, …). Rendering such a partial
+  // block throws a raw TypeError out of the composer. The append has already
+  // succeeded, so we keep the updated document and degrade the fragment to
+  // `null` rather than letting an internal renderer crash escape the tool.
+  let fragment: string | null;
+  try {
+    fragment = renderBlockHtml(input.block);
+  } catch {
+    fragment = null;
+  }
+  return { document: result.doc, fragment };
+}
+
+// ---------------------------------------------------------------------------
 // Tool registry — used by the MCP server to advertise tools + dispatch calls.
 // ---------------------------------------------------------------------------
 
@@ -233,6 +333,7 @@ export const TOOL_NAMES = [
   'doc_render',
   'doc_explain_block',
   'doc_suggest_fixes',
+  'doc_append_block',
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -315,6 +416,26 @@ export const TOOL_DESCRIPTORS: ToolDescriptor[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'doc_append_block',
+    description:
+      'Append a single block (may be a draft/partial block) to the end of a PortableDoc. Validates the block in draft mode; on an error-severity issue returns a structured error carrying the issues. Returns the updated document plus an inline-styled HTML fragment for just the appended block so callers can stream it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        document: {
+          type: 'object',
+          description: 'Current PortableDoc AST the block is appended to.',
+        },
+        block: {
+          type: 'object',
+          description: 'The block to append. MAY be a draft (partial) block.',
+        },
+      },
+      required: ['document', 'block'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 /** Dispatch a tool call by name. Returns a JSON-serializable result. */
@@ -332,6 +453,11 @@ export async function dispatchTool(name: string, args: unknown): Promise<unknown
       return docExplainBlock({ blockType: String(a['blockType']) });
     case 'doc_suggest_fixes':
       return docSuggestFixes({ document: a['document'] as PortableDoc });
+    case 'doc_append_block':
+      return docAppendBlock({
+        document: a['document'] as PortableDoc,
+        block: a['block'] as Block,
+      });
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

@@ -5,7 +5,7 @@
  * `StreamableHTTPClientTransport`.
  *
  * Covers:
- *   - tools/list returns the four spec-mandated tools.
+ *   - tools/list returns the registered tools.
  *   - doc_validate roundtrips a clean fixture and yields valid:true.
  *   - CORS check: origin outside the allowlist is rejected with 403.
  *   - CLI parser: `--http --port N --cors-origin x --cors-origin y`.
@@ -47,7 +47,7 @@ describe('mcp-server HTTP mode', () => {
     expect(h.port).toBeGreaterThan(0);
   });
 
-  it('lists the four spec-mandated tools over the SDK client', async () => {
+  it('lists the registered tools over the SDK client', async () => {
     const h = await spawnServer();
     const client = new Client({ name: 'test-client', version: '0.0.0' }, { capabilities: {} });
     const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${h.port}/mcp`));
@@ -55,7 +55,13 @@ describe('mcp-server HTTP mode', () => {
     try {
       const tools = await client.listTools();
       const names = tools.tools.map((t) => t.name).sort();
-      expect(names).toEqual(['doc_explain_block', 'doc_render', 'doc_suggest_fixes', 'doc_validate']);
+      expect(names).toEqual([
+        'doc_append_block',
+        'doc_explain_block',
+        'doc_render',
+        'doc_suggest_fixes',
+        'doc_validate',
+      ]);
     } finally {
       await client.close();
     }

@@ -9,8 +9,10 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PortableDoc } from '@portable-doc/core';
+import type { Block, PortableDoc } from '@portable-doc/core';
 import {
+  DocAppendBlockError,
+  docAppendBlock,
   docExplainBlock,
   docRender,
   docSuggestFixes,
@@ -249,5 +251,104 @@ describe('doc_suggest_fixes', () => {
   it('produces an empty changes array on a clean fixture', () => {
     const out = docSuggestFixes({ document: welcome });
     expect(out.changes).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// doc_append_block
+// ---------------------------------------------------------------------------
+
+describe('doc_append_block', () => {
+  it('appends a valid block and the returned doc has it last', async () => {
+    const block: Block = {
+      id: 'appended-heading',
+      type: 'heading',
+      level: 2,
+      text: 'Newly appended section',
+    };
+    const out = await docAppendBlock({ document: welcome, block });
+
+    // Original block count grows by exactly one, with the new block last.
+    expect(out.document.blocks).toHaveLength(welcome.blocks.length + 1);
+    const last = out.document.blocks[out.document.blocks.length - 1];
+    expect(last?.id).toBe('appended-heading');
+    expect(last).toEqual(block);
+    // Pure / immutable — the input doc is untouched.
+    expect(welcome.blocks.some((b) => b.id === 'appended-heading')).toBe(false);
+  });
+
+  it('returns a structured error for an invalid draft block', async () => {
+    // A draft block that is missing a required field is *tolerated*; an actual
+    // rule violation is HARD. Use a content-constraint violation (label > 48).
+    const bad: Block = {
+      id: 'bad-action',
+      type: 'action',
+      label: 'x'.repeat(100),
+      href: 'javascript:alert(1)', // url-safety violation too
+      priority: 'primary',
+    };
+
+    await expect(docAppendBlock({ document: welcome, block: bad })).rejects.toBeInstanceOf(
+      DocAppendBlockError,
+    );
+
+    let thrown: unknown;
+    try {
+      await docAppendBlock({ document: welcome, block: bad });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(DocAppendBlockError);
+    const e = thrown as DocAppendBlockError;
+    // The structured issues are carried on the error and serialized into message.
+    expect(e.issues.length).toBeGreaterThan(0);
+    const rules = new Set(e.issues.map((i) => i.rule));
+    expect(rules.has('content-constraint')).toBe(true);
+    expect(rules.has('url-safety')).toBe(true);
+    // Message is JSON so the issues survive the server's text-only error channel.
+    const payload = JSON.parse(e.message) as { error: string; issues: unknown[] };
+    expect(Array.isArray(payload.issues)).toBe(true);
+    expect(payload.issues.length).toBe(e.issues.length);
+  });
+
+  it('returns a fragment whose HTML contains the block content', async () => {
+    const block: Block = {
+      id: 'frag-para',
+      type: 'paragraph',
+      content: [{ type: 'text', value: 'Streamed fragment content' }],
+    };
+    const out = await docAppendBlock({ document: welcome, block });
+    // Fragment is a bare HTML chunk (no full-document chrome) carrying the text.
+    expect(out.fragment).toContain('Streamed fragment content');
+    expect(out.fragment).not.toContain('<!doctype html>');
+  });
+
+  it('still appends a valid-but-incomplete draft block, with fragment=null', async () => {
+    // A paragraph missing `content` is tolerated by draft validation (no
+    // error-severity issues) but can't be rendered yet. The append must still
+    // succeed and the render must not throw out of the tool.
+    const draft = { id: 'draft-para', type: 'paragraph' } as unknown as Block;
+    const out = await docAppendBlock({ document: welcome, block: draft });
+    expect(out.document.blocks).toHaveLength(welcome.blocks.length + 1);
+    expect(out.document.blocks[out.document.blocks.length - 1]?.id).toBe('draft-para');
+    expect(out.fragment).toBeNull();
+  });
+
+  it('rejects a duplicate-id block with a structured error', async () => {
+    // welcome's first block id is 'welcome-heading'; reuse it to force the
+    // applyDocPatch duplicate-id path.
+    const dup: Block = {
+      id: welcome.blocks[0]!.id,
+      type: 'paragraph',
+      content: [{ type: 'text', value: 'dup' }],
+    };
+    let thrown: unknown;
+    try {
+      await docAppendBlock({ document: welcome, block: dup });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(DocAppendBlockError);
+    expect((thrown as DocAppendBlockError).patchError).toBe('duplicate-id');
   });
 });
