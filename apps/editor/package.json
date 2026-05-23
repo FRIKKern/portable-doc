@@ -10,7 +10,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check:structural": "tsx scripts/structural-check.ts",
-    "check:semantic-diff": "tsx scripts/semantic-diff.ts",
+    "check:geometry": "tsx scripts/semantic-diff.ts",
     "check:roundtrip": "tsx scripts/round-trip-check.ts"
   },
   "dependencies": {
