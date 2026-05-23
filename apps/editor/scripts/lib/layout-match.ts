@@ -72,10 +72,18 @@ export type VerdictRecord = {
    *  synthetic `<channel>-block-<idx>`. */
   blockId: string;
   channel: Channel;
-  /** PRIMARY metric: |normalized inter-block gap delta|, in line-heights.
-   *  null for orphans (no pair to measure against). */
+  /** PRIMARY metric: |normalized WHITESPACE-gap delta|, in line-heights — the
+   *  true inter-block spacing rhythm (top of this block minus BOTTOM of the
+   *  previous block, each side normalized by its own line height). null for
+   *  orphans (no pair to measure against). This is what the verdict gates on. */
   deltaLH: number | null;
-  /** DIAGNOSTIC ONLY (non-gating): absolute inter-block gap delta in points.
+  /** SEPARATE per-block signal (pdoc-sur root cause #1): |this block's own
+   *  height vs its paired editor block's height|, each normalized by its side's
+   *  line height. A container (image / table / code) that legitimately renders
+   *  at a different height flags HERE — localized to itself — instead of
+   *  cascading a fake spacing fail onto the NEXT block. null for orphans. */
+  heightDeltaLH: number | null;
+  /** DIAGNOSTIC ONLY (non-gating): absolute whitespace-gap delta in points.
    *  Carries the raw zoom-inflated drift T2 saw, kept for debuggability. */
   dyPtAbs: number | null;
   /** The pass/fail band edges applied (channel-specific). */
@@ -154,98 +162,183 @@ function medianFontSize(blocks: PdfBlock[]): number {
     : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
+// ─── text-content similarity (pdoc-sur root cause #2) ──────────────────────────
+
 /**
- * Pair editor blocks against channel blocks.
- *
- * Container-first by document order: `extractPdfGeometry` already collapses
- * each list / table / callout to ONE block, so when the two streams have equal
- * length we pair straight by index — the cheap, common, correct path.
- *
- * When the counts differ we run an LCS-style sequence alignment over the
- * coarse `alignKey` of each block. The classic edit-distance DP gives us a
- * traceback where an inserted/deleted block becomes a single orphan rather
- * than shifting every subsequent pair (the cascade the prototype suffered).
+ * Normalize a block's text into comparable tokens. The two sides render the
+ * SAME document, so their block TEXT matches even when their block SETS don't —
+ * but only after we strip the rendering noise:
+ *   - lowercase + collapse whitespace (font/scale differences shift wrapping);
+ *   - strip the pdf.js ligature artifact where "fi"/"fl"/"ff" glyphs come back
+ *     split by a stray space ("fi xture" → "fixture", "con fl ict" → "conflict").
+ * Returns the cleaned string; `tokenSet` derives the token set from it.
  */
+function normalizeText(s: string): string {
+  return s
+    .toLowerCase()
+    // Rejoin ligature-split fragments: a space sitting immediately after an
+    // f-ligature prefix between two letters is a pdf.js extraction artifact.
+    .replace(/\b(f[ifl]?)\s+(?=[a-z])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Token SET (dedup) of a normalized snippet — order-free, so a re-wrapped or
+ *  re-segmented line still overlaps its counterpart heavily. */
+function tokenSet(s: string): Set<string> {
+  const norm = normalizeText(s);
+  if (norm.length === 0) return new Set();
+  return new Set(norm.split(' ').filter((t) => t.length > 0));
+}
+
+/**
+ * Text-content similarity in [0, 1]: token-set Jaccard, the share of distinct
+ * tokens the two snippets agree on. Robust to the re-wrapping and incidental
+ * re-segmentation that drove orphan inflation — two blocks covering the same
+ * prose overlap heavily even when one side split it differently. Two empty
+ * snippets are treated as similarity 0 (no positive evidence to pair on; the
+ * no-text rule and order tiebreak handle genuinely text-less blocks).
+ */
+function textSimilarity(a: string, b: string): number {
+  const sa = tokenSet(a);
+  const sb = tokenSet(b);
+  if (sa.size === 0 || sb.size === 0) return 0;
+  let inter = 0;
+  for (const t of sa) if (sb.has(t)) inter++;
+  const union = sa.size + sb.size - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+/** A text match is only trusted as a pairing above this Jaccard floor; below
+ *  it the blocks are too dissimilar to be "the same content" and we let the
+ *  order/tag tiebreak (or an orphan) decide instead. */
+const TEXT_MATCH_FLOOR = 0.34;
+
+/**
+ * Score a candidate diagonal pairing of editor block `e` with channel block
+ * `c`. Both sides render the SAME document, so the dominant signal is TEXT
+ * CONTENT (pdoc-sur root cause #2): incidental segmentation differences between
+ * the editor and the channel left high orphan counts when we keyed only on
+ * geometry, even though the prose plainly matched. We therefore drive pairing
+ * by token-set similarity, and fall back to the coarse tag/order key only to
+ * break ties when text gives no signal (both snippets empty, or below the
+ * trust floor).
+ *
+ * Returns a score in roughly [0, 1.1]: the text similarity when it clears the
+ * floor (a strong, content-confirmed pair), a small TAG_BONUS when text is
+ * silent but the geometric kind agrees (a weak, order-confirmed pair), or 0
+ * when neither signal supports the pairing (leave it to become an orphan).
+ */
+const TAG_BONUS = 0.2; // weak pull toward same-kind blocks when text is silent.
+
+function pairScore(e: PdfBlock, c: PdfBlock, ekKey: string, ckKey: string): number {
+  const sim = textSimilarity(e.textSnippet, c.textSnippet);
+  if (sim >= TEXT_MATCH_FLOOR) {
+    // Content-confirmed. Nudge same-kind matches above near-identical text so a
+    // heading and a paragraph that happen to share words don't outrank the real
+    // same-kind pairing — but text always dominates.
+    return sim + (ekKey === ckKey ? 0.1 : 0);
+  }
+  // Text too weak to confirm: only same-kind blocks earn a faint pull, so a
+  // genuinely inserted/deleted block (no text overlap, possibly off-kind)
+  // stays an orphan rather than being force-paired.
+  return ekKey === ckKey ? TAG_BONUS : 0;
+}
+
+/**
+ * Pair editor blocks against channel blocks by TEXT CONTENT, order-preserving.
+ *
+ * `extractPdfGeometry` collapses each list / table / callout into ONE block, so
+ * the streams often line up by order — but complex fixtures segment into
+ * different block SETS on the two sides, and the old geometry-only alignment
+ * dropped that surplus as orphans even when the prose matched (pdoc-sur root
+ * cause #2). We instead run a max-score monotonic (Needleman–Wunsch) alignment
+ * whose diagonal score is `pairScore` — text-similarity-first, tag/order only
+ * to break ties. A gap (no pairing) costs `GAP_PENALTY`, so the alignment only
+ * emits an orphan when leaving a block UNPAIRED beats every available pairing —
+ * i.e. for a genuine structural insert/delete, not an incidental re-segmentation.
+ * Order is preserved (no crossing), so a localized insert stays localized.
+ */
+const GAP_PENALTY = 0.05; // cost of leaving a block unpaired; below it, pairing wins.
+
 export function pairBlocks(
   editorBlocks: PdfBlock[],
   channelBlocks: PdfBlock[],
 ): Pair[] {
-  // Fast path: equal counts → straight document-order zip. This is the funnel's
-  // common case once containers are grouped (T2 finding #1).
-  if (editorBlocks.length === channelBlocks.length) {
-    return editorBlocks.map((e, i) => ({
-      editor: e,
-      channel: channelBlocks[i] ?? null,
-    }));
+  const m = editorBlocks.length;
+  const n = channelBlocks.length;
+  if (m === 0 || n === 0) {
+    return [
+      ...editorBlocks.map((e) => ({ editor: e, channel: null })),
+      ...channelBlocks.map((c) => ({ editor: null, channel: c })),
+    ];
   }
 
-  // Differing counts → align. Key each side against ITS OWN body size so the
-  // heading/body/small classification is scale-invariant — a heading on the
-  // editor side keys the same 'h' as the heading on the smaller-scaled channel
-  // side even though their absolute point sizes differ (T2 finding #2).
+  // Coarse geometric keys, scale-invariant per side (the tie-break signal).
   const bodyEditor = bodyFontSize(editorBlocks);
   const bodyChannel = bodyFontSize(channelBlocks);
   const ek = editorBlocks.map((b) => alignKey(b, bodyEditor));
   const ck = channelBlocks.map((b) => alignKey(b, bodyChannel));
 
-  const m = editorBlocks.length;
-  const n = channelBlocks.length;
-
-  // dp[i][j] = min edit cost to align editor[0..i) with channel[0..j).
-  // A key MATCH costs 0; an indel costs 1. A key-MISMATCH "substitution" costs
-  // 2 — strictly more than an indel pair — so two unlike blocks are NEVER
-  // paired when they could instead be explained as one insert + one delete.
-  // This makes a genuine inserted/deleted block emit a localized `orphan`
-  // rather than smearing into a same-cost mismatched-substitution chain that
-  // shifts every downstream pair (the cascade bound decision #3 forbids).
-  const MISMATCH_COST = 2;
+  // dp[i][j] = MAX total score aligning editor[0..i) with channel[0..j).
+  // A pairing adds pairScore; a gap (orphan on either side) subtracts the gap
+  // penalty. Maximizing total score pairs everything the content supports and
+  // only leaves genuine inserts/deletes unpaired.
   const dp: number[][] = Array.from({ length: m + 1 }, () =>
     new Array<number>(n + 1).fill(0),
   );
-  for (let i = 0; i <= m; i++) dp[i]![0] = i;
-  for (let j = 0; j <= n; j++) dp[0]![j] = j;
+  for (let i = 1; i <= m; i++) dp[i]![0] = -i * GAP_PENALTY;
+  for (let j = 1; j <= n; j++) dp[0]![j] = -j * GAP_PENALTY;
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      const subCost = ek[i - 1] === ck[j - 1] ? 0 : MISMATCH_COST;
-      dp[i]![j] = Math.min(
-        dp[i - 1]![j - 1]! + subCost, // align i with j
-        dp[i - 1]![j]! + 1, // editor i is an orphan (delete)
-        dp[i]![j - 1]! + 1, // channel j is an orphan (insert)
+      const score = pairScore(
+        editorBlocks[i - 1]!,
+        channelBlocks[j - 1]!,
+        ek[i - 1]!,
+        ck[j - 1]!,
+      );
+      dp[i]![j] = Math.max(
+        dp[i - 1]![j - 1]! + score, // pair editor i with channel j
+        dp[i - 1]![j]! - GAP_PENALTY, // editor i is an orphan (delete)
+        dp[i]![j - 1]! - GAP_PENALTY, // channel j is an orphan (insert)
       );
     }
   }
 
-  // Traceback from (m, n) to (0, 0), emitting pairs / orphans in reverse, then
-  // reverse the list so it reads in document order.
+  // Traceback from (m, n), emitting in reverse, then reverse to document order.
   const out: Pair[] = [];
   let i = m;
   let j = n;
   while (i > 0 || j > 0) {
-    // Prefer a genuine MATCH on the diagonal (subCost 0) above all else — a
-    // real pairing should never be broken into two orphans. A key-mismatch
-    // substitution (cost 2) is only taken as a last resort, when it is the
-    // sole optimal move, so a uniquely-keyed insert/delete is emitted as an
-    // orphan instead of being smeared into a mismatched substitution chain.
     if (i > 0 && j > 0) {
-      const subCost = ek[i - 1] === ck[j - 1] ? 0 : MISMATCH_COST;
-      if (subCost === 0 && dp[i]![j] === dp[i - 1]![j - 1]!) {
+      const score = pairScore(
+        editorBlocks[i - 1]!,
+        channelBlocks[j - 1]!,
+        ek[i - 1]!,
+        ck[j - 1]!,
+      );
+      // Take the diagonal pairing whenever it lies on the optimal path AND it
+      // carried any positive support (score > 0). A zero-score "pairing" is no
+      // better than two orphans, so we reserve it for last and prefer the
+      // explicit orphan moves below — a genuine insert/delete stays localized.
+      if (score > 0 && dp[i]![j] === dp[i - 1]![j - 1]! + score) {
         out.push({ editor: editorBlocks[i - 1]!, channel: channelBlocks[j - 1]! });
         i--;
         j--;
         continue;
       }
     }
-    if (i > 0 && dp[i]![j] === dp[i - 1]![j]! + 1) {
+    if (i > 0 && dp[i]![j] === dp[i - 1]![j]! - GAP_PENALTY) {
       out.push({ editor: editorBlocks[i - 1]!, channel: null });
       i--;
       continue;
     }
-    if (j > 0 && dp[i]![j] === dp[i]![j - 1]! + 1) {
+    if (j > 0 && dp[i]![j] === dp[i]![j - 1]! - GAP_PENALTY) {
       out.push({ editor: null, channel: channelBlocks[j - 1]! });
       j--;
       continue;
     }
-    // Only a mismatched substitution remains on the optimal path.
+    // Fallback: a zero-score diagonal is the only move left on the path.
     out.push({ editor: editorBlocks[i - 1]!, channel: channelBlocks[j - 1]! });
     i--;
     j--;
@@ -281,6 +374,21 @@ function classify(deltaLH: number, t: Thresholds): Verdict {
   return 'fail';
 }
 
+/**
+ * Height-parity fail edge, in line-heights (pdoc-sur root cause #1). A block's
+ * OWN height divergence is a SEPARATE signal from inter-block spacing — a tall
+ * container (image / table / code) often renders at a legitimately different
+ * height in the editor vs a channel, and that must NOT read as a defect at the
+ * strict spacing band. So the height gate is deliberately LOOSE: a divergence
+ * is only a fail when it exceeds this many line-heights, which catches a
+ * grossly dropped or exploded container while tolerating the routine
+ * container-height jitter that previously cascaded fake spacing fails onto the
+ * NEXT block. The spacing gate keeps the strict 0.5/1.0 bands; this is the only
+ * place container-height drift can produce a verdict, and it's localized to the
+ * diverging block itself.
+ */
+const HEIGHT_FAIL_LH = 2.0;
+
 function blockTypeOf(b: PdfBlock, medianSize: number): string {
   return b.fontSize >= medianSize + 2 ? 'heading' : 'body';
 }
@@ -289,17 +397,50 @@ function blockIdOf(b: PdfBlock, channel: Channel): string {
   return `${channel}-block-${b.idx}`;
 }
 
+/** Block-height parity (pdoc-sur root cause #1): the difference between a
+ *  block's own height on each side, each normalized by that side's line height.
+ *  A uniform display-vs-print scale cancels in the ratio (a faithful container
+ *  at different absolute heights but the same line-count → ~0), so a non-zero
+ *  value means the block occupies a different NUMBER of lines on the two sides. */
+function heightParityLH(
+  editor: PdfBlock,
+  chBlk: PdfBlock,
+  lhEditor: number,
+  lhChannel: number,
+): number {
+  const hNormEditor = editor.h / lhEditor;
+  const hNormChannel = chBlk.h / lhChannel;
+  return Math.abs(hNormChannel - hNormEditor);
+}
+
 /**
  * Compare a paired block list and emit one VerdictRecord per pair / orphan.
  *
- * The metric is the line-height-normalized inter-block gap delta described in
- * the module header. For the FIRST paired block there is no previous block to
- * measure a gap against, so we anchor it as a pass (its absolute position is
- * fixed by the page top; only RHYTHM between blocks is a defect we can localize).
+ * Two ORTHOGONAL signals, both line-height-normalized (pdoc-sur root cause #1):
+ *
+ *   1. `deltaLH` — the PRIMARY, gating metric: the WHITESPACE gap between this
+ *      block and the previous one, i.e. `top_i − bottom_{i−1}` on each side
+ *      (NOT top-to-top). The old top-to-top gap folded the previous block's
+ *      HEIGHT into the spacing, so a tall container rendered at different
+ *      heights editor-vs-channel inflated the gap into the NEXT block — a
+ *      container-height difference masquerading as a spacing-rhythm defect.
+ *      Measuring bottom-of-prev → top-of-current isolates the true inter-block
+ *      spacing. Gates on the strict 0.5 / 1.0 LH bands.
+ *
+ *   2. `heightDeltaLH` — a SEPARATE per-block signal: this block's own height
+ *      vs its paired editor block's height, each normalized by its side's line
+ *      height. Reported always; gates only on a LARGE divergence
+ *      (> HEIGHT_FAIL_LH), so a container that legitimately renders a different
+ *      height flags HERE, localized to itself, instead of cascading a fake
+ *      spacing fail downstream.
+ *
+ * For the FIRST paired block there is no previous block to measure a whitespace
+ * gap against, so we anchor its spacing at 0 (pass) — but we STILL compute its
+ * height parity, since that needs no predecessor.
  *
  * Rules baked in (bound #9):
  *   - orphan: a block present on only one side → `verdict:"orphan"`, deltaLH
- *     null. No cascade — the alignment already localized it.
+ *     and heightDeltaLH null. No cascade — the alignment already localized it.
  *   - no-text: a channel block whose snippet is empty while the editor side
  *     HAS text → `verdict:"no-text"` (a FAIL), never a silent pass.
  */
@@ -345,6 +486,7 @@ export function computeVerdicts(
         blockId: editor ? `editor-block-${present.idx}` : blockIdOf(present, channel),
         channel,
         deltaLH: null,
+        heightDeltaLH: null,
         dyPtAbs: null,
         threshold,
         verdict: 'orphan',
@@ -368,6 +510,7 @@ export function computeVerdicts(
         blockId: blockIdOf(chBlk, channel),
         channel,
         deltaLH: null,
+        heightDeltaLH: null,
         dyPtAbs: null,
         threshold,
         verdict: 'no-text',
@@ -381,19 +524,29 @@ export function computeVerdicts(
       continue;
     }
 
-    // ── metric: line-height-normalized inter-block gap delta ─────────────
+    // Height parity is computable for any pair (needs no predecessor).
+    const heightDeltaLH = heightParityLH(editor, chBlk, lhEditor, lhChannel);
+    const heightFails = heightDeltaLH > HEIGHT_FAIL_LH;
+
+    // ── metric: line-height-normalized inter-block WHITESPACE gap delta ──
     if (!prevEditor || !prevChannel) {
-      // First paired block — no previous gap to measure. Anchor as pass.
+      // First paired block — no previous block to measure a whitespace gap
+      // against. Anchor its SPACING at 0, but its height parity still gates.
+      const verdict: Verdict = heightFails ? 'fail' : 'pass';
+      const reason = heightFails
+        ? `${blockType} '${chBlk.textSnippet}' is the first paired block (spacing anchor) but its own height diverges ${heightDeltaLH.toFixed(2)}LH (> ${HEIGHT_FAIL_LH}LH) — likely a container rendered at a very different height`
+        : `${blockType} '${chBlk.textSnippet}' is the first paired block (anchor) — gap measured from here on; height parity ${heightDeltaLH.toFixed(2)}LH`;
       records.push({
         blockId: blockIdOf(chBlk, channel),
         channel,
         deltaLH: 0,
+        heightDeltaLH,
         dyPtAbs: 0,
         threshold,
-        verdict: 'pass',
+        verdict,
         blockType,
         textSnippet: chBlk.textSnippet,
-        reason: `${blockType} '${chBlk.textSnippet}' is the first paired block (anchor) — gap measured from here on`,
+        reason,
         gateLevel,
       });
       prevEditor = editor;
@@ -401,23 +554,34 @@ export function computeVerdicts(
       continue;
     }
 
-    const gapEditorPt = editor.y - prevEditor.y;
-    const gapChannelPt = chBlk.y - prevChannel.y;
+    // WHITESPACE gap = top of this block minus BOTTOM of the previous block.
+    // Subtracting the previous block's height removes its container size from
+    // the spacing signal (pdoc-sur root cause #1).
+    const gapEditorPt = editor.y - (prevEditor.y + prevEditor.h);
+    const gapChannelPt = chBlk.y - (prevChannel.y + prevChannel.h);
     const gapNormEditor = gapEditorPt / lhEditor;
     const gapNormChannel = gapChannelPt / lhChannel;
     const deltaLH = Math.abs(gapNormChannel - gapNormEditor);
     const dyPtAbs = Math.abs(gapChannelPt - gapEditorPt);
 
-    const verdict = classify(deltaLH, threshold);
-    const reason =
-      verdict === 'pass'
-        ? `${blockType} '${chBlk.textSnippet}' gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — within ${threshold.pass}LH)`
-        : `${blockType} '${chBlk.textSnippet}' gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${verdict === 'fail' ? `exceeds ${threshold.fail}LH` : `over ${threshold.pass}LH`})`;
+    // The spacing band gives the primary verdict; a LARGE height divergence can
+    // independently push to fail (localized to THIS block — no downstream cascade).
+    const spacingVerdict = classify(deltaLH, threshold);
+    const verdict: Verdict = heightFails ? 'fail' : spacingVerdict;
+
+    const spacingClause =
+      spacingVerdict === 'pass'
+        ? `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — within ${threshold.pass}LH)`
+        : `gap ${gapNormChannel.toFixed(2)} line-heights vs editor ${gapNormEditor.toFixed(2)} (Δ ${deltaLH.toFixed(2)}LH — ${spacingVerdict === 'fail' ? `exceeds ${threshold.fail}LH` : `over ${threshold.pass}LH`})`;
+    const reason = heightFails
+      ? `${blockType} '${chBlk.textSnippet}' OWN HEIGHT diverges ${heightDeltaLH.toFixed(2)}LH (> ${HEIGHT_FAIL_LH}LH) — container rendered at a very different height; whitespace ${spacingClause}`
+      : `${blockType} '${chBlk.textSnippet}' ${spacingClause}; height parity ${heightDeltaLH.toFixed(2)}LH`;
 
     records.push({
       blockId: blockIdOf(chBlk, channel),
       channel,
       deltaLH,
+      heightDeltaLH,
       dyPtAbs,
       threshold,
       verdict,

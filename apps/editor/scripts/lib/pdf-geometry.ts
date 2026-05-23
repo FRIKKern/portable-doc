@@ -183,6 +183,59 @@ function collectVerticalGaps(runs: Run[]): number[] {
   return gaps;
 }
 
+/**
+ * Self-tune the INTRA-block leading: the median run-to-run advance BETWEEN
+ * consecutive lines of the same paragraph — never across a paragraph break.
+ *
+ * Why this matters (pdoc-sur root cause #3): the naive median over *all*
+ * positive run-to-run gaps mixes the small wrapped-line advances (the true
+ * leading) with the much larger paragraph-break advances. On a document of
+ * many short blocks (headings, list items, callouts) the large breaks are a
+ * sizeable fraction of all gaps, so the plain median lands well ABOVE one line
+ * — we measured editor `measuredLineHeight` 42pt where ~28pt was correct. That
+ * inflation poisons EVERY normalized delta downstream (every gap divided by a
+ * too-big line height reads as too-few line-heights), so it must be excluded.
+ *
+ * Anchoring on the plain median is unsafe: when short blocks dominate, the
+ * paragraph-break gaps are a large enough fraction that the median lands ABOVE
+ * the wrapped-line cluster, and a window centred on it would exclude the very
+ * cluster we want. The wrapped-line advances are instead the LOW, tight cluster
+ * of the gap distribution (a paragraph break only ever ADDS whitespace, never
+ * removes it). So we anchor on a low percentile — which falls inside that
+ * cluster by construction — and keep the gaps within `WITHIN_PARA_FRACTION` of
+ * it, then take their median. Paragraph breaks (≥ 0.6 line-heights of extra
+ * leading, bound rule #2) sit above the window and are dropped. Falls back to
+ * the plain median when too few intra-block gaps survive (e.g. a document with
+ * no wrapped paragraphs at all), so single-line docs still tune.
+ */
+const WITHIN_PARA_FRACTION = 0.5; // a same-paragraph advance is within ±50% of the anchor.
+const ANCHOR_PERCENTILE = 0.25; // low-quantile anchor lands inside the wrapped-line cluster.
+const MIN_INTRA_GAPS = 3; // need a few clustered advances to trust the refined median.
+
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.round(p * (sorted.length - 1))),
+  );
+  return sorted[idx] ?? 0;
+}
+
+function intraBlockLineHeight(allGaps: number[]): number {
+  const positive = allGaps.filter((g) => g > 0);
+  const fallback = median(positive);
+  if (fallback <= 0) return 0;
+  // Anchor inside the low (wrapped-line) cluster, not on the inflated median.
+  const anchor = percentile(positive, ANCHOR_PERCENTILE);
+  if (anchor <= 0) return fallback;
+  const lo = anchor * (1 - WITHIN_PARA_FRACTION);
+  const hi = anchor * (1 + WITHIN_PARA_FRACTION);
+  const intra = positive.filter((g) => g >= lo && g <= hi);
+  if (intra.length < MIN_INTRA_GAPS) return fallback;
+  return median(intra);
+}
+
 // ─── extraction ─────────────────────────────────────────────────────────────
 
 export async function extractPdfGeometry(
@@ -267,9 +320,11 @@ export async function extractPdfGeometry(
 
   await doc.cleanup();
 
-  // Self-tune the line height from the PDF's own run-to-run cadence.
+  // Self-tune the line height from the PDF's own run-to-run cadence — using
+  // only the INTRA-block (same-paragraph) advances so paragraph-break gaps
+  // don't inflate it (pdoc-sur root cause #3).
   const gaps = collectVerticalGaps(runs);
-  const measuredLineHeight = median(gaps.filter((g) => g > 0)) || 12;
+  const measuredLineHeight = intraBlockLineHeight(gaps) || 12;
   const groupingGapPt = GAP_FRACTION * measuredLineHeight;
 
   // ─── group runs → blocks ───────────────────────────────────────────────

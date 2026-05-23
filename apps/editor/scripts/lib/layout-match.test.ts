@@ -207,3 +207,142 @@ describe('layout-match — metric properties', () => {
     expect(noText[0]!.textSnippet).toBe('Steps to reproduce');
   });
 });
+
+/**
+ * pdoc-sur fixes — proves the two denoising changes that make COMPLEX-fixture
+ * verdicts trustworthy without loosening any threshold.
+ */
+describe('layout-match — pdoc-sur denoising (root causes #1 + #2)', () => {
+  it('ROOT CAUSE #1: a tall container at a different height does NOT cascade a fake spacing fail onto the next block', () => {
+    // Build editor blocks where block 2 is a TALL container (image / table /
+    // code) and a normal body block follows it. The channel renders the SAME
+    // document faithfully EXCEPT the container is much shorter — exactly the
+    // situation that, under the old top-to-top gap, exploded the gap INTO the
+    // following block and failed an innocent neighbour.
+    const editor: PdfGeometry = {
+      blocks: [
+        { idx: 0, x: 72, y: 72, w: 400, h: 40, fontSize: 32, textSnippet: 'Doc heading', pageIndex: 0 },
+        { idx: 1, x: 72, y: 130, w: 400, h: 24, fontSize: 18, textSnippet: 'Intro paragraph above the figure', pageIndex: 0 },
+        // The TALL container: 200pt high on the editor side.
+        { idx: 2, x: 72, y: 170, w: 400, h: 200, fontSize: 18, textSnippet: 'A large diagram figure container', pageIndex: 0 },
+        // Body block immediately after the container, one paragraph gap below it.
+        { idx: 3, x: 72, y: 398, w: 400, h: 24, fontSize: 18, textSnippet: 'Body text right after the figure', pageIndex: 0 },
+      ],
+      meta: {
+        pageCount: 1,
+        measuredLineHeight: LINE_HEIGHT_EDITOR,
+        groupingGapPt: 0.6 * LINE_HEIGHT_EDITOR,
+      },
+    };
+    const scale = LINE_HEIGHT_HTML / LINE_HEIGHT_EDITOR;
+    // Faithful channel render: same WHITESPACE rhythm (each block sits the same
+    // normalized gap below the previous block's BOTTOM), but the container
+    // renders only 90pt tall instead of 200pt — a legitimate container-height
+    // divergence. We lay the channel out from the gaps, not by scaling y, so
+    // the shorter container does NOT corrupt the spacing below it.
+    const lhE = LINE_HEIGHT_EDITOR;
+    const editorGaps = [
+      editor.blocks[1]!.y - (editor.blocks[0]!.y + editor.blocks[0]!.h),
+      editor.blocks[2]!.y - (editor.blocks[1]!.y + editor.blocks[1]!.h),
+      editor.blocks[3]!.y - (editor.blocks[2]!.y + editor.blocks[2]!.h),
+    ];
+    const chHeights = [40, 24, 90 /* shorter container */, 24].map((h) => h * scale);
+    const chTexts = editor.blocks.map((b) => b.textSnippet);
+    const chBlocks: PdfBlock[] = [];
+    let yCursor = 72 * scale;
+    for (let i = 0; i < 4; i++) {
+      if (i > 0) {
+        const prev = chBlocks[i - 1]!;
+        const gapNorm = editorGaps[i - 1]! / lhE; // same normalized whitespace gap
+        yCursor = prev.y + prev.h + gapNorm * LINE_HEIGHT_HTML;
+      }
+      chBlocks.push({
+        idx: i,
+        x: 72 * scale,
+        y: yCursor,
+        w: 400 * scale,
+        h: chHeights[i]!,
+        fontSize: editor.blocks[i]!.fontSize * scale,
+        textSnippet: chTexts[i]!,
+        pageIndex: 0,
+      });
+    }
+    const channel: PdfGeometry = {
+      blocks: chBlocks,
+      meta: {
+        pageCount: 1,
+        measuredLineHeight: LINE_HEIGHT_HTML,
+        groupingGapPt: 0.6 * LINE_HEIGHT_HTML,
+      },
+    };
+
+    const records = matchLayout(editor, channel, HTML);
+    expect(records).toHaveLength(4);
+
+    // The block AFTER the container keeps a clean WHITESPACE gap → no fake fail.
+    const after = records.find((r) => r.textSnippet === 'Body text right after the figure')!;
+    expect(after.deltaLH).not.toBeNull();
+    expect(after.deltaLH!).toBeLessThan(0.5);
+    expect(after.verdict).not.toBe('fail');
+
+    // The container ITSELF carries the height divergence as its own signal,
+    // localized to itself — 110pt over a 17pt LH ≈ 6.5 LH, well past the gate.
+    const container = records.find((r) => r.textSnippet === 'A large diagram figure container')!;
+    expect(container.heightDeltaLH).not.toBeNull();
+    expect(container.heightDeltaLH!).toBeGreaterThan(2.0);
+    expect(container.verdict).toBe('fail');
+    expect(container.reason).toContain('HEIGHT');
+  });
+
+  it('ROOT CAUSE #2: block sets that segment slightly differently still PAIR by text instead of orphaning', () => {
+    // Editor segments a passage into ONE block; the channel renderer splits the
+    // SAME prose across TWO blocks (a common wrapping/segmentation difference).
+    // Old geometry-only alignment dropped the surplus as an orphan; the text
+    // match must now pair them with no orphan and no fail.
+    const editor: PdfGeometry = {
+      blocks: [
+        { idx: 0, x: 72, y: 72, w: 400, h: 40, fontSize: 32, textSnippet: 'Release notes for the funnel tool', pageIndex: 0 },
+        { idx: 1, x: 72, y: 130, w: 400, h: 24, fontSize: 18, textSnippet: 'The verifier pairs editor and channel', pageIndex: 0 },
+        { idx: 2, x: 72, y: 175, w: 400, h: 24, fontSize: 18, textSnippet: 'Each block earns one verdict record', pageIndex: 0 },
+      ],
+      meta: {
+        pageCount: 1,
+        measuredLineHeight: LINE_HEIGHT_EDITOR,
+        groupingGapPt: 0.6 * LINE_HEIGHT_EDITOR,
+      },
+    };
+    const scale = LINE_HEIGHT_HTML / LINE_HEIGHT_EDITOR;
+    // Channel keeps the heading but splits editor block 1's prose into two — the
+    // tokens of editor block 1 are shared across channel blocks 1a and 1b, while
+    // editor block 2 maps cleanly to channel block 2. 4 channel blocks vs 3.
+    const channel: PdfGeometry = {
+      blocks: [
+        { idx: 0, x: 72, y: 72 * scale, w: 400, h: 40 * scale, fontSize: 32 * scale, textSnippet: 'Release notes for the funnel tool', pageIndex: 0 },
+        { idx: 1, x: 72, y: 130 * scale, w: 400, h: 17, fontSize: 18 * scale, textSnippet: 'The verifier pairs editor and', pageIndex: 0 },
+        { idx: 2, x: 72, y: 152 * scale, w: 400, h: 17, fontSize: 18 * scale, textSnippet: 'channel blocks by content', pageIndex: 0 },
+        { idx: 3, x: 72, y: 175 * scale, w: 400, h: 24 * scale, fontSize: 18 * scale, textSnippet: 'Each block earns one verdict record', pageIndex: 0 },
+      ],
+      meta: {
+        pageCount: 1,
+        measuredLineHeight: LINE_HEIGHT_HTML,
+        groupingGapPt: 0.6 * LINE_HEIGHT_HTML,
+      },
+    };
+
+    const records = matchLayout(editor, channel, HTML);
+    // The heading and 'Each block…' pair cleanly by text; the split prose pairs
+    // its strongest counterpart and the residual fragment is the ONLY thing the
+    // alignment may leave over. With token overlap on both fragments the heavy
+    // overlap pairs; at most ONE residual orphan — far below the old counts —
+    // and crucially the cleanly-matching blocks are NOT orphaned.
+    const orphans = records.filter((r) => r.verdict === 'orphan');
+    expect(orphans.length).toBeLessThanOrEqual(1);
+    // The heading and the trailing block must PAIR (not orphan).
+    const heading = records.find((r) => r.textSnippet.startsWith('Release notes'));
+    const trailing = records.find((r) => r.textSnippet.startsWith('Each block earns'));
+    expect(heading).toBeDefined();
+    expect(heading!.verdict).not.toBe('orphan');
+    expect(trailing).toBeDefined();
+    expect(trailing!.verdict).not.toBe('orphan');
+  });
+});
