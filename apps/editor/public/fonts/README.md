@@ -1,55 +1,32 @@
 # `apps/editor/public/fonts/`
 
-Self-hosted WOFF2 fallback for the v0.4 Paper typography decision.
+Self-hosted **Adobe Source Serif 4** TTF bundle — the canonical body face for the v0.4 Paper typography decision.
 
 ## Decision in one sentence
 
-The editor uses a **system-first serif stack** (`'Iowan Old Style', 'Constantia', 'Charter', Georgia, serif`) and **self-hosts an Iowan Old Style WOFF2** here as a `font-display: optional` fallback. Mac users get Iowan from the OS for free; Windows/Linux/Android users get Constantia/Charter/Georgia from their OS on first paint, then the WOFF2 quietly downloads in the background and catches up on the second visit. Never blocks first render.
-
-Locked in pre-flight T1 — see `~/docs/paperflow/notes/2026-05-12-v0-4-typography.html`.
+The editor's serif voice is **Source Serif 4** (`--paper-font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif` — see `apps/editor/src/styles/paper.css:32`). The four TTFs in this directory are self-hosted and served by Vite at `/fonts/` in both dev and after `vite build`, so every host — Mac, Windows, Linux, Android — gets the same face without depending on an OS-installed font. Georgia / Times New Roman remain only as the cold-cache fallback during the `font-display: swap` FOUT.
 
 ## Files
 
-| File | Status | Notes |
-|---|---|---|
-| `iowan-old-style.woff2` | **placeholder** — not committed yet | Required for the `@font-face` fallback to resolve. The path is referenced by `paper.css` (added in v0.4 A1). |
-| `iowan-old-style.woff2.placeholder` | committed | Zero-byte sentinel so the directory layout is reproducible. |
+| File | Notes |
+|---|---|
+| `SourceSerif4-Regular.ttf` | weight 400, upright |
+| `SourceSerif4-Italic.ttf` | weight 400, italic |
+| `SourceSerif4-Bold.ttf` | weight 700, upright |
+| `SourceSerif4-BoldItalic.ttf` | weight 700, italic |
+| `LICENSE.txt` | SIL Open Font License 1.1 |
+| `NOTES.txt` | provenance + upstream filename mapping |
 
-## Licensing — why this file is not in the repo
+The `@font-face` rules that load these live in `apps/editor/src/styles/paper.css:111-134` (one rule per file, `font-display: swap`).
 
-**Iowan Old Style is a copyrighted typeface** by Bigelow & Holmes Inc., distributed by Linotype/Monotype. The family ships pre-installed on **macOS** as part of the OS (legally usable by every Mac user), but **redistributing the font file** — including converting the bundled `.ttc` to WOFF2 and shipping it in a public web app — is a separate license question.
+## Provenance
 
-Two acceptable paths to obtain the WOFF2 before v0.4.0 ships:
+Vendored from Adobe's [`adobe-fonts/source-serif`](https://github.com/adobe-fonts/source-serif) (release branch). The italic and bold-italic files are renamed locally from upstream's `SourceSerif4-It.ttf` / `SourceSerif4-BoldIt.ttf` to the consistent `*-Italic.ttf` / `*-BoldItalic.ttf` scheme — see `NOTES.txt` for the full mapping. Naming follows `2026-05-20-font-bundle-spec.html`.
 
-1. **License from Monotype** (the canonical commercial path). Buy a self-hosted web font license for Iowan Old Style on https://www.monotype.com/, receive the WOFF2 from them, drop it in this directory.
-2. **Extract from a licensed copy you own.** The user owns macOS, so Iowan ships at `/System/Library/Fonts/Supplemental/Iowan Old Style.ttc`. Conversion to WOFF2 is technically straightforward with `fonttools`:
-   ```bash
-   pip install fonttools brotli
-   # extract regular weight from .ttc
-   python -c "from fontTools.ttLib import TTCollection; ttc = TTCollection('/System/Library/Fonts/Supplemental/Iowan Old Style.ttc'); ttc.fonts[0].save('iowan-regular.ttf')"
-   # convert to woff2
-   python -c "from fontTools.ttLib import TTFont; f = TTFont('iowan-regular.ttf'); f.flavor='woff2'; f.save('iowan-old-style.woff2')"
-   ```
-   **Legality of this path depends on the macOS EULA / Linotype EULA** — generally OS-bundled fonts are licensed for *use on this machine*, not for embedding into a web app for distribution to third parties. Treat this as a development-only fallback unless a lawyer signs off.
+## Licensing
 
-For the v0.4 pre-flight, the file is **left as a placeholder.** The decision is locked, the CSS path is wired up, but the binary asset is sourced manually before v0.4.0 ships.
+Source Serif 4 is released under the **SIL Open Font License 1.1** (see `LICENSE.txt`), which permits bundling and redistribution in a web app. No commercial license, no manual extraction, and no per-host font install is required.
 
-## `@font-face` block (lands in `paper.css` in task A1)
+## Build guard
 
-```css
-@font-face {
-  font-family: 'Iowan Old Style';
-  src: url('/fonts/iowan-old-style.woff2') format('woff2');
-  font-weight: 400 700;
-  font-display: optional;
-}
-```
-
-`font-display: optional` is the key. If the WOFF2 isn't in cache when the page paints, the browser skips it entirely for that load — no FOIT, no FOUT, no layout shift. Mac users never hit it (system Iowan wins the cascade). Non-Mac users get Constantia/Charter/Georgia on first paint; by the second visit the WOFF2 is cached and Iowan paints from byte one.
-
-## When to replace the placeholder
-
-- Before `pnpm build` produces a production bundle of `apps/editor` for any public deployment.
-- Before the v0.4.0 release tag.
-
-The build should **not fail** when the WOFF2 is missing — `font-display: optional` means the browser simply 404s and falls through to the system stack. CI can lint for the placeholder's presence and warn (not fail).
+`apps/editor/scripts/structural-check.ts` enforces this decision: check **A22** fails the build if `'Iowan Old Style'` appears anywhere in the `--paper-font-serif` stack or if Source Serif 4 isn't the first token, and a companion check requires exactly four `'Source Serif 4'` `@font-face` rules. Keep all four TTFs present and the stack Source-Serif-first.

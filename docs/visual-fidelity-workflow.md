@@ -213,9 +213,13 @@ errors with the exact command above and exits.
 - **Microsoft Word automation** (`osascript -e 'tell app "Microsoft Word"
   ... export as PDF'`) is out of scope for v1. Needs a paid Word install
   and breaks on every Word update.
-- **Fonts:** the exporter targets Georgia. LibreOffice substitutes if
-  Georgia isn't installed locally, which changes metrics. Ensure Georgia
-  is on the host before trusting the PNG.
+- **Fonts:** the exporter embeds **Source Serif 4** (all four weights as
+  real font bytes via `Document({ fonts: [...] })`, writing `word/fonts/*.ttf`
+  + `word/fontTable.xml` — see `apps/editor/src/export/toDocx.ts:67-191,961`),
+  so the `.docx` renders the same prose face in Word / Pages / Google Docs /
+  LibreOffice with no host font install required. Georgia is only the
+  reader-fallback chain in `styles.xml`. No "ensure Georgia on the host" step
+  is needed.
 - **First-run latency:** the first `soffice --headless` invocation after
   a reboot can take 10+ seconds while LibreOffice spins up its profile.
   Subsequent runs are sub-second.

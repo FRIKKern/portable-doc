@@ -33,8 +33,8 @@ flowchart TD
 
 ## Package layout
 
-After the v0.2.1 collapses, the workspace ships eight packages plus the
-editor app:
+The workspace ships eight packages plus two apps (the editor and the public
+playground):
 
 ```
 packages/
@@ -49,7 +49,9 @@ packages/
                        rnw/    — react-native-web wrapper for editor
   mcp-server/        MCP server: 5 resources + 4 tools
 apps/
-  editor/            Vite + React editor (5 preview tabs, TUI default)
+  editor/            Vite + React TipTap WYSIWYG editor (DOCX/EPUB/PDF/Ink export)
+  playground/        Public playground — paste JSON, live-validate, preview 5
+                       surfaces, share via ?doc= (deployed to GitHub Pages)
 examples/            welcome.json + incident.json reference docs
 goldens/             Per-fixture per-surface artifact files
 scripts/
@@ -74,7 +76,7 @@ Ten core block types:
 
 | Type | Notes |
 |---|---|
-| `heading` | Levels 1–3; max 80 chars |
+| `heading` | Levels 1–6; max 80 chars |
 | `paragraph` | Inline content tree |
 | `list` | Ordered or unordered; items are `InlineNode[][]` |
 | `callout` | `tone` ∈ `{success, warning, danger, info, neutral}` |
@@ -177,10 +179,17 @@ primitives:
 
 - `<PdBox>` — flex container with padding, margin, border, background
 - `<PdText>` — typed text with marks
-- `<PdHr>` — horizontal rule
 - `<PdLink>` — anchored inline content
+- `<PdInlineCode>` — inline code span
 - `<PdButton>` — call-to-action wrapper
+- `<PdHr>` — horizontal rule
 - `<PdContainer>` — top-level document boundary
+- `<PdImage>` — image escape-hatch with alt-text fallback
+- `<PdTable>` — table escape-hatch with rows-as-lines fallback
+- `<PdCallout>` — toned callout block
+
+Ten primitive kinds in total (`packages/primitives/src/pd.ts` — the `PdNode`
+union).
 
 Pd\* is forked from RN at a snapshot, not re-exported. The
 `pd-to-rn-shim` package translates Pd\* to RN at the Native and Web
@@ -257,45 +266,53 @@ can validate, render, and rewrite documents.
 - `doc_explain_block` — prose explanation of a block's contract
 - `doc_suggest_fixes` — repair hints for common rejection patterns
 
+### Live mutation + barkpark forwarding
+
+The server also applies structured patches. `applyDocPatch(doc, op)` (from
+`@portable-doc/core`) takes a `DocPatchOp` — e.g. `append-block` — and returns
+the updated document plus an inline-styled HTML fragment for just the touched
+block, so callers can stream the change in. `applyDocPatch` is pure and never
+throws; a failed apply returns a structured error. When a `barkpark_slug` is
+set and the `BARKPARK_INGEST_URL` / `BARKPARK_INGEST_TOKEN` env vars are
+configured, the applied op is forwarded (`resolveBarkparkTarget` → `forwardOp`,
+`packages/mcp-server/src/tools.ts:28-32`) to that live Barkpark paper so the
+block streams in with no reload — a forwarding failure is reported but never
+fails the local apply.
+
 ## The editor
 
-A Vite + React app with five preview tabs over the same document tree.
-Block list left, edit form center, validation panel along the bottom.
-Inactive tabs lazy-mount so the RNW preview never costs anything until
-opened. Two fixtures load on boot: `welcome` and `incident`.
+A Vite + React app. v0.4 replaced v0.3's three-panel grid (block-list
+sidebar | edit form | preview-strip with five surface tabs) with a single
+centered TipTap WYSIWYG column on warm cream paper — see
+`apps/editor/src/App.tsx:1-21`. You edit the document directly; there is no
+separate block list or edit form, and no in-app surface-preview tabs. The
+column carries block chrome, a slash menu, a BubbleMenu, the variant chip,
+drag-and-drop, the ⌘P export overlay, an outline rail, and inline
+diagnostics. A `Cmd+Shift+J` power-user JSON overlay is kept from v0.3. Two
+fixtures load on boot: `welcome` and `incident`.
 
-Tab order:
-
-1. **TUI** (default — see the constraint surface first)
-2. Email
-3. Web
-4. Native
-5. JSON
-
-Backend dispatch happens via React context: a `<BackendProvider
-value={inkBackend}>` wraps each preview region. Editor controls (block
-list, validation panel, JSON tab) stay plain React — they're not document
-content, so RN-shape doesn't apply.
+Instead of live preview tabs, the editor exposes **export surfaces** —
+DOCX, EPUB, PDF, and Ink — driven from the ⌘P overlay; cross-surface preview
+now lives in the public playground (`apps/playground`). The McpProvider state
+contract from v0.3 stays as a pure state source (its banner dissolved into the
+footer status dot).
 
 ```mermaid
 sequenceDiagram
     participant A as Author
-    participant E as Editor
+    participant E as TipTap editor
     participant K as Kernel
-    participant T as Active tab
-    participant I as Inactive tabs
+    participant X as Export surface
     A->>E: keystroke
-    E->>K: re-compose AST
-    K->>T: render via active backend
-    Note over I: state preserved<br/>but unmounted (lazy)
-    A->>E: switch to Email tab
-    E->>I: unmount TUI tab
-    E->>T: mount Email backend
-    K->>T: render via RE adapter
+    E->>E: validate inline, update column
+    A->>E: ⌘P → choose DOCX / EPUB / PDF / Ink
+    E->>K: compose AST → Pd* tree
+    K->>X: render to chosen export format
+    X-->>A: downloadable artifact
 ```
 
-One keystroke produces one re-render of one preview region. Tab switch
-incurs a remount, accepted.
+Editing happens in one column; cross-surface output is produced on export
+rather than as live preview tabs.
 
 ## Test harness
 
@@ -307,7 +324,7 @@ Three layers, two cadences:
 | Per-adapter unit specs (escaping, allowlist, determinism, …) | Every commit (CI) | `pnpm test` |
 | Visual goldens (Ink TUI, Email HTML, Web HTML) | On demand | `pnpm visual-goldens` then eyeball `goldens/` |
 
-282 specs across 15 files at the time of v0.2.1. CI also runs `pnpm
+445 specs across 36 files. CI also runs `pnpm
 typecheck` (per-package `tsc --noEmit`); `pnpm snapshots:ci` runs the
 structural snapshot suite. Web-editor (RNW) and Native (RN) adapter
 snapshots inherit from the kernel + adapter layers and are not

@@ -97,6 +97,13 @@ equal the targeted `id`). If it changes the id, the new id must not already
 exist elsewhere in the document, or the op fails with
 [`duplicate-id`](#5-errors-never-silent).
 
+> ⚠️ **PLANNED for `replace-block` — not implemented in the reference TS
+> runtime (`packages/core/src/patch.ts:118-124`) as of 2026-05-29; other
+> runtimes MUST NOT rely on it yet.** `append-block` and `insert-after` do
+> guard `duplicate-id` (`patch.ts:78,85`), but `replace-block` currently
+> re-keys without a duplicate-id check. The guard above is the intended
+> behaviour; the reference runtime does not yet enforce it.
+
 ### remove-block
 
 ```json
@@ -130,6 +137,12 @@ and **must** preserve it on output — see [`duplicate-id`](#5-errors-never-sile
 ---
 
 ## 4. Optimistic concurrency — `ifRev` / `expectedVersion`
+
+> ⚠️ **PLANNED — not implemented in the reference TS runtime
+> (`packages/core/src/patch.ts`) as of 2026-05-29; other runtimes MUST NOT rely
+> on it yet.** The reference `DocPatchOp` union carries no `ifRev` /
+> `expectedVersion` field and `applyDocPatch` never reads one. This whole
+> section describes the intended forward behaviour, not current behaviour.
 
 Any op MAY carry an optional concurrency guard. Two spellings are accepted on
 the wire and are **exact synonyms** — runtimes treat them identically and
@@ -167,8 +180,8 @@ document. The defined error codes:
 | ----------------- | --------------------------------------------------------------------------- |
 | `block-not-found` | `insert-after` / `patch-block` / `replace-block` / `remove-block` targets an `id`/`afterId` that exists nowhere in the tree. |
 | `type-mismatch`   | `patch-block` carries a `patch.type` that differs from the target's `type`. |
-| `duplicate-id`    | An op would introduce a second block sharing an existing `id` (`append-block` / `insert-after` with a colliding `block.id`, or `replace-block` re-keying onto an in-use id). |
-| `rev-mismatch`    | An `ifRev` / `expectedVersion` guard does not match the current revision, or the two guard spellings disagree. |
+| `duplicate-id`    | An op would introduce a second block sharing an existing `id` (`append-block` / `insert-after` with a colliding `block.id`, or — ⚠️ **PLANNED, see §2** — `replace-block` re-keying onto an in-use id). The reference runtime enforces this for `append-block` / `insert-after` only as of 2026-05-29. |
+| `rev-mismatch`    | ⚠️ **PLANNED — not implemented in the reference TS runtime (`packages/core/src/patch.ts`) as of 2026-05-29; other runtimes MUST NOT rely on it yet.** Would be raised when an `ifRev` / `expectedVersion` guard does not match the current revision, or the two guard spellings disagree. The reference `DocPatchError` type defines only the three codes above. |
 
 Error shape on the wire (the reference shape; runtimes map to their own error
 type but preserve `code` and `target`):
@@ -183,11 +196,20 @@ not required.
 
 ### DRAFT-mode validation
 
-Mutating ops validate in **DRAFT mode**: validation must **tolerate an
-in-progress trailing block** — a final top-level block that is structurally
-incomplete (e.g. an empty `paragraph` with `content: []`, a freshly-added
-`heading` with empty `text`, a `section` with `blocks: []`). Editors emit such
-blocks mid-keystroke; rejecting them would make live editing impossible.
+DRAFT mode is a **validator** concern, not an `applyDocPatch` concern. In the
+reference runtime, `applyDocPatch` (`packages/core/src/patch.ts`) performs the
+structural checks below (`block-not-found`, `type-mismatch`, `duplicate-id`)
+but does **not** run content validation; DRAFT-mode tolerance lives in the
+validator (`validateDoc` / `validateBlock`), which a caller runs around the
+patch (e.g. the MCP server validates the appended block in draft mode before
+applying). The contract below describes how that validation must behave when a
+runtime chooses to validate a patched document.
+
+Content validation in **DRAFT mode** must **tolerate an in-progress trailing
+block** — a final top-level block that is structurally incomplete (e.g. an
+empty `paragraph` with `content: []`, a freshly-added `heading` with empty
+`text`, a `section` with `blocks: []`). Editors emit such blocks mid-keystroke;
+rejecting them would make live editing impossible.
 
 DRAFT mode relaxes *block-content completeness* for that trailing block only. It
 does **not** relax the structural invariants this contract turns on:
@@ -228,6 +250,16 @@ A new op variant, a renamed field, a changed merge semantic, or a dropped error
 code is a **breaking change to this contract** and requires a new fixture set
 plus a coordinated bump across all three repos. The fixtures are the executable
 spec; this prose explains them.
+
+> **Note (2026-05-29):** the golden fixtures live in `fixtures/doc-patch-op/`,
+> but the conformance harness described above is **not yet wired** — no `.ts`
+> test currently loads those fixtures and asserts `deepEqual`. Treat §6 as the
+> intended conformance contract; the runtime check is still to be implemented.
+> Two fixtures carry forward-looking guard fields that the reference runtime
+> does **not** enforce yet (§4): `patch.json` includes an `ifRev` and
+> `remove.json` includes an `expectedVersion`. They are left in place
+> deliberately so the fixtures are ready when guards land, but no runtime
+> rejects on them today.
 
 ---
 

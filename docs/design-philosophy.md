@@ -84,9 +84,10 @@ The AST commits to a closed set:
 - **Variant catalog** — per-block named variants (`<Callout tone="success"
   emphasis="bold">`). 21 variants across callout (5×2), action (2×2),
   section (3), code (2×2). The keystone of v0.2.
-- **Pd\* primitives** — `<PdBox>`, `<PdText>`, `<PdHr>`, `<PdLink>`,
-  `<PdButton>`, `<PdContainer>`. Shaped like React Native's primitive set,
-  paperflow-owned.
+- **Pd\* primitives** — `<PdBox>`, `<PdText>`, `<PdLink>`, `<PdInlineCode>`,
+  `<PdButton>`, `<PdHr>`, `<PdContainer>`, `<PdImage>`, `<PdTable>`,
+  `<PdCallout>`. Ten kinds (`packages/primitives/src/pd.ts` — the `PdNode`
+  union). Shaped like React Native's primitive set, paperflow-owned.
 - **PortableDoc-owned token system** — color, space (xs/sm/md/lg/xl),
   borderStyle (single/double/bold), system-font typography. No web-fonts,
   no custom radius.
@@ -134,9 +135,9 @@ v0.2. Per block, a finite enum of named visual states:
 
 ```ts
 <Callout tone="success" emphasis="bold">
-<Action variant="primary" emphasis="filled">
+<Action priority="primary" size="large">
 <Section density="comfortable">
-<Code variant="inline" emphasis="muted">
+<Code theme="dark" density="compact">
 ```
 
 Tamagui-inspired pattern. Paperflow-owned implementation. Every variant
@@ -221,6 +222,18 @@ Package collapses: `backend-web-server` + `backend-web-editor` →
 `backend-web` (with `static`/`rnw` subpath exports); `backend-native`
 inlined into `pd-to-rn-shim`; `fixtures` package → `examples/*.json`.
 Documentation distilled into this `docs/` tree. 8 packages. 282 specs.
+
+**v0.3 — Public playground.** Shipped `apps/playground`: paste a PortableDoc
+JSON, live-validate it, preview across all five surfaces, and share via a
+`?doc=` URL — deployed to GitHub Pages. The MCP server gained `applyDocPatch`
+structured-patch handling.
+
+**v0.4 — Paper editor.** Rebuilt `apps/editor` as a single-column TipTap
+WYSIWYG on warm cream paper, replacing the v0.3 three-panel grid. Live
+surface tabs gave way to DOCX / EPUB / PDF / Ink export surfaces, and the
+self-hosted Source Serif 4 (SIL OFL) bundle became the canonical body face.
+The MCP server added barkpark forwarding for live streaming of applied ops.
+445 specs across 36 files.
 
 ## Cross-references
 

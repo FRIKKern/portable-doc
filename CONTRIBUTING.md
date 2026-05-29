@@ -10,15 +10,16 @@ Requires Node ≥ 20 and pnpm ≥ 9.
 git clone https://github.com/FRIKKern/portable-doc.git
 cd portable-doc
 pnpm install
-pnpm test                    # 282 specs across 15 files
+pnpm test                    # 445 specs across 36 files
 pnpm --filter editor dev     # http://localhost:5173
 ```
 
 ## Project layout
 
-Eight packages plus the editor app. See [`docs/architecture.md`](./docs/architecture.md)
-for the technical spec; [`docs/design-philosophy.md`](./docs/design-philosophy.md)
-explains the design rules that decide what's in the AST.
+Eight packages plus two apps (the editor and the public playground). See
+[`docs/architecture.md`](./docs/architecture.md) for the technical spec;
+[`docs/design-philosophy.md`](./docs/design-philosophy.md) explains the design
+rules that decide what's in the AST.
 
 ```
 packages/
@@ -30,7 +31,8 @@ packages/
   backend-email/     React Email adapter (Outlook VML, dark mode, a11y)
   backend-web/       Web adapter — /static (MCP) + /rnw (editor)
   mcp-server/        MCP server: 5 resources + 4 tools
-apps/editor/         Vite + React editor (5 preview tabs, TUI default)
+apps/editor/         Vite + React TipTap editor (DOCX/EPUB/PDF/Ink export)
+apps/playground/     Public playground — paste JSON, validate, preview 5 surfaces, share via ?doc=
 examples/            welcome.json + incident.json
 ```
 
@@ -42,7 +44,10 @@ examples/            welcome.json + incident.json
 3. Wire into `mcp-server`'s `doc_render` tool if the backend should be
    reachable from agents.
 4. Update `scripts/visual-goldens.ts` to emit a per-fixture artifact.
-5. Add a structural snapshot test to the package's `vitest.config.ts`.
+5. Add a structural snapshot test as `src/**/*.test.ts` in the package — the
+   root `vitest.config.ts` and the package's `"test": "vitest run"` script pick
+   it up automatically. (Only packages that need a non-default test environment,
+   e.g. `backend-web`'s DOM, carry their own `vitest.config.ts`.)
 
 The architecture doc walks through how Pd\* primitives compose and where
 each backend slots in.

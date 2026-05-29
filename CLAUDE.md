@@ -53,18 +53,35 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-_Add your build and test commands here_
+Requires Node ≥ 20 and pnpm ≥ 9.
 
 ```bash
-# Example:
-# npm install
-# npm test
+pnpm install                                   # bootstrap the workspace
+pnpm test                                      # run all specs (vitest run)
+pnpm typecheck                                 # tsc --noEmit across every package (pnpm -r typecheck)
+pnpm format                                    # prettier --write .
+pnpm dev:full                                  # editor on :5173 + MCP HTTP on :6123 (concurrently)
+pnpm --filter editor dev                       # editor only — http://localhost:5173
+pnpm --filter @portable-doc/mcp-server start   # stdio MCP server
+pnpm visual-goldens                            # regenerate eyeball-check goldens
 ```
+
+Filter tests/typecheck to one package with `pnpm --filter @portable-doc/<pkg> test`.
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+One PortableDoc JSON renders across five surfaces (Web, Email, TUI, Native, Text)
+through a shared kernel — `validateDoc` (core) → `composeDocument` (primitives) →
+per-surface backends, with an MCP server and two apps (`apps/editor`, `apps/playground`)
+on top. Full technical spec: [`docs/architecture.md`](./docs/architecture.md).
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- **Closed schema** — the AST is a fixed, validated set of block/inline kinds;
+  new shapes pass the design rules in [`docs/design-philosophy.md`](./docs/design-philosophy.md)
+  before they enter, and the validator rejects unknown nodes at edit time.
+- **Kernel-first** — backends never re-implement structure; they consume the
+  kernel's `composeDocument` output. Add a backend by rendering Pd\* primitives,
+  not by reparsing the doc.
+- **SIL-OFL fonts** — Source Serif 4 is self-hosted and embedded across every
+  channel (editor, DOCX, EPUB, HTML, PDF); see `apps/editor/public/fonts/`.
