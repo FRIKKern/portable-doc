@@ -135,7 +135,8 @@ try {
 
   await test("an in-vocabulary paste is untouched (Google Docs)", async () => {
     const r = await pasteInto(CLIPBOARDS["google-docs"]);
-    assert.deepEqual(r.blocks.map((b) => b.type + (b.level || "")), ["paragraph", "heading2", "paragraph", "list", "paragraph", "paragraph"]);
+    // No paragraph from the <br> Google Docs puts between blocks (task-68314b1d334213e8).
+    assert.deepEqual(r.blocks.map((b) => b.type + (b.level || "")), ["paragraph", "heading2", "paragraph", "list", "paragraph"]);
     assert.equal(r.notice(), "");
     r.canvas.remove();
   });
