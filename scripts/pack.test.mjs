@@ -12,6 +12,14 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pack test-'));
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 let n = 0;
 
+const noNetwork = { allow: 'never', 'file.allow': 'always', 'http.allow': 'never', 'https.allow': 'never', 'ssh.allow': 'never', 'git.allow': 'never' };
+Object.entries(noNetwork).forEach(([key, value], i) => {
+  process.env[`GIT_CONFIG_KEY_${i}`] = `protocol.${key}`;
+  process.env[`GIT_CONFIG_VALUE_${i}`] = value;
+});
+process.env.GIT_CONFIG_COUNT = String(Object.keys(noNetwork).length);
+process.env.GIT_TERMINAL_PROMPT = '0';
+
 function write(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
@@ -252,4 +260,14 @@ test('sync-pr opens one PR on main, pushes nothing while that PR already carries
   assert.notEqual(c.head(), pushed);
   assert.match(gh.log(), /^pr edit 7 --title Sync from Barkpark /m);
   assert.equal(gh.log().match(/^pr create/gm).length, 1);
+});
+
+test('nothing the tests run can push to a network remote: git refuses https and ssh before it connects', () => {
+  const c = clone();
+  for (const [url, transport] of [['https://example.invalid/portable-doc.git', 'https'], ['git@example.invalid:portable-doc.git', 'ssh']]) {
+    c.git('remote', 'set-url', 'origin', url);
+    const r = spawnSync('git', ['-C', c.work, 'push', 'origin', 'HEAD:refs/heads/sync/barkpark'], { encoding: 'utf8' });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, new RegExp(`transport '${transport}' not allowed`));
+  }
 });
