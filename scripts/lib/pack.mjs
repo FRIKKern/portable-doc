@@ -4,7 +4,10 @@ import path from 'node:path';
 
 export const MIN_BLOCK_GOLDENS = 80;
 export const PACK_DIRS = ['spec', 'goldens'];
+export const BARKPARK_REPO = 'FRIKKern/barkpark';
 export const BARKPARK_PACK = 'api/priv/portable_doc';
+
+const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 export function sha256(file) {
   return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -31,13 +34,15 @@ export function stampId(packRoot) {
   return fs.existsSync(file) ? sha256(file).slice(0, 12) : 'none';
 }
 
-function readJson(root, file, errors) {
+function readObject(root, file, errors) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+    const value = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+    if (isObject(value) && isObject(value.files)) return value;
+    errors.push(`${file}: not an object with a files object`);
   } catch (e) {
     errors.push(`${file}: ${e.code === 'ENOENT' ? 'missing' : `unreadable (${e.message})`}`);
-    return null;
   }
+  return null;
 }
 
 export function checkPack(packRoot) {
@@ -46,9 +51,9 @@ export function checkPack(packRoot) {
   if (!fs.existsSync(path.join(packRoot, 'spec', 'blocks.schema.json'))) errors.push('spec/blocks.schema.json: missing');
   const blocks = listFiles(path.join(goldens, 'blocks')).length;
   if (blocks < MIN_BLOCK_GOLDENS) errors.push(`goldens/blocks: ${blocks} block goldens, need at least ${MIN_BLOCK_GOLDENS}`);
-  const stamp = readJson(packRoot, 'goldens/stamp.json', errors);
+  const stamp = readObject(packRoot, 'goldens/stamp.json', errors);
   if (!stamp) return errors;
-  const listed = stamp.files ?? {};
+  const listed = stamp.files;
   for (const [file, hash] of Object.entries(listed)) {
     const full = path.join(goldens, file);
     if (!fs.existsSync(full)) errors.push(`goldens/${file}: in the stamp, missing on disk`);
@@ -69,9 +74,12 @@ export function diff(from, to) {
 
 export function checkSource(root) {
   const errors = [];
-  const source = readJson(root, 'SOURCE.json', errors);
+  const source = readObject(root, 'SOURCE.json', errors);
   if (!source) return errors;
-  const d = diff(source.files ?? {}, hashes(root));
+  if (source.repo !== BARKPARK_REPO) errors.push(`SOURCE.json: repo is ${JSON.stringify(source.repo)}, not "${BARKPARK_REPO}"`);
+  if (source.path !== BARKPARK_PACK) errors.push(`SOURCE.json: path is ${JSON.stringify(source.path)}, not "${BARKPARK_PACK}"`);
+  if (!/^[0-9a-f]{40}$/.test(source.commit)) errors.push(`SOURCE.json: commit ${JSON.stringify(source.commit)} is not a full sha`);
+  const d = diff(source.files, hashes(root));
   for (const f of d.added) errors.push(`${f}: not written by the sync (absent from SOURCE.json)`);
   for (const f of d.changed) errors.push(`${f}: edited by hand (sha256 differs from SOURCE.json)`);
   for (const f of d.removed) errors.push(`${f}: in SOURCE.json, missing on disk`);

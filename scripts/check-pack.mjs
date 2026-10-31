@@ -1,9 +1,10 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { BARKPARK_PACK, checkPack, checkSource, diff, hashes, stampId } from './lib/pack.mjs';
 
 const { values } = parseArgs({ options: { against: { type: 'string' }, root: { type: 'string' } } });
-const root = values.root ?? new URL('..', import.meta.url).pathname;
+const root = values.root ?? fileURLToPath(new URL('..', import.meta.url));
 const errors = [...checkPack(root), ...checkSource(root)];
 
 if (values.against) {

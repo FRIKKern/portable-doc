@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { BARKPARK_PACK, PACK_DIRS, checkPack, diff, hashes, stampId } from './lib/pack.mjs';
+import { BARKPARK_PACK, BARKPARK_REPO, PACK_DIRS, checkPack, diff, hashes, stampId } from './lib/pack.mjs';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -15,7 +16,7 @@ if (positionals.length !== 1) {
 
 const barkpark = positionals[0];
 const source = path.join(barkpark, BARKPARK_PACK);
-const root = values.root ?? new URL('..', import.meta.url).pathname;
+const root = values.root ?? fileURLToPath(new URL('..', import.meta.url));
 const sourceErrors = checkPack(source);
 if (sourceErrors.length) {
   console.error(`Barkpark's pack at ${source} is not valid, nothing copied:\n${sourceErrors.join('\n')}`);
@@ -29,7 +30,7 @@ for (const dir of PACK_DIRS) {
   fs.cpSync(path.join(source, dir), path.join(root, dir), { recursive: true });
 }
 const files = hashes(root);
-fs.writeFileSync(path.join(root, 'SOURCE.json'), `${JSON.stringify({ repo: 'FRIKKern/barkpark', commit, path: BARKPARK_PACK, files }, null, 2)}\n`);
+fs.writeFileSync(path.join(root, 'SOURCE.json'), `${JSON.stringify({ repo: BARKPARK_REPO, commit, path: BARKPARK_PACK, files }, null, 2)}\n`);
 
 const after = stampId(root);
 const d = diff(before.files, files);

@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   sync:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -31,21 +32,9 @@ jobs:
         if: steps.fresh.outputs.same == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE: ${{ github.ref_name }}
-          BRANCH: sync/barkpark
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          title=$(node scripts/sync-from-barkpark.mjs .barkpark --pr-body "$RUNNER_TEMP/body.md")
+          node scripts/sync-from-barkpark.mjs .barkpark --pr-body "$RUNNER_TEMP/body.md" > "$RUNNER_TEMP/title.txt"
           npm run check
-          git switch -c "$BRANCH"
-          git add -A -- spec goldens SOURCE.json
-          git commit -q -m "$title"
-          git diff --stat HEAD~1 HEAD | tail -1
-          git push --force origin "HEAD:$BRANCH"
-          number=$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[].number')
-          if [ -n "$number" ]; then
-            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/body.md"
-          else
-            gh pr create --head "$BRANCH" --base "$BASE" --title "$title" --body-file "$RUNNER_TEMP/body.md"
-          fi
+          node scripts/sync-pr.mjs "$RUNNER_TEMP/title.txt" "$RUNNER_TEMP/body.md"

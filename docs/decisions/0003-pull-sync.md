@@ -19,6 +19,8 @@ api/priv/portable_doc/goldens/  ─┼─ read ─► check-pack --against: same
 
 Barkpark is the source of the spec and the goldens until their flip (Z9). portable-doc must hold the same bytes, and must fail when its copy is stale or empty (Z8). Both repos are public. Barkpark has no token that can write to portable-doc.
 
+portable-doc copies the bytes Barkpark committed and never regenerates them. That is safe because Barkpark's required `mix test` fails when the committed pack or spec differs from a fresh build (`api/test/barkpark/portable_doc/golden_pack_test.exs`, `spec_test.exs`), so `main` never holds a stale pack.
+
 ## Decision
 
 - portable-doc pulls. A scheduled workflow checks out Barkpark `main` read-only, and opens or updates one PR on the fixed branch `sync/barkpark` when anything differs. No change, no PR.
