@@ -12,13 +12,29 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pack test-'));
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 let n = 0;
 
-const noNetwork = { allow: 'never', 'file.allow': 'always', 'http.allow': 'never', 'https.allow': 'never', 'ssh.allow': 'never', 'git.allow': 'never' };
-Object.entries(noNetwork).forEach(([key, value], i) => {
-  process.env[`GIT_CONFIG_KEY_${i}`] = `protocol.${key}`;
+const blocked = path.join(tmp, 'blocked');
+const gitConfig = [
+  ['protocol.allow', 'never'],
+  ['protocol.file.allow', 'always'],
+  ...['http', 'https', 'ssh', 'git'].map((p) => [`protocol.${p}.allow`, 'never']),
+  [`url.${blocked}/.pushInsteadOf`, 'https://github.com/'],
+  [`url.${blocked}/.pushInsteadOf`, 'git@github.com:'],
+];
+gitConfig.forEach(([key, value], i) => {
+  process.env[`GIT_CONFIG_KEY_${i}`] = key;
   process.env[`GIT_CONFIG_VALUE_${i}`] = value;
 });
-process.env.GIT_CONFIG_COUNT = String(Object.keys(noNetwork).length);
-process.env.GIT_TERMINAL_PROMPT = '0';
+fs.writeFileSync(path.join(tmp, 'gitconfig'), '');
+Object.assign(process.env, {
+  GIT_CONFIG_COUNT: String(gitConfig.length),
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_CONFIG_GLOBAL: path.join(tmp, 'gitconfig'),
+  GIT_CEILING_DIRECTORIES: path.dirname(tmp),
+  GIT_TERMINAL_PROMPT: '0',
+  GH_CONFIG_DIR: path.join(tmp, 'gh'),
+});
+for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN']) delete process.env[key];
+process.chdir(tmp);
 
 function write(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -32,8 +48,8 @@ function stamp(packRoot) {
   write(path.join(goldens, 'stamp.json'), `${JSON.stringify({ render_version: 'synthetic', files }, null, 2)}\n`);
 }
 
-function pack(packRoot, { blocks = 80, tag = 'a', locale = true } = {}) {
-  write(path.join(packRoot, 'spec', 'blocks.schema.json'), `{"title":"synthetic ${tag}"}\n`);
+function pack(packRoot, { blocks = 80, tag = 'a', specTag = tag, locale = true } = {}) {
+  write(path.join(packRoot, 'spec', 'blocks.schema.json'), `{"title":"synthetic ${specTag}"}\n`);
   for (let i = 0; i < blocks; i++) write(path.join(packRoot, 'goldens', 'blocks', `b${i}.golden.json`), `{"block":${i},"tag":"${tag}"}\n`);
   if (locale) write(path.join(packRoot, 'goldens', 'locales', 'nb.golden.json'), `{"tag":"${tag}"}\n`);
   stamp(packRoot);
@@ -72,6 +88,7 @@ function barkpark(opts) {
 }
 
 function node(file, args, env = process.env) {
+  assert.ok(file.startsWith(tmp + path.sep), `refusing to run ${file}: outside the test dir`);
   const r = spawnSync(process.execPath, [file, ...args], { cwd: tmp, encoding: 'utf8', env });
   return { code: r.status, stdout: r.stdout, out: r.stdout + r.stderr };
 }
@@ -208,6 +225,7 @@ esac
   return {
     env: { ...process.env, PATH: `${path.dirname(gh)}${path.delimiter}${process.env.PATH}` },
     log: () => (fs.existsSync(`${dir}/log`) ? fs.readFileSync(`${dir}/log`, 'utf8') : ''),
+    close: () => fs.rmSync(`${dir}/open`),
   };
 }
 
@@ -262,6 +280,21 @@ test('sync-pr opens one PR on main, pushes nothing while that PR already carries
   assert.equal(gh.log().match(/^pr create/gm).length, 1);
 });
 
+test('the tests run with no credentials, no gh token, git confined to the test dir, and GitHub push URLs sent to a blocked dir', () => {
+  assert.equal(process.cwd(), fs.realpathSync(tmp));
+  assert.equal(process.env.GH_TOKEN, undefined);
+  assert.equal(process.env.GITHUB_TOKEN, undefined);
+  const c = clone();
+  assert.equal(spawnSync('git', ['-C', c.work, 'config', '--get', 'credential.helper']).status, 1);
+  for (const [url, pushUrl] of [['https://github.com/FRIKKern/portable-doc', `${blocked}/FRIKKern/portable-doc`], ['git@github.com:FRIKKern/portable-doc.git', `${blocked}/FRIKKern/portable-doc.git`]]) {
+    c.git('remote', 'set-url', 'origin', url);
+    assert.equal(c.git('remote', 'get-url', '--push', 'origin'), pushUrl);
+  }
+  const loose = path.join(tmp, `loose-${n++}`);
+  fs.mkdirSync(loose);
+  assert.notEqual(spawnSync('git', ['-C', loose, 'rev-parse', '--show-toplevel']).status, 0);
+});
+
 test('nothing the tests run can push to a network remote: git refuses https and ssh before it connects', () => {
   const c = clone();
   for (const [url, transport] of [['https://example.invalid/portable-doc.git', 'https'], ['git@example.invalid:portable-doc.git', 'ssh']]) {
@@ -270,4 +303,54 @@ test('nothing the tests run can push to a network remote: git refuses https and 
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, new RegExp(`transport '${transport}' not allowed`));
   }
+});
+
+test('the test harness refuses to run a script that lives outside the test dir', () => {
+  assert.throws(() => node(path.join(scripts, 'check-pack.mjs'), []), /refusing to run .*: outside the test dir/);
+});
+
+function prFiles(c) {
+  const title = path.join(tmp, `title-${n++}`);
+  const body = path.join(tmp, `body-${n++}.md`);
+  fs.writeFileSync(title, 'Sync from Barkpark test\n');
+  fs.writeFileSync(body, 'body\n');
+  return [title, body];
+}
+
+test('sync-pr refuses to run, and touches nothing, when its root is not the top of a git repo', () => {
+  const c = clone();
+  const nested = scripted(path.join(c.work, 'nested'));
+  const inside = node(path.join(nested, 'scripts/sync-pr.mjs'), prFiles(c), ghStub().env);
+  assert.equal(inside.code, 1, inside.out);
+  assert.match(inside.out, /nested\/ is not the top of a git repo \(git says .*repo-\d+\); nothing done/);
+  assert.equal(c.git('branch', '--show-current'), 'main');
+  assert.equal(c.git('rev-list', '--count', 'HEAD'), '1');
+  const loose = node(path.join(repo(), 'scripts/sync-pr.mjs'), prFiles(c), ghStub().env);
+  assert.equal(loose.code, 1, loose.out);
+  assert.match(loose.out, /is not the top of a git repo \(git says no repo\); nothing done/);
+});
+
+for (const [name, opts] of [['a spec-only', { tag: 'b', specTag: 's' }], ['a goldens-only', { tag: 'g', specTag: 'b' }]]) {
+  test(`sync-pr pushes and edits the open PR on ${name} change`, () => {
+    const c = clone();
+    const gh = ghStub();
+    assert.equal(workflowRun(c, barkpark({ tag: 'b' }), gh).code, 0);
+    const pushed = c.head();
+    const r = workflowRun(c, barkpark(opts), gh);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /updated https:\/\/example.test\/pull\/7/);
+    assert.notEqual(c.head(), pushed);
+    assert.match(gh.log(), /^pr edit 7 /m);
+  });
+}
+
+test('sync-pr opens a new PR when the old one was closed, even if its branch carries the pack', () => {
+  const c = clone();
+  const gh = ghStub();
+  assert.equal(workflowRun(c, barkpark({ tag: 'b' }), gh).code, 0);
+  gh.close();
+  const r = workflowRun(c, barkpark({ tag: 'b' }), gh);
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /opened https:\/\/example.test\/pull\/7/);
+  assert.equal(gh.log().match(/^pr create/gm).length, 2);
 });

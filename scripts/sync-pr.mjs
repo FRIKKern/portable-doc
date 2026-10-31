@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -25,6 +25,11 @@ const succeeds = (cmd, ...args) => {
   }
 };
 
+const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+if (top !== fs.realpathSync(root)) {
+  console.error(`sync-pr: ${root} is not the top of a git repo (git says ${top || 'no repo'}); nothing done`);
+  process.exit(1);
+}
 run('git', 'switch', '-q', '-C', BRANCH);
 run('git', 'add', '-A', '--', 'spec', 'goldens', 'SOURCE.json');
 run('git', 'commit', '-q', '-m', title);
