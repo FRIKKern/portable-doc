@@ -7,7 +7,7 @@ import { BARKPARK_PACK, BARKPARK_REPO, PACK_DIRS, checkPack, diff, hashes, stamp
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { 'pr-body': { type: 'string' }, root: { type: 'string' } },
+  options: { 'pr-body': { type: 'string' } },
 });
 if (positionals.length !== 1) {
   console.error('usage: node scripts/sync-from-barkpark.mjs <barkpark checkout> [--pr-body <file>]');
@@ -16,7 +16,7 @@ if (positionals.length !== 1) {
 
 const barkpark = positionals[0];
 const source = path.join(barkpark, BARKPARK_PACK);
-const root = values.root ?? fileURLToPath(new URL('..', import.meta.url));
+const root = fileURLToPath(new URL('..', import.meta.url));
 const sourceErrors = checkPack(source);
 if (sourceErrors.length) {
   console.error(`Barkpark's pack at ${source} is not valid, nothing copied:\n${sourceErrors.join('\n')}`);

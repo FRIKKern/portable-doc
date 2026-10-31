@@ -6,14 +6,14 @@ import { parseArgs } from 'node:util';
 const BASE = 'main';
 const BRANCH = 'sync/barkpark';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { root: { type: 'string' } } });
+const { positionals } = parseArgs({ allowPositionals: true });
 if (positionals.length !== 2) {
   console.error('usage: node scripts/sync-pr.mjs <title file> <body file>');
   process.exit(2);
 }
 
 const [titleFile, bodyFile] = positionals;
-const root = values.root ?? fileURLToPath(new URL('..', import.meta.url));
+const root = fileURLToPath(new URL('..', import.meta.url));
 const title = fs.readFileSync(titleFile, 'utf8').trim();
 const run = (cmd, ...args) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
 const succeeds = (cmd, ...args) => {

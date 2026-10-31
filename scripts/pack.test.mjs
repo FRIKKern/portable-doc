@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { BARKPARK_PACK, BARKPARK_REPO, hashes, sha256 } from './lib/pack.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pack-test-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pack test-'));
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 let n = 0;
 
@@ -44,9 +44,13 @@ function editSource(root, edit) {
   write(file, JSON.stringify(value));
 }
 
+function scripted(dir) {
+  fs.cpSync(scripts, path.join(dir, 'scripts'), { recursive: true, filter: (f) => !f.endsWith('.test.mjs') });
+  return dir;
+}
+
 function repo(opts) {
-  const dir = path.join(tmp, `repo-${n++}`);
-  return source(pack(dir, opts));
+  return source(pack(scripted(path.join(tmp, `repo-${n++}`)), opts));
 }
 
 function barkpark(opts) {
@@ -60,13 +64,13 @@ function barkpark(opts) {
 }
 
 function node(file, args, env = process.env) {
-  const r = spawnSync(process.execPath, [file, ...args], { encoding: 'utf8', env });
+  const r = spawnSync(process.execPath, [file, ...args], { cwd: tmp, encoding: 'utf8', env });
   return { code: r.status, stdout: r.stdout, out: r.stdout + r.stderr };
 }
 
-const run = (script, ...args) => node(path.join(scripts, script), args);
+const run = (root, script, ...args) => node(path.join(root, 'scripts', script), args);
 
-const check = (root, ...args) => run('check-pack.mjs', '--root', root, ...args);
+const check = (root, ...args) => run(root, 'check-pack.mjs', ...args);
 
 test('a whole pack written by the sync passes', () => {
   const r = check(repo());
@@ -129,7 +133,7 @@ test('sync copies Barkpark, records the commit, and names old and new stamp', ()
   const commit = execFileSync('git', ['-C', bp, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const oldStamp = sha256(path.join(root, 'goldens/stamp.json')).slice(0, 12);
   const body = path.join(tmp, `body-${n++}.md`);
-  const r = run('sync-from-barkpark.mjs', bp, '--root', root, '--pr-body', body);
+  const r = run(root, 'sync-from-barkpark.mjs', bp, '--pr-body', body);
   assert.equal(r.code, 0, r.out);
   const newStamp = sha256(path.join(root, 'goldens/stamp.json')).slice(0, 12);
   assert.notEqual(newStamp, oldStamp);
@@ -151,34 +155,31 @@ test('sync refuses a broken Barkpark pack and leaves the repo as it was', () => 
   const bp = barkpark({ tag: 'b' });
   fs.rmSync(path.join(bp, BARKPARK_PACK, 'spec/blocks.schema.json'));
   const before = hashes(root);
-  const r = run('sync-from-barkpark.mjs', bp, '--root', root);
+  const r = run(root, 'sync-from-barkpark.mjs', bp);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /nothing copied/);
   assert.deepEqual(hashes(root), before);
 });
 
 test('a first sync into an empty repo says none for what did not change', () => {
-  const root = path.join(tmp, `empty-${n++}`);
-  fs.mkdirSync(root);
+  const root = scripted(path.join(tmp, `empty-${n++}`));
   const body = path.join(tmp, `body-${n++}.md`);
-  const r = run('sync-from-barkpark.mjs', barkpark(), '--root', root, '--pr-body', body);
+  const r = run(root, 'sync-from-barkpark.mjs', barkpark(), '--pr-body', body);
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /: stamp none → [0-9a-f]{12}\n$/);
   assert.match(fs.readFileSync(body, 'utf8'), /### Added\n(- `.+`\n){83}\n### Changed\n- none\n\n### Removed\n- none\n$/);
   assert.equal(check(root).code, 0);
 });
 
-test('the scripts find the repo root in a path with a space', () => {
-  const root = path.join(tmp, 'sp ace', `repo-${n++}`);
-  fs.cpSync(scripts, path.join(root, 'scripts'), { recursive: true });
+test('every test runs its scripts from a path with a space, and check-docs finds its repo root there too', () => {
+  assert.match(tmp, / /);
+  const root = repo();
   write(path.join(root, 'README.md'), '# synthetic\n');
   execFileSync('git', ['init', '-q', root]);
-  assert.equal(node(path.join(root, 'scripts/sync-from-barkpark.mjs'), [barkpark()]).code, 0);
-  assert.equal(fs.existsSync(path.join(root, 'goldens/stamp.json')), true);
-  const r = node(path.join(root, 'scripts/check-pack.mjs'), []);
+  fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts/check-docs.mjs'));
+  const r = run(root, 'check-docs.mjs');
   assert.equal(r.code, 0, r.out);
-  const docs = node(path.join(root, 'scripts/check-docs.mjs'), []);
-  assert.equal(docs.code, 0, docs.out);
+  assert.match(r.out, /docs ok: 1 files, README 1 lines/);
 });
 
 function ghStub() {
@@ -220,10 +221,10 @@ function workflowRun(c, bp, gh) {
   c.git('clean', '-fdq');
   const title = path.join(tmp, `title-${n++}`);
   const body = path.join(tmp, `body-${n++}.md`);
-  const sync = run('sync-from-barkpark.mjs', bp, '--root', c.work, '--pr-body', body);
+  const sync = run(c.work, 'sync-from-barkpark.mjs', bp, '--pr-body', body);
   assert.equal(sync.code, 0, sync.out);
   fs.writeFileSync(title, sync.stdout);
-  return { title: sync.stdout.trim(), ...node(path.join(scripts, 'sync-pr.mjs'), [title, body, '--root', c.work], gh.env) };
+  return { title: sync.stdout.trim(), ...node(path.join(c.work, 'scripts/sync-pr.mjs'), [title, body], gh.env) };
 }
 
 test('sync-pr opens one PR on main, pushes nothing while that PR already carries the pack, and updates it when the pack changes', () => {
