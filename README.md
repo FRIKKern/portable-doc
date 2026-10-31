@@ -29,8 +29,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 1 change
-  - R0: portable-doc becomes the PortableDoc hub: README, roadmap picture from the board, journeys, quality bar, decisions 0001-0002, scope, Apache-2.0
+- **Today** · 2 changes
+  - R0.8: today-vs-target picture in the README; eight renderers, not six (5 in Barkpark + 3 look-alikes)
 <!-- timeline:end -->
 
 ## Where things live (one fact, one home)
