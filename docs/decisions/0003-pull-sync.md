@@ -23,8 +23,8 @@ portable-doc copies the bytes Barkpark committed and never regenerates them. Tha
 
 ## Decision
 
-- portable-doc pulls. A scheduled workflow checks out Barkpark `main` read-only, and opens or updates one PR on the fixed branch `sync/barkpark` when anything differs. No change, no PR.
-- The copy runs in a plain script, `scripts/sync-from-barkpark.mjs <barkpark checkout>`, so it runs and is tested locally. The workflow only calls it.
+- portable-doc pulls. A scheduled workflow on `main` checks out Barkpark `main` read-only, and opens or updates one PR on the fixed branch `sync/barkpark` when anything differs. No change, no PR. An open PR that already carries the same `spec/` and `goldens/` gets no push, so its head holds still for review.
+- The copy (`scripts/sync-from-barkpark.mjs <barkpark checkout>`) and the PR step (`scripts/sync-pr.mjs`) are plain scripts, so they run and are tested locally. The workflow only calls them.
 - `npm run check` checks the pack: the stamp lists every golden with its sha256, at least 80 block goldens, `spec/blocks.schema.json` exists. It also checks `SOURCE.json`: every file in `spec/` and `goldens/` is as the sync wrote it, so a hand edit fails.
 - `scripts/check-pack.mjs --against <barkpark checkout>` also fails when the copy differs from Barkpark. The workflow uses it to decide.
 - The PR is opened with `GITHUB_TOKEN`. The repo setting "Allow GitHub Actions to create pull requests" must be on.
