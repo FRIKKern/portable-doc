@@ -26,7 +26,7 @@
 <text x="60" y="262" font-size="23" font-weight="600">Kickoff</text>
 <path d="M60 282H288" class="rule"/>
 <text x="60" y="312" font-size="16">You can see the project</text>
-<text x="60" y="372" font-size="15" class="now">◐ in progress</text>
+<text x="60" y="372" font-size="15" class="todo">○ to do</text>
 </g>
 <g data-milestone="R1">
 <rect x="324" y="196" width="268" height="196" rx="12" class="card"/>

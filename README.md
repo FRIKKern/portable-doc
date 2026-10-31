@@ -29,8 +29,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 2 changes
-  - R0.8: today-vs-target picture in the README; eight renderers, not six (5 in Barkpark + 3 look-alikes)
+- **Today** · 3 changes
+  - R0.6: README links the PortableDoc board (GitHub Project 3)
 <!-- timeline:end -->
 
 ## Where things live (one fact, one home)
