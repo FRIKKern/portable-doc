@@ -7,17 +7,12 @@ Barkever note is written once and reads and edits the same everywhere: Barkpark
 Studio, the web, Barkdown, Barkever, barkpark-studio and the phone.
 
 Today the format's rules live inside [Barkpark](https://github.com/FRIKKern/barkpark)
-and are copied into six renderers that drift apart. This repo becomes their one
+and are rendered in eight places that drift apart. This repo becomes their one
 home: the spec, the goldens every renderer must pass, the edit ops, the editor and
 the JS renderers. They move here one reward at a time, with no downtime
 ([0001](docs/decisions/0001-one-home.md)).
 
-```
-                 FRIKKern/portable-doc
-  spec · goldens · ops · editor · react · validate · mcp
-                          ▲ pin a version, pass the goldens
-  Barkpark · Barkdown · Barkever · barkpark-studio · mobile · Go
-```
+![Today: eight renderers drift apart inside Barkpark and three apps. Target: portable-doc holds spec, goldens, ops, editor and packages; every app pins a version and passes the goldens](docs/images/today-vs-target.svg)
 
 ## What we get
 

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="t d">
+<title id="t">PortableDoc today and target</title>
+<desc id="d">Today: Barkpark holds five renderers (Elixir reader as the source of truth, editor canvas, React, Go plus WASM, mobile) and Barkever, barkpark-studio and next-starter carry look-alike copies, so eight renderers drift apart. Target: FRIKKern/portable-doc holds spec, goldens, ops, editor, react, code, validate and mcp; Barkpark, Barkdown, Barkever, barkpark-studio, mobile and Go pin a version and pass the goldens.</desc>
+<style>
+  svg { --bg:#fbfaf7; --card:#ffffff; --line:#e3e0d6; --ink:#1f1e1b; --muted:#6c6a63; --good:#2c7a4b; --bad:#b3261e; --chip:#f3f1ea; --goodbg:#eef6f0; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#14161a; --card:#1c1f24; --line:#30343b; --ink:#ecebe6; --muted:#9a9ca3; --good:#6cc28f; --bad:#f2b8b5; --chip:#262a30; --goodbg:#1a2a20; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  .muted { fill: var(--muted); } .good { fill: var(--good); } .bad { fill: var(--bad); }
+  .bg { fill: var(--bg); } .card { fill: var(--card); stroke: var(--line); } .box { fill: none; stroke: var(--line); }
+  .chip { fill: var(--chip); } .home { fill: var(--goodbg); stroke: var(--good); stroke-width: 2; }
+</style>
+<rect class="bg" width="1200" height="560" rx="16"/>
+<text x="40" y="64" font-size="30" font-weight="700" letter-spacing="-0.6">Where PortableDoc lives</text>
+
+<rect x="40" y="96" width="540" height="430" rx="12" class="card"/>
+<text x="60" y="128" font-size="13" font-weight="700" letter-spacing="1.5" class="muted">TODAY</text>
+<text x="60" y="162" font-size="22" font-weight="600">Rules in eight places</text>
+<rect x="60" y="184" width="500" height="150" rx="10" class="box"/>
+<text x="76" y="210" font-size="15" font-weight="700">FRIKKern/barkpark</text>
+<rect x="76" y="226" width="155" height="36" rx="8" class="chip"/><text x="88" y="249" font-size="14">Elixir reader · truth</text>
+<rect x="240" y="226" width="155" height="36" rx="8" class="chip"/><text x="252" y="249" font-size="14">Editor canvas</text>
+<rect x="404" y="226" width="140" height="36" rx="8" class="chip"/><text x="416" y="249" font-size="14">React</text>
+<rect x="76" y="274" width="155" height="36" rx="8" class="chip"/><text x="88" y="297" font-size="14">Go + WASM</text>
+<rect x="240" y="274" width="155" height="36" rx="8" class="chip"/><text x="252" y="297" font-size="14">Mobile</text>
+<rect x="60" y="352" width="160" height="58" rx="10" class="box"/><text x="74" y="376" font-size="14" font-weight="600">Barkever</text><text x="74" y="397" font-size="12" class="muted">Blocks.tsx copy</text>
+<rect x="230" y="352" width="160" height="58" rx="10" class="box"/><text x="244" y="376" font-size="14" font-weight="600">barkpark-studio</text><text x="244" y="397" font-size="12" class="muted">PortableDocView copy</text>
+<rect x="400" y="352" width="160" height="58" rx="10" class="box"/><text x="414" y="376" font-size="14" font-weight="600">next-starter</text><text x="414" y="397" font-size="12" class="muted">359-line copy</text>
+<text x="60" y="452" font-size="17" font-weight="600" class="bad">✕ eight renderers drift apart</text>
+<text x="60" y="478" font-size="14" class="muted">Apps live-load whatever the server serves.</text>
+<text x="60" y="500" font-size="14" class="muted">Barkdown's fallback is on contract 1.14; the server is on 1.19.</text>
+
+<rect x="620" y="96" width="540" height="430" rx="12" class="card"/>
+<text x="640" y="128" font-size="13" font-weight="700" letter-spacing="1.5" class="muted">TARGET</text>
+<text x="640" y="162" font-size="22" font-weight="600">One home, one set of rules</text>
+<rect x="640" y="184" width="500" height="150" rx="10" class="home"/>
+<text x="656" y="210" font-size="15" font-weight="700">FRIKKern/portable-doc</text>
+<rect x="656" y="226" width="110" height="36" rx="8" class="chip"/><text x="670" y="249" font-size="14">spec</text>
+<rect x="776" y="226" width="110" height="36" rx="8" class="chip"/><text x="790" y="249" font-size="14">goldens</text>
+<rect x="896" y="226" width="110" height="36" rx="8" class="chip"/><text x="910" y="249" font-size="14">ops</text>
+<rect x="1016" y="226" width="110" height="36" rx="8" class="chip"/><text x="1030" y="249" font-size="14">editor</text>
+<rect x="656" y="274" width="110" height="36" rx="8" class="chip"/><text x="670" y="297" font-size="14">react</text>
+<rect x="776" y="274" width="110" height="36" rx="8" class="chip"/><text x="790" y="297" font-size="14">code</text>
+<rect x="896" y="274" width="110" height="36" rx="8" class="chip"/><text x="910" y="297" font-size="14">validate</text>
+<rect x="1016" y="274" width="110" height="36" rx="8" class="chip"/><text x="1030" y="297" font-size="14">mcp</text>
+<text x="890" y="358" font-size="14" text-anchor="middle" class="good">▲ pin a version · pass the goldens</text>
+<rect x="640" y="372" width="160" height="40" rx="10" class="box"/><text x="654" y="397" font-size="14"><tspan class="good">✓</tspan> Barkpark reader</text>
+<rect x="810" y="372" width="160" height="40" rx="10" class="box"/><text x="824" y="397" font-size="14"><tspan class="good">✓</tspan> Barkdown</text>
+<rect x="980" y="372" width="160" height="40" rx="10" class="box"/><text x="994" y="397" font-size="14"><tspan class="good">✓</tspan> Barkever</text>
+<rect x="640" y="420" width="160" height="40" rx="10" class="box"/><text x="654" y="445" font-size="14"><tspan class="good">✓</tspan> barkpark-studio</text>
+<rect x="810" y="420" width="160" height="40" rx="10" class="box"/><text x="824" y="445" font-size="14"><tspan class="good">✓</tspan> mobile</text>
+<rect x="980" y="420" width="160" height="40" rx="10" class="box"/><text x="994" y="445" font-size="14"><tspan class="good">✓</tspan> Go + WASM</text>
+<text x="640" y="500" font-size="17" font-weight="600" class="good">✓ one heatmap, all green</text>
+</svg>

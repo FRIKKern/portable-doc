@@ -25,5 +25,5 @@ Progress is visible from here: the roadmap picture and the README timeline are g
 
 ## Considered
 
-- **Only the editor in its own repo.** Rejected: the editor is one of six renderers; the drift between them is the bigger cost.
+- **Only the editor in its own repo.** Rejected: the editor is one of eight renderers; the drift between them is the bigger cost.
 - **Rename to GoodDoc.** Rejected: stored data and public imports already say PortableDoc; a rename means aliases or a fleet-wide data migration.
