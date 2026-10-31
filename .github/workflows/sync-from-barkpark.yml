@@ -1,7 +1,5 @@
 name: sync-from-barkpark
 on:
-  push:
-    branches: [pd/r1-5-sync]
   schedule:
     - cron: '41 * * * *'
   workflow_dispatch:
