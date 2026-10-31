@@ -29,8 +29,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 3 changes
-  - R0.6: README links the PortableDoc board (GitHub Project 3)
+- **Today** · 3 changes, 4 milestones closed
+  - Delivered: [R1.1 Honest checks: barkdown-parity really runs, paper-editor path filter complete, Chrome rigs fail on an empty corpus, gate baseline](https://github.com/FRIKKern/barkpark/issues/24941)
 <!-- timeline:end -->
 
 ## Where things live (one fact, one home)
