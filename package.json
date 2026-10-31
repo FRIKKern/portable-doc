@@ -1,0 +1,12 @@
+{
+  "name": "portable-doc",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "roadmap": "node scripts/generate-roadmap.mjs",
+    "timeline": "node scripts/readme-timeline.mjs",
+    "check": "node scripts/check-docs.mjs"
+  }
+}
