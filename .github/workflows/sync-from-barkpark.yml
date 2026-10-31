@@ -1,0 +1,40 @@
+name: sync-from-barkpark
+on:
+  schedule:
+    - cron: '41 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: sync-from-barkpark
+  cancel-in-progress: false
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: FRIKKern/barkpark
+          ref: main
+          path: .barkpark
+          sparse-checkout: api/priv/portable_doc
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - name: Same as Barkpark?
+        id: fresh
+        run: |
+          if node scripts/check-pack.mjs --against .barkpark; then echo same=true >> "$GITHUB_OUTPUT"; else echo same=false >> "$GITHUB_OUTPUT"; fi
+      - name: Open or update the sync PR
+        if: steps.fresh.outputs.same == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node scripts/sync-from-barkpark.mjs .barkpark --pr-body "$RUNNER_TEMP/body.md" > "$RUNNER_TEMP/title.txt"
+          npm run check
+          node scripts/sync-pr.mjs "$RUNNER_TEMP/title.txt" "$RUNNER_TEMP/body.md"

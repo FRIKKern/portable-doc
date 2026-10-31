@@ -7,6 +7,8 @@
   "scripts": {
     "roadmap": "node scripts/generate-roadmap.mjs",
     "timeline": "node scripts/readme-timeline.mjs",
-    "check": "node scripts/check-docs.mjs"
+    "sync": "node scripts/sync-from-barkpark.mjs",
+    "test": "node --test scripts/*.test.mjs",
+    "check": "node scripts/check-docs.mjs && node scripts/check-pack.mjs && node --test scripts/*.test.mjs"
   }
 }
