@@ -41,6 +41,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 | Milestones | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
 | The journeys (the spec of "works") | [`JOURNEYS.md`](JOURNEYS.md) |
 | The format spec | [`SPEC.md`](SPEC.md) |
+| The spec, as JSON Schema (synced from Barkpark, never edited here) | [`spec/`](spec/), source in [`SOURCE.json`](SOURCE.json) ([0003](docs/decisions/0003-pull-sync.md)) |
+| The goldens every renderer must pass, stamped (synced the same way) | [`goldens/`](goldens/) |
 | The quality bar | [`QUALITY.md`](QUALITY.md) |
 | How we work | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
 | Decisions | [`docs/decisions/`](docs/decisions/), one page each |
@@ -54,7 +56,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ```sh
 npm run roadmap    # redraw docs/images/roadmap.svg from the board
 npm run timeline   # rewrite the timeline above
-npm run check      # doc rules: README cap, links
+npm run sync -- ../barkpark   # copy spec/ and goldens/ from a Barkpark checkout
+npm run check      # doc rules, pack stamp and SOURCE.json, tests
 ```
 
 The editor, the workbench and the host pages arrive with R2 and R5.
