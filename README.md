@@ -45,7 +45,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 | How we work | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
 | Decisions | [`docs/decisions/`](docs/decisions/), one page each |
 | What the move touches, in numbers | [`docs/SCOPE.md`](docs/SCOPE.md) |
-| Status, who does what | Barkpark tasks under goal `task-88d88a6e15e5a2eb`, mirrored to [FRIKKern/barkpark#24888](https://github.com/FRIKKern/barkpark/issues/24888). Never in docs |
+| Status, who does what | Barkpark tasks under goal `task-88d88a6e15e5a2eb`, mirrored to [FRIKKern/barkpark#24888](https://github.com/FRIKKern/barkpark/issues/24888) and the [PortableDoc board](https://github.com/users/FRIKKern/projects/3). Never in docs |
 | License (Apache-2.0); ported code | [`LICENSE`](LICENSE); [`THIRD-PARTY.md`](THIRD-PARTY.md) |
 | The old 10-type version | tag [`legacy-v0.4`](https://github.com/FRIKKern/portable-doc/tree/legacy-v0.4) ([0002](docs/decisions/0002-reuse-this-repo.md)) |
 
