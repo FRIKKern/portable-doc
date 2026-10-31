@@ -89,11 +89,14 @@ const mutants = {
   'no SOURCE.json': [(root) => fs.rmSync(path.join(root, 'SOURCE.json')), /SOURCE.json: missing/],
   'a null stamp that SOURCE.json agrees with': [(root) => { write(path.join(root, 'goldens/stamp.json'), 'null\n'); source(root); }, /goldens\/stamp.json: not an object with a files object/],
   'a stamp whose files is not an object': [(root) => { write(path.join(root, 'goldens/stamp.json'), '{"files":[]}\n'); source(root); }, /goldens\/stamp.json: not an object with a files object/],
+  'a stamp that is not JSON': [(root) => { write(path.join(root, 'goldens/stamp.json'), '{'); source(root); }, /goldens\/stamp.json: unreadable \(/],
   'a null SOURCE.json': [(root) => write(path.join(root, 'SOURCE.json'), 'null\n'), /SOURCE.json: not an object with a files object/],
   'a SOURCE.json whose files is not an object': [(root) => editSource(root, (s) => { s.files = 'all'; }), /SOURCE.json: not an object with a files object/],
   'a SOURCE.json with no repo': [(root) => editSource(root, (s) => { delete s.repo; }), /SOURCE.json: repo is undefined, not "FRIKKern\/barkpark"/],
   'a SOURCE.json naming another path': [(root) => editSource(root, (s) => { s.path = 'elsewhere'; }), /SOURCE.json: path is "elsewhere", not "api\/priv\/portable_doc"/],
   'a SOURCE.json commit that is not a full sha': [(root) => editSource(root, (s) => { s.commit = 'a'.repeat(12); }), /SOURCE.json: commit "aaaaaaaaaaaa" is not a full sha/],
+  'a SOURCE.json commit with text before the sha': [(root) => editSource(root, (s) => { s.commit = `v${'a'.repeat(40)}`; }), /SOURCE.json: commit "va{40}" is not a full sha/],
+  'a SOURCE.json commit with text after the sha': [(root) => editSource(root, (s) => { s.commit = `${'a'.repeat(40)}v`; }), /SOURCE.json: commit "a{40}v" is not a full sha/],
 };
 
 for (const [name, [mutate, message]] of Object.entries(mutants)) {
@@ -114,7 +117,7 @@ test('check fails on fewer than 80 block goldens, even when the stamp agrees', (
 
 test('--against passes when the pack matches Barkpark and fails when Barkpark moved', () => {
   const root = repo();
-  assert.equal(check(root, '--against', barkpark()).code, 0);
+  assert.match(check(root, '--against', barkpark()).out, /^pack ok: stamp [0-9a-f]{12}, 83 files, same as Barkpark\n$/);
   const r = check(root, '--against', barkpark({ tag: 'b', blocks: 81 }));
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /goldens\/blocks\/b3.golden.json: stale, changed in Barkpark/);
