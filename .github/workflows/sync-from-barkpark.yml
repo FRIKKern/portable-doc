@@ -1,0 +1,51 @@
+name: sync-from-barkpark
+on:
+  schedule:
+    - cron: '41 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: sync-from-barkpark
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: FRIKKern/barkpark
+          ref: main
+          path: .barkpark
+          sparse-checkout: api/priv/portable_doc
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - name: Same as Barkpark?
+        id: fresh
+        run: |
+          if node scripts/check-pack.mjs --against .barkpark; then echo same=true >> "$GITHUB_OUTPUT"; else echo same=false >> "$GITHUB_OUTPUT"; fi
+      - name: Open or update the sync PR
+        if: steps.fresh.outputs.same == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.ref_name }}
+          BRANCH: sync/barkpark
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          title=$(node scripts/sync-from-barkpark.mjs .barkpark --pr-body "$RUNNER_TEMP/body.md")
+          npm run check
+          git switch -c "$BRANCH"
+          git add -A -- spec goldens SOURCE.json
+          git commit -q -m "$title"
+          git diff --stat HEAD~1 HEAD | tail -1
+          git push --force origin "HEAD:$BRANCH"
+          number=$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[].number')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --head "$BRANCH" --base "$BASE" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          fi

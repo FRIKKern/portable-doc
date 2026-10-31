@@ -27,5 +27,6 @@ the format    ─► SPEC.md; until R4.2 the source is Barkpark api/lib/barkpark
 - **Nobody signs off their own journey.**
 - **No skip-pass.** A check with nothing to check fails (Z8).
 - **Barkpark stays the source** of each piece until its flip (Z9). Change it there first.
+- **`spec/` and `goldens/` are written only by the sync** (`sync/barkpark` PRs, [0003](docs/decisions/0003-pull-sync.md)). `npm run check` fails on a hand edit.
 - **No secrets** in prompts, files or output. **Fixtures are synthetic.**
 - **Ask before pushing** or anything destructive.

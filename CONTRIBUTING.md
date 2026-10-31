@@ -13,6 +13,7 @@ bp task (one milestone step) ─► branch + PR here or in the app repo ─► c
 - **Steps that touch another repo** land there (Barkpark, Barkdown, Barkever, barkpark-studio) and link back to the step's task.
 - **Every step has a rollback line** in its PR before it merges (Z5).
 - **Evidence on close:** what ran, where to see it, screenshots for anything you can see.
+- **`spec/` and `goldens/` arrive only through `sync/barkpark` PRs.** Fix them in Barkpark; the hourly sync brings them here ([0003](docs/decisions/0003-pull-sync.md)).
 - **No squash of history you didn't write.** The editor's history arrives at R5 with its original commits.
 
 ## Before you push
