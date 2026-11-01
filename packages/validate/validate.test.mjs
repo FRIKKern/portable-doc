@@ -125,6 +125,63 @@ test('a thrown or odd call leaves nothing behind for the next', () => {
   assert.deepEqual(validate(nest(MAX_DEPTH, wraps.section)), { ok: true });
 });
 
+const wellFormed = (r) =>
+  r.ok === true ? Object.keys(r).length === 1
+    : r.ok === false && r.errors.length > 0 && r.errors.every((e) => CODES.includes(e.code) && /^(\/.*)?$/.test(e.path) && typeof e.message === 'string' && e.message.length > 0);
+
+test('validate returns a well-formed result for any value put at any node of any golden', () => {
+  const odd = [null, 0, -1, 1.5, NaN, Infinity, '', 'x', true, false, [], {}, [null], { type: 'nope' }, { _type: 'block', children: [] }, 1n];
+  const nodes = (v, at = []) => (v && typeof v === 'object' ? [at, ...Object.keys(v).flatMap((k) => nodes(v[k], [...at, k]))] : [at]);
+  const put = (v, at, x) => {
+    if (!at.length) return x;
+    const copy = Array.isArray(v) ? [...v] : { ...v };
+    copy[at[0]] = put(v[at[0]], at.slice(1), x);
+    return copy;
+  };
+  let runs = 0;
+  for (const file of jsonIn('goldens/blocks')) {
+    const doc = { blocks: [read(file).input] };
+    for (const at of nodes(doc)) {
+      for (const x of odd) {
+        runs++;
+        assert.ok(wellFormed(validate(put(doc, at, x))), `${file} /${at.join('/')} = ${typeof x === 'bigint' ? `${x}n` : JSON.stringify(x)}`);
+      }
+    }
+  }
+  assert.ok(runs > 10000, `${runs} runs`);
+});
+
+test('validate returns a well-formed result for random nested docs', () => {
+  let seed = 42;
+  const rand = (n) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed % n;
+  };
+  const types = schema.properties.type.enum;
+  const keys = ['type', 'id', 'text', 'level', 'blocks', 'children', 'items', 'content', 'columns', 'child', 'slots', 'tabs', 'steps', 'media', 'body', 'rows'];
+  const value = (depth) => {
+    const pick = rand(depth > 6 ? 6 : 9);
+    if (pick === 0) return null;
+    if (pick === 1) return rand(10) - 3;
+    if (pick === 2) return ['', 'x', 'a', types[rand(types.length)]][rand(4)];
+    if (pick === 3) return rand(2) === 0;
+    if (pick === 4) return 'block';
+    if (pick === 5) return 1.5;
+    if (pick <= 7) return Array.from({ length: rand(4) }, () => value(depth + 1));
+    return Object.fromEntries(Array.from({ length: rand(5) }, () => [keys[rand(keys.length)], value(depth + 1)]).concat([['type', types[rand(types.length)]]]));
+  };
+  for (let i = 0; i < 2000; i++) {
+    const doc = rand(5) === 0 ? value(0) : { blocks: Array.from({ length: rand(4) }, () => value(1)) };
+    assert.ok(wellFormed(validate(doc)), JSON.stringify(doc));
+  }
+});
+
+test('a cycle through blocks stops at MAX_DEPTH', () => {
+  const loop = { type: 'section', blocks: [] };
+  loop.blocks.push(loop);
+  assert.deepEqual(validate({ blocks: [loop] }).errors.map((e) => e.code), ['too_deep']);
+});
+
 test('every type the schema names passes as a bare block', () => {
   assert.ok(schema.properties.type.enum.length >= 80);
   for (const type of schema.properties.type.enum) assert.deepEqual(validate({ blocks: [{ type }] }), { ok: true }, type);
