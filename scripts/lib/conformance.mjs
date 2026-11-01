@@ -3,6 +3,7 @@ import path from 'node:path';
 import { listFiles, sha256 } from './pack.mjs';
 
 export const STATUSES = ['pass', 'fail', 'missing', 'unchecked'];
+export const COMPARES = ['dom', 'text'];
 
 export function packTypes(packRoot) {
   return listFiles(path.join(packRoot, 'goldens', 'blocks'))
@@ -40,7 +41,8 @@ export function readReports(packRoot) {
     const name = `conformance/${file}`;
     const renderer = file.slice(0, -'.json'.length);
     if (report.renderer !== renderer) errors.push(`${name}: renderer is ${JSON.stringify(report.renderer)}, not "${renderer}"`);
-    if (stamp && report.pack_stamp !== stamp) errors.push(`${name}: pack_stamp ${String(report.pack_stamp).slice(0, 12)} is not goldens/stamp.json ${stamp.slice(0, 12)}`);
+    if (!COMPARES.includes(report.compare)) errors.push(`${name}: compare is ${JSON.stringify(report.compare)}, not ${COMPARES.join(' or ')}`);
+    if (stamp && report.pack_stamp !== stamp) errors.push(`${name}: pack_stamp ${report.pack_stamp} is not the sha256 of goldens/stamp.json, ${stamp}`);
     const seen = new Set();
     for (const row of report.rows) {
       if (!types.includes(row?.type)) errors.push(`${name}: row ${JSON.stringify(row?.type)} is not a pack type`);

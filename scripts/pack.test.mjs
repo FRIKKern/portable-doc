@@ -111,7 +111,9 @@ const mutants = {
   'a SOURCE.json naming another path': [(root) => editSource(root, (s) => { s.path = 'elsewhere'; }), /SOURCE.json: path is "elsewhere", not "api\/priv\/portable_doc"/],
   'a SOURCE.json commit that is not a full sha': [(root) => editSource(root, (s) => { s.commit = 'a'.repeat(12); }), /SOURCE.json: commit "aaaaaaaaaaaa" is not a full sha/],
   'a SOURCE.json commit with text before the sha': [(root) => editSource(root, (s) => { s.commit = `v${'a'.repeat(40)}`; }), /SOURCE.json: commit "va{40}" is not a full sha/],
-  'a report whose pack_stamp is not the pack\'s, even when SOURCE.json agrees': [resynced((root) => editReport(root, 'text-b', (r) => { r.pack_stamp = 'c'.repeat(64); })), /conformance\/text-b.json: pack_stamp cccccccccccc is not goldens\/stamp.json [0-9a-f]{12}/],
+  'a report whose pack_stamp is not the pack\'s, even when SOURCE.json agrees': [resynced((root) => editReport(root, 'text-b', (r) => { r.pack_stamp = 'c'.repeat(64); })), /conformance\/text-b.json: pack_stamp c{64} is not the sha256 of goldens\/stamp.json, [0-9a-f]{64}/],
+  'a report whose pack_stamp shares only the first 12 characters with the pack\'s': [resynced((root) => editReport(root, 'text-b', (r) => { r.pack_stamp = r.pack_stamp.slice(0, 12) + (r.pack_stamp[12] === '0' ? '1' : '0') + r.pack_stamp.slice(13); })), /conformance\/text-b.json: pack_stamp [0-9a-f]{64} is not the sha256/],
+  'a report whose compare is neither dom nor text': [resynced((root) => editReport(root, 'ref', (r) => { r.compare = 'pixels'; })), /conformance\/ref.json: compare is "pixels", not dom or text/],
   'a report with no row for a pack type, even when SOURCE.json agrees': [resynced((root) => editReport(root, 'ref', (r) => { r.rows = r.rows.filter((row) => row.type !== 'b7'); })), /conformance\/ref.json: no row for pack type b7/],
   'a report row that is not a pack type': [resynced((root) => editReport(root, 'ref', (r) => { r.rows.push({ type: 'gone', status: 'pass' }); })), /conformance\/ref.json: row "gone" is not a pack type/],
   'a report with two rows for one type': [resynced((root) => editReport(root, 'ref', (r) => { r.rows.push({ type: 'b3', status: 'pass' }); })), /conformance\/ref.json: b3 has more than one row/],
@@ -134,6 +136,18 @@ for (const [name, [mutate, message]] of Object.entries(mutants)) {
     assert.match(r.out, message);
   });
 }
+
+test('only goldens/blocks/*.golden.json are pack types, and only conformance/*.json are reports', () => {
+  const root = scripted(path.join(tmp, `extras-${n++}`));
+  write(path.join(root, 'goldens/blocks/README.txt'), 'not a golden\n');
+  write(path.join(root, 'goldens/blocks/b1.golden.json.orig'), '{}\n');
+  write(path.join(root, 'conformance/CONFORMANCE.md'), '# notes\n');
+  write(path.join(root, 'conformance/fixtures/sample.json'), '{"rows":[]}\n');
+  source(pack(root));
+  const r = check(root);
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /, 2 conformance reports\n$/);
+});
 
 test('check fails on fewer than 80 block goldens, even when the stamp agrees', () => {
   const r = check(repo({ blocks: 79 }));
@@ -200,7 +214,7 @@ test('sync refuses a Barkpark pack whose reports are stale or short, and leaves 
   const r = run(root, 'sync-from-barkpark.mjs', bp);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /nothing copied/);
-  assert.match(r.out, /conformance\/text-b.json: pack_stamp cccccccccccc is not/);
+  assert.match(r.out, /conformance\/text-b.json: pack_stamp c{64} is not/);
   assert.match(r.out, /conformance\/text-b.json: no row for pack type b79/);
   assert.deepEqual(hashes(root), before);
 });

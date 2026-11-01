@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { hashes, sha256 } from './pack.mjs';
+import { listFiles, sha256 } from './pack.mjs';
 
 export const RENDERERS = [{ renderer: 'ref', compare: 'dom', reference: true }, { renderer: 'text-b', compare: 'text' }];
 
@@ -9,10 +9,10 @@ export function write(file, text) {
   fs.writeFileSync(file, text);
 }
 
-function stamp(packRoot) {
-  const files = {};
-  for (const [f, h] of Object.entries(hashes(packRoot))) if (f.startsWith('goldens/') && f !== 'goldens/stamp.json') files[f.slice(8)] = h;
-  write(path.join(packRoot, 'goldens', 'stamp.json'), `${JSON.stringify({ render_version: 'synthetic', files }, null, 2)}\n`);
+export function stamp(packRoot) {
+  const goldens = path.join(packRoot, 'goldens');
+  const files = Object.fromEntries(listFiles(goldens).filter((f) => f !== 'stamp.json').map((f) => [f, sha256(path.join(goldens, f))]));
+  write(path.join(goldens, 'stamp.json'), `${JSON.stringify({ render_version: 'synthetic', files }, null, 2)}\n`);
 }
 
 export function report(packRoot, { renderer, compare, reference }, types, status) {
@@ -21,9 +21,8 @@ export function report(packRoot, { renderer, compare, reference }, types, status
   write(path.join(packRoot, 'conformance', `${renderer}.json`), `${JSON.stringify(value, null, 2)}\n`);
 }
 
-export function pack(packRoot, { blocks = 80, tag = 'a', specTag = tag, locale = true, spec, renderers = RENDERERS, status = () => ({ status: 'pass' }) } = {}) {
+export function pack(packRoot, { blocks = 80, types = Array.from({ length: blocks }, (_, i) => `b${i}`), tag = 'a', specTag = tag, locale = true, spec, renderers = RENDERERS, status = () => ({ status: 'pass' }) } = {}) {
   write(path.join(packRoot, 'spec', 'blocks.schema.json'), spec ? `${JSON.stringify(spec)}\n` : `{"title":"synthetic ${specTag}"}\n`);
-  const types = Array.from({ length: blocks }, (_, i) => `b${i}`);
   for (const type of types) write(path.join(packRoot, 'goldens', 'blocks', `${type}.golden.json`), `{"type":"${type}","tag":"${tag}"}\n`);
   if (locale) write(path.join(packRoot, 'goldens', 'locales', 'nb.golden.json'), `{"tag":"${tag}"}\n`);
   stamp(packRoot);
