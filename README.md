@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 3 milestones closed
-  - Delivered: [R2.1 Contract truth: every editor member any app uses is declared in EMBED-CONTRACT.md and index.d.ts, with EDITOR_VERSION + sha](https://github.com/FRIKKern/barkpark/issues/24948)
+- **Today** · 4 milestones closed
+  - Delivered: [R4.3 @portable-doc/validate with shared broken-doc fixtures; Elixir refuses the same docs with the same reason codes](https://github.com/FRIKKern/barkpark/issues/24957)
 - **Yesterday** · 3 changes, 5 milestones closed
   - Delivered: [R1.5 Sync: Barkpark opens a PR to portable-doc with spec/ and goldens/ when the stamp changes; portable-doc fails on a stale stamp](https://github.com/FRIKKern/barkpark/issues/24945)
 <!-- timeline:end -->
