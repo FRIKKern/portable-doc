@@ -82,8 +82,8 @@ export function render(reports, types, tierOf) {
   const groups = grouped(types, tierOf);
   const n = byRenderer.length;
 
-  const labelW = Math.ceil(Math.max(80, ...types.map((t) => textWidth(t, 13))) + 16);
-  const headLen = Math.max(...ordered.map((r) => textWidth(r.renderer, 12, { bold: !!r.reference })));
+  const labelW = Math.ceil(Math.max(80, ...types.map((t) => textWidth(t, 14))) + 16);
+  const headLen = Math.max(...ordered.map((r) => textWidth(r.renderer, 13, { bold: !!r.reference })));
   const headH = Math.ceil(headLen * SIN) + 24;
   const overhang = Math.max(0, Math.ceil(CELL_W / 2 + 4 + headLen * COS - CELL_W));
   const tierW = Math.max(...groups.map(([tier, ts]) => textWidth(`${tier.toUpperCase()} · ${ts.length} (cont.)`, 12, { bold: true, spacing: 1.5 })));
@@ -162,7 +162,7 @@ export function render(reports, types, tierOf) {
       const x = px + labelW + c * COL;
       if (r.reference) out.push(`<rect x="${x - 1}" y="${gridY}" width="${CELL_W + 2}" height="${headH + col.length * PITCH}" rx="4" class="ref" data-band="${esc(r.renderer)}"/>`);
       const tx = x + CELL_W / 2 + 4, ty = bodyY - 8;
-      out.push(`<text x="${tx}" y="${ty}" font-size="12" transform="rotate(-55 ${tx} ${ty})" data-renderer="${esc(r.renderer)}"${r.reference ? ' font-weight="700"' : ''}>${esc(r.renderer)}</text>`);
+      out.push(`<text x="${tx}" y="${ty}" font-size="13" transform="rotate(-55 ${tx} ${ty})" data-renderer="${esc(r.renderer)}"${r.reference ? ' font-weight="700"' : ''}>${esc(r.renderer)}</text>`);
     });
     col.forEach((item, k) => {
       const y = bodyY + k * PITCH;
@@ -171,7 +171,7 @@ export function render(reports, types, tierOf) {
         return;
       }
       const cells = byRenderer.map(({ rows: byType }, c) => cell(px + labelW + c * COL, y, byType[item.type]));
-      out.push(`<g data-type="${esc(item.type)}"><text x="${px + labelW - 8}" y="${y + 13}" font-size="13" text-anchor="end">${esc(item.type)}</text>${cells.join('')}</g>`);
+      out.push(`<g data-type="${esc(item.type)}"><text x="${px + labelW - 8}" y="${y + 13}" font-size="14" text-anchor="end">${esc(item.type)}</text>${cells.join('')}</g>`);
     });
   });
 

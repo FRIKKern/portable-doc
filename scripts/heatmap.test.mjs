@@ -63,6 +63,8 @@ function rects(svg) {
 const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 function assertFits(svg, label) {
+  const rule = Number(svg.match(/<path d="M[\d.]+ ([\d.]+)H/)[1]);
+  for (const head of texts(svg.match(/<text [^>]*rotate\(-55[^>]*>.*?<\/text>/g).join(''))) assert.ok(head.top >= rule, `${label}: column head ${head.text} reaches ${head.top}, above the rule at ${rule}`);
   for (const box of [...rects(svg), ...texts(svg)]) {
     assert.ok(box.left >= PAD - 1 && box.right <= W - PAD + 0.5, `${label}: ${JSON.stringify(box)} is outside ${PAD}..${W - PAD}`);
   }
@@ -70,7 +72,8 @@ function assertFits(svg, label) {
     ...[...svg.matchAll(/<g data-type="[^"]+">.*?<\/g>/g)].map(([g]) => [...texts(g), ...rects(g)].reduce((a, b) => ({ left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom), text: a.text ?? b.text }))),
     ...texts(svg.match(/<text [^>]*data-tier="[^"]+"[^>]*>.*?<\/text>/g)?.join('') ?? ''),
   ];
-  for (let i = 0; i < blocks.length; i++) for (let j = i + 1; j < blocks.length; j++) assert.ok(!overlaps(blocks[i], blocks[j]), `${label}: ${blocks[i].text} overlaps ${blocks[j].text}`);
+  const clear = (a) => ({ ...a, left: a.left - 12, right: a.right + 12 });
+  for (let i = 0; i < blocks.length; i++) for (let j = i + 1; j < blocks.length; j++) assert.ok(!overlaps(clear(blocks[i]), blocks[j]), `${label}: ${blocks[i].text} is within 12px of ${blocks[j].text}`);
   for (const [, g] of svg.matchAll(/<g data-total="[^"]+">([\s\S]*?)<\/g>/g)) {
     const [name, counts] = texts(g);
     assert.ok(name.right + 8 <= counts.left, `${label}: totals ${name.text} runs into ${counts.text}`);
@@ -194,8 +197,8 @@ test('the panels are as short as the rows allow: no empty row above the footer',
 const many = (count, name = (i) => `renderer-${i}`) => [{ renderer: 'ref', compare: 'dom', reference: true }, ...Array.from({ length: count - 1 }, (_, i) => ({ renderer: name(i), compare: i % 2 ? 'text' : 'dom' }))];
 const longTypes = Array.from({ length: 80 }, (_, i) => (i % 10 ? `type-${i}` : `a-much-longer-block-type-${i}`));
 
-test('it fits the card at 1, 4, 6, 7 and 10 renderers, with long type names and every status in a totals row', () => {
-  for (const count of [1, 4, 6, 7, 10]) {
+test('it fits the card at 1 to 10 renderers, with long type names and every status in a totals row', () => {
+  for (let count = 1; count <= 10; count++) {
     const { code, out, svg } = draw(repo({ renderers: many(count), types: longTypes, status: everyStatus }));
     assert.equal(code, 0, out);
     assertFits(svg, `${count} renderers`);
