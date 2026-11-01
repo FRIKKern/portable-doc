@@ -152,29 +152,46 @@ test('validate returns a well-formed result for any value put at any node of any
   assert.ok(runs > 10000, `${runs} runs`);
 });
 
-test('validate returns a well-formed result for random nested docs', () => {
+test('validate returns a well-formed result for 2000 seeded random docs that reach every code', () => {
   let seed = 42;
   const rand = (n) => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed % n;
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) % n;
   };
   const types = schema.properties.type.enum;
-  const keys = ['type', 'id', 'text', 'level', 'blocks', 'children', 'items', 'content', 'columns', 'child', 'slots', 'tabs', 'steps', 'media', 'body', 'rows'];
+  const common = ['heading', 'section', 'list', 'paragraph', 'columns', 'card', 'figure', 'tabs'];
+  const typeOf = () => (rand(2) === 0 ? common[rand(common.length)] : types[rand(types.length)]);
+  const keys = ['id', 'text', 'level', 'blocks', 'children', 'items', 'content', 'columns', 'child', 'slots', 'tabs', 'media', 'rows', 'title'];
+  const scalar = () => [null, rand(10) - 3, 1.5, '', 'x', true, typeOf(), 'nope'][rand(8)];
   const value = (depth) => {
-    const pick = rand(depth > 6 ? 6 : 9);
-    if (pick === 0) return null;
-    if (pick === 1) return rand(10) - 3;
-    if (pick === 2) return ['', 'x', 'a', types[rand(types.length)]][rand(4)];
-    if (pick === 3) return rand(2) === 0;
-    if (pick === 4) return 'block';
-    if (pick === 5) return 1.5;
-    if (pick <= 7) return Array.from({ length: rand(4) }, () => value(depth + 1));
-    return Object.fromEntries(Array.from({ length: rand(5) }, () => [keys[rand(keys.length)], value(depth + 1)]).concat([['type', types[rand(types.length)]]]));
+    const pick = rand(depth > 6 ? 3 : 10);
+    if (pick < 3) return scalar();
+    if (pick < 5) return Array.from({ length: rand(4) }, () => value(depth + 1));
+    const node = Object.fromEntries(Array.from({ length: rand(4) }, () => [keys[rand(keys.length)], value(depth + 1)]));
+    const kind = rand(10);
+    if (kind < 7) node.type = typeOf();
+    else if (kind === 7) node.type = 'nope';
+    else if (kind === 8) Object.assign(node, { _type: 'block', children: [] });
+    if (rand(3) === 0) node.id = ['a', 'b', 'c'][rand(3)];
+    return node;
   };
+  const depthOf = (v) => (v && typeof v === 'object' ? 1 + Math.max(0, ...Object.values(v).map(depthOf)) : 0);
+  const docs = new Set();
+  const seen = new Set();
+  let deepest = 0;
   for (let i = 0; i < 2000; i++) {
-    const doc = rand(5) === 0 ? value(0) : { blocks: Array.from({ length: rand(4) }, () => value(1)) };
-    assert.ok(wellFormed(validate(doc)), JSON.stringify(doc));
+    const doc = rand(10) === 0 ? value(0) : { blocks: Array.from({ length: 1 + rand(4) }, () => value(1)) };
+    const result = validate(doc);
+    assert.ok(wellFormed(result), JSON.stringify(doc));
+    docs.add(JSON.stringify(doc));
+    deepest = Math.max(deepest, depthOf(doc));
+    if (!result.ok) for (const e of result.errors) seen.add(e.code);
   }
+  assert.ok(docs.size >= 1500, `${docs.size} distinct docs`);
+  assert.deepEqual(CODES.filter((c) => !seen.has(c) && c !== 'too_deep'), []);
+  assert.ok(deepest >= 5, `deepest doc is ${deepest}`);
 });
 
 test('a cycle through blocks stops at MAX_DEPTH', () => {
