@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { startFakeReader } from './test/fake-reader.mjs';
+import { FAKE_TOKEN, startFakeReader } from './test/fake-reader.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const OUT = fileURLToPath(new URL('TRANSCRIPT.md', import.meta.url));
@@ -30,7 +30,7 @@ const json = (value) => ['```json', JSON.stringify(value, null, 2), '```'].join(
 export async function transcript() {
   const reader = await startFakeReader();
   const client = new Client({ name: 'transcript', version: '0.0.0' });
-  const transport = new StdioClientTransport({ command: process.execPath, args: [BIN], env: { BARKPARK_URL: reader.base }, stderr: 'pipe' });
+  const transport = new StdioClientTransport({ command: process.execPath, args: [BIN], env: { BARKPARK_URL: reader.base, BARKPARK_TOKEN: FAKE_TOKEN }, stderr: 'pipe' });
   const lines = [
     '# Transcript',
     '',

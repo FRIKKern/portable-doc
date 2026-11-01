@@ -24,15 +24,15 @@ async function readCapped(response) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export async function render(doc, { base, timeoutMs }) {
+export async function render(doc, { base, token, timeoutMs }) {
   const target = readerUrl(base);
   if (target.error) return { ok: false, error: target.error };
-  const blocks = Array.isArray(doc) ? doc : doc.blocks;
-  const body = JSON.stringify(typeof doc?.title === 'string' ? { title: doc.title, blocks } : { blocks });
+  if (!token) return { ok: false, error: 'render needs BARKPARK_TOKEN, a Barkpark ingest token or admin API token' };
+  const body = JSON.stringify({ blocks: Array.isArray(doc) ? doc : doc.blocks });
   try {
     const response = await fetch(target.url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${token}` },
       body,
       redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),

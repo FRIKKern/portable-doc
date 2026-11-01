@@ -11,6 +11,11 @@ test('BARKPARK_TIMEOUT_MS takes a whole number of ms from 1 to 60000; anything e
   }
 });
 
+test('BARKPARK_TOKEN is read as given', () => {
+  assert.equal(configFromEnv({}).token, undefined);
+  assert.equal(configFromEnv({ BARKPARK_TOKEN: 'synthetic' }).token, 'synthetic');
+});
+
 test('BARKPARK_URL: missing, not a URL, not http, a path prefix, query and hash dropped', () => {
   assert.equal(configFromEnv({}).base, undefined);
   assert.match(readerUrl(undefined).error, /render needs BARKPARK_URL/);

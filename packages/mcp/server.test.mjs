@@ -10,7 +10,7 @@ import { MAX_DEPTH, MAX_NODES } from './limits.js';
 import { MAX_HTML_BYTES, render } from './render.js';
 import { MAX_MESSAGE_BYTES } from './stdio.js';
 import { MAX_OPS } from './tools.js';
-import { readerHtml, startFakeReader } from './test/fake-reader.mjs';
+import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const TIMEOUT = { timeout: 20_000 };
@@ -52,7 +52,7 @@ describe('over stdio with the SDK client', () => {
   let reader;
   before(async () => {
     reader = await startFakeReader();
-    client = await connect({ BARKPARK_URL: reader.base });
+    client = await connect({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: FAKE_TOKEN });
   });
   after(async () => {
     await client.close();
@@ -76,7 +76,8 @@ describe('over stdio with the SDK client', () => {
     assert.deepEqual(applied.doc.blocks.map((b) => b.id), ['c', 'h']);
     const rendered = (await call(client, 'render', { doc: applied.doc })).structuredContent;
     assert.equal(rendered.html, readerHtml(applied.doc.blocks));
-    assert.deepEqual(JSON.parse(reader.requests.at(-1).body), { title: 'Sample', blocks: applied.doc.blocks });
+    assert.deepEqual(JSON.parse(reader.requests.at(-1).body), { blocks: applied.doc.blocks });
+    assert.equal(reader.requests.at(-1).auth, `Bearer ${FAKE_TOKEN}`);
   });
 
   test('every op golden applies through the server', async () => {
@@ -178,7 +179,7 @@ describe('over stdio with the SDK client', () => {
 
 describe('render failures are tool errors, never a hang', () => {
   const renderWith = async (env, doc = SAMPLE) => {
-    const client = await connect(env);
+    const client = await connect({ BARKPARK_TOKEN: FAKE_TOKEN, ...env });
     try {
       return await call(client, 'render', { doc });
     } finally {
@@ -190,6 +191,18 @@ describe('render failures are tool errors, never a hang', () => {
     toolError(await renderWith({}), /render needs BARKPARK_URL/);
     toolError(await renderWith({ BARKPARK_URL: 'not a url' }), /is not a URL/);
     toolError(await renderWith({ BARKPARK_URL: 'file:///etc' }), /must be http or https/);
+  });
+
+  test('no BARKPARK_TOKEN sends nothing; a wrong one gets the reader\'s 401', async () => {
+    const reader = await startFakeReader();
+    try {
+      toolError(await renderWith({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: '' }), /render needs BARKPARK_TOKEN/);
+      assert.equal(reader.requests.length, 0);
+      toolError(await renderWith({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: 'wrong' }), /answered 401: .*invalid ingest token/);
+      assert.equal(reader.requests[0].auth, 'Bearer wrong');
+    } finally {
+      await reader.close();
+    }
   });
 
   test('a reader that errors, answers no html, answers junk, redirects, is too big, is gone, or is slow', async () => {
@@ -210,8 +223,8 @@ describe('render failures are tool errors, never a hang', () => {
     }
     const full = await startFakeReader({ raw: JSON.stringify({ html: 'x'.repeat(MAX_HTML_BYTES - 11) }) });
     try {
-      assert.equal((await render({ blocks: [] }, { base: full.base, timeoutMs: 10_000 })).html.length, MAX_HTML_BYTES - 11);
-      await render([{ id: 'b', type: 'divider' }], { base: full.base, timeoutMs: 10_000 });
+      assert.equal((await render({ blocks: [] }, { base: full.base, token: FAKE_TOKEN, timeoutMs: 10_000 })).html.length, MAX_HTML_BYTES - 11);
+      await render([{ id: 'b', type: 'divider' }], { base: full.base, token: FAKE_TOKEN, timeoutMs: 10_000 });
       assert.deepEqual(JSON.parse(full.requests.at(-1).body), { blocks: [{ id: 'b', type: 'divider' }] });
     } finally {
       await full.close();

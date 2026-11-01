@@ -49,7 +49,7 @@ export const TOOLS = [
   },
   {
     name: 'render',
-    description: "Render a PortableDoc to HTML through Barkpark's reader (BARKPARK_URL).",
+    description: "Render a PortableDoc to HTML through Barkpark's reader (BARKPARK_URL, BARKPARK_TOKEN).",
     inputSchema: { type: 'object', properties: { doc: DOC }, required: ['doc'], additionalProperties: false },
   },
 ];

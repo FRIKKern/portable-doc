@@ -20,8 +20,10 @@ Bad arguments are `InvalidParams` (-32602); `apply_ops` and `render` need a bloc
 ## Run
 
 ```sh
-BARKPARK_URL=https://barkpark.example node packages/mcp/bin/portable-doc-mcp.mjs
+BARKPARK_URL=https://barkpark.example BARKPARK_TOKEN=<ingest token> node packages/mcp/bin/portable-doc-mcp.mjs
 ```
+
+`BARKPARK_TOKEN` is the instance ingest token or an admin API token; it goes only into the render request's `Authorization` header. Barkpark validates before it renders (a broken doc comes back as its 422 with every violation) and stores nothing. It meters the route per token like its other POSTs; a 429 comes back as a tool error carrying Barkpark's retry hint.
 
 `BARKPARK_TIMEOUT_MS` (default 10000) bounds a render. Only `render` touches the network.
 
