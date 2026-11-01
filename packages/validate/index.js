@@ -61,7 +61,7 @@ function audit(root, resolve) {
       if (!key.startsWith('x-') && !KEYWORDS.has(key)) throw new Error(`unsupported schema keyword ${key} at ${at}`);
     }
     if ('enum' in node && !Array.isArray(node.enum)) throw new Error(`schema enum at ${at} is not an array`);
-    for (const value of ['const' in node ? [node.const] : [], node.enum ?? []].flat()) {
+    for (const value of [node.const, ...(node.enum ?? [])]) {
       if (!isPrimitive(value)) throw new Error(`unsupported schema const or enum value ${JSON.stringify(value)} at ${at}`);
     }
     for (const type of [].concat(node.type ?? [])) {
