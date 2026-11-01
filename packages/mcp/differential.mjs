@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { applyPatch } from './ops/patch.js';
+import { digest } from './test/digest.mjs';
 import { generator } from './test/random-ops.mjs';
 
-const [barkpark, countArg = '20000', seedArg = '1'] = process.argv.slice(2);
+const [barkpark, countArg = '20000', seedArg = '1', record] = process.argv.slice(2);
 if (!barkpark) {
-  console.error('usage: node packages/mcp/differential.mjs <barkpark checkout> [cases] [seed]');
+  console.error('usage: node packages/mcp/differential.mjs <barkpark checkout> [cases] [seed] [record.json]');
   process.exit(2);
 }
 
@@ -33,38 +34,47 @@ end)
 `;
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-differential-'));
-const source = path.join(barkpark, 'api/lib/barkpark/portable_doc');
-execFileSync('elixirc', ['--ignore-module-conflict', '-o', work, path.join(source, 'patch.ex'), path.join(source, 'field_number.ex')], { stdio: ['ignore', 'ignore', 'pipe'] });
-fs.writeFileSync(path.join(work, 'runner.exs'), RUNNER);
+try {
+  const source = path.join(barkpark, 'api/lib/barkpark/portable_doc');
+  execFileSync('elixirc', ['--ignore-module-conflict', '-o', work, path.join(source, 'patch.ex'), path.join(source, 'field_number.ex')], { stdio: ['ignore', 'ignore', 'pipe'] });
+  fs.writeFileSync(path.join(work, 'runner.exs'), RUNNER);
 
-const next = generator(Number(seedArg));
-const cases = Array.from({ length: Number(countArg) }, next);
-fs.writeFileSync(path.join(work, 'cases.jsonl'), cases.map((c) => JSON.stringify(c)).join('\n') + '\n');
-const out = execFileSync('elixir', ['-pa', work, path.join(work, 'runner.exs'), path.join(work, 'cases.jsonl')], { maxBuffer: 1 << 30, encoding: 'utf8' });
-const elixir = out.trim().split('\n').map((line) => JSON.parse(line));
+  const next = generator(Number(seedArg));
+  const cases = Array.from({ length: Number(countArg) }, next);
+  fs.writeFileSync(path.join(work, 'cases.jsonl'), cases.map((c) => JSON.stringify(c)).join('\n') + '\n');
+  const out = execFileSync('elixir', ['-pa', work, path.join(work, 'runner.exs'), path.join(work, 'cases.jsonl')], { maxBuffer: 1 << 30, encoding: 'utf8' });
+  const elixir = out.trim().split('\n').map((line) => JSON.parse(line));
 
-const tally = new Map();
-const crashes = new Map();
-let mismatches = 0;
-cases.forEach((c, i) => {
-  const theirs = elixir[i];
-  const ours = applyPatch(c.doc, c.op);
-  const label = ours.ok ? 'ok' : ours.error.code;
-  tally.set(label, (tally.get(label) ?? 0) + 1);
-  if (theirs.crash) {
-    crashes.set(`${theirs.crash} -> ${label}`, (crashes.get(`${theirs.crash} -> ${label}`) ?? 0) + 1);
-    return;
+  const tally = new Map();
+  const crashes = new Map();
+  let mismatches = 0;
+  cases.forEach((c, i) => {
+    const theirs = elixir[i];
+    const ours = applyPatch(c.doc, c.op);
+    const label = ours.ok ? 'ok' : ours.error.code;
+    tally.set(label, (tally.get(label) ?? 0) + 1);
+    if (theirs.crash) {
+      crashes.set(`${theirs.crash} -> ${label}`, (crashes.get(`${theirs.crash} -> ${label}`) ?? 0) + 1);
+      return;
+    }
+    try {
+      assert.deepEqual(ours, theirs);
+    } catch {
+      if (mismatches++ < 5) console.log('MISMATCH', JSON.stringify(c), '\n  elixir', JSON.stringify(theirs), '\n  js    ', JSON.stringify(ours));
+    }
+  });
+
+  const distinct = new Set(cases.map((c) => JSON.stringify(c))).size;
+  console.log(`cases ${cases.length}, distinct ${distinct}, mismatches ${mismatches}`);
+  console.log('outcomes', Object.fromEntries([...tally].sort()));
+  console.log('elixir raised (skipped)', Object.fromEntries(crashes));
+  if (record) {
+    const files = ['patch.ex', 'field_number.ex'].map((f) => path.join(source, f));
+    const commit = execFileSync('git', ['-C', barkpark, 'log', '-1', '--format=%h', '--', ...files], { encoding: 'utf8' }).trim();
+    const answers = elixir.map((theirs) => (theirs.crash ? 'raised' : digest(theirs)));
+    fs.writeFileSync(record, JSON.stringify({ barkpark: commit, seed: Number(seedArg), answers }) + '\n');
   }
-  try {
-    assert.deepEqual(ours, theirs);
-  } catch {
-    if (mismatches++ < 5) console.log('MISMATCH', JSON.stringify(c), '\n  elixir', JSON.stringify(theirs), '\n  js    ', JSON.stringify(ours));
-  }
-});
-
-const distinct = new Set(cases.map((c) => JSON.stringify(c))).size;
-console.log(`cases ${cases.length}, distinct ${distinct}, mismatches ${mismatches}`);
-console.log('outcomes', Object.fromEntries([...tally].sort()));
-console.log('elixir raised (skipped)', Object.fromEntries(crashes));
-fs.rmSync(work, { recursive: true });
-process.exit(mismatches ? 1 : 0);
+  process.exitCode = mismatches ? 1 : 0;
+} finally {
+  fs.rmSync(work, { recursive: true });
+}

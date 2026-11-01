@@ -44,7 +44,7 @@ const tablesStable = (blocks) => tablesIn(blocks).every(stable);
 
 function lowerCardBody(blocks, op) {
   const { id, content } = op;
-  if (!isString(id) || id === '' || !Array.isArray(content)) return invalid(op);
+  if (!isString(id) || id === '') return invalid(op);
   if (!Object.keys(op).every((k) => ['op', 'id', 'content'].includes(k)) || !validCardInline(content)) return invalid(op);
   const found = blocksWithId(blocks, id);
   if (found.length === 0) return fail('block_not_found', id, 'patch-card-body');
@@ -85,7 +85,7 @@ function strictCard(card) {
 
 function lowerTable(blocks, op) {
   const payload = op.op === 'patch-table-cells' ? 'cells' : 'action';
-  if (!isString(op.id) || !Object.hasOwn(op, 'shape') || !exactKeys(op, ['op', 'id', 'shape', payload])) return invalid(op);
+  if (!exactKeys(op, ['op', 'id', 'shape', payload])) return invalid(op);
   const found = blocksWithId(blocks, op.id);
   if (found.length === 0) return fail('block_not_found', op.id, op.op);
   if (found.length > 1) return fail('duplicate_id', op.id, op.op);

@@ -100,7 +100,7 @@ function transformChildren(block, id, fun) {
       return null;
     case 'figure': {
       const r = transform([c.child], id, fun);
-      if (!r || r.list.length !== 1 || !isMap(r.list[0])) return null;
+      if (!r) return null;
       return { block: { ...block, child: r.list[0] }, flag: r.flag };
     }
   }

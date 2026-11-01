@@ -9,7 +9,7 @@ export const RENDER_TIMEOUT_MS = 10_000;
 
 export function configFromEnv(env = process.env) {
   const timeout = Number(env.BARKPARK_TIMEOUT_MS);
-  return { base: env.BARKPARK_URL ?? '', timeoutMs: Number.isInteger(timeout) && timeout > 0 && timeout <= 60_000 ? timeout : RENDER_TIMEOUT_MS };
+  return { base: env.BARKPARK_URL, timeoutMs: Number.isInteger(timeout) && timeout > 0 && timeout <= 60_000 ? timeout : RENDER_TIMEOUT_MS };
 }
 
 export function createServer(config = configFromEnv()) {

@@ -7,7 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { CallToolResultSchema, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { MAX_DEPTH, MAX_NODES } from './limits.js';
-import { MAX_HTML_BYTES } from './render.js';
+import { MAX_HTML_BYTES, render } from './render.js';
 import { MAX_MESSAGE_BYTES } from './stdio.js';
 import { MAX_OPS } from './tools.js';
 import { readerHtml, startFakeReader } from './test/fake-reader.mjs';
@@ -104,8 +104,12 @@ describe('over stdio with the SDK client', () => {
     await protocolError(call(client, 'explain', { errors: [{ code: 'nope', path: '' }] }), /errors\[0\]\.code must be one of not_a_doc/);
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: 5 }] }), /errors\[0\]\.path must be a JSON pointer/);
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: 'blocks' }] }), /errors\[0\]\.path must be a JSON pointer/);
+    await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: 'blocks/0' }] }), /errors\[0\]\.path must be a JSON pointer/);
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: '', message: 3 }] }), /errors\[0\]\.message must be a string/);
+    await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: `/${'a'.repeat(10_000)}` }] }), /errors\[0\]\.path must be a JSON pointer/);
+    assert.equal((await call(client, 'explain', { errors: [{ code: 'too_deep', path: `/${'a'.repeat(9_999)}` }] })).isError, undefined);
     await protocolError(call(client, 'explain', { errors: Array(1001).fill({ code: 'too_deep', path: '' }) }), /more than 1000 entries/);
+    assert.equal((await call(client, 'explain', { errors: Array(1000).fill({ code: 'too_deep', path: '' }) })).structuredContent.explanations.length, 1000);
     await protocolError(call(client, 'explain', { errors: [], doc: 'x' }), /doc must be an object/);
     await protocolError(call(client, 'nope', {}), /no tool "nope"; tools: validate, explain, apply_ops, render/);
     await assert.rejects(client.request({ method: 'tools/call', params: { name: 'validate', arguments: [] } }, CallToolResultSchema, TIMEOUT), (e) => {
@@ -156,6 +160,12 @@ describe('over stdio with the SDK client', () => {
     }
   });
 
+  test('twenty calls in flight at once all get their own answer', async () => {
+    const calls = Array.from({ length: 20 }, (_, i) => call(client, 'apply_ops', { doc: SAMPLE, ops: [{ op: 'append-block', block: { id: `n${i}`, type: 'divider' } }] }));
+    const answers = await Promise.all(calls);
+    answers.forEach((a, i) => assert.equal(a.structuredContent.doc.blocks.at(-1).id, `n${i}`));
+  });
+
   test('the server still answers after every bad call', async () => {
     assert.equal((await client.listTools()).tools.length, 4);
   });
@@ -183,6 +193,7 @@ describe('render failures are tool errors, never a hang', () => {
       [{ raw: '{"nohtml":1}' }, /answered 200 without an html string/],
       [{ raw: 'not json' }, /answered 200 without an html string/],
       [{ status: 302, raw: '' }, /failed/],
+      [{ status: 204, raw: '' }, /answered 204 without an html string/],
       [{ raw: JSON.stringify({ html: 'x'.repeat(MAX_HTML_BYTES) }) }, new RegExp(`more than ${MAX_HTML_BYTES} bytes`)],
     ]) {
       const reader = await startFakeReader(options);
@@ -192,9 +203,15 @@ describe('render failures are tool errors, never a hang', () => {
         await reader.close();
       }
     }
+    const full = await startFakeReader({ raw: JSON.stringify({ html: 'x'.repeat(MAX_HTML_BYTES - 11) }) });
+    try {
+      assert.equal((await render({ blocks: [] }, { base: full.base, timeoutMs: 10_000 })).html.length, MAX_HTML_BYTES - 11);
+    } finally {
+      await full.close();
+    }
     const gone = await startFakeReader();
     await gone.close();
-    toolError(await renderWith({ BARKPARK_URL: gone.base }), /failed: .*ECONNREFUSED|failed: fetch failed/);
+    toolError(await renderWith({ BARKPARK_URL: gone.base }), /failed: connect ECONNREFUSED/);
     const slow = await startFakeReader({ delayMs: 3000 });
     try {
       const started = Date.now();
@@ -251,7 +268,10 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
     assert.deepEqual(await reply('not json\n'), { jsonrpc: '2.0', id: null, error: { code: ErrorCode.ParseError, message: 'message is not JSON' } });
     assert.equal((await reply('{"id":3,"foo":1}\n')).error.code, ErrorCode.InvalidRequest);
     assert.equal((await reply('{"id":3,"foo":1}\n')).id, 3);
+    assert.equal((await reply('{"id":"s","foo":1}\n')).id, 's');
     assert.equal((await reply('{"jsonrpc":"2.0","id":4,"method":"nope"}\n')).error.code, ErrorCode.MethodNotFound);
+    const bare = await reply('{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"validate"}}\n');
+    assert.deepEqual([bare.error.code, bare.error.message.includes('validate needs doc')], [ErrorCode.InvalidParams, true]);
   });
 
   test('a depth-5000 doc (10000 JSON levels, past what JSON.stringify can write): validate answers too_deep, explain names it, apply_ops and render refuse it', async () => {
@@ -277,6 +297,13 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
     assert.match(tail.error.message, new RegExp(`the limit is ${MAX_MESSAGE_BYTES}`));
     const head = await reply(`{"jsonrpc":"2.0","id":"ten","method":"tools/call","params":{"pad":"${pad}"}}\n`);
     assert.equal(head.id, 'ten');
+    assert.equal((await reply(`{"jsonrpc":"2.0","id":0,"method":"tools/call","params":{"pad":"${pad}"}}\n`)).id, 0);
+    const sized = (extra) => {
+      const line = (pad) => `{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"explain","arguments":{"errors":[],"pad":"${pad}"}}}`;
+      return `${line('x'.repeat(MAX_MESSAGE_BYTES - line('').length + extra))}\n`;
+    };
+    assert.match((await reply(sized(0))).error.message, /takes no argument "pad"/);
+    assert.match((await reply(sized(1))).error.message, new RegExp(`the limit is ${MAX_MESSAGE_BYTES}`));
     const ok = await reply('{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"validate","arguments":{"doc":{"blocks":[]}}}}\n');
     assert.deepEqual(ok.result.structuredContent, { ok: true });
   });

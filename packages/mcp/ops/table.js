@@ -8,7 +8,7 @@ const safeIndex = (i) => Number.isInteger(i) && i >= 0 && i <= Number.MAX_SAFE_I
 
 const cellKind = (cell) => {
   if (Array.isArray(cell)) return validTableInline(cell) ? 'inline-array' : null;
-  if (!isMap(cell) || !Array.isArray(cell.content) || Object.hasOwn(cell, 'header')) return null;
+  if (!isMap(cell) || Object.hasOwn(cell, 'header')) return null;
   if (cell.type === 'tableHeader' || cell.type === 'table_header') return null;
   if (Object.keys(cell).length === 1) return null;
   return validTableInline(cell.content) ? 'content-map' : null;
@@ -61,7 +61,7 @@ export function stable(table) {
 
 export function mergeCells(table, shape, changes) {
   const projection = project(table);
-  if (!projection || !same(projection.shape, shape) || !Array.isArray(changes)) return null;
+  if (!same(projection.shape, shape) || !Array.isArray(changes)) return null;
   let previous = null;
   let updated = table;
   for (const change of changes) {
@@ -110,7 +110,7 @@ const swap = (list, a, b) => list.with(a, list[b]).with(b, list[a]);
 
 export function applyAction(table, shape, action) {
   const projection = project(table);
-  if (!projection || !same(projection.shape, shape)) return null;
+  if (!same(projection.shape, shape)) return null;
   const parsed = parseAction(action);
   if (!parsed) return null;
   const updated = act(table, projection, parsed);
