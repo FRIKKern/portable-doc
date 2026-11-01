@@ -74,6 +74,12 @@ function assertFits(svg, label) {
   ];
   const clear = (a) => ({ ...a, left: a.left - 12, right: a.right + 12 });
   for (let i = 0; i < blocks.length; i++) for (let j = i + 1; j < blocks.length; j++) assert.ok(!overlaps(clear(blocks[i]), blocks[j]), `${label}: ${blocks[i].text} is within 12px of ${blocks[j].text}`);
+  const columns = svg.match(/data-renderer="ref"/g).length;
+  const n = svg.match(/data-renderer="/g).length / columns;
+  const bands = [...svg.matchAll(/<rect x="([\d.]+)"[^>]*data-band/g)].map((m) => Number(m[1]));
+  const tierXs = [...new Set([...svg.matchAll(/<text x="([\d.]+)"[^>]*data-tier/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
+  assert.equal(tierXs.length, bands.length, `${label}: one panel per band`);
+  for (let p = 1; p < bands.length; p++) assert.ok(tierXs[p] - (bands[p - 1] + n * 32 - 1) >= 24, `${label}: panel ${p + 1} starts ${tierXs[p] - (bands[p - 1] + n * 32 - 1)}px after panel ${p}`);
   for (const [, g] of svg.matchAll(/<g data-total="[^"]+">([\s\S]*?)<\/g>/g)) {
     const [name, counts] = texts(g);
     assert.ok(name.right + 8 <= counts.left, `${label}: totals ${name.text} runs into ${counts.text}`);
