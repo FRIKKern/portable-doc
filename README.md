@@ -29,8 +29,10 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 3 changes, 4 milestones closed
-  - Delivered: [R1.1 Honest checks: barkdown-parity really runs, paper-editor path filter complete, Chrome rigs fail on an empty corpus, gate baseline](https://github.com/FRIKKern/barkpark/issues/24941)
+- **Today** · 1 milestone closed
+  - Delivered: [R4.1 Equality test: Barkpark's Elixir block modules match spec/blocks.schema.json](https://github.com/FRIKKern/barkpark/issues/24955)
+- **Yesterday** · 3 changes, 5 milestones closed
+  - Delivered: [R1.5 Sync: Barkpark opens a PR to portable-doc with spec/ and goldens/ when the stamp changes; portable-doc fails on a stale stamp](https://github.com/FRIKKern/barkpark/issues/24945)
 <!-- timeline:end -->
 
 ## Where things live (one fact, one home)
