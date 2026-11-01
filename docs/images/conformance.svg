@@ -1,0 +1,660 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1116" viewBox="0 0 1200 1116" role="img" aria-labelledby="t d">
+<title id="t">PortableDoc conformance heatmap</title>
+<desc id="d">80 block types by 6 renderers, 363 of 480 cells pass. elixir (reference): 80 pass, 0 fail, 0 missing, 0 unchecked. editor-canvas: 13 pass, 49 fail, 18 missing, 0 unchecked, 8 painted by the host. react: 80 pass, 0 fail, 0 missing, 0 unchecked. mobile: 65 pass, 12 fail, 0 missing, 3 unchecked. pdrender: 63 pass, 14 fail, 0 missing, 3 unchecked. pdrender-wasm: 62 pass, 15 fail, 0 missing, 3 unchecked.</desc>
+<defs><pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" class="hatch-bg"/><path d="M0 0V5" class="hatch"/></pattern></defs>
+<style>
+  svg { --bg:#fbfaf7; --card:#ffffff; --line:#e3e0d6; --ink:#1f1e1b; --muted:#6c6a63; --pass:#2c7a4b; --fail:#b3261e; --missing:#b26b00; --missbg:#fff6e5; --unchecked:#a3a097; --on:#ffffff; --refbg:#eef6f0; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#14161a; --card:#1c1f24; --line:#30343b; --ink:#ecebe6; --muted:#9a9ca3; --pass:#6cc28f; --fail:#f2b8b5; --missing:#e8b55a; --missbg:#2a2418; --unchecked:#6d7179; --on:#14161a; --refbg:#1a2a20; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  .muted { fill: var(--muted); } .bg { fill: var(--bg); } .track { fill: var(--line); } .ref { fill: var(--refbg); } .rule { stroke: var(--line); }
+  .c-pass { fill: var(--pass); } .c-fail { fill: var(--fail); } .c-missing { fill: var(--missbg); stroke: var(--missing); stroke-width: 1.5; stroke-dasharray: 3 2; } .c-unchecked { fill: url(#hatch); stroke: var(--unchecked); }
+  .g-pass, .g-fail { fill: var(--on); } .g-missing { fill: var(--missing); } .g-unchecked { fill: var(--ink); }
+  .hatch { stroke: var(--unchecked); stroke-width: 2; } .hatch-bg { fill: var(--card); } .via { fill: var(--on); }
+  .t-pass { fill: var(--pass); } .t-fail { fill: var(--fail); } .t-missing { fill: var(--missing); } .t-unchecked { fill: var(--unchecked); }
+</style>
+<rect class="bg" width="1200" height="1116" rx="16"/>
+<text x="40" y="70" font-size="36" font-weight="700" letter-spacing="-0.8">Conformance</text>
+<text x="40" y="102" font-size="19" class="muted">Every block type in the goldens, rendered by every renderer.</text>
+<text x="1160" y="70" font-size="40" font-weight="700" text-anchor="end">363<tspan class="muted" font-weight="400"> / 480</tspan></text>
+<text x="1160" y="102" font-size="16" text-anchor="end" class="muted">cells pass</text>
+<g data-total="elixir">
+<text x="40" y="163" font-size="16" font-weight="600">elixir<tspan class="muted" font-weight="400"> · reference</tspan></text>
+<rect x="230" y="150" width="560" height="16" rx="4" class="track"/>
+<rect x="230" y="150" width="560" height="16" class="c-pass"/>
+<text x="810" y="163" font-size="14"><tspan class="t-pass" font-weight="700">✓ 80</tspan><tspan class="muted"> pass</tspan></text>
+</g>
+<g data-total="editor-canvas">
+<text x="40" y="193" font-size="16" font-weight="600">editor-canvas</text>
+<rect x="230" y="180" width="560" height="16" rx="4" class="track"/>
+<rect x="230" y="180" width="91" height="16" class="c-pass"/>
+<rect x="321" y="180" width="343" height="16" class="c-fail"/>
+<rect x="664" y="180" width="126" height="16" class="c-missing"/>
+<text x="810" y="193" font-size="14"><tspan class="t-pass" font-weight="700">✓ 13</tspan><tspan class="muted"> pass</tspan><tspan class="t-fail" font-weight="700" dx="12">✕ 49</tspan><tspan class="muted"> fail</tspan><tspan class="t-missing" font-weight="700" dx="12">∅ 18</tspan><tspan class="muted"> missing</tspan><tspan class="muted" dx="12">(8 host-paint)</tspan></text>
+</g>
+<g data-total="react">
+<text x="40" y="223" font-size="16" font-weight="600">react</text>
+<rect x="230" y="210" width="560" height="16" rx="4" class="track"/>
+<rect x="230" y="210" width="560" height="16" class="c-pass"/>
+<text x="810" y="223" font-size="14"><tspan class="t-pass" font-weight="700">✓ 80</tspan><tspan class="muted"> pass</tspan></text>
+</g>
+<g data-total="mobile">
+<text x="40" y="253" font-size="16" font-weight="600">mobile</text>
+<rect x="230" y="240" width="560" height="16" rx="4" class="track"/>
+<rect x="230" y="240" width="455" height="16" class="c-pass"/>
+<rect x="685" y="240" width="84" height="16" class="c-fail"/>
+<rect x="769" y="240" width="21" height="16" class="c-unchecked"/>
+<text x="810" y="253" font-size="14"><tspan class="t-pass" font-weight="700">✓ 65</tspan><tspan class="muted"> pass</tspan><tspan class="t-fail" font-weight="700" dx="12">✕ 12</tspan><tspan class="muted"> fail</tspan><tspan class="t-unchecked" font-weight="700" dx="12">? 3</tspan><tspan class="muted"> unchecked</tspan></text>
+</g>
+<g data-total="pdrender">
+<text x="40" y="283" font-size="16" font-weight="600">pdrender</text>
+<rect x="230" y="270" width="560" height="16" rx="4" class="track"/>
+<rect x="230" y="270" width="441" height="16" class="c-pass"/>
+<rect x="671" y="270" width="98" height="16" class="c-fail"/>
+<rect x="769" y="270" width="21" height="16" class="c-unchecked"/>
+<text x="810" y="283" font-size="14"><tspan class="t-pass" font-weight="700">✓ 63</tspan><tspan class="muted"> pass</tspan><tspan class="t-fail" font-weight="700" dx="12">✕ 14</tspan><tspan class="muted"> fail</tspan><tspan class="t-unchecked" font-weight="700" dx="12">? 3</tspan><tspan class="muted"> unchecked</tspan></text>
+</g>
+<g data-total="pdrender-wasm">
+<text x="40" y="313" font-size="16" font-weight="600">pdrender-wasm</text>
+<rect x="230" y="300" width="560" height="16" rx="4" class="track"/>
+<rect x="230" y="300" width="434" height="16" class="c-pass"/>
+<rect x="664" y="300" width="105" height="16" class="c-fail"/>
+<rect x="769" y="300" width="21" height="16" class="c-unchecked"/>
+<text x="810" y="313" font-size="14"><tspan class="t-pass" font-weight="700">✓ 62</tspan><tspan class="muted"> pass</tspan><tspan class="t-fail" font-weight="700" dx="12">✕ 15</tspan><tspan class="muted"> fail</tspan><tspan class="t-unchecked" font-weight="700" dx="12">? 3</tspan><tspan class="muted"> unchecked</tspan></text>
+</g>
+<rect x="40" y="354" width="30" height="18" rx="3" class="c-pass"/><text x="55" y="367.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><text x="78" y="367" font-size="14">pass</text>
+<rect x="155" y="354" width="30" height="18" rx="3" class="c-fail"/><text x="170" y="367.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text><text x="193" y="367" font-size="14">fail</text>
+<rect x="270" y="354" width="30" height="18" rx="3" class="c-missing"/><text x="285" y="367.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text><text x="308" y="367" font-size="14">missing</text>
+<rect x="385" y="354" width="30" height="18" rx="3" class="c-unchecked"/><text x="400" y="367.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text><text x="423" y="367" font-size="14">unchecked</text>
+<rect x="500" y="354" width="30" height="18" rx="3" class="c-pass"/><text x="515" y="367.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M519 354H527Q530 354 530 357V365Z" class="via"/><text x="538" y="367" font-size="14">host-paint: drawn by the host</text>
+<rect x="770" y="352" width="30" height="22" rx="3" class="ref"/><text x="808" y="367" font-size="14">reference: its output is the goldens</text>
+<path d="M40 380H1160" class="rule"/>
+<rect x="179" y="394" width="32" height="658" rx="4" class="ref"/>
+<text x="199" y="464" font-size="12" transform="rotate(-55 199 464)" data-renderer="elixir" font-weight="700">elixir</text>
+<text x="231" y="464" font-size="12" transform="rotate(-55 231 464)" data-renderer="editor-canvas">editor-canvas</text>
+<text x="263" y="464" font-size="12" transform="rotate(-55 263 464)" data-renderer="react">react</text>
+<text x="295" y="464" font-size="12" transform="rotate(-55 295 464)" data-renderer="mobile">mobile</text>
+<text x="327" y="464" font-size="12" transform="rotate(-55 327 464)" data-renderer="pdrender">pdrender</text>
+<text x="359" y="464" font-size="12" transform="rotate(-55 359 464)" data-renderer="pdrender-wasm">pdrender-wasm</text>
+<text x="40" y="486" font-size="12" font-weight="700" letter-spacing="1.5" class="muted">ELEMENT · 30</text>
+<text x="172" y="505" font-size="13" text-anchor="end" data-type="action">action</text>
+<rect x="180" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="492" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="525" font-size="13" text-anchor="end" data-type="arrayOf">arrayOf</text>
+<rect x="180" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="512" width="30" height="18" rx="3" class="c-missing"/><text x="227" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="244" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="545" font-size="13" text-anchor="end" data-type="blockquote">blockquote</text>
+<rect x="180" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="532" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="565" font-size="13" text-anchor="end" data-type="byline">byline</text>
+<rect x="180" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="227" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="244" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="585" font-size="13" text-anchor="end" data-type="code">code</text>
+<rect x="180" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="572" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="605" font-size="13" text-anchor="end" data-type="codelist">codelist</text>
+<rect x="180" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="592" width="30" height="18" rx="3" class="c-missing"/><text x="227" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="244" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="625" font-size="13" text-anchor="end" data-type="composite">composite</text>
+<rect x="180" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="612" width="30" height="18" rx="3" class="c-missing"/><text x="227" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="244" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="645" font-size="13" text-anchor="end" data-type="diagram">diagram</text>
+<rect x="180" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="632" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="632" width="30" height="18" rx="3" class="c-fail"/><text x="291" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="308" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="665" font-size="13" text-anchor="end" data-type="divider">divider</text>
+<rect x="180" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="652" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="652" width="30" height="18" rx="3" class="c-unchecked"/><text x="291" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<rect x="308" y="652" width="30" height="18" rx="3" class="c-unchecked"/><text x="323" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<rect x="340" y="652" width="30" height="18" rx="3" class="c-unchecked"/><text x="355" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<text x="172" y="685" font-size="13" text-anchor="end" data-type="equation">equation</text>
+<rect x="180" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="672" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="672" width="30" height="18" rx="3" class="c-fail"/><text x="323" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="340" y="672" width="30" height="18" rx="3" class="c-fail"/><text x="355" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="172" y="705" font-size="13" text-anchor="end" data-type="eyebrow">eyebrow</text>
+<rect x="180" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="227" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="244" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="692" width="30" height="18" rx="3" class="c-fail"/><text x="323" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="340" y="692" width="30" height="18" rx="3" class="c-fail"/><text x="355" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="172" y="725" font-size="13" text-anchor="end" data-type="field-boolean">field-boolean</text>
+<rect x="180" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="712" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="745" font-size="13" text-anchor="end" data-type="field-color">field-color</text>
+<rect x="180" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="732" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="765" font-size="13" text-anchor="end" data-type="field-datetime">field-datetime</text>
+<rect x="180" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="752" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="785" font-size="13" text-anchor="end" data-type="field-image">field-image</text>
+<rect x="180" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="772" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="805" font-size="13" text-anchor="end" data-type="field-number">field-number</text>
+<rect x="180" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="792" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="825" font-size="13" text-anchor="end" data-type="field-reference">field-reference</text>
+<rect x="180" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="812" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="845" font-size="13" text-anchor="end" data-type="field-select">field-select</text>
+<rect x="180" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="832" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="865" font-size="13" text-anchor="end" data-type="field-slug">field-slug</text>
+<rect x="180" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="852" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="885" font-size="13" text-anchor="end" data-type="field-string">field-string</text>
+<rect x="180" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="872" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="905" font-size="13" text-anchor="end" data-type="field-text">field-text</text>
+<rect x="180" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="892" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="925" font-size="13" text-anchor="end" data-type="heading">heading</text>
+<rect x="180" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="227" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="244" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="945" font-size="13" text-anchor="end" data-type="image">image</text>
+<rect x="180" y="932" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="932" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="932" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="932" width="30" height="18" rx="3" class="c-unchecked"/><text x="291" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<rect x="308" y="932" width="30" height="18" rx="3" class="c-unchecked"/><text x="323" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<rect x="340" y="932" width="30" height="18" rx="3" class="c-unchecked"/><text x="355" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<text x="172" y="965" font-size="13" text-anchor="end" data-type="ingress">ingress</text>
+<rect x="180" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="227" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="244" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="985" font-size="13" text-anchor="end" data-type="list">list</text>
+<rect x="180" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="972" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="1005" font-size="13" text-anchor="end" data-type="localizedText">localizedText</text>
+<rect x="180" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="992" width="30" height="18" rx="3" class="c-missing"/><text x="227" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="244" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="172" y="1025" font-size="13" text-anchor="end" data-type="paragraph">paragraph</text>
+<rect x="180" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="1012" width="30" height="18" rx="3" class="c-fail"/><text x="227" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="244" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="1012" width="30" height="18" rx="3" class="c-fail"/><text x="355" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="172" y="1045" font-size="13" text-anchor="end" data-type="pre-gate-badge">pre-gate-badge</text>
+<rect x="180" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="195" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="212" y="1032" width="30" height="18" rx="3" class="c-missing"/><text x="227" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="244" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="259" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="276" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="291" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="308" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="323" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="340" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="355" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="545" y="394" width="32" height="658" rx="4" class="ref"/>
+<text x="565" y="464" font-size="12" transform="rotate(-55 565 464)" data-renderer="elixir" font-weight="700">elixir</text>
+<text x="597" y="464" font-size="12" transform="rotate(-55 597 464)" data-renderer="editor-canvas">editor-canvas</text>
+<text x="629" y="464" font-size="12" transform="rotate(-55 629 464)" data-renderer="react">react</text>
+<text x="661" y="464" font-size="12" transform="rotate(-55 661 464)" data-renderer="mobile">mobile</text>
+<text x="693" y="464" font-size="12" transform="rotate(-55 693 464)" data-renderer="pdrender">pdrender</text>
+<text x="725" y="464" font-size="12" transform="rotate(-55 725 464)" data-renderer="pdrender-wasm">pdrender-wasm</text>
+<text x="406" y="486" font-size="12" font-weight="700" letter-spacing="1.5" class="muted">ELEMENT · 30 (cont.)</text>
+<text x="538" y="505" font-size="13" text-anchor="end" data-type="pullquote">pullquote</text>
+<rect x="546" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="593" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="610" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="525" font-size="13" text-anchor="end" data-type="video">video</text>
+<rect x="546" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="512" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="512" width="30" height="18" rx="3" class="c-unchecked"/><text x="657" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<rect x="674" y="512" width="30" height="18" rx="3" class="c-unchecked"/><text x="689" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<rect x="706" y="512" width="30" height="18" rx="3" class="c-unchecked"/><text x="721" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-unchecked">?</text>
+<text x="406" y="546" font-size="12" font-weight="700" letter-spacing="1.5" class="muted">WIDGET · 47</text>
+<text x="538" y="565" font-size="13" text-anchor="end" data-type="api-endpoint">api-endpoint</text>
+<rect x="546" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="552" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="552" width="30" height="18" rx="3" class="c-fail"/><text x="657" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="674" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="585" font-size="13" text-anchor="end" data-type="asciicast">asciicast</text>
+<rect x="546" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="593" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M597 572H605Q608 572 608 575V583Z" class="via"/>
+<rect x="610" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="572" width="30" height="18" rx="3" class="c-fail"/><text x="689" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="706" y="572" width="30" height="18" rx="3" class="c-fail"/><text x="721" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="538" y="605" font-size="13" text-anchor="end" data-type="bar-chart">bar-chart</text>
+<rect x="546" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="592" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="625" font-size="13" text-anchor="end" data-type="callout">callout</text>
+<rect x="546" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="612" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="645" font-size="13" text-anchor="end" data-type="card">card</text>
+<rect x="546" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="632" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="665" font-size="13" text-anchor="end" data-type="cards">cards</text>
+<rect x="546" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="652" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="685" font-size="13" text-anchor="end" data-type="chart">chart</text>
+<rect x="546" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="672" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="705" font-size="13" text-anchor="end" data-type="chat-approval">chat-approval</text>
+<rect x="546" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="692" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="725" font-size="13" text-anchor="end" data-type="chat-plan">chat-plan</text>
+<rect x="546" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="712" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="745" font-size="13" text-anchor="end" data-type="chat-question">chat-question</text>
+<rect x="546" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="732" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="765" font-size="13" text-anchor="end" data-type="chat-thinking">chat-thinking</text>
+<rect x="546" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="752" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="785" font-size="13" text-anchor="end" data-type="chat-todo">chat-todo</text>
+<rect x="546" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="772" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="805" font-size="13" text-anchor="end" data-type="chat-tool-diff">chat-tool-diff</text>
+<rect x="546" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="792" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="792" width="30" height="18" rx="3" class="c-fail"/><text x="657" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="674" y="792" width="30" height="18" rx="3" class="c-fail"/><text x="689" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="706" y="792" width="30" height="18" rx="3" class="c-fail"/><text x="721" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="538" y="825" font-size="13" text-anchor="end" data-type="code-tabs">code-tabs</text>
+<rect x="546" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="812" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="812" width="30" height="18" rx="3" class="c-fail"/><text x="657" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="674" y="812" width="30" height="18" rx="3" class="c-fail"/><text x="689" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="706" y="812" width="30" height="18" rx="3" class="c-fail"/><text x="721" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="538" y="845" font-size="13" text-anchor="end" data-type="criteria-progress">criteria-progress</text>
+<rect x="546" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="832" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="832" width="30" height="18" rx="3" class="c-fail"/><text x="689" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="706" y="832" width="30" height="18" rx="3" class="c-fail"/><text x="721" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="538" y="865" font-size="13" text-anchor="end" data-type="diff">diff</text>
+<rect x="546" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="852" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="852" width="30" height="18" rx="3" class="c-fail"/><text x="689" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="706" y="852" width="30" height="18" rx="3" class="c-fail"/><text x="721" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="538" y="885" font-size="13" text-anchor="end" data-type="duel">duel</text>
+<rect x="546" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="872" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="872" width="30" height="18" rx="3" class="c-fail"/><text x="689" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="706" y="872" width="30" height="18" rx="3" class="c-fail"/><text x="721" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="538" y="905" font-size="13" text-anchor="end" data-type="embed">embed</text>
+<rect x="546" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="892" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="925" font-size="13" text-anchor="end" data-type="expandable">expandable</text>
+<rect x="546" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="912" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="945" font-size="13" text-anchor="end" data-type="figure">figure</text>
+<rect x="546" y="932" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="932" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text><path d="M597 932H605Q608 932 608 935V943Z" class="via"/>
+<rect x="610" y="932" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="932" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="932" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="932" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="945.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="965" font-size="13" text-anchor="end" data-type="filetree">filetree</text>
+<rect x="546" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="952" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="985" font-size="13" text-anchor="end" data-type="footnote">footnote</text>
+<rect x="546" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="972" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="1005" font-size="13" text-anchor="end" data-type="form">form</text>
+<rect x="546" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="992" width="30" height="18" rx="3" class="c-fail"/><text x="593" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="610" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="1025" font-size="13" text-anchor="end" data-type="gauge-list">gauge-list</text>
+<rect x="546" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="1012" width="30" height="18" rx="3" class="c-missing"/><text x="593" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="610" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="1012" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="1025.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="538" y="1045" font-size="13" text-anchor="end" data-type="heatmap">heatmap</text>
+<rect x="546" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="561" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="578" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="593" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="610" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="625" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="642" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="657" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="674" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="689" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="706" y="1032" width="30" height="18" rx="3" class="c-pass"/><text x="721" y="1045.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="911" y="394" width="32" height="618" rx="4" class="ref"/>
+<text x="931" y="464" font-size="12" transform="rotate(-55 931 464)" data-renderer="elixir" font-weight="700">elixir</text>
+<text x="963" y="464" font-size="12" transform="rotate(-55 963 464)" data-renderer="editor-canvas">editor-canvas</text>
+<text x="995" y="464" font-size="12" transform="rotate(-55 995 464)" data-renderer="react">react</text>
+<text x="1027" y="464" font-size="12" transform="rotate(-55 1027 464)" data-renderer="mobile">mobile</text>
+<text x="1059" y="464" font-size="12" transform="rotate(-55 1059 464)" data-renderer="pdrender">pdrender</text>
+<text x="1091" y="464" font-size="12" transform="rotate(-55 1091 464)" data-renderer="pdrender-wasm">pdrender-wasm</text>
+<text x="772" y="486" font-size="12" font-weight="700" letter-spacing="1.5" class="muted">WIDGET · 47 (cont.)</text>
+<text x="904" y="505" font-size="13" text-anchor="end" data-type="lineage">lineage</text>
+<rect x="912" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="492" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="492" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="492" width="30" height="18" rx="3" class="c-fail"/><text x="1055" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1072" y="492" width="30" height="18" rx="3" class="c-fail"/><text x="1087" y="505.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="904" y="525" font-size="13" text-anchor="end" data-type="note">note</text>
+<rect x="912" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="512" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="512" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="525.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="545" font-size="13" text-anchor="end" data-type="notes">notes</text>
+<rect x="912" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="532" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="532" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="545.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="565" font-size="13" text-anchor="end" data-type="paper-links">paper-links</text>
+<rect x="912" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="552" width="30" height="18" rx="3" class="c-missing"/><text x="959" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="976" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="552" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="552" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="565.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="585" font-size="13" text-anchor="end" data-type="pipeline">pipeline</text>
+<rect x="912" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="572" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="572" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="585.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="605" font-size="13" text-anchor="end" data-type="questionnaire">questionnaire</text>
+<rect x="912" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="592" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="592" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="605.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="625" font-size="13" text-anchor="end" data-type="roadmap">roadmap</text>
+<rect x="912" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="959" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M963 612H971Q974 612 974 615V623Z" class="via"/>
+<rect x="976" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="612" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="612" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="625.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="645" font-size="13" text-anchor="end" data-type="route">route</text>
+<rect x="912" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="632" width="30" height="18" rx="3" class="c-missing"/><text x="959" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-missing">∅</text>
+<rect x="976" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="632" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="632" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="645.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="665" font-size="13" text-anchor="end" data-type="sheet">sheet</text>
+<rect x="912" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="652" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="652" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="665.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="685" font-size="13" text-anchor="end" data-type="stage">stage</text>
+<rect x="912" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="672" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="672" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="685.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="705" font-size="13" text-anchor="end" data-type="stat-grid">stat-grid</text>
+<rect x="912" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="692" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="692" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="692" width="30" height="18" rx="3" class="c-fail"/><text x="1055" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1072" y="692" width="30" height="18" rx="3" class="c-fail"/><text x="1087" y="705.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="904" y="725" font-size="13" text-anchor="end" data-type="stat">stat</text>
+<rect x="912" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="712" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="712" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="712" width="30" height="18" rx="3" class="c-fail"/><text x="1055" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1072" y="712" width="30" height="18" rx="3" class="c-fail"/><text x="1087" y="725.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="904" y="745" font-size="13" text-anchor="end" data-type="stats">stats</text>
+<rect x="912" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="732" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="732" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="732" width="30" height="18" rx="3" class="c-fail"/><text x="1055" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1072" y="732" width="30" height="18" rx="3" class="c-fail"/><text x="1087" y="745.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="904" y="765" font-size="13" text-anchor="end" data-type="status-legend">status-legend</text>
+<rect x="912" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="959" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M963 752H971Q974 752 974 755V763Z" class="via"/>
+<rect x="976" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="752" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="765.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="785" font-size="13" text-anchor="end" data-type="steps">steps</text>
+<rect x="912" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="772" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="772" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="785.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="805" font-size="13" text-anchor="end" data-type="table">table</text>
+<rect x="912" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="792" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="792" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="805.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="825" font-size="13" text-anchor="end" data-type="task-board">task-board</text>
+<rect x="912" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="959" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M963 812H971Q974 812 974 815V823Z" class="via"/>
+<rect x="976" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="812" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="812" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="825.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="845" font-size="13" text-anchor="end" data-type="task-detail">task-detail</text>
+<rect x="912" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="959" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M963 832H971Q974 832 974 835V843Z" class="via"/>
+<rect x="976" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="832" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="845.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="865" font-size="13" text-anchor="end" data-type="task-list">task-list</text>
+<rect x="912" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="959" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M963 852H971Q974 852 974 855V863Z" class="via"/>
+<rect x="976" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="852" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="852" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="865.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="885" font-size="13" text-anchor="end" data-type="tasks">tasks</text>
+<rect x="912" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="959" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text><path d="M963 872H971Q974 872 974 875V883Z" class="via"/>
+<rect x="976" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="872" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="872" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="885.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="905" font-size="13" text-anchor="end" data-type="terminal">terminal</text>
+<rect x="912" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="892" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="892" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="892" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="905.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="925" font-size="13" text-anchor="end" data-type="toc">toc</text>
+<rect x="912" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="912" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="912" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="925.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="772" y="946" font-size="12" font-weight="700" letter-spacing="1.5" class="muted">SECTION · 3</text>
+<text x="904" y="965" font-size="13" text-anchor="end" data-type="columns">columns</text>
+<rect x="912" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="952" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="952" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="952" width="30" height="18" rx="3" class="c-fail"/><text x="1055" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1072" y="952" width="30" height="18" rx="3" class="c-fail"/><text x="1087" y="965.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="904" y="985" font-size="13" text-anchor="end" data-type="section">section</text>
+<rect x="912" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="972" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="1023" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1040" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="1055" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1072" y="972" width="30" height="18" rx="3" class="c-pass"/><text x="1087" y="985.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<text x="904" y="1005" font-size="13" text-anchor="end" data-type="tabs">tabs</text>
+<rect x="912" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="927" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="944" y="992" width="30" height="18" rx="3" class="c-fail"/><text x="959" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="976" y="992" width="30" height="18" rx="3" class="c-pass"/><text x="991" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-pass">✓</text>
+<rect x="1008" y="992" width="30" height="18" rx="3" class="c-fail"/><text x="1023" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1040" y="992" width="30" height="18" rx="3" class="c-fail"/><text x="1055" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<rect x="1072" y="992" width="30" height="18" rx="3" class="c-fail"/><text x="1087" y="1005.5" font-size="12" font-weight="700" text-anchor="middle" class="g-fail">✕</text>
+<text x="40" y="1088" font-size="14" class="muted">Generated from conformance/*.json by scripts/generate-heatmap.mjs · pack stamp ae93502b0562 · rows grouped by x-tier in spec/blocks.schema.json</text>
+</svg>

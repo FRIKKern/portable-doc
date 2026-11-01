@@ -6,6 +6,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BARKPARK_PACK, BARKPARK_REPO, hashes, sha256 } from './lib/pack.mjs';
+import { pack, write } from './lib/synthetic.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pack test-'));
@@ -36,26 +37,6 @@ Object.assign(process.env, {
 for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN']) delete process.env[key];
 process.chdir(tmp);
 
-function write(file, text) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, text);
-}
-
-function stamp(packRoot) {
-  const goldens = path.join(packRoot, 'goldens');
-  const files = {};
-  for (const [f, h] of Object.entries(hashes(packRoot))) if (f.startsWith('goldens/') && f !== 'goldens/stamp.json') files[f.slice(8)] = h;
-  write(path.join(goldens, 'stamp.json'), `${JSON.stringify({ render_version: 'synthetic', files }, null, 2)}\n`);
-}
-
-function pack(packRoot, { blocks = 80, tag = 'a', specTag = tag, locale = true } = {}) {
-  write(path.join(packRoot, 'spec', 'blocks.schema.json'), `{"title":"synthetic ${specTag}"}\n`);
-  for (let i = 0; i < blocks; i++) write(path.join(packRoot, 'goldens', 'blocks', `b${i}.golden.json`), `{"block":${i},"tag":"${tag}"}\n`);
-  if (locale) write(path.join(packRoot, 'goldens', 'locales', 'nb.golden.json'), `{"tag":"${tag}"}\n`);
-  stamp(packRoot);
-  return packRoot;
-}
-
 function source(root) {
   write(path.join(root, 'SOURCE.json'), JSON.stringify({ repo: BARKPARK_REPO, commit: 'a'.repeat(40), path: BARKPARK_PACK, files: hashes(root) }));
   return root;
@@ -67,6 +48,15 @@ function editSource(root, edit) {
   edit(value);
   write(file, JSON.stringify(value));
 }
+
+function editReport(root, renderer, edit) {
+  const file = path.join(root, 'conformance', `${renderer}.json`);
+  const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  edit(value);
+  write(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+const resynced = (edit) => (root) => { edit(root); source(root); };
 
 function scripted(dir) {
   fs.cpSync(scripts, path.join(dir, 'scripts'), { recursive: true, filter: (f) => !f.endsWith('.test.mjs') });
@@ -100,7 +90,7 @@ const check = (root, ...args) => run(root, 'check-pack.mjs', ...args);
 test('a whole pack written by the sync passes', () => {
   const r = check(repo());
   assert.equal(r.code, 0, r.out);
-  assert.match(r.out, /pack ok: stamp [0-9a-f]{12}, 83 files/);
+  assert.match(r.out, /pack ok: stamp [0-9a-f]{12}, 85 files, 2 conformance reports/);
 });
 
 const mutants = {
@@ -121,6 +111,17 @@ const mutants = {
   'a SOURCE.json naming another path': [(root) => editSource(root, (s) => { s.path = 'elsewhere'; }), /SOURCE.json: path is "elsewhere", not "api\/priv\/portable_doc"/],
   'a SOURCE.json commit that is not a full sha': [(root) => editSource(root, (s) => { s.commit = 'a'.repeat(12); }), /SOURCE.json: commit "aaaaaaaaaaaa" is not a full sha/],
   'a SOURCE.json commit with text before the sha': [(root) => editSource(root, (s) => { s.commit = `v${'a'.repeat(40)}`; }), /SOURCE.json: commit "va{40}" is not a full sha/],
+  'a report whose pack_stamp is not the pack\'s, even when SOURCE.json agrees': [resynced((root) => editReport(root, 'text-b', (r) => { r.pack_stamp = 'c'.repeat(64); })), /conformance\/text-b.json: pack_stamp cccccccccccc is not goldens\/stamp.json [0-9a-f]{12}/],
+  'a report with no row for a pack type, even when SOURCE.json agrees': [resynced((root) => editReport(root, 'ref', (r) => { r.rows = r.rows.filter((row) => row.type !== 'b7'); })), /conformance\/ref.json: no row for pack type b7/],
+  'a report row that is not a pack type': [resynced((root) => editReport(root, 'ref', (r) => { r.rows.push({ type: 'gone', status: 'pass' }); })), /conformance\/ref.json: row "gone" is not a pack type/],
+  'a report with two rows for one type': [resynced((root) => editReport(root, 'ref', (r) => { r.rows.push({ type: 'b3', status: 'pass' }); })), /conformance\/ref.json: b3 has more than one row/],
+  'a report row with an unknown status': [resynced((root) => editReport(root, 'ref', (r) => { r.rows[4].status = 'green'; })), /conformance\/ref.json: b4 has status "green"/],
+  'a report named for another renderer': [resynced((root) => editReport(root, 'text-b', (r) => { r.renderer = 'ref'; })), /conformance\/text-b.json: renderer is "ref", not "text-b"/],
+  'a report that is not JSON': [resynced((root) => write(path.join(root, 'conformance/ref.json'), '{')), /conformance\/ref.json: unreadable \(/],
+  'a report with no rows array': [resynced((root) => write(path.join(root, 'conformance/ref.json'), '{"rows":{}}\n')), /conformance\/ref.json: not an object with a rows array/],
+  'no conformance reports at all, even when SOURCE.json agrees': [resynced((root) => fs.rmSync(path.join(root, 'conformance'), { recursive: true })), /conformance: no reports/],
+  'a report edited by hand': [(root) => editReport(root, 'text-b', (r) => { r.rows[2].status = 'fail'; }), /conformance\/text-b.json: edited by hand/],
+  'a conformance file the sync did not write': [(root) => write(path.join(root, 'conformance/extra.md'), 'x\n'), /conformance\/extra.md: not written by the sync/],
   'a SOURCE.json commit with text after the sha': [(root) => editSource(root, (s) => { s.commit = `${'a'.repeat(40)}v`; }), /SOURCE.json: commit "a{40}v" is not a full sha/],
 };
 
@@ -142,7 +143,7 @@ test('check fails on fewer than 80 block goldens, even when the stamp agrees', (
 
 test('--against passes when the pack matches Barkpark and fails when Barkpark moved', () => {
   const root = repo();
-  assert.match(check(root, '--against', barkpark()).out, /^pack ok: stamp [0-9a-f]{12}, 83 files, same as Barkpark\n$/);
+  assert.match(check(root, '--against', barkpark()).out, /^pack ok: stamp [0-9a-f]{12}, 85 files, 2 conformance reports, same as Barkpark\n$/);
   const r = check(root, '--against', barkpark({ tag: 'b', blocks: 81 }));
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /goldens\/blocks\/b3.golden.json: stale, changed in Barkpark/);
@@ -167,6 +168,7 @@ test('sync copies Barkpark, records the commit, and names old and new stamp', ()
   assert.notEqual(newStamp, oldStamp);
   assert.equal(r.out.trim(), `Sync from Barkpark ${commit.slice(0, 12)}: stamp ${oldStamp} → ${newStamp}`);
   assert.deepEqual(hashes(root), hashes(path.join(bp, BARKPARK_PACK)));
+  assert.ok('conformance/ref.json' in JSON.parse(fs.readFileSync(path.join(root, 'SOURCE.json'), 'utf8')).files);
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'SOURCE.json'), 'utf8')).commit, commit);
   const text = fs.readFileSync(body, 'utf8');
   assert.match(text, new RegExp(`Old stamp \\| \`${oldStamp}\``));
@@ -189,13 +191,27 @@ test('sync refuses a broken Barkpark pack and leaves the repo as it was', () => 
   assert.deepEqual(hashes(root), before);
 });
 
+test('sync refuses a Barkpark pack whose reports are stale or short, and leaves the repo as it was', () => {
+  const root = repo();
+  const bp = barkpark({ tag: 'b' });
+  const packRoot = path.join(bp, BARKPARK_PACK);
+  editReport(packRoot, 'text-b', (r) => { r.pack_stamp = 'c'.repeat(64); r.rows.pop(); });
+  const before = hashes(root);
+  const r = run(root, 'sync-from-barkpark.mjs', bp);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /nothing copied/);
+  assert.match(r.out, /conformance\/text-b.json: pack_stamp cccccccccccc is not/);
+  assert.match(r.out, /conformance\/text-b.json: no row for pack type b79/);
+  assert.deepEqual(hashes(root), before);
+});
+
 test('a first sync into an empty repo says none for what did not change', () => {
   const root = scripted(path.join(tmp, `empty-${n++}`));
   const body = path.join(tmp, `body-${n++}.md`);
   const r = run(root, 'sync-from-barkpark.mjs', barkpark(), '--pr-body', body);
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /: stamp none → [0-9a-f]{12}\n$/);
-  assert.match(fs.readFileSync(body, 'utf8'), /### Added\n(- `.+`\n){83}\n### Changed\n- none\n\n### Removed\n- none\n$/);
+  assert.match(fs.readFileSync(body, 'utf8'), /### Added\n(- `.+`\n){85}\n### Changed\n- none\n\n### Removed\n- none\n$/);
   assert.equal(check(root).code, 0);
 });
 
@@ -330,7 +346,7 @@ test('sync-pr refuses to run, and touches nothing, when its root is not the top 
   assert.match(loose.out, /is not the top of a git repo \(git says no repo\); nothing done/);
 });
 
-for (const [name, opts] of [['a spec-only', { tag: 'b', specTag: 's' }], ['a goldens-only', { tag: 'g', specTag: 'b' }]]) {
+for (const [name, opts] of [['a spec-only', { tag: 'b', specTag: 's' }], ['a goldens-only', { tag: 'g', specTag: 'b' }], ['a conformance-only', { tag: 'b', status: (renderer, type) => ({ status: type === 'b5' ? 'fail' : 'pass' }) }]]) {
   test(`sync-pr pushes and edits the open PR on ${name} change`, () => {
     const c = clone();
     const gh = ghStub();

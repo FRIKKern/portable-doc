@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { readReports } from './lib/conformance.mjs';
 import { BARKPARK_PACK, BARKPARK_REPO, PACK_DIRS, checkPack, diff, hashes, stampId } from './lib/pack.mjs';
 
 const { values, positionals } = parseArgs({
@@ -17,7 +18,7 @@ if (positionals.length !== 1) {
 const barkpark = positionals[0];
 const source = path.join(barkpark, BARKPARK_PACK);
 const root = fileURLToPath(new URL('..', import.meta.url));
-const sourceErrors = checkPack(source);
+const sourceErrors = [...checkPack(source), ...readReports(source).errors];
 if (sourceErrors.length) {
   console.error(`Barkpark's pack at ${source} is not valid, nothing copied:\n${sourceErrors.join('\n')}`);
   process.exit(1);

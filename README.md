@@ -1,5 +1,9 @@
 [![PortableDoc roadmap: milestones R0 to R7, each with the reward it ships and its status on the board](docs/images/roadmap.svg)](docs/ROADMAP.md)
 
+[![PortableDoc conformance: every block type in the goldens against every renderer, pass, fail, missing or unchecked](docs/images/conformance.svg)](conformance/CONFORMANCE.md)
+
+One cell per golden per renderer, drawn from [`conformance/`](conformance/); every red cluster is a task under R6.
+
 ## Vision
 
 One document format for every Barkpark app. A Paper, a Barkdown note or a
@@ -45,6 +49,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 | The format spec | [`SPEC.md`](SPEC.md) |
 | The spec, as JSON Schema (synced from Barkpark, never edited here) | [`spec/`](spec/), source in [`SOURCE.json`](SOURCE.json) ([0003](docs/decisions/0003-pull-sync.md)) |
 | The goldens every renderer must pass, stamped (synced the same way) | [`goldens/`](goldens/) |
+| Each renderer's result on the goldens (synced the same way) | [`conformance/`](conformance/), drawn as [`conformance.svg`](docs/images/conformance.svg) |
 | The quality bar | [`QUALITY.md`](QUALITY.md) |
 | How we work | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
 | Decisions | [`docs/decisions/`](docs/decisions/), one page each |
@@ -57,9 +62,10 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 ```sh
 npm run roadmap    # redraw docs/images/roadmap.svg from the board
+npm run heatmap    # redraw docs/images/conformance.svg from conformance/
 npm run timeline   # rewrite the timeline above
-npm run sync -- ../barkpark   # copy spec/ and goldens/ from a Barkpark checkout
-npm run check      # doc rules, pack stamp and SOURCE.json, tests
+npm run sync -- ../barkpark   # copy spec/, goldens/ and conformance/ from a Barkpark checkout
+npm run check      # doc rules, pack stamp, reports and SOURCE.json, tests
 ```
 
 The editor, the workbench and the host pages arrive with R2 and R5.
