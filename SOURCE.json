@@ -1,9 +1,9 @@
 {
   "repo": "FRIKKern/barkpark",
-  "commit": "221be398acb1e6be9bae601b171bb0315ba910ef",
+  "commit": "bc65637bc37485848c3f2fec373e3d8ccb23c74d",
   "path": "api/priv/portable_doc",
   "files": {
-    "spec/blocks.schema.json": "a70344740a257dec23b4952fc62af7407b82452776659fefc7911696b72ae790",
+    "spec/blocks.schema.json": "8fbc2c72c423c76f6e083e0d28a78534f530851509f80c3c88933196f1b05683",
     "goldens/blocks/action.golden.json": "5bde37b1cb3fd5ff82ee0efca094f3c365faf9ce42a7adfb818936bf9dcdbc9f",
     "goldens/blocks/api-endpoint.golden.json": "7277f99f4da5f250a0b2e8f32a4aff6b528a06d13e076f0918578dc8b1a2a9d6",
     "goldens/blocks/arrayOf.golden.json": "7d3c81f28037174dee9ff92223b0bf54df9180396cccdccf389a175d96990a0a",
