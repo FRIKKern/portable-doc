@@ -16,6 +16,7 @@ export function readerHtml(blocks) {
 
 export async function startFakeReader({ status, delayMs = 0, raw } = {}) {
   const requests = [];
+  const timers = new Set();
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
@@ -25,7 +26,8 @@ export async function startFakeReader({ status, delayMs = 0, raw } = {}) {
         res.writeHead(code, { 'content-type': 'application/json' });
         res.end(typeof value === 'string' ? value : JSON.stringify(value));
       };
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
         if (raw !== undefined) return reply(status ?? 200, raw);
         if (status) return reply(status, { error: { code: 'fake', message: `fake reader answers ${status}` } });
         if (req.method !== 'POST' || req.url !== RENDER_PATH) return reply(404, { error: { code: 'not_found' } });
@@ -33,6 +35,7 @@ export async function startFakeReader({ status, delayMs = 0, raw } = {}) {
         if (html === null) return reply(422, { error: { code: 'no_golden', message: 'the fake reader serves golden blocks only' } });
         reply(200, { html });
       }, delayMs);
+      timers.add(timer);
     });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -40,6 +43,10 @@ export async function startFakeReader({ status, delayMs = 0, raw } = {}) {
   return {
     base: `http://127.0.0.1:${port}`,
     requests,
-    close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }),
+    close: () => new Promise((resolve) => {
+      timers.forEach(clearTimeout);
+      server.closeAllConnections();
+      server.close(resolve);
+    }),
   };
 }

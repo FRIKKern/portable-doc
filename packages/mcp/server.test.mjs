@@ -241,7 +241,8 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
     const count = lines.length;
     const answered = new Promise((resolve) => waiters.push(resolve));
     child.stdin.write(text);
-    await Promise.race([answered, new Promise((_, reject) => setTimeout(() => reject(new Error('no answer within 10 s')), 10_000))]);
+    let timer;
+    await Promise.race([answered, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error('no answer within 10 s')), 10_000)))]).finally(() => clearTimeout(timer));
     assert.equal(lines.length, count + 1);
     return lines.at(-1);
   };
