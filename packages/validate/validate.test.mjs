@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { MIN_BLOCK_GOLDENS } from '../../scripts/lib/pack.mjs';
-import { CODES, compile, validate } from './index.js';
+import { CODES, MAX_DEPTH, compile, validate } from './index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -71,6 +71,37 @@ test('the nested-list golden and every ops golden doc pass', () => {
     assert.deepEqual(validate(after), { ok: true }, `${file} after`);
   }
 });
+
+test('ids inside list item children and card media count, though Elixir skips them', () => {
+  const paragraph = (id) => ({ id, type: 'paragraph', text: id });
+  const paths = (doc) => validate(doc).errors.map((e) => `${e.code} ${e.path}`);
+  assert.deepEqual(paths({ blocks: [paragraph('x'), { type: 'list', items: [{ text: 'item', children: [paragraph('x')] }] }] }), ['duplicate_block_id /blocks/1/items/0/children/0/id']);
+  assert.deepEqual(paths({ blocks: [paragraph('x'), { type: 'card', slots: { media: [{ id: 'x', type: 'image', src: 'https://example.com/a.png' }] } }] }), ['duplicate_block_id /blocks/1/slots/media/0/id']);
+});
+
+test('a Portable Text block is refused in inline content too', () => {
+  const pt = { _type: 'block', children: [{ _type: 'span', text: 'Pasted.' }] };
+  assert.deepEqual(validate({ blocks: [{ type: 'paragraph', content: [{ type: 'text', value: 'Fine.' }, pt] }] }).errors.map((e) => `${e.code} ${e.path}`), ['portable_text_block /blocks/0/content/1']);
+});
+
+const nest = (depth, wrap) => {
+  let block = { type: 'paragraph', text: 'Deep.' };
+  for (let i = 1; i < depth; i++) block = wrap(block);
+  return { blocks: [block] };
+};
+const wraps = {
+  section: (b) => ({ type: 'section', blocks: [b] }),
+  'list children': (b) => ({ type: 'list', items: [{ text: 'item', children: [b] }] }),
+  'figure child': (b) => ({ type: 'figure', child: b }),
+  'card media': (b) => ({ type: 'card', slots: { media: [b] } }),
+};
+
+for (const [name, wrap] of Object.entries(wraps)) {
+  test(`${name}: ${MAX_DEPTH} levels pass, ${MAX_DEPTH + 1} and 5000 are too_deep, nothing throws`, () => {
+    assert.deepEqual(validate(nest(MAX_DEPTH, wrap)), { ok: true });
+    for (const depth of [MAX_DEPTH + 1, 5000]) assert.deepEqual(validate(nest(depth, wrap)).errors.map((e) => e.code), ['too_deep']);
+  });
+}
 
 test('every type the schema names passes as a bare block', () => {
   assert.ok(schema.properties.type.enum.length >= 80);
@@ -143,6 +174,10 @@ test('compile refuses a schema it cannot follow', () => {
   assert.throws(() => compile(block({ else: {} })), /unsupported schema keyword else/);
   assert.throws(() => compile(block({ type: 'date' })), /unsupported schema type date/);
   assert.throws(() => compile(block({ 'nox-tier': 1 })), /unsupported schema keyword nox-tier/);
+  assert.throws(() => compile(block({ xtier: 1 })), /unsupported schema keyword xtier/);
+  assert.throws(() => compile(block({ properties: { kind: { const: { a: 1 } } } })), /unsupported schema const or enum value \{"a":1\} at #\/definitions\/blocks\/note\/properties\/kind/);
+  assert.throws(() => compile(block({ properties: { kind: { enum: ['a', ['b']] } } })), /unsupported schema const or enum value \["b"\]/);
+  assert.doesNotThrow(() => compile(block({ properties: { kind: { enum: ['a', 1, true, null] } } })));
   assert.throws(() => compile(block({ properties: { text: { type: 'string', pattern: '^a' } } })), /unsupported schema keyword pattern at #\/definitions\/blocks\/note\/properties\/text/);
   for (const key of ['items', 'not', 'if', 'then']) {
     assert.throws(() => compile(block({ [key]: { format: 'uri' } })), new RegExp(`unsupported schema keyword format at #/definitions/blocks/note/${key}`));

@@ -6,7 +6,8 @@ export type Code =
   | 'unknown_block_type'
   | 'wrong_field_type'
   | 'value_not_allowed'
-  | 'duplicate_block_id';
+  | 'duplicate_block_id'
+  | 'too_deep';
 
 export interface ValidationError {
   code: Code;
@@ -17,6 +18,8 @@ export interface ValidationError {
 export type Result = { ok: true } | { ok: false; errors: ValidationError[] };
 
 export const CODES: readonly Code[];
+
+export const MAX_DEPTH: number;
 
 export function validate(doc: unknown): Result;
 

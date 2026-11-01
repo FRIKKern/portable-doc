@@ -19,8 +19,8 @@ R4 promises that AI and apps can't save a broken doc. Barkpark refuses some brok
 
 ## Decision
 
-- `@portable-doc/validate` (`packages/validate/`) reads `spec/blocks.schema.json` at load time and follows it keyword by keyword. No rule is copied by hand, except two Barkpark already enforces that the schema cannot say: Portable Text blocks and duplicate ids.
-- Errors carry a code from a closed set of eight, listed with where Elixir refuses each today in [`CODES.md`](../../packages/validate/CODES.md). That table is the brief for part 2.
+- `@portable-doc/validate` (`packages/validate/`) reads `spec/blocks.schema.json` at load time and follows it keyword by keyword. No rule is copied by hand, except two Barkpark already enforces that the schema cannot say (Portable Text blocks, duplicate ids) and a depth cap so the walk returns instead of overflowing the stack.
+- Errors carry a code from a closed set of nine, listed with where Elixir refuses each today in [`CODES.md`](../../packages/validate/CODES.md). That table is the brief for part 2.
 - `fixtures/broken/` holds one synthetic doc per shape with its expected codes and paths; `fixtures/valid/` holds docs that must pass. Both sides run the same files.
 - A schema keyword the validator cannot follow throws at load, so a synced schema change fails `npm run check` instead of passing unchecked (Z8).
 - Zero runtime dependencies. Not published: `private: true` until the owner decides.

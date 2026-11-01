@@ -9,7 +9,10 @@ export const CODES = Object.freeze([
   'wrong_field_type',
   'value_not_allowed',
   'duplicate_block_id',
+  'too_deep',
 ]);
+
+export const MAX_DEPTH = 100;
 
 const KEYWORDS = new Set([
   '$schema', '$comment', 'title', 'description', 'definitions',
@@ -18,6 +21,7 @@ const KEYWORDS = new Set([
 ]);
 
 const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isPrimitive = (v) => v === null || typeof v !== 'object';
 
 const TYPES = {
   object: isObject,
@@ -32,7 +36,7 @@ const TYPES = {
 const pointer = (path, key) => `${path}/${String(key).replaceAll('~', '~0').replaceAll('/', '~1')}`;
 const unescape = (key) => key.replaceAll('~1', '/').replaceAll('~0', '~');
 const error = (code, path, message) => ({ code, path, message });
-const show = (v) => JSON.stringify(v);
+const show = (v) => (isObject(v) ? 'an object' : Array.isArray(v) ? 'an array' : JSON.stringify(v));
 
 const isPortableText = (block) =>
   block._type === 'block' && ['children', 'markDefs', 'listItem'].some((key) => Object.hasOwn(block, key));
@@ -55,6 +59,9 @@ function audit(root, resolve) {
     if (!isObject(node)) throw new Error(`schema at ${at} is not an object`);
     for (const key of Object.keys(node)) {
       if (!key.startsWith('x-') && !KEYWORDS.has(key)) throw new Error(`unsupported schema keyword ${key} at ${at}`);
+    }
+    for (const value of 'const' in node ? [node.const] : node.enum ?? []) {
+      if (!isPrimitive(value)) throw new Error(`unsupported schema const or enum value ${JSON.stringify(value)} at ${at}`);
     }
     for (const type of [].concat(node.type ?? [])) {
       if (!Object.hasOwn(TYPES, type)) throw new Error(`unsupported schema type ${type} at ${at}`);
@@ -91,7 +98,10 @@ export function compile(root) {
     out.ids.push(...from.ids);
   };
 
+  let depth = 0;
+
   function check(value, node, path, out) {
+    if (isObject(value) && isPortableText(value)) return out.errors.push(error('portable_text_block', path, 'a Sanity Portable Text block (_type "block"), not a PortableDoc block'));
     const target = deref(node);
     if (target === root) return checkBlock(value, path, out);
     checkNode(value, target, path, out);
@@ -99,9 +109,11 @@ export function compile(root) {
 
   function checkBlock(value, path, out) {
     if (!isObject(value)) return out.errors.push(error('block_not_object', path, `a block must be an object, got ${show(value)}`));
-    if (isPortableText(value)) return out.errors.push(error('portable_text_block', path, 'a Sanity Portable Text block (_type "block"), not a PortableDoc block'));
+    if (depth === MAX_DEPTH) return out.errors.push(error('too_deep', path, `blocks nest deeper than ${MAX_DEPTH}`));
     if (typeof value.id === 'string' && value.id !== '') out.ids.push({ id: value.id, path: pointer(path, 'id') });
+    depth++;
     checkNode(value, root, path, out);
+    depth--;
   }
 
   function checkNode(value, node, path, out) {
