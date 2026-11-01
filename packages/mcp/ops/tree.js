@@ -28,8 +28,6 @@ export function visibleContainer(block) {
       return isMap(block.child) ? { kind: 'figure', child: block.child } : null;
     case 'terminal':
       return Array.isArray(block.children) && !Object.hasOwn(block, 'blocks') ? { kind: 'blocks', key: 'children', list: block.children } : null;
-    default:
-      return null;
   }
 }
 
