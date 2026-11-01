@@ -97,6 +97,7 @@ const tiny = {
           body: { type: 'array', items: { $ref: '#' } },
           ref: { anyOf: [{ type: 'string' }, { type: 'object', required: ['a'], properties: { a: { type: 'string' }, b: { type: 'string' } } }] },
           either: { anyOf: [{ type: 'string' }, { required: ['a'] }, { type: 'object', required: ['c'] }] },
+          media: { type: 'array', items: { anyOf: [{ $ref: '#' }, { type: 'string' }] } },
         },
       },
       pair: { properties: { left: { $ref: '#' }, right: { $ref: '#' } } },
@@ -120,6 +121,7 @@ test('compile follows the schema it is given, keyword by keyword', () => {
   assert.deepEqual(codes({ blocks: [{ type: 'note', ref: { b: 1 } }] }), ['missing_required_field /blocks/0/ref/a', 'wrong_field_type /blocks/0/ref/b']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', ref: 3 }] }), ['wrong_field_type /blocks/0/ref']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', either: { b: 1 } }] }), ['missing_required_field /blocks/0/either/a']);
+  assert.deepEqual(codes({ blocks: [{ type: 'note', media: ['ok', 5] }] }), ['wrong_field_type /blocks/0/media/1']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', body: [{ type: 'note', text: 1 }] }] }), ['wrong_field_type /blocks/0/body/0/text']);
   assert.deepEqual(codes({ blocks: [{ type: 'pair', left: { id: 'x', type: 'note' }, right: { id: 'x', type: 'note' } }] }), ['duplicate_block_id /blocks/0/right/id']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', 'a/b~c': 1 }] }), []);
