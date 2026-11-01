@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseAction, project, stable } from './ops/table.js';
+import { parseAction, project } from './ops/table.js';
 
 const text = (value) => [{ type: 'text', value }];
 const table = (extra) => ({ id: 'tb', type: 'table', rows: [[text('a'), text('b')]], ...extra });
@@ -28,20 +28,6 @@ test('project refuses every shape outside the strict editable grammar', () => {
     table({ rows: [[{ id: 'c', content: 'x' }, text('b')]] }), table({ rows: [['bare', text('b')]] }), table({ rows: [[null, text('b')]] }), table({ rows: [[{ id: 'c', note: 1 }, text('b')]] }),
   ]) assert.equal(project(t), null, JSON.stringify(t));
   assert.ok(project(table({ blocks: 'opaque', children: null })));
-});
-
-test('stable: a table the write normalizer would leave alone; a table with no rows is stable, rows that are not a list are not', () => {
-  assert.equal(stable(table()), true);
-  assert.equal(stable({ id: 'tb', type: 'table' }), true);
-  assert.equal(stable(table({ rows: [[text('a')], [text('a'), text('b')]] })), true);
-  assert.equal(stable(table({ head: null })), true);
-  assert.equal(stable(table({ head: [] })), true);
-  assert.equal(stable(table({ head: [text('x')] })), true);
-  for (const t of [
-    table({ id: '' }), { type: 'table', rows: [] }, table({ rows: 'x' }), table({ head: 'x' }), table({ head: [['bad']] }),
-    table({ columns: [] }), table({ children: [] }), table({ rows: [{ cells: [text('a')] }] }), table({ rows: [[{ content: text('a') }]] }),
-    table({ rows: [[[{ type: 'text', text: 'tiptap' }]]] }),
-  ]) assert.equal(stable(t), false, JSON.stringify(t));
 });
 
 test('parseAction: plain names, kind:index with a canonical safe index of at most 16 digits', () => {

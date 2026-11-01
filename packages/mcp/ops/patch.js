@@ -1,5 +1,5 @@
 import { coerceFieldPatch } from './fields.js';
-import { get, isMap, refusal, same, termOrder } from './terms.js';
+import { canonical, get, isMap, refusal, same, termOrder } from './terms.js';
 import { blockId, directFigureChildId, idExists, lockedAtId, patchAuthoredIds, transform } from './tree.js';
 
 const FIGURE_CHILD = 'figure must contain exactly one child';
@@ -95,31 +95,30 @@ function moveBlock(blocks, id, after) {
   return ok([...without.slice(0, idx + 1), moved, ...without.slice(idx + 1)]);
 }
 
+const idKey = (id) => (typeof id === 'string' ? `s${id}` : `j${canonical(id)}`);
+
 function lockedIndex(blocks) {
-  const index = [];
+  const index = new Map();
   blocks.forEach((b, i) => {
-    if (!isMap(b) || b.locked !== true) return;
-    const id = blockId(b);
-    const prior = index.find((e) => same(e.id, id));
-    if (prior) prior.idx = i;
-    else index.push({ id, idx: i });
+    if (isMap(b) && b.locked === true) index.set(idKey(blockId(b)), { id: blockId(b), idx: i });
   });
-  return index.sort((x, y) => termOrder(x.id, y.id));
+  return index;
 }
 
 function checkLockedPlacement(before, after, op) {
   const locked = lockedIndex(before);
-  if (locked.length === 0) return null;
+  if (locked.size === 0) return null;
   const now = lockedIndex(after);
-  const moved = locked.find(({ id, idx }) => now.find((e) => same(e.id, id))?.idx !== idx);
-  return moved ? fail('locked_block', moved.id, get(op, 'op')) : null;
+  const moved = [...locked].filter(([key, { idx }]) => now.get(key)?.idx !== idx).map(([, e]) => e.id).sort(termOrder);
+  return moved.length ? fail('locked_block', moved[0], get(op, 'op')) : null;
 }
 
 function checkDuplicateRatchet(before, after, op) {
-  const count = (ids) => ids.reduce((m, id) => m.set(id, (m.get(id) ?? 0) + 1), new Map());
-  const was = count(patchAuthoredIds(before));
+  const tally = new Map();
+  for (const id of patchAuthoredIds(before)) tally.set(id, (tally.get(id) ?? 0) - 1);
   const ids = patchAuthoredIds(after);
-  const now = count(ids);
-  const dup = ids.find((id) => now.get(id) > 1 && now.get(id) > (was.get(id) ?? 0));
+  const now = new Map();
+  for (const id of ids) now.set(id, (now.get(id) ?? 0) + 1);
+  const dup = ids.find((id) => now.get(id) > 1 && now.get(id) + (tally.get(id) ?? 0) > 0);
   return dup === undefined ? null : fail('duplicate_id', dup, op.op);
 }

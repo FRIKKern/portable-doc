@@ -114,67 +114,89 @@ function transformRows(block, key, rows, id, fun, body) {
   return null;
 }
 
-const authoredId = (v) => (isMap(v) && typeof v.id === 'string' && v.id !== '' ? [v.id] : []);
+const pushId = (out, v) => {
+  if (isMap(v) && typeof v.id === 'string' && v.id !== '') out.push(v.id);
+};
 
-const aliasIds = (container, walk) =>
-  ['children', 'blocks'].flatMap((key) => (Array.isArray(get(container, key)) ? walk(container[key]) : []));
+function aliasIds(container, walk) {
+  for (const key of ['children', 'blocks']) if (Array.isArray(get(container, key))) walk(container[key]);
+}
+
+function rowIds(out, rows, walk, body) {
+  for (const row of rows) {
+    if (!isMap(row)) continue;
+    pushId(out, row);
+    body(row);
+  }
+}
 
 export function patchAuthoredIds(blocks) {
-  const walk = (list) => list.flatMap(block);
-  const block = (b) => {
-    if (!isMap(b)) return [];
-    return [...authoredId(b), ...nested(b)];
-  };
-  const nested = (b) => {
+  const out = [];
+  const walk = (list) => list.forEach(block);
+  const tabBody = (row) => Array.isArray(row.blocks) && walk(row.blocks);
+  function block(b) {
+    if (!isMap(b)) return;
+    pushId(out, b);
     switch (b.type) {
       case 'section':
-        return Array.isArray(b.blocks) ? walk(b.blocks) : [];
+        if (Array.isArray(b.blocks)) walk(b.blocks);
+        break;
       case 'expandable':
       case 'terminal':
-        return aliasIds(b, walk);
+        aliasIds(b, walk);
+        break;
       case 'columns':
-        return Array.isArray(b.columns) ? b.columns.flatMap((col) => (Array.isArray(col) ? walk(col) : [])) : [];
+        if (Array.isArray(b.columns)) b.columns.forEach((col) => Array.isArray(col) && walk(col));
+        break;
       case 'figure':
-        return isMap(b.child) ? block(b.child) : [];
+        if (isMap(b.child)) block(b.child);
+        break;
       case 'steps':
-        return Array.isArray(b.steps) ? b.steps.flatMap((row) => (isMap(row) ? [...authoredId(row), ...aliasIds(row, walk)] : [])) : [];
+        if (Array.isArray(b.steps)) rowIds(out, b.steps, walk, (row) => aliasIds(row, walk));
+        break;
       case 'tabs':
-        return Array.isArray(b.tabs) ? b.tabs.flatMap((row) => (isMap(row) ? [...authoredId(row), ...(Array.isArray(row.blocks) ? walk(row.blocks) : [])] : [])) : [];
-      default:
-        return [];
+        if (Array.isArray(b.tabs)) rowIds(out, b.tabs, walk, tabBody);
+        break;
     }
-  };
-  return walk(blocks);
+  }
+  walk(blocks);
+  return out;
 }
 
 export function treeAuthoredIds(blocks) {
-  const walk = (list) => list.flatMap(block);
-  const block = (b) => (isMap(b) ? [...authoredId(b), ...nested(b)] : []);
-  const nested = (b) => {
+  const out = [];
+  const walk = (list) => list.forEach(block);
+  const tabBody = (row) => Array.isArray(row.blocks) && walk(row.blocks);
+  function block(b) {
+    if (!isMap(b)) return;
+    pushId(out, b);
     switch (b.type) {
       case 'steps':
-        if (Array.isArray(b.steps)) return b.steps.flatMap((row) => (isMap(row) ? [...authoredId(row), ...aliasIds(row, walk)] : []));
+        if (Array.isArray(b.steps)) return rowIds(out, b.steps, walk, (row) => aliasIds(row, walk));
         break;
       case 'tabs':
-        return Array.isArray(b.tabs) ? b.tabs.flatMap((row) => (isMap(row) ? [...authoredId(row), ...(Array.isArray(row.blocks) ? walk(row.blocks) : [])] : [])) : [];
+        return Array.isArray(b.tabs) && rowIds(out, b.tabs, walk, tabBody);
       case 'expandable':
       case 'terminal':
         return aliasIds(b, walk);
       case 'columns':
-        return Array.isArray(b.columns) ? b.columns.flatMap((col) => (Array.isArray(col) ? walk(col) : [])) : [];
+        return Array.isArray(b.columns) && b.columns.forEach((col) => Array.isArray(col) && walk(col));
       case 'figure':
-        return isMap(b.child) ? block(b.child) : [];
+        return isMap(b.child) && block(b.child);
     }
-    return Array.isArray(b.blocks) ? walk(b.blocks) : [];
-  };
-  return walk(blocks);
+    if (Array.isArray(b.blocks)) walk(b.blocks);
+  }
+  walk(blocks);
+  return out;
 }
 
-export function blocksWithId(blocks, id) {
-  return blocks.flatMap((b) => {
-    if (!isMap(b)) return [];
-    return [...(same(get(b, 'id'), id) ? [b] : []), ...paperChildLists(b).flatMap((list) => blocksWithId(list, id))];
-  });
+export function blocksWithId(blocks, id, out = []) {
+  for (const b of blocks) {
+    if (!isMap(b)) continue;
+    if (same(get(b, 'id'), id)) out.push(b);
+    for (const list of paperChildLists(b)) blocksWithId(list, id, out);
+  }
+  return out;
 }
 
 function bodyList(container) {

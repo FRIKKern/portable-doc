@@ -127,8 +127,42 @@ export function intentGenerator(seed) {
   const ids = ['t1', 't2', 'k1', 'k2'];
   const block = (id) => (id.startsWith('t') ? (chance(0.9) ? table(id) : card(id)) : chance(0.9) ? card(id) : table(id));
 
+  const grid = () => [[pick(INLINE)]];
+  const NOISE = [
+    () => ({ type: 'table', rows: grid() }),
+    () => ({ id: 'n', type: 'table', content: [[{ type: 'paragraph', content: pick(INLINE) }]] }),
+    () => ({ id: 'n', type: 'table', content: { head: [pick(INLINE)], rows: grid() } }),
+    () => ({ id: 'n', type: 'table', rows: grid(), headers: [pick(INLINE)] }),
+    () => ({ id: 'n', type: 'table', rows: [{ k: 'v' }], columns: [{ key: 'k', label: pick(['K', null]) }] }),
+    () => ({ id: 'n', type: 'table', rows: grid(), columns: pick([[{ text: 'c' }], ['c', 1], [{ text: 'c', x: 1 }], []]) }),
+    () => ({ id: 'n', type: 'table', rows: [[pick(INLINE)], [pick(INLINE)]], header: pick([true, false, null]) }),
+    () => ({ id: 'n', type: 'table', rows: [{ header: true, cells: [pick(INLINE)] }, [pick(INLINE)]] }),
+    () => ({ id: 'n', type: 'table', rows: [{ cells: [{ header: true, content: pick(INLINE) }] }, [pick(INLINE)]] }),
+    () => ({ id: 'n', type: 'table', rows: [[pick(['s', { text: 's' }, { content: pick(INLINE) }, 3])]] }),
+    () => ({ id: 'n', type: 'table', rows: grid(), blocks: [{ type: 'paragraph' }] }),
+    () => ({ id: 'n', type: 'paragraph', junk: { id: 'q', type: 'table', rows: pick(['x', grid(), [[{ type: 'text', text: 't' }]]]) } }),
+    () => ({ id: 'n', type: 'paragraph', content: [{ type: 'table', id: 'q', children: [{ type: 'text', text: 't' }] }] }),
+    () => ({ id: 'n', type: 'list', items: [pick(['plain', '[{"type":"table","id":"q","rows":[]}]', 4, null, [{ type: 'paragraph', content: [{ type: 'text', text: 't' }] }]])] }),
+    () => ({ id: 'n', type: pick(['bulletList', 'list']), content: [{ type: 'listItem', content: [{ type: 'paragraph', content: pick(INLINE.slice(0, 5)) }] }] }),
+    () => ({ id: 'n', type: pick(['notes', 'pipeline']), [pick(['items', 'nodes'])]: [pick(['s', pick(INLINE), { type: 'table', id: 'q', rows: [] }])] }),
+    () => ({ id: 'n', type: 'callout', text: pick(['hi', ' ', '']), ...(chance(0.5) ? { content: [] } : {}) }),
+    () => ({ id: 'n', type: 'section', blocks: [{ type: 'table', rows: grid() }] }),
+  ];
+  const noise = () => pick(NOISE)();
+  const wrap = (b) => pick([
+    () => ({ id: 'w', type: 'section', blocks: [b] }),
+    () => ({ id: 'w', type: 'steps', steps: [{ id: 'w-s', blocks: [b] }] }),
+    () => ({ id: 'w', type: 'tabs', tabs: [{ id: 'w-t', blocks: [b] }] }),
+    () => ({ id: 'w', type: 'columns', columns: [[b]] }),
+    () => ({ id: 'w', type: 'expandable', children: [b] }),
+    () => ({ id: 'w', type: 'figure', child: b }),
+    () => ({ id: 'w', type: 'paragraph', opaque: [b] }),
+  ])();
+
   function shapeOf(doc, id) {
-    return project(doc.blocks.find((b) => b.id === id))?.shape ?? {};
+    const found = [];
+    JSON.stringify(doc, (_k, v) => (v?.id === id && v.type === 'table' && found.push(v), v));
+    return project(found[0])?.shape ?? {};
   }
 
   function op(doc) {
@@ -144,8 +178,9 @@ export function intentGenerator(seed) {
   }
 
   return () => {
-    const doc = { blocks: ids.filter(() => chance(0.7)).map(block) };
+    const doc = { blocks: ids.filter(() => chance(0.7)).map((id) => (chance(0.15) ? wrap(block(id)) : block(id))) };
     if (chance(0.1)) doc.blocks.push(block(pick(ids)));
+    if (chance(0.3)) doc.blocks.splice(int(doc.blocks.length + 1), 0, chance(0.2) ? wrap(noise()) : noise());
     return { doc, op: op(doc) };
   };
 }

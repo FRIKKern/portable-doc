@@ -8,6 +8,7 @@ import { digest } from './test/digest.mjs';
 import { generator, intentGenerator } from './test/random-ops.mjs';
 
 const recorded = JSON.parse(fs.readFileSync(new URL('./test/patch-elixir.json', import.meta.url), 'utf8'));
+const recordedIntents = JSON.parse(fs.readFileSync(new URL('./test/intents-elixir.json', import.meta.url), 'utf8'));
 
 const dir = new URL('../../goldens/ops/', import.meta.url);
 const goldens = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort()
@@ -86,6 +87,9 @@ test('patch-block merges shallowly and pins id and type; a different type is a m
   assert.deepEqual(after.blocks[0], { id: 'a', type: 'paragraph', content: text('new') });
   refused(applyOp(doc(para('a')), { op: 'patch-block', id: 'a', patch: { type: 'heading' } }), 'type_mismatch', 'a');
   assert.ok(applyOp(doc(para('a')), { op: 'patch-block', id: 'a', patch: { type: null } }).ok);
+  assert.deepEqual(ok(applyOp(doc({ id: 'o', type: { k: 1 } }), { op: 'patch-block', id: 'o', patch: { type: { k: 1 }, x: 1 } })).blocks[0], { id: 'o', type: { k: 1 }, x: 1 });
+  assert.ok(applyOp(doc({ id: 'o', type: [1] }), { op: 'patch-block', id: 'o', patch: { type: [1] } }).ok);
+  refused(applyOp(doc({ id: 'o', type: { k: 1 } }), { op: 'patch-block', id: 'o', patch: { type: { k: 2 } } }), 'type_mismatch', 'o');
 });
 
 test('field patches coerce like Barkpark: boolean text, number text and range, select options', () => {
@@ -95,9 +99,11 @@ test('field patches coerce like Barkpark: boolean text, number text and range, s
   const num = { id: 'n', type: 'field-number', value: 2, min: 0, max: 10 };
   assert.deepEqual(ok(applyOp(doc(num), { op: 'patch-block', id: 'n', patch: { value: ' 7 ' } })).blocks[0], { ...num, value: 7 });
   assert.equal(ok(applyOp(doc(num), { op: 'patch-block', id: 'n', patch: { value: '2.5e0' } })).blocks[0].value, 2.5);
+  assert.equal(ok(applyOp(doc(num), { op: 'patch-block', id: 'n', patch: { value: '5.0' } })).blocks[0].value, 5);
+  assert.equal(ok(applyOp(doc(num), { op: 'patch-block', id: 'n', patch: { value: '1e1' } })).blocks[0].value, 10);
   assert.equal(ok(applyOp(doc(num), { op: 'patch-block', id: 'n', patch: { value: '' } })).blocks[0].value, null);
   for (const patch of [{ value: 0 }, { value: 10 }, { min: 2, max: 2 }, { value: '', min: 4, max: 4 }]) assert.ok(applyOp(doc(num), { op: 'patch-block', id: 'n', patch }).ok, JSON.stringify(patch));
-  for (const patch of [{ value: 11 }, { value: 'seven' }, { min: 3 }, { max: 1 }, { step: 0 }, { value: '.5' }, { value: [] }, { value: '', min: 5, max: 3 }]) {
+  for (const patch of [{ value: 11 }, { value: 'seven' }, { min: 3 }, { max: 1 }, { step: 0 }, { value: '.5' }, { value: '5.' }, { value: ' 5. ' }, { value: '1e999' }, { value: '-1e999' }, { value: [] }, { value: '', min: 5, max: 3 }]) {
     refused(applyOp(doc(num), { op: 'patch-block', id: 'n', patch }), 'invalid_op');
   }
   refused(applyOp(doc({ id: 'n', type: 'field-number' }), { op: 'patch-block', id: 'n', patch: { value: 'seven' } }), 'invalid_op');
@@ -301,7 +307,7 @@ test('patch-table-structure runs every action and refuses one out of range', () 
   refused(run('remove-row:0', grid([[text('a')]])), 'invalid_op');
 });
 
-test('table intents refuse a table outside the strict grammar, a duplicate id anywhere, or another table the write would migrate', () => {
+test('table intents refuse a table outside the strict grammar, a duplicate id anywhere, or a table the write normalizer would change', () => {
   const t = grid([[text('a')]]);
   const run = (blocks, shape = shapeOf(t)) => applyOp(doc(...blocks), { op: 'patch-table-structure', id: 'tb', shape, action: 'add-row' });
   assert.ok(run([t]).ok);
@@ -313,16 +319,41 @@ test('table intents refuse a table outside the strict grammar, a duplicate id an
     { id: 'x', type: 'columns', columns: [[para('p')]] },
     { id: 'x', type: 'figure', child: para('p') },
   ]) refused(run([t, para('p'), box]), 'duplicate_id', 'p');
-  refused(run([t, { id: 'old', type: 'table', rows: [[{ type: 'text', text: 'tiptap' }]] }]), 'table_normalization_would_change_authored_data');
+  assert.ok(run([t, { id: 'old', type: 'table', rows: [[{ type: 'text', text: 'tiptap' }]] }]).ok);
+  refused(run([t, { id: 'old', type: 'table', rows: [[[{ type: 'text', text: 'tiptap' }]]] }]), 'table_normalization_would_change_authored_data');
   refused(run([t, { type: 'table', rows: [[text('no id')]] }]), 'table_normalization_would_change_authored_data');
-  refused(run([grid([[text('a')]], { columns: [] })], {}), 'table_normalization_would_change_authored_data');
+  refused(run([grid([[text('a')]], { columns: [] })], {}), 'invalid_op');
   refused(run([grid([{ cells: [text('a')] }])], {}), 'table_normalization_would_change_authored_data');
   refused(run([grid([[{ content: text('a') }]])], {}), 'table_normalization_would_change_authored_data');
   refused(run([grid([[text('a')], [text('a'), text('b')]])], {}), 'invalid_op');
-  refused(run([grid([[[{ type: 'text', value: 'a', note: 'opaque' }]]])], {}), 'table_normalization_would_change_authored_data');
+  refused(run([grid([[[{ type: 'text', value: 'a', note: 'opaque' }]]])], {}), 'invalid_op');
   refused(run([{ ...t, id: ' tb' }]), 'invalid_op');
   refused(run([para('tb')]), 'invalid_op');
   refused(applyOp(doc(t, para('p')), { op: 'patch-table-structure', id: 'p', shape: shapeOf(t), action: 'add-row' }), 'invalid_op');
+});
+
+test('the whole-doc table check is Barkpark\'s: only a table the normalizer reaches and changes, or one that gains an id, blocks an edit', () => {
+  const t = grid([[text('a')]]);
+  const run = (...others) => applyOp(doc(t, ...others), { op: 'patch-table-structure', id: 'tb', shape: shapeOf(t), action: 'add-row' });
+  assert.ok(run({ type: 'section', blocks: [{ id: 't2', type: 'table', rows: [], columns: [] }] }).ok);
+  assert.ok(run({ id: 'p', type: 'paragraph', junk: { type: 'table', id: 'q', rows: 'x' } }).ok);
+  assert.ok(run({ id: 'p', type: 'paragraph', junk: [{ type: 'table', rows: [[{ content: [], header: true }]] }] }).ok);
+  assert.ok(run({ id: 's', type: 'section', blocks: [{ id: 'n', type: 'table', rows: [[[]]], blocks: [{ id: 'c', type: 'table', rows: [['s']] }] }] }).ok);
+  for (const other of [
+    { id: 's', type: 'section', blocks: [{ type: 'table', rows: [] }] },
+    { id: 'f', type: 'figure', child: { type: 'table', rows: [] } },
+    { id: 'n', type: 'table', rows: [], blocks: [{ type: 'paragraph' }] },
+    { id: 'n', type: 'table', content: [[text('a')]] },
+    { id: 'n', type: 'table', rows: [[text('a')]], headers: [text('h')] },
+    { id: 'n', type: 'table', rows: [{ k: 1 }], columns: [{ key: 'k' }] },
+    { id: 'n', type: 'table', rows: [[text('a')], [text('b')]], header: true },
+    { id: 'n', type: 'table', rows: [[{ text: 'a' }]] },
+    { id: 'n', type: 'table', rows: [[[{ type: 'em', children: [{ type: 'text', text: 'a' }] }]]] },
+    { id: 'l', type: 'list', items: ['[{"type":"table","id":"q","rows":[]}]'] },
+    { id: 'l', type: 'bulletList', content: [{ type: 'table', id: 'q', rows: [] }] },
+    { id: 'p', type: 'paragraph', content: [{ type: 'table', id: 'q', children: [{ type: 'text', text: 't' }] }] },
+    { id: 'n', type: 'notes', items: [[{ type: 'table', id: 'q', rows: [], value: 'v' }]] },
+  ]) refused(run(other), 'table_normalization_would_change_authored_data', undefined);
 });
 
 function sweep(next, n) {
@@ -364,4 +395,17 @@ test(`${recorded.answers.length} seeded Patch cases answer what Barkpark's patch
     return got === (answer === 'raised' ? 'invalid_op' : answer) ? [] : [i];
   });
   assert.deepEqual(misses.slice(0, 5), [], 'rerun differential.mjs with this seed to see the cases');
+});
+
+test(`${recordedIntents.answers.length} seeded card and table intent cases answer what Barkpark's BlockOps.lower_editor_op + Patch (${recordedIntents.barkpark}) answered`, () => {
+  const next = intentGenerator(recordedIntents.seed);
+  const outcomes = new Set();
+  const misses = recordedIntents.answers.flatMap((answer, i) => {
+    const { doc, op } = next();
+    const ours = applyOp(doc, op);
+    outcomes.add(ours.ok ? 'ok' : ours.error.code);
+    return digest(ours) === answer ? [] : [i];
+  });
+  assert.deepEqual(misses.slice(0, 5), [], 'rerun differential.mjs --intents with this seed to see the cases');
+  assert.deepEqual([...outcomes].sort(), ['block_not_found', 'duplicate_id', 'invalid_op', 'ok', 'table_normalization_would_change_authored_data', 'type_mismatch']);
 });

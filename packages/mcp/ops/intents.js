@@ -1,6 +1,7 @@
 import { validCardInline } from './inline.js';
-import { applyAction, mergeCells, project, stable } from './table.js';
-import { exactKeys, isMap, isString, refusal, same } from './terms.js';
+import { normalizationSafe } from './persist.js';
+import { applyAction, mergeCells, project } from './table.js';
+import { exactKeys, isMap, isString, refusal } from './terms.js';
 import { blocksWithId, treeAuthoredIds } from './tree.js';
 
 const TABLE_OPS = ['patch-table-cells', 'patch-table-structure'];
@@ -21,26 +22,13 @@ export function lowerEditorOp(blocks, op) {
 
 function tablePreflight(blocks, op) {
   const ids = treeAuthoredIds(blocks);
-  const seen = new Set();
-  const dup = ids.find((id) => seen.has(id) || !seen.add(id));
+  const counts = ids.reduce((m, id) => m.set(id, (m.get(id) ?? 0) + 1), new Map());
+  const dup = ids.find((id) => counts.get(id) > 1);
   if (dup !== undefined) return { ok: false, error: { code: 'duplicate_id', target: dup } };
-  if (!tablesStable(blocks)) return { ok: false, error: { code: 'table_normalization_would_change_authored_data' } };
-  const id = op.id;
-  const eligible = isString(id) && id !== '' && id.trim() === id && blocksWithId(blocks, id).length === 1 &&
-    tablesIn(blocks).some((t) => t.id === id && same(blocksWithId(blocks, id)[0], t) && project(t));
-  return eligible ? null : invalid(op);
+  if (!normalizationSafe(blocks)) return { ok: false, error: { code: 'table_normalization_would_change_authored_data' } };
+  const found = isString(op.id) && op.id !== '' ? blocksWithId(blocks, op.id) : [];
+  return found.length === 1 && found[0].type === 'table' && project(found[0]) ? null : invalid(op);
 }
-
-function tablesIn(value, out = []) {
-  if (Array.isArray(value)) value.forEach((v) => tablesIn(v, out));
-  else if (isMap(value)) {
-    if (value.type === 'table') out.push(value);
-    Object.values(value).forEach((v) => tablesIn(v, out));
-  }
-  return out;
-}
-
-const tablesStable = (blocks) => tablesIn(blocks).every(stable);
 
 function lowerCardBody(blocks, op) {
   const { id, content } = op;

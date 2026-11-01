@@ -51,14 +51,6 @@ export function project(table) {
   return { shape: { v: 1, head: head.shape, rows: rows.map((r) => r.shape) }, head: head.cells, rows: rows.map((r) => r.cells) };
 }
 
-export function stable(table) {
-  if (ALIASES.some((k) => Object.hasOwn(table, k)) || nestsBlocks(table) || typeof table.id !== 'string' || table.id === '') return false;
-  const head = !Object.hasOwn(table, 'head') || table.head === null ||
-    (Array.isArray(table.head) && (table.head.length === 0 || projectCells(table.head, 'array') !== null));
-  const rows = Array.isArray(table.rows) ? table.rows.every((r) => projectRow(r) !== null) : !Object.hasOwn(table, 'rows');
-  return head && rows;
-}
-
 export function mergeCells(table, shape, changes) {
   const projection = project(table);
   if (!same(projection.shape, shape) || !Array.isArray(changes)) return null;
@@ -101,7 +93,7 @@ export function parseAction(action) {
   if (at < 0) return null;
   const kind = action.slice(0, at);
   const encoded = action.slice(at + 1);
-  if (!INDEXED.includes(kind) || encoded.length > 16 || !/^(0|[1-9][0-9]*)$/.test(encoded)) return null;
+  if (!INDEXED.includes(kind) || !/^(0|[1-9][0-9]*)$/.test(encoded)) return null;
   const index = Number(encoded);
   return safeIndex(index) ? { kind, index } : null;
 }
@@ -128,7 +120,7 @@ function act(table, { head, rows }, { kind, index }) {
     case 'add-row':
       return { ...table, rows: [...table.rows, Array.from({ length: width }, () => [])] };
     case 'remove-row':
-      return height > 1 && index < height ? { ...table, rows: table.rows.toSpliced(index, 1) } : null;
+      return index < height ? { ...table, rows: table.rows.toSpliced(index, 1) } : null;
     case 'up-row':
       return index > 0 && index < height ? { ...table, rows: swap(table.rows, index, index - 1) } : null;
     case 'down-row':
