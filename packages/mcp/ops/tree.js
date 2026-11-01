@@ -180,7 +180,6 @@ export function blocksWithId(blocks, id) {
 }
 
 function bodyList(container) {
-  if (!isMap(container)) return [];
   const children = get(container, 'children');
   if (Array.isArray(children)) return [children];
   if ((children === null || children === false) && Array.isArray(get(container, 'blocks'))) return [container.blocks];

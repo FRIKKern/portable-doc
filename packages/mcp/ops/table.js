@@ -79,7 +79,7 @@ function validChange(change, projection) {
   if (!isMap(change) || !exactKeys(change, ['area', 'row', 'column', 'content'])) return null;
   const { area, row, column, content } = change;
   if (area !== 'head' && area !== 'body') return null;
-  if (!safeIndex(row) || !safeIndex(column) || !validTableInline(content)) return null;
+  if (!safeIndex(row) || !safeIndex(column)) return null;
   const cells = area === 'head' ? (row === 0 ? projection.head : null) : projection.rows[row];
   if (!Array.isArray(cells) || column >= cells.length) return null;
   return [area === 'head' ? 0 : 1, row, column];

@@ -23,12 +23,24 @@ test('card and table inline take every node kind, nested marks in rank order', (
   }
 });
 
-test('a node with a key it does not take, or a mark out of rank order, is refused', () => {
+test('a key a node does not take or a mark out of rank order is refused; a mark inside itself is fine in a card, refused in a table', () => {
   for (const node of EVERY) {
     const extra = { ...node, extra: 1 };
     assert.equal(validCardInline([extra]), false, JSON.stringify(extra));
     assert.equal(validTableInline([extra]), false, JSON.stringify(extra));
   }
+  for (const type of ['strong', 'wikilink']) {
+    const twice = { type, ...(type === 'wikilink' ? { target: 't' } : {}), children: [{ type, ...(type === 'wikilink' ? { target: 't' } : {}), children: [text('x')] }] };
+    assert.equal(validCardInline([twice]), true, `card: ${type} in ${type}`);
+    assert.equal(validTableInline([twice]), false, `table: ${type} in ${type}`);
+  }
+  for (const junk of [null, 'x', 5, []]) {
+    assert.equal(validCardInline([junk]), false, JSON.stringify(junk));
+    assert.equal(validTableInline([junk]), false, JSON.stringify(junk));
+  }
+  const ref = { type: 'valueref', target: 'doc', field: 'f' };
+  assert.equal(validTableInline([ref, ref]), false, 'two adjacent equal nodes would merge');
+  assert.equal(validTableInline([ref, { ...ref, as: 'number' }]), true);
   const backwards = { type: 'em', children: [{ type: 'strong', children: [text('x')] }] };
   assert.equal(validCardInline([backwards]), false);
   assert.equal(validTableInline([backwards]), false);

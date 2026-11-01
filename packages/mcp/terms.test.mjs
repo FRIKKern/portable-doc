@@ -5,6 +5,8 @@ import { exactKeys, optionalNonNil, same, subsetKeys, termOrder } from './ops/te
 test('termOrder sorts like Elixir: numbers, atoms (false, nil, true), maps, lists, strings', () => {
   const mixed = ['b', [1], { a: 1 }, true, null, 2, 'a', false, 1];
   assert.deepEqual(mixed.toSorted(termOrder), [1, 2, false, null, true, { a: 1 }, [1], 'a', 'b']);
+  assert.deepEqual(['\u{10000}', '\uFFFF', 'a#', 'a"'].toSorted(termOrder), ['a"', 'a#', '\uFFFF', '\u{10000}'], 'strings compare as UTF-8 bytes');
+  for (const v of [null, true, 1, 'a', [1], { a: 1 }]) assert.equal(termOrder(v, structuredClone(v)), 0, JSON.stringify(v));
 });
 
 test('optionalNonNil: absent or any value but null', () => {

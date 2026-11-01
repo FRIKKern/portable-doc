@@ -1,8 +1,11 @@
 import { lowerEditorOp } from './intents.js';
 import { applyPatch } from './patch.js';
+import { get, refusal } from './terms.js';
 
 export function applyOp(doc, op) {
-  const lowered = lowerEditorOp(Array.isArray(doc) ? doc : doc.blocks, op);
+  const blocks = Array.isArray(doc) ? doc : doc?.blocks;
+  if (!Array.isArray(blocks)) return { ok: false, error: refusal('invalid_doc', null, get(op, 'op')) };
+  const lowered = lowerEditorOp(blocks, op);
   return lowered.ok ? applyPatch(doc, lowered.value) : lowered;
 }
 

@@ -45,11 +45,8 @@ export class BoundedStdioTransport {
     this.onclose?.();
   }
 
-  send(message) {
-    return new Promise((resolve) => {
-      if (this.#stdout.write(JSON.stringify(message) + '\n')) resolve();
-      else this.#stdout.once('drain', resolve);
-    });
+  async send(message) {
+    this.#stdout.write(JSON.stringify(message) + '\n');
   }
 
   #onerror = (error) => this.onerror?.(error);

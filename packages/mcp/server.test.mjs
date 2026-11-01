@@ -97,6 +97,10 @@ describe('over stdio with the SDK client', () => {
     for (const doc of ['x', 5, null, true]) {
       for (const name of ['validate', 'apply_ops', 'render']) await protocolError(call(client, name, { ...ARGS[name], doc }), /doc must be an object with a blocks array/);
     }
+    for (const doc of [{}, { title: 'T' }, { blocks: 'x' }, { blocks: null }]) {
+      for (const name of ['apply_ops', 'render']) await protocolError(call(client, name, { ...ARGS[name], doc }), /doc must be an object with a blocks array/);
+      assert.equal((await call(client, 'validate', { doc })).isError, undefined);
+    }
     await protocolError(call(client, 'apply_ops', { doc: SAMPLE, ops: 'x' }), /ops must be an array/);
     await protocolError(call(client, 'apply_ops', { doc: SAMPLE, ops: Array(MAX_OPS + 1).fill({ op: 'remove-block', id: 'x' }) }), new RegExp(`more than ${MAX_OPS} ops`));
     await protocolError(call(client, 'explain', { errors: 'x' }), /errors must be an array/);
@@ -105,6 +109,7 @@ describe('over stdio with the SDK client', () => {
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: 5 }] }), /errors\[0\]\.path must be a JSON pointer/);
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: 'blocks' }] }), /errors\[0\]\.path must be a JSON pointer/);
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: 'blocks/0' }] }), /errors\[0\]\.path must be a JSON pointer/);
+    await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: 'x' }] }), /errors\[0\]\.path must be a JSON pointer/);
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: '', message: 3 }] }), /errors\[0\]\.message must be a string/);
     await protocolError(call(client, 'explain', { errors: [{ code: 'too_deep', path: `/${'a'.repeat(10_000)}` }] }), /errors\[0\]\.path must be a JSON pointer/);
     assert.equal((await call(client, 'explain', { errors: [{ code: 'too_deep', path: `/${'a'.repeat(9_999)}` }] })).isError, undefined);
@@ -206,6 +211,8 @@ describe('render failures are tool errors, never a hang', () => {
     const full = await startFakeReader({ raw: JSON.stringify({ html: 'x'.repeat(MAX_HTML_BYTES - 11) }) });
     try {
       assert.equal((await render({ blocks: [] }, { base: full.base, timeoutMs: 10_000 })).html.length, MAX_HTML_BYTES - 11);
+      await render([{ id: 'b', type: 'divider' }], { base: full.base, timeoutMs: 10_000 });
+      assert.deepEqual(JSON.parse(full.requests.at(-1).body), { blocks: [{ id: 'b', type: 'divider' }] });
     } finally {
       await full.close();
     }
@@ -291,7 +298,7 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
 
   test(`a message past ${MAX_MESSAGE_BYTES} bytes is InvalidRequest under its own id, wherever the id sits, and the next call works`, async () => {
     const pad = 'x'.repeat(MAX_MESSAGE_BYTES);
-    const tail = await reply(`{"method":"tools/call","params":{"name":"validate","arguments":{"doc":{"blocks":[],"pad":"${pad}"}}},"jsonrpc":"2.0","id":9}\n`);
+    const tail = await reply(`{"method":"tools/call","params":{"name":"validate","arguments":{"doc":{"blocks":[],"pad":"${pad}${'y'.repeat(1 << 20)}"}}},"jsonrpc":"2.0","id":9}\n`);
     assert.equal(tail.id, 9);
     assert.equal(tail.error.code, ErrorCode.InvalidRequest);
     assert.match(tail.error.message, new RegExp(`the limit is ${MAX_MESSAGE_BYTES}`));

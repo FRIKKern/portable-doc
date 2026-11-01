@@ -11,7 +11,6 @@ export function applyPatch(docOrBlocks, op) {
     const r = applyPatch(docOrBlocks.blocks, op);
     return r.ok ? { ok: true, value: { ...docOrBlocks, blocks: r.value } } : r;
   }
-  if (!Array.isArray(docOrBlocks)) return { ok: false, error: refusal('invalid_doc', null, get(op, 'op')) };
   const r = applyToBlocks(docOrBlocks, op);
   if (!r.ok) return r;
   return checkLockedPlacement(docOrBlocks, r.value, op) ?? checkDuplicateRatchet(docOrBlocks, r.value, op) ?? r;
@@ -117,7 +116,6 @@ function checkLockedPlacement(before, after, op) {
 }
 
 function checkDuplicateRatchet(before, after, op) {
-  if (!Object.hasOwn(op, 'op')) return null;
   const count = (ids) => ids.reduce((m, id) => m.set(id, (m.get(id) ?? 0) + 1), new Map());
   const was = count(patchAuthoredIds(before));
   const ids = patchAuthoredIds(after);

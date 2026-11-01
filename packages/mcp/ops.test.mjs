@@ -100,6 +100,7 @@ test('field patches coerce like Barkpark: boolean text, number text and range, s
   for (const patch of [{ value: 11 }, { value: 'seven' }, { min: 3 }, { max: 1 }, { step: 0 }, { value: '.5' }, { value: [] }, { value: '', min: 5, max: 3 }]) {
     refused(applyOp(doc(num), { op: 'patch-block', id: 'n', patch }), 'invalid_op');
   }
+  refused(applyOp(doc({ id: 'n', type: 'field-number' }), { op: 'patch-block', id: 'n', patch: { value: 'seven' } }), 'invalid_op');
   const select = { id: 's', type: 'field-select' };
   assert.ok(applyOp(doc(select), { op: 'patch-block', id: 's', patch: { options: [{ value: 'a' }, { value: 'b', label: 'B' }] } }).ok);
   for (const options of [[{ value: 'a' }, { value: 'a' }], [{ value: '' }], [{ value: 'a', extra: 1 }], [{ value: 'a', label: null }], 'a']) {
@@ -164,6 +165,16 @@ test('the ratchet counts an id that is new and doubled inside one block; a displ
   refused(applyOp(both, { op: 'insert-after', afterId: 'a', block: { id: 's', type: 'section', blocks: [para('a')] } }), 'locked_block', 'l');
 });
 
+test('a doc without a blocks array is invalid_doc for every op; a bare blocks array is a doc', () => {
+  const body = text('x');
+  for (const d of [{}, { blocks: 'x' }, { blocks: null }]) {
+    for (const op of [{ op: 'remove-block', id: 'a' }, { op: 'patch-card-body', id: 'k', content: body }, { op: 'patch-table-cells', id: 'tb', shape: {}, cells: [] }]) {
+      assert.deepEqual(applyOp(d, op), { ok: false, error: { code: 'invalid_doc', target: null, op: op.op } });
+    }
+  }
+  assert.deepEqual(ok(applyOp([{ id: 'k', type: 'card' }], { op: 'patch-card-body', id: 'k', content: body }))[0].slots.body, [{ type: 'paragraph', content: body }]);
+});
+
 test('a malformed op is invalid_op and echoes the op', () => {
   for (const op of [null, 'x', [], {}, { op: 'nope' }, { op: 'append-block' }, { op: 'insert-after', block: {} }, { op: 'patch-block', id: 'a', patch: 'x' }, { op: 'patch-block', patch: {} }, { op: 'replace-block', id: 'a' }, { op: 'remove-block' }, { op: 'move-block' }]) {
     const r = applyOp(doc(para('a')), op);
@@ -210,6 +221,7 @@ test('patch-card-body reads the card the strict way: each slot holds at most one
   ]) assert.ok(run(card(slots)).ok, JSON.stringify(slots));
   assert.ok(run({ id: 'k', type: 'card', slots: null, tone: null }).ok);
   assert.ok(run({ id: 'k', type: 'card' }).ok);
+  assert.ok(applyOp(doc({ id: 'e', type: 'expandable', children: [card({})] }), { op: 'patch-card-body', id: 'k', content: body }).ok);
   for (const children of [null, false, undefined]) {
     const box = { id: 'e', type: 'expandable', ...(children === undefined ? {} : { children }), blocks: [card({})] };
     assert.ok(applyOp(doc(box), { op: 'patch-card-body', id: 'k', content: body }).ok, String(children));
@@ -249,6 +261,9 @@ test('patch-table-cells writes through the stored carriers and refuses a stale s
   refused(applyOp(doc(t), op({ cells: [{ area: 'body', row: 0, column: 0, content: [...text('x'), ...text('y')] }] })), 'invalid_op');
   for (const bad of [null, 5, 'x', [cells[1], null], [{ area: 'body', row: 0, column: -1, content: [] }], [{ area: 'body', row: 0, column: 0.5, content: [] }]]) {
     refused(applyOp(doc(t), op({ cells: bad })), 'invalid_op');
+  }
+  for (const change of [{ row: 0, column: '1' }, { row: '0', column: 1 }, { row: 0, column: 2 }]) {
+    refused(applyOp(doc(t), op({ cells: [{ area: 'body', content: [], ...change }] })), 'invalid_op');
   }
   refused(applyOp(doc(t), op({ extra: 1 })), 'invalid_op');
 });

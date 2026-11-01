@@ -44,7 +44,7 @@ export async function transcript() {
   ];
   const call = async (step, name, args) => {
     const result = await client.callTool({ name, arguments: args });
-    lines.push('', `## ${step}`, '', `\`${name}\``, '', json(args), '', result.isError ? '→ error' : '→', '', json(result.structuredContent));
+    lines.push('', `## ${step}`, '', `\`${name}\``, '', json(args), '', '→', '', json(result.structuredContent));
     return result.structuredContent;
   };
   try {
