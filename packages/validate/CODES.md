@@ -17,7 +17,7 @@ Fixtures counts the files that expect the code; `mixed-three-codes.json` expects
 ## Rules
 
 - `path` is a JSON pointer into the doc: `/blocks/2/level`. A duplicate points at the second `id`.
-- Every error is reported, not just the first. `validate` never throws on a JSON value and keeps no state between calls.
+- Every error is reported, not just the first. `validate` keeps no state between calls and returns a result for any JSON value, BigInt, or cycle (a cycle through blocks ends at `MAX_DEPTH`). It reads properties, so a getter that throws still throws.
 - The walk reaches only what the schema describes. A value under an open field (an extra key, `table.rows`, an inline node's `children`) is not checked, Portable Text included.
 - A block past `MAX_DEPTH` gets only `too_deep`: nothing in or under it is checked, not even whether it is an object, and its `id` does not count toward duplicates.
 - A value that fits no `anyOf` shape gets the errors of the first shape whose JSON type it has; with none, `wrong_field_type`.
