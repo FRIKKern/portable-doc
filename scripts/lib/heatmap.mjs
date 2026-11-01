@@ -1,4 +1,6 @@
-import { COMPARES, STATUSES } from './conformance.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { COMPARES, STATUSES, readReports } from './conformance.mjs';
 
 export const W = 1200, PAD = 40, MAX_NAME = 32;
 const CELL_W = 30, CELL_H = 18, PITCH = 20, COL = CELL_W + 2, MIN_GAP = 24, TOTAL_ROW = 46, TOTALS_Y = 140;
@@ -62,7 +64,7 @@ function tally(report) {
 function cell(x, y, row) {
   const out = [`<rect x="${x}" y="${y}" width="${CELL_W}" height="${CELL_H}" rx="3" class="c-${row.status}"/>`];
   out.push(`<text x="${x + CELL_W / 2}" y="${y + CELL_H / 2 + 4.5}" font-size="12" font-weight="700" text-anchor="middle" class="g-${row.status}">${GLYPH[row.status]}</text>`);
-  if (row.via) out.push(`<path d="M${x + CELL_W - 11} ${y}H${x + CELL_W - 3}Q${x + CELL_W} ${y} ${x + CELL_W} ${y + 3}V${y + 11}Z" class="via via-${row.status}"/>`);
+  if (row.via) out.push(`<path d="M${x + CELL_W - 11} ${y}H${x + CELL_W - 3}Q${x + CELL_W} ${y} ${x + CELL_W} ${y + 3}V${y + 11}Z" class="via-${row.status}"/>`);
   return out.join('');
 }
 
@@ -77,7 +79,7 @@ function totalsText(t) {
 export function render(reports, types, tierOf) {
   const long = reports.filter((r) => r.renderer.length > MAX_NAME).map((r) => r.renderer);
   if (long.length) throw new Error(`renderer names over ${MAX_NAME} characters do not fit: ${long.join(', ')}`);
-  const ordered = [...reports].sort((a, b) => Number(!!b.reference) - Number(!!a.reference) || COMPARES.indexOf(a.compare) - COMPARES.indexOf(b.compare));
+  const ordered = [...reports].sort((a, b) => Number(!!b.reference) - Number(!!a.reference) || COMPARES.indexOf(a.compare) - COMPARES.indexOf(b.compare) || a.renderer.localeCompare(b.renderer));
   const byRenderer = ordered.map((r) => ({ report: r, rows: Object.fromEntries(r.rows.map((row) => [row.type, row])), tally: tally(r) }));
   const groups = grouped(types, tierOf);
   const n = byRenderer.length;
@@ -118,8 +120,8 @@ export function render(reports, types, tierOf) {
   .c-fail { fill: var(--failbg); stroke: var(--fail); stroke-width: 1.5; }
   .c-missing { fill: var(--missbg); stroke: var(--missing); stroke-width: 1.5; stroke-dasharray: 3 2; }
   .c-unchecked { fill: url(#hatch); stroke: var(--unchecked); }
-  .g-pass { fill: var(--on-pass); } .g-fail { fill: var(--fail); } .g-missing { fill: var(--missing); } .g-unchecked { fill: var(--ink); }
-  .hatch { stroke: var(--unchecked); stroke-width: 2; } .hatch-bg { fill: var(--card); } .via { fill: var(--ink); } .via-pass { fill: var(--on-pass); }
+  .g-pass, .via-pass { fill: var(--on-pass); } .g-fail, .via-fail { fill: var(--fail); } .g-missing, .via-missing { fill: var(--missing); } .g-unchecked, .via-unchecked { fill: var(--ink); }
+  .hatch { stroke: var(--unchecked); stroke-width: 2; } .hatch-bg { fill: var(--card); }
   .t-pass { fill: var(--pass-ink); } .t-fail { fill: var(--fail-ink); } .t-missing { fill: var(--missing); } .t-unchecked { fill: var(--muted); }
 </style>`);
   out.push(`<rect class="bg" width="${W}" height="${H}" rx="16"/>`);
@@ -178,4 +180,15 @@ export function render(reports, types, tierOf) {
   out.push(`<text x="${PAD}" y="${H - 28}" font-size="14" class="muted">Generated from conformance/*.json by scripts/generate-heatmap.mjs · pack stamp ${esc(ordered[0].pack_stamp.slice(0, 12))} · rows grouped by x-tier in spec/blocks.schema.json</text>`);
   out.push(`</svg>\n`);
   return out.join('\n');
+}
+
+export function draw(root) {
+  const { reports, types, errors } = readReports(root);
+  if (errors.length) return { reports, errors };
+  try {
+    const blocks = JSON.parse(fs.readFileSync(path.join(root, 'spec', 'blocks.schema.json'), 'utf8')).definitions?.blocks ?? {};
+    return { reports, errors: [], svg: render(reports, types, (type) => blocks[type]?.['x-tier']) };
+  } catch (e) {
+    return { reports, errors: [`docs/images/conformance.svg: cannot be drawn: ${e.message}`] };
+  }
 }

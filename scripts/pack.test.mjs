@@ -150,6 +150,27 @@ test('only goldens/blocks/*.golden.json are pack types, and only conformance/*.j
   assert.match(r.out, /, 2 conformance reports\n$/);
 });
 
+for (const [name, renderers, message] of [
+  ['a renderer name the heatmap cannot fit', [{ renderer: 'r'.repeat(33), compare: 'dom' }], /docs\/images\/conformance.svg: cannot be drawn: renderer names over 32 characters do not fit: r{33}/],
+  ['more renderers than the heatmap can hold', Array.from({ length: 40 }, (_, i) => ({ renderer: `r${i}`, compare: 'dom' })), /docs\/images\/conformance.svg: cannot be drawn: 40 renderers need a \d+px panel/],
+]) {
+  test(`check fails on ${name}, even when SOURCE.json agrees`, () => {
+    const r = check(repo({ renderers }));
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, message);
+  });
+
+  test(`sync refuses a Barkpark pack with ${name} and leaves the repo as it was`, () => {
+    const root = repo();
+    const before = hashes(root);
+    const r = run(root, 'sync-from-barkpark.mjs', barkpark({ tag: 'b', renderers }));
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /nothing copied/);
+    assert.match(r.out, message);
+    assert.deepEqual(hashes(root), before);
+  });
+}
+
 test('check fails on fewer than 80 block goldens, even when the stamp agrees', () => {
   const r = check(repo({ blocks: 79 }));
   assert.equal(r.code, 1, r.out);

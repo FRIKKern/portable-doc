@@ -1,12 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { readReports } from './lib/conformance.mjs';
+import { draw } from './lib/heatmap.mjs';
 import { BARKPARK_PACK, checkPack, checkSource, diff, hashes, stampId } from './lib/pack.mjs';
 
 const { values } = parseArgs({ options: { against: { type: 'string' } } });
 const root = fileURLToPath(new URL('..', import.meta.url));
-const conformance = readReports(root);
+const conformance = draw(root);
 const errors = [...checkPack(root), ...conformance.errors, ...checkSource(root)];
 
 if (values.against) {

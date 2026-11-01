@@ -109,6 +109,16 @@ test('every pack type is one row and every renderer a column in every panel: ref
   assert.doesNotMatch(totalOf(svg, 'c-dom'), /reference/);
 });
 
+test('within a compare mode renderers order by name, not by file name: x before x-y, pdrender before pdrender-wasm', () => {
+  const named = [{ renderer: 'ref', compare: 'dom', reference: true }, { renderer: 'x-y', compare: 'text' }, { renderer: 'x', compare: 'text' }];
+  const root = repo({ renderers: named });
+  const files = fs.readdirSync(path.join(root, 'conformance')).sort();
+  assert.ok(files.indexOf('x-y.json') < files.indexOf('x.json'), files.join(' '));
+  const { code, out, svg } = draw(root);
+  assert.equal(code, 0, out);
+  assert.deepEqual([...svg.matchAll(/<g data-total="([^"]+)">/g)].map((m) => m[1]), ['ref', 'x', 'x-y']);
+});
+
 test('the reference band sits on the reference column in every panel', () => {
   const { svg } = draw(repo());
   const bands = [...svg.matchAll(/<rect x="([\d.]+)"[^>]*data-band="ref"/g)].map((m) => Number(m[1]) + 1);
@@ -128,15 +138,15 @@ test('each status has its own fill, stroke and glyph, and host-paint cells carry
   assert.match(rowOf(svg, 'b1'), /class="g-missing">∅</);
   assert.match(rowOf(svg, 'b2'), /class="g-unchecked">\?</);
   assert.match(rowOf(svg, 'b4'), /class="g-pass">✓</);
-  assert.match(rowOf(svg, 'b3'), /class="via via-pass"/);
-  assert.match(rowOf(svg, 'b5'), /class="via via-fail"/);
+  assert.match(rowOf(svg, 'b3'), /class="via-pass"/);
+  assert.match(rowOf(svg, 'b5'), /class="via-fail"/);
   assert.doesNotMatch(rowOf(svg, 'b4'), /class="via/);
   for (const rule of [
     '.c-pass { fill: var(--pass); }',
     '.c-fail { fill: var(--failbg); stroke: var(--fail); stroke-width: 1.5; }',
     '.c-missing { fill: var(--missbg); stroke: var(--missing); stroke-width: 1.5; stroke-dasharray: 3 2; }',
     '.c-unchecked { fill: url(#hatch); stroke: var(--unchecked); }',
-    '.g-pass { fill: var(--on-pass); } .g-fail { fill: var(--fail); } .g-missing { fill: var(--missing); } .g-unchecked { fill: var(--ink); }',
+    '.g-pass, .via-pass { fill: var(--on-pass); } .g-fail, .via-fail { fill: var(--fail); } .g-missing, .via-missing { fill: var(--missing); } .g-unchecked, .via-unchecked { fill: var(--ink); }',
   ]) assert.ok(svg.includes(rule), rule);
 });
 
