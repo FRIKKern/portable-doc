@@ -29,8 +29,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 1 milestone closed
-  - Delivered: [R4.1 Equality test: Barkpark's Elixir block modules match spec/blocks.schema.json](https://github.com/FRIKKern/barkpark/issues/24955)
+- **Today** · 3 milestones closed
+  - Delivered: [R2.1 Contract truth: every editor member any app uses is declared in EMBED-CONTRACT.md and index.d.ts, with EDITOR_VERSION + sha](https://github.com/FRIKKern/barkpark/issues/24948)
 - **Yesterday** · 3 changes, 5 milestones closed
   - Delivered: [R1.5 Sync: Barkpark opens a PR to portable-doc with spec/ and goldens/ when the stamp changes; portable-doc fails on a stale stamp](https://github.com/FRIKKern/barkpark/issues/24945)
 <!-- timeline:end -->

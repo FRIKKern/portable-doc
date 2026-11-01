@@ -47,7 +47,7 @@
 <path d="M628 282H856" class="rule"/>
 <text x="628" y="312" font-size="16">Editor changes proven in all</text>
 <text x="628" y="334" font-size="16">5 apps</text>
-<text x="628" y="372" font-size="15" class="todo">○ to do</text>
+<text x="628" y="372" font-size="15" class="todo">✕ dropped</text>
 </g>
 <g data-milestone="R3">
 <rect x="892" y="196" width="268" height="196" rx="12" class="card"/>
