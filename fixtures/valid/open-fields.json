@@ -1,0 +1,16 @@
+{
+  "blocks": [
+    {
+      "id": "a",
+      "type": "paragraph",
+      "text": "Extra keys are allowed: the schema leaves blocks open.",
+      "audit": {
+        "keep": true
+      }
+    },
+    {
+      "type": "divider",
+      "style": "dots"
+    }
+  ]
+}
