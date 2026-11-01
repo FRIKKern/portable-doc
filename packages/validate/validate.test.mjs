@@ -77,6 +77,7 @@ test('ids inside list item children and card media count, though Elixir skips th
   const paths = (doc) => validate(doc).errors.map((e) => `${e.code} ${e.path}`);
   assert.deepEqual(paths({ blocks: [paragraph('x'), { type: 'list', items: [{ text: 'item', children: [paragraph('x')] }] }] }), ['duplicate_block_id /blocks/1/items/0/children/0/id']);
   assert.deepEqual(paths({ blocks: [paragraph('x'), { type: 'card', slots: { media: [{ id: 'x', type: 'image', src: 'https://example.com/a.png' }] } }] }), ['duplicate_block_id /blocks/1/slots/media/0/id']);
+  assert.deepEqual(paths({ blocks: [paragraph('x'), { type: 'card', slots: { media: [{ id: 'x', type: 'image', src: 5 }] } }] }), ['wrong_field_type /blocks/1/slots/media/0/src', 'duplicate_block_id /blocks/1/slots/media/0/id']);
 });
 
 test('a Portable Text block is refused in inline content too', () => {
