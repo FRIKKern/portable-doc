@@ -113,6 +113,7 @@ test('past MAX_DEPTH a block gets only too_deep: not block_not_object, and its i
   const codes = (doc) => validate(doc).errors.map((e) => e.code);
   assert.deepEqual(codes({ blocks: [under(7)] }), ['too_deep']);
   assert.deepEqual(codes({ blocks: [{ id: 'x', type: 'paragraph', text: 'x' }, under({ id: 'x', type: 'paragraph' })] }), ['too_deep']);
+  assert.deepEqual(codes({ blocks: [under({ _type: 'block', children: [] })] }), ['portable_text_block']);
 });
 
 test('a thrown or odd call leaves nothing behind for the next', () => {
