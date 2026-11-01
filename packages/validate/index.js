@@ -36,7 +36,7 @@ const TYPES = {
 const pointer = (path, key) => `${path}/${String(key).replaceAll('~', '~0').replaceAll('/', '~1')}`;
 const unescape = (key) => key.replaceAll('~1', '/').replaceAll('~0', '~');
 const error = (code, path, message) => ({ code, path, message });
-const show = (v) => (isObject(v) ? 'an object' : Array.isArray(v) ? 'an array' : JSON.stringify(v));
+const show = (v) => (isObject(v) ? 'an object' : Array.isArray(v) ? 'an array' : typeof v === 'bigint' ? `${v}n` : JSON.stringify(v));
 
 const isPortableText = (block) =>
   block._type === 'block' && ['children', 'markDefs', 'listItem'].some((key) => Object.hasOwn(block, key));
@@ -60,7 +60,8 @@ function audit(root, resolve) {
     for (const key of Object.keys(node)) {
       if (!key.startsWith('x-') && !KEYWORDS.has(key)) throw new Error(`unsupported schema keyword ${key} at ${at}`);
     }
-    for (const value of 'const' in node ? [node.const] : node.enum ?? []) {
+    if ('enum' in node && !Array.isArray(node.enum)) throw new Error(`schema enum at ${at} is not an array`);
+    for (const value of ['const' in node ? [node.const] : [], node.enum ?? []].flat()) {
       if (!isPrimitive(value)) throw new Error(`unsupported schema const or enum value ${JSON.stringify(value)} at ${at}`);
     }
     for (const type of [].concat(node.type ?? [])) {
@@ -87,9 +88,9 @@ export function compile(root) {
     return !options || options.some((option) => typeof option === typeof value);
   };
 
-  const trial = (value, node, path) => {
+  const trial = (value, node, path, depth) => {
     const out = { errors: [], ids: [] };
-    check(value, node, path, out);
+    check(value, node, path, out, depth);
     return out;
   };
 
@@ -98,25 +99,21 @@ export function compile(root) {
     out.ids.push(...from.ids);
   };
 
-  let depth = 0;
-
-  function check(value, node, path, out) {
+  function check(value, node, path, out, depth) {
     if (isObject(value) && isPortableText(value)) return out.errors.push(error('portable_text_block', path, 'a Sanity Portable Text block (_type "block"), not a PortableDoc block'));
     const target = deref(node);
-    if (target === root) return checkBlock(value, path, out);
-    checkNode(value, target, path, out);
+    if (target === root) return checkBlock(value, path, out, depth);
+    checkNode(value, target, path, out, depth);
   }
 
-  function checkBlock(value, path, out) {
-    if (!isObject(value)) return out.errors.push(error('block_not_object', path, `a block must be an object, got ${show(value)}`));
+  function checkBlock(value, path, out, depth) {
     if (depth === MAX_DEPTH) return out.errors.push(error('too_deep', path, `blocks nest deeper than ${MAX_DEPTH}`));
+    if (!isObject(value)) return out.errors.push(error('block_not_object', path, `a block must be an object, got ${show(value)}`));
     if (typeof value.id === 'string' && value.id !== '') out.ids.push({ id: value.id, path: pointer(path, 'id') });
-    depth++;
-    checkNode(value, root, path, out);
-    depth--;
+    checkNode(value, root, path, out, depth + 1);
   }
 
-  function checkNode(value, node, path, out) {
+  function checkNode(value, node, path, out, depth) {
     if (node.type && !accepts(node, value)) {
       return out.errors.push(error('wrong_field_type', path, `expected ${[].concat(node.type).join(' or ')}, got ${show(value)}`));
     }
@@ -133,18 +130,18 @@ export function compile(root) {
         if (!Object.hasOwn(value, key)) out.errors.push(error('missing_required_field', pointer(path, key), `${key} is required`));
       }
       for (const [key, child] of Object.entries(node.properties ?? {})) {
-        if (Object.hasOwn(value, key)) check(value[key], child, pointer(path, key), out);
+        if (Object.hasOwn(value, key)) check(value[key], child, pointer(path, key), out, depth);
       }
     }
-    if (Array.isArray(value) && node.items) value.forEach((item, i) => check(item, node.items, pointer(path, i), out));
-    for (const child of node.allOf ?? []) check(value, child, path, out);
-    if (node.if && node.then && trial(value, node.if, path).errors.length === 0) check(value, node.then, path, out);
-    if (node.anyOf) checkAnyOf(value, node.anyOf, path, out);
-    if (node.not && trial(value, node.not, path).errors.length === 0) out.errors.push(error('value_not_allowed', path, 'matches a shape the schema forbids here'));
+    if (Array.isArray(value) && node.items) value.forEach((item, i) => check(item, node.items, pointer(path, i), out, depth));
+    for (const child of node.allOf ?? []) check(value, child, path, out, depth);
+    if (node.if && node.then && trial(value, node.if, path, depth).errors.length === 0) check(value, node.then, path, out, depth);
+    if (node.anyOf) checkAnyOf(value, node.anyOf, path, out, depth);
+    if (node.not && trial(value, node.not, path, depth).errors.length === 0) out.errors.push(error('value_not_allowed', path, 'matches a shape the schema forbids here'));
   }
 
-  function checkAnyOf(value, branches, path, out) {
-    const trials = branches.map((branch) => ({ branch, result: trial(value, branch, path) }));
+  function checkAnyOf(value, branches, path, out, depth) {
+    const trials = branches.map((branch) => ({ branch, result: trial(value, branch, path, depth) }));
     const pass = trials.find((t) => t.result.errors.length === 0);
     if (pass) return merge(out, pass.result);
     const fit = trials.find((t) => accepts(t.branch, value));
@@ -157,7 +154,7 @@ export function compile(root) {
     if (isObject(doc) && !Array.isArray(doc.blocks)) return { ok: false, errors: [error('not_a_doc', '/blocks', 'blocks must be an array')] };
     const base = Array.isArray(doc) ? '' : '/blocks';
     const out = { errors: [], ids: [] };
-    (Array.isArray(doc) ? doc : doc.blocks).forEach((block, i) => check(block, root, pointer(base, i), out));
+    (Array.isArray(doc) ? doc : doc.blocks).forEach((block, i) => check(block, root, pointer(base, i), out, 0));
     const first = new Map();
     for (const { id, path } of out.ids) {
       if (first.has(id)) out.errors.push(error('duplicate_block_id', path, `id ${show(id)} is already used at ${first.get(id)}`));

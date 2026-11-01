@@ -104,6 +104,27 @@ for (const [name, wrap] of Object.entries(wraps)) {
   });
 }
 
+test('past MAX_DEPTH a block gets only too_deep: not block_not_object, and its id does not count', () => {
+  const under = (inner) => {
+    let block = inner;
+    for (let i = 0; i < MAX_DEPTH; i++) block = wraps.section(block);
+    return block;
+  };
+  const codes = (doc) => validate(doc).errors.map((e) => e.code);
+  assert.deepEqual(codes({ blocks: [under(7)] }), ['too_deep']);
+  assert.deepEqual(codes({ blocks: [{ id: 'x', type: 'paragraph', text: 'x' }, under({ id: 'x', type: 'paragraph' })] }), ['too_deep']);
+});
+
+test('a thrown or odd call leaves nothing behind for the next', () => {
+  const throwing = nest(30, wraps.section);
+  let inner = throwing.blocks[0];
+  while (inner.type === 'section') inner = inner.blocks[0];
+  Object.defineProperty(inner, 'text', { enumerable: true, get() { throw new Error('getter'); } });
+  assert.throws(() => validate(throwing), /getter/);
+  assert.deepEqual(validate({ blocks: [{ type: 'heading', level: 1n }] }).errors.map((e) => `${e.code} ${e.message}`), ['wrong_field_type no allowed shape takes 1n']);
+  assert.deepEqual(validate(nest(MAX_DEPTH, wraps.section)), { ok: true });
+});
+
 test('every type the schema names passes as a bare block', () => {
   assert.ok(schema.properties.type.enum.length >= 80);
   for (const type of schema.properties.type.enum) assert.deepEqual(validate({ blocks: [{ type }] }), { ok: true }, type);
@@ -178,6 +199,8 @@ test('compile refuses a schema it cannot follow', () => {
   assert.throws(() => compile(block({ xtier: 1 })), /unsupported schema keyword xtier/);
   assert.throws(() => compile(block({ properties: { kind: { const: { a: 1 } } } })), /unsupported schema const or enum value \{"a":1\} at #\/definitions\/blocks\/note\/properties\/kind/);
   assert.throws(() => compile(block({ properties: { kind: { enum: ['a', ['b']] } } })), /unsupported schema const or enum value \["b"\]/);
+  assert.throws(() => compile(block({ properties: { kind: { const: 'a', enum: ['a', { b: 1 }] } } })), /unsupported schema const or enum value \{"b":1\}/);
+  assert.throws(() => compile(block({ properties: { kind: { enum: 'abc' } } })), /schema enum at #\/definitions\/blocks\/note\/properties\/kind is not an array/);
   assert.doesNotThrow(() => compile(block({ properties: { kind: { enum: ['a', 1, true, null] } } })));
   assert.throws(() => compile(block({ properties: { text: { type: 'string', pattern: '^a' } } })), /unsupported schema keyword pattern at #\/definitions\/blocks\/note\/properties\/text/);
   for (const key of ['items', 'not', 'if', 'then']) {
