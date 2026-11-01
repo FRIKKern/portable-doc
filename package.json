@@ -7,6 +7,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "roadmap": "node scripts/generate-roadmap.mjs",
+    "heatmap": "node scripts/generate-heatmap.mjs",
     "timeline": "node scripts/readme-timeline.mjs",
     "sync": "node scripts/sync-from-barkpark.mjs",
     "test": "node --test scripts/*.test.mjs packages/*/*.test.mjs",

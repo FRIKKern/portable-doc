@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { PACK_DIRS } from './lib/pack.mjs';
 
 const BASE = 'main';
 const BRANCH = 'sync/barkpark';
@@ -31,10 +32,10 @@ if (top !== fs.realpathSync(root)) {
   process.exit(1);
 }
 run('git', 'switch', '-q', '-C', BRANCH);
-run('git', 'add', '-A', '--', 'spec', 'goldens', 'SOURCE.json');
+run('git', 'add', '-A', '--', ...PACK_DIRS, 'SOURCE.json');
 run('git', 'commit', '-q', '-m', title);
 const open = run('gh', 'pr', 'list', '--head', BRANCH, '--base', BASE, '--state', 'open', '--json', 'number', '--jq', '.[].number');
-if (open && succeeds('git', 'fetch', '-q', 'origin', BRANCH) && succeeds('git', 'diff', '--quiet', 'FETCH_HEAD', 'HEAD', '--', 'spec', 'goldens')) {
+if (open && succeeds('git', 'fetch', '-q', 'origin', BRANCH) && succeeds('git', 'diff', '--quiet', 'FETCH_HEAD', 'HEAD', '--', ...PACK_DIRS)) {
   console.log(`sync PR #${open} already carries this pack: nothing pushed`);
   process.exit(0);
 }

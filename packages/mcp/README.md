@@ -34,4 +34,4 @@ BARKPARK_URL=https://barkpark.example node packages/mcp/bin/portable-doc-mcp.mjs
 | The six Patch ops against Barkpark's own Elixir | `node packages/mcp/differential.mjs ../barkpark 20000` |
 | Re-record the answers `npm run check` replays | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/patch-elixir.json` |
 
-Why it looks like this: [0005](../../docs/decisions/0005-mcp.md).
+Why it looks like this: [0006](../../docs/decisions/0006-mcp.md).
