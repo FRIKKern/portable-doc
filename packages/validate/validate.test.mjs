@@ -96,6 +96,7 @@ const tiny = {
           tag: { not: { type: 'string' } },
           body: { type: 'array', items: { $ref: '#' } },
           ref: { anyOf: [{ type: 'string' }, { type: 'object', required: ['a'], properties: { a: { type: 'string' }, b: { type: 'string' } } }] },
+          either: { anyOf: [{ type: 'string' }, { required: ['a'] }, { type: 'object', required: ['c'] }] },
         },
       },
       pair: { properties: { left: { $ref: '#' }, right: { $ref: '#' } } },
@@ -118,6 +119,7 @@ test('compile follows the schema it is given, keyword by keyword', () => {
   assert.deepEqual(codes({ blocks: [{ type: 'note', tag: 'no' }] }), ['value_not_allowed /blocks/0/tag']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', ref: { b: 1 } }] }), ['missing_required_field /blocks/0/ref/a', 'wrong_field_type /blocks/0/ref/b']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', ref: 3 }] }), ['wrong_field_type /blocks/0/ref']);
+  assert.deepEqual(codes({ blocks: [{ type: 'note', either: { b: 1 } }] }), ['missing_required_field /blocks/0/either/a']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', body: [{ type: 'note', text: 1 }] }] }), ['wrong_field_type /blocks/0/body/0/text']);
   assert.deepEqual(codes({ blocks: [{ type: 'pair', left: { id: 'x', type: 'note' }, right: { id: 'x', type: 'note' } }] }), ['duplicate_block_id /blocks/0/right/id']);
   assert.deepEqual(codes({ blocks: [{ type: 'note', 'a/b~c': 1 }] }), []);
@@ -138,6 +140,13 @@ test('compile refuses a schema it cannot follow', () => {
   assert.throws(() => compile(block({ additionalProperties: false })), /unsupported schema keyword additionalProperties at #\/definitions\/blocks\/note/);
   assert.throws(() => compile(block({ else: {} })), /unsupported schema keyword else/);
   assert.throws(() => compile(block({ type: 'date' })), /unsupported schema type date/);
+  assert.throws(() => compile(block({ 'nox-tier': 1 })), /unsupported schema keyword nox-tier/);
+  assert.throws(() => compile(block({ properties: { text: { type: 'string', pattern: '^a' } } })), /unsupported schema keyword pattern at #\/definitions\/blocks\/note\/properties\/text/);
+  for (const key of ['items', 'not', 'if', 'then']) {
+    assert.throws(() => compile(block({ [key]: { format: 'uri' } })), new RegExp(`unsupported schema keyword format at #/definitions/blocks/note/${key}`));
+  }
+  assert.throws(() => compile(block({ anyOf: [{ type: 'string' }, { format: 'uri' }] })), /unsupported schema keyword format at #\/definitions\/blocks\/note\/anyOf\/1/);
+  assert.throws(() => compile(block({ properties: { text: true } })), /schema at #\/definitions\/blocks\/note\/properties\/text is not an object/);
   assert.throws(() => compile({ ...tiny, allOf: [{ $ref: '#/definitions/blocks/missing' }] }), /\$ref #\/definitions\/blocks\/missing does not resolve/);
   assert.doesNotThrow(() => compile(schema));
 });

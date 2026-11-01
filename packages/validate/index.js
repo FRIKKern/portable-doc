@@ -135,9 +135,9 @@ export function compile(root) {
     const trials = branches.map((branch) => ({ branch, result: trial(value, branch, path) }));
     const pass = trials.find((t) => t.result.errors.length === 0);
     if (pass) return merge(out, pass.result);
-    const fits = trials.filter((t) => accepts(t.branch, value));
-    if (fits.length === 0) return out.errors.push(error('wrong_field_type', path, `no allowed shape takes ${show(value)}`));
-    merge(out, fits.reduce((best, t) => (t.result.errors.length < best.result.errors.length ? t : best)).result);
+    const fit = trials.find((t) => accepts(t.branch, value));
+    if (!fit) return out.errors.push(error('wrong_field_type', path, `no allowed shape takes ${show(value)}`));
+    merge(out, fit.result);
   }
 
   return function validate(doc) {

@@ -11,6 +11,11 @@
     {
       "type": "divider",
       "style": "dots"
+    },
+    {
+      "_type": "block",
+      "type": "paragraph",
+      "text": "A _type key alone does not make a Portable Text block."
     }
   ]
 }

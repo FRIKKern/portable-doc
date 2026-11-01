@@ -3,7 +3,7 @@
 | Code | Refused when | From | Fixtures | Elixir today (Barkpark `main` afb4063) |
 |---|---|---|---|---|
 | `not_a_doc` | the doc is neither a blocks array nor an object with a `blocks` array | the doc envelope | 3 | Papers only: `BlockOps.validate_render_shapes/1` → `{:invalid_paper_structure, %{"blocks" => ["must be an array when a Paper declares a block body"]}}` |
-| `block_not_object` | a block is not an object | the schema root's `type: object` | 4 | `BlockOps.validate_block_elements/2` → `{:malformed_blocks, %{"blocks" => ["blocks[0] must be an object"]}}` on every write through `Content.Writer`. Descends `blocks`, `children`, `steps`, `tabs`, `columns`; not a figure's `child` |
+| `block_not_object` | a block is not an object | the schema root's `type: object` | 5 | `BlockOps.validate_block_elements/2` → `{:malformed_blocks, %{"blocks" => ["blocks[0] must be an object"]}}` on every write through `Content.Writer`. Descends `blocks`, `children`, `steps`, `tabs`, `columns`; not a figure's `child` |
 | `portable_text_block` | a block is a Sanity Portable Text block (`_type: "block"` with `children`, `markDefs` or `listItem`) | Barkpark's own check | 2 | `Content.Validation` finding `:portable_text_not_portabledoc`, on a richText field with `"editor": "blocks"`; an error only on an enforcing dataset, else a warning |
 | `missing_required_field` | a field the schema lists in `required` is absent: a block's or an inline node's `type` | schema `required` | 3 | Block `type`, blocks fields only: `FieldVocabulary.validate/2` → `{:out_of_vocabulary, "a block without a type"}`. Papers: not refused (renders "invalid block"). Inline `type`: not refused yet |
 | `unknown_block_type` | a block's `type` is not in the schema's type enum | schema root `properties.type.enum` | 4 | Papers: advisory only, `AuthoringWall` warning `unknown_block_children`, and only when the block has children. Blocks fields: `FieldVocabulary.validate/2` → `{:out_of_vocabulary, "block type … is not in this field's vocabulary"}` (that vocabulary is narrower than the schema) |
@@ -17,6 +17,7 @@ Fixtures counts the files that expect the code; `mixed-three-codes.json` expects
 
 - `path` is a JSON pointer into the doc: `/blocks/2/level`. A duplicate points at the second `id`.
 - Every error is reported, not just the first.
+- A value that fits no `anyOf` shape gets the errors of the first shape whose JSON type it has; with none, `wrong_field_type`.
 - The schema drives the checks. `compile(schema)` refuses a schema that uses a keyword or type it cannot follow, so a new rule in a synced schema fails `npm run check` instead of passing unchecked.
 - Ids: JS counts every block it reaches through `$ref: "#"`, including card, callout, note and stage slots and list item children. Elixir's fence skips those, and also counts steps and tabs row ids. The fixtures stay where both agree.
 
