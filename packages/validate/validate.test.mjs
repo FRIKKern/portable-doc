@@ -113,6 +113,7 @@ test('past MAX_DEPTH a block gets only too_deep: not block_not_object, and its i
   const codes = (doc) => validate(doc).errors.map((e) => e.code);
   assert.deepEqual(codes({ blocks: [under(7)] }), ['too_deep']);
   assert.deepEqual(codes({ blocks: [{ id: 'x', type: 'paragraph', text: 'x' }, under({ id: 'x', type: 'paragraph' })] }), ['too_deep']);
+  assert.deepEqual(codes({ blocks: [under({ _type: 'block', children: [] })] }), ['portable_text_block']);
 });
 
 test('a thrown or odd call leaves nothing behind for the next', () => {
@@ -123,6 +124,80 @@ test('a thrown or odd call leaves nothing behind for the next', () => {
   assert.throws(() => validate(throwing), /getter/);
   assert.deepEqual(validate({ blocks: [{ type: 'heading', level: 1n }] }).errors.map((e) => `${e.code} ${e.message}`), ['wrong_field_type no allowed shape takes 1n']);
   assert.deepEqual(validate(nest(MAX_DEPTH, wraps.section)), { ok: true });
+});
+
+const wellFormed = (r) =>
+  r.ok === true ? Object.keys(r).length === 1
+    : r.ok === false && r.errors.length > 0 && r.errors.every((e) => CODES.includes(e.code) && /^(\/.*)?$/.test(e.path) && typeof e.message === 'string' && e.message.length > 0);
+
+test('validate returns a well-formed result for any value put at any node of any golden', () => {
+  const odd = [null, 0, -1, 1.5, NaN, Infinity, '', 'x', true, false, [], {}, [null], { type: 'nope' }, { _type: 'block', children: [] }, 1n];
+  const nodes = (v, at = []) => (v && typeof v === 'object' ? [at, ...Object.keys(v).flatMap((k) => nodes(v[k], [...at, k]))] : [at]);
+  const put = (v, at, x) => {
+    if (!at.length) return x;
+    const copy = Array.isArray(v) ? [...v] : { ...v };
+    copy[at[0]] = put(v[at[0]], at.slice(1), x);
+    return copy;
+  };
+  let runs = 0;
+  for (const file of jsonIn('goldens/blocks')) {
+    const doc = { blocks: [read(file).input] };
+    for (const at of nodes(doc)) {
+      for (const x of odd) {
+        runs++;
+        assert.ok(wellFormed(validate(put(doc, at, x))), `${file} /${at.join('/')} = ${typeof x === 'bigint' ? `${x}n` : JSON.stringify(x)}`);
+      }
+    }
+  }
+  assert.ok(runs > 10000, `${runs} runs`);
+});
+
+test('validate returns a well-formed result for 2000 seeded random docs that reach every code', () => {
+  let seed = 42;
+  const rand = (n) => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) % n;
+  };
+  const types = schema.properties.type.enum;
+  const common = ['heading', 'section', 'list', 'paragraph', 'columns', 'card', 'figure', 'tabs'];
+  const typeOf = () => (rand(2) === 0 ? common[rand(common.length)] : types[rand(types.length)]);
+  const keys = ['id', 'text', 'level', 'blocks', 'children', 'items', 'content', 'columns', 'child', 'slots', 'tabs', 'media', 'rows', 'title'];
+  const scalar = () => [null, rand(10) - 3, 1.5, '', 'x', true, typeOf(), 'nope'][rand(8)];
+  const value = (depth) => {
+    const pick = rand(depth > 6 ? 3 : 10);
+    if (pick < 3) return scalar();
+    if (pick < 5) return Array.from({ length: rand(4) }, () => value(depth + 1));
+    const node = Object.fromEntries(Array.from({ length: rand(4) }, () => [keys[rand(keys.length)], value(depth + 1)]));
+    const kind = rand(10);
+    if (kind < 7) node.type = typeOf();
+    else if (kind === 7) node.type = 'nope';
+    else if (kind === 8) Object.assign(node, { _type: 'block', children: [] });
+    if (rand(3) === 0) node.id = ['a', 'b', 'c'][rand(3)];
+    return node;
+  };
+  const depthOf = (v) => (v && typeof v === 'object' ? 1 + Math.max(0, ...Object.values(v).map(depthOf)) : 0);
+  const docs = new Set();
+  const seen = new Set();
+  let deepest = 0;
+  for (let i = 0; i < 2000; i++) {
+    const doc = rand(10) === 0 ? value(0) : { blocks: Array.from({ length: 1 + rand(4) }, () => value(1)) };
+    const result = validate(doc);
+    assert.ok(wellFormed(result), JSON.stringify(doc));
+    docs.add(JSON.stringify(doc));
+    deepest = Math.max(deepest, depthOf(doc));
+    if (!result.ok) for (const e of result.errors) seen.add(e.code);
+  }
+  assert.ok(docs.size >= 1500, `${docs.size} distinct docs`);
+  assert.deepEqual(CODES.filter((c) => !seen.has(c) && c !== 'too_deep'), []);
+  assert.ok(deepest >= 5, `deepest doc is ${deepest}`);
+});
+
+test('a cycle through blocks stops at MAX_DEPTH', () => {
+  const loop = { type: 'section', blocks: [] };
+  loop.blocks.push(loop);
+  assert.deepEqual(validate({ blocks: [loop] }).errors.map((e) => e.code), ['too_deep']);
 });
 
 test('every type the schema names passes as a bare block', () => {
