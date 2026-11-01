@@ -305,6 +305,7 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
     const head = await reply(`{"jsonrpc":"2.0","id":"ten","method":"tools/call","params":{"pad":"${pad}"}}\n`);
     assert.equal(head.id, 'ten');
     assert.equal((await reply(`{"jsonrpc":"2.0","id":0,"method":"tools/call","params":{"pad":"${pad}"}}\n`)).id, 0);
+    assert.equal((await reply(`{"jsonrpc":"2.0","id":"\\x","method":"tools/call","params":{"pad":"${pad}"}}\n`)).id, null);
     const sized = (extra) => {
       const line = (pad) => `{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"explain","arguments":{"errors":[],"pad":"${pad}"}}}`;
       return `${line('x'.repeat(MAX_MESSAGE_BYTES - line('').length + extra))}\n`;

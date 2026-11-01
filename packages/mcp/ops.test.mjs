@@ -209,7 +209,7 @@ test('patch-card-body lowers to a patch-block of the body slot', () => {
   refused(applyOp(doc(card('slots')), { op: 'patch-card-body', id: 'k', content: body }), 'invalid_op');
 });
 
-test('patch-card-body reads the card the strict way: each slot holds at most one element of its kind, text fields are text or null', () => {
+test('patch-card-body reads the card the strict way (each slot holds at most one element of its kind, text fields are text or null) and finds it in every container', () => {
   const body = text('new');
   const run = (c) => applyOp(doc(c), { op: 'patch-card-body', id: 'k', content: body });
   for (const slots of [
@@ -228,6 +228,12 @@ test('patch-card-body reads the card the strict way: each slot holds at most one
   }
   refused(applyOp(doc({ id: 'e', type: 'expandable', children: 'x', blocks: [card({})] }), { op: 'patch-card-body', id: 'k', content: body }), 'block_not_found', 'k');
   assert.ok(applyOp(doc({ id: 'cols', type: 'columns', columns: ['x', [card({})]] }), { op: 'patch-card-body', id: 'k', content: body }).ok);
+  for (const box of [
+    { id: 'b', type: 'section', blocks: [card({})] },
+    { id: 'b', type: 'steps', steps: [{ id: 's1', children: [card({})] }] },
+    { id: 'b', type: 'tabs', tabs: [{ id: 't1', blocks: [card({})] }] },
+    { id: 'b', type: 'figure', child: card({}) },
+  ]) assert.ok(applyOp(doc(null, box), { op: 'patch-card-body', id: 'k', content: body }).ok, box.type);
   for (const c of [
     card({ body: [{ type: 'paragraph', content: [{ type: 'text', value: 'a', marks: [] }] }] }),
     card({ body: [{ type: 'paragraph', content: 'x' }] }),
@@ -300,6 +306,13 @@ test('table intents refuse a table outside the strict grammar, a duplicate id an
   const run = (blocks, shape = shapeOf(t)) => applyOp(doc(...blocks), { op: 'patch-table-structure', id: 'tb', shape, action: 'add-row' });
   assert.ok(run([t]).ok);
   refused(run([t, para('p'), { id: 'st', type: 'steps', steps: [{ id: 'p' }] }]), 'duplicate_id', 'p');
+  for (const box of [
+    { id: 'x', type: 'tabs', tabs: [{ id: 'tab', blocks: [para('p')] }] },
+    { id: 'x', type: 'expandable', children: [para('p')] },
+    { id: 'x', type: 'terminal', children: [para('p')] },
+    { id: 'x', type: 'columns', columns: [[para('p')]] },
+    { id: 'x', type: 'figure', child: para('p') },
+  ]) refused(run([t, para('p'), box]), 'duplicate_id', 'p');
   refused(run([t, { id: 'old', type: 'table', rows: [[{ type: 'text', text: 'tiptap' }]] }]), 'table_normalization_would_change_authored_data');
   refused(run([t, { type: 'table', rows: [[text('no id')]] }]), 'table_normalization_would_change_authored_data');
   refused(run([grid([[text('a')]], { columns: [] })], {}), 'table_normalization_would_change_authored_data');
