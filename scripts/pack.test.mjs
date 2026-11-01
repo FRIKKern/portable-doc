@@ -143,6 +143,7 @@ test('only goldens/blocks/*.golden.json are pack types, and only conformance/*.j
   write(path.join(root, 'goldens/blocks/b1.golden.json.orig'), '{}\n');
   write(path.join(root, 'conformance/CONFORMANCE.md'), '# notes\n');
   write(path.join(root, 'conformance/fixtures/sample.json'), '{"rows":[]}\n');
+  write(path.join(root, 'conformance/ref.json.orig'), '{}\n');
   source(pack(root));
   const r = check(root);
   assert.equal(r.code, 0, r.out);

@@ -77,7 +77,7 @@ function totalsText(t) {
 export function render(reports, types, tierOf) {
   const long = reports.filter((r) => r.renderer.length > MAX_NAME).map((r) => r.renderer);
   if (long.length) throw new Error(`renderer names over ${MAX_NAME} characters do not fit: ${long.join(', ')}`);
-  const ordered = [...reports].sort((a, b) => Number(!!b.reference) - Number(!!a.reference) || COMPARES.indexOf(a.compare) - COMPARES.indexOf(b.compare) || a.renderer.localeCompare(b.renderer));
+  const ordered = [...reports].sort((a, b) => Number(!!b.reference) - Number(!!a.reference) || COMPARES.indexOf(a.compare) - COMPARES.indexOf(b.compare));
   const byRenderer = ordered.map((r) => ({ report: r, rows: Object.fromEntries(r.rows.map((row) => [row.type, row])), tally: tally(r) }));
   const groups = grouped(types, tierOf);
   const n = byRenderer.length;
