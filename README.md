@@ -46,6 +46,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 | The spec, as JSON Schema (synced from Barkpark, never edited here) | [`spec/`](spec/), source in [`SOURCE.json`](SOURCE.json) ([0003](docs/decisions/0003-pull-sync.md)) |
 | The goldens every renderer must pass, stamped (synced the same way) | [`goldens/`](goldens/) |
 | The doc validator and its reason codes; broken and valid fixtures. Report-only: nothing calls it yet | [`packages/validate/`](packages/validate/CODES.md), [`fixtures/`](fixtures/) ([0004](docs/decisions/0004-validate.md)) |
+| The MCP server an agent uses to validate, explain, apply ops to and render a doc | [`packages/mcp/`](packages/mcp/README.md) ([0005](docs/decisions/0005-mcp.md)) |
 | The quality bar | [`QUALITY.md`](QUALITY.md) |
 | How we work | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
 | Decisions | [`docs/decisions/`](docs/decisions/), one page each |
