@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const MIN_BLOCK_GOLDENS = 80;
-export const PACK_DIRS = ['spec', 'goldens'];
+export const PACK_DIRS = ['spec', 'goldens', 'conformance'];
 export const BARKPARK_REPO = 'FRIKKern/barkpark';
 export const BARKPARK_PACK = 'api/priv/portable_doc';
 

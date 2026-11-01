@@ -1,5 +1,5 @@
-# Keeps README's timeline and the roadmap picture current.
-# Why and how: docs/decisions/0001-one-home.md
+# Keeps README's timeline, the roadmap picture and the conformance heatmap current.
+# Why and how: docs/decisions/0001-one-home.md, docs/decisions/0005-conformance-heatmap.md
 name: housekeeping
 on:
   push:
@@ -32,10 +32,11 @@ jobs:
             git reset -q --hard origin/main
             node scripts/readme-timeline.mjs
             node scripts/generate-roadmap.mjs
+            node scripts/generate-heatmap.mjs
             node scripts/check-docs.mjs
-            git add README.md docs/images/roadmap.svg
+            git add README.md docs/images/roadmap.svg docs/images/conformance.svg
             git diff --cached --quiet && { echo "no change"; exit 0; }
-            git commit -q -m 'chore: refresh README timeline and roadmap [skip ci]'
+            git commit -q -m 'chore: refresh README timeline, roadmap and heatmap [skip ci]'
             git push origin HEAD:main && exit 0
             echo "::warning::push $try rejected (main moved): regenerating from origin/main"
             sleep $((try * 5))
