@@ -7,8 +7,9 @@ export function readerUrl(base) {
   try {
     url = new URL(base);
   } catch {
-    return { error: `BARKPARK_URL ${JSON.stringify(base)} is not a URL` };
+    return { error: 'BARKPARK_URL is not a URL' };
   }
+  if (url.username || url.password) return { error: 'BARKPARK_URL must not carry a user or password; put the credential in BARKPARK_TOKEN' };
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return { error: `BARKPARK_URL must be http or https, got ${url.protocol}` };
   return { url: `${url.origin}${url.pathname.replace(/\/+$/, '')}${RENDER_PATH}` };
 }
@@ -28,6 +29,7 @@ export async function render(doc, { base, token, timeoutMs }) {
   const target = readerUrl(base);
   if (target.error) return { ok: false, error: target.error };
   if (!token) return { ok: false, error: 'render needs BARKPARK_TOKEN, a Barkpark ingest token or admin API token' };
+  if (!/^[\x21-\x7e]+$/.test(token)) return { ok: false, error: 'BARKPARK_TOKEN must be printable ASCII with no spaces or line breaks' };
   const body = JSON.stringify({ blocks: Array.isArray(doc) ? doc : doc.blocks });
   try {
     const response = await fetch(target.url, {

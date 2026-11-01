@@ -119,8 +119,8 @@ describe('over stdio with the SDK client', () => {
     await protocolError(call(client, 'explain', { errors: [], doc: 'x' }), /doc must be an object/);
     await protocolError(call(client, 'nope', {}), /no tool "nope"; tools: validate, explain, apply_ops, render/);
     await assert.rejects(client.request({ method: 'tools/call', params: { name: 'validate', arguments: [] } }, CallToolResultSchema, TIMEOUT), (e) => {
-      assert.equal(e.code, ErrorCode.InternalError);
-      assert.match(e.message, /"expected": "record"/);
+      assert.equal(e.code, ErrorCode.InvalidParams);
+      assert.match(e.message, /"arguments"/);
       return true;
     });
   });
@@ -152,7 +152,9 @@ describe('over stdio with the SDK client', () => {
     const checked = (await call(client, 'validate', { doc })).structuredContent;
     assert.deepEqual(checked.errors.map((e) => e.code), ['too_deep']);
     const words = (await call(client, 'explain', { errors: checked.errors, doc })).structuredContent.explanations;
-    assert.match(words[0].text, /^block 1 \(section\) › field "blocks" › block 1 \(section\)/);
+    assert.match(words[0].text, /^… › field "blocks" › block 1 \(section\)/);
+    assert.ok(words[0].where.length <= 1000);
+    assert.match(words[0].where, /› block 1 \(section\)$/);
     await protocolError(call(client, 'apply_ops', { doc, ops: [] }), new RegExp(`nest deeper than ${MAX_DEPTH} JSON levels`));
     await protocolError(call(client, 'render', { doc }), new RegExp(`nest deeper than ${MAX_DEPTH} JSON levels`));
     await protocolError(call(client, 'apply_ops', { doc: SAMPLE, ops: [{ op: 'append-block', block: deepDoc(600).blocks[0] }] }), /nest deeper/);
@@ -200,6 +202,25 @@ describe('render failures are tool errors, never a hang', () => {
       assert.equal(reader.requests.length, 0);
       toolError(await renderWith({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: 'wrong' }), /answered 401: .*invalid ingest token/);
       assert.equal(reader.requests[0].auth, 'Bearer wrong');
+    } finally {
+      await reader.close();
+    }
+  });
+
+  test('a BARKPARK_TOKEN or BARKPARK_URL of the wrong shape is named, never echoed, and sends nothing', async () => {
+    const reader = await startFakeReader();
+    try {
+      for (const token of [`${FAKE_TOKEN}\nX: 1`, `${FAKE_TOKEN} x`, `${FAKE_TOKEN}\u{1f4a5}`, `${FAKE_TOKEN}\r\n`, `\t${FAKE_TOKEN}`]) {
+        const answer = await renderWith({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: token });
+        toolError(answer, /BARKPARK_TOKEN must be printable ASCII with no spaces or line breaks/);
+        assert.ok(!JSON.stringify(answer).includes(FAKE_TOKEN), JSON.stringify(token));
+      }
+      for (const base of [`http://[${FAKE_TOKEN}`, reader.base.replace('//', `//u:${FAKE_TOKEN}@`)]) {
+        const answer = await renderWith({ BARKPARK_URL: base });
+        toolError(answer, /BARKPARK_URL (is not a URL|must not carry a user or password)/);
+        assert.ok(!JSON.stringify(answer).includes(FAKE_TOKEN), base);
+      }
+      assert.equal(reader.requests.length, 0);
     } finally {
       await reader.close();
     }
@@ -292,6 +313,27 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
     assert.equal((await reply('{"jsonrpc":"2.0","id":4,"method":"nope"}\n')).error.code, ErrorCode.MethodNotFound);
     const bare = await reply('{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"validate"}}\n');
     assert.deepEqual([bare.error.code, bare.error.message.includes('validate needs doc')], [ErrorCode.InvalidParams, true]);
+  });
+
+  test('blank lines get no answer; a line ending in CRLF is read like one ending in LF', async () => {
+    assert.deepEqual(await reply('\n  \r\n\t\n{"jsonrpc":"2.0","id":7,"method":"ping"}\n'), { jsonrpc: '2.0', id: 7, result: {} });
+    assert.deepEqual(await reply('{"jsonrpc":"2.0","id":8,"method":"ping"}\r\n'), { jsonrpc: '2.0', id: 8, result: {} });
+  });
+
+  test('tools/call params of the wrong shape are InvalidParams naming the bad field; params null is not JSON-RPC, so InvalidRequest', async () => {
+    for (const [params, field] of [
+      ['{"name":"validate","arguments":[]}', /"arguments"/],
+      ['{"name":"validate","arguments":"x"}', /"arguments"/],
+      ['{"name":"validate","arguments":null}', /"arguments"/],
+      [undefined, /"params"/],
+      ['{"name":1,"arguments":{}}', /"name"/],
+    ]) {
+      const line = `{"jsonrpc":"2.0","id":6,"method":"tools/call"${params === undefined ? '' : `,"params":${params}`}}\n`;
+      const { error } = await reply(line);
+      assert.equal(error.code, ErrorCode.InvalidParams, line);
+      assert.match(error.message, field, line);
+    }
+    assert.equal((await reply('{"jsonrpc":"2.0","id":6,"method":"tools/call","params":null}\n')).error.code, ErrorCode.InvalidRequest);
   });
 
   test('a depth-5000 doc (10000 JSON levels, past what JSON.stringify can write): validate answers too_deep, explain names it, apply_ops and render refuse it', async () => {

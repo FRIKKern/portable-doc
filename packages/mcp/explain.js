@@ -7,7 +7,7 @@ export function readCodes(markdown) {
   for (const line of markdown.split('\n')) {
     const cells = line.split('|').map((c) => c.trim());
     const code = cells[1]?.match(/^`([a-z_]+)`$/)?.[1];
-    if (code && CODES.includes(code) && !rows.has(code)) rows.set(code, cells[2]);
+    if (code && CODES.includes(code)) rows.set(code, cells[2]);
   }
   const missing = CODES.filter((c) => !rows.has(c));
   if (missing.length) throw new Error(`CODES.md has no row for ${missing.join(', ')}`);
@@ -17,13 +17,15 @@ export function readCodes(markdown) {
 const codesFile = fileURLToPath(new URL('CODES.md', import.meta.resolve('@portable-doc/validate')));
 export const REFUSED_WHEN = readCodes(fs.readFileSync(codesFile, 'utf8'));
 
+const MAX_WHERE = 1_000;
 const isMap = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const unescape = (key) => key.replaceAll('~1', '/').replaceAll('~0', '~');
 const plain = (text) => text.replaceAll('`', '');
+const clip = (text) => (text.length > 100 ? `${text.slice(0, 100)}…` : text);
 
 function describe(block) {
   if (!isMap(block)) return '';
-  const bits = [typeof block.type === 'string' ? block.type : null, typeof block.id === 'string' && block.id ? `id "${block.id}"` : null].filter(Boolean);
+  const bits = [typeof block.type === 'string' ? clip(block.type) : null, typeof block.id === 'string' && block.id ? `id "${clip(block.id)}"` : null].filter(Boolean);
   return bits.length ? ` (${bits.join(', ')})` : '';
 }
 
@@ -43,15 +45,22 @@ export function where(path, doc) {
     if (Array.isArray(node) || (node === undefined && index !== null)) {
       const child = Array.isArray(node) ? node[index ?? -1] : undefined;
       const noun = ['blocks', 'children'].includes(parentKey) ? 'block' : 'item';
-      words.push(index === null ? `"${key}"` : `${noun} ${index + 1}${describe(child)}`);
+      words.push(index === null ? `"${clip(key)}"` : `${noun} ${index + 1}${describe(child)}`);
       node = child;
     } else {
-      words.push(`field "${key}"`);
+      words.push(`field "${clip(key)}"`);
       node = isMap(node) && Object.hasOwn(node, key) ? node[key] : undefined;
     }
     parentKey = key;
   }
-  return words.join(' › ') || 'the blocks array';
+  return tail(words) || 'the blocks array';
+}
+
+function tail(words) {
+  let kept = words.length;
+  let size = 0;
+  while (kept > 0 && size + words[kept - 1].length + 3 <= MAX_WHERE) size += words[--kept].length + 3;
+  return [...(kept > 0 ? ['…'] : []), ...words.slice(kept)].join(' › ');
 }
 
 export function explain(errors, doc) {

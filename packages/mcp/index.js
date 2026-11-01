@@ -5,6 +5,8 @@ import { TOOLS, callTool } from './tools.js';
 export { TOOLS } from './tools.js';
 export { applyOp, applyOps } from './ops/apply.js';
 
+const ToolCall = CallToolRequestSchema.pick({ method: true }).loose();
+
 export const RENDER_TIMEOUT_MS = 10_000;
 
 export function configFromEnv(env = process.env) {
@@ -15,6 +17,6 @@ export function configFromEnv(env = process.env) {
 export function createServer(config = configFromEnv()) {
   const server = new Server({ name: 'portable-doc', version: '0.0.0' }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: TOOLS }));
-  server.setRequestHandler(CallToolRequestSchema, (request) => callTool(config, request.params.name, request.params.arguments));
+  server.setRequestHandler(ToolCall, (request) => callTool(config, request.params.name, request.params.arguments));
   return server;
 }

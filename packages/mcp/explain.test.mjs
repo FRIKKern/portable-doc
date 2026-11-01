@@ -27,6 +27,28 @@ test('paths read as blocks and fields, naming each block by type and id when the
   assert.equal(where('/blocks/0/level'), 'block 1 › field "level"');
   assert.equal(where('/0/type', [{ type: 'divider' }]), 'block 1 (divider) › field "type"');
   assert.equal(where('/blocks/9/a~1b~0c', doc), 'block 10 › field "a/b~c"');
+  assert.equal(where('/blocks/0/~01', doc), 'block 1 (heading, id "h") › field "~1"');
+  const nested = { blocks: [{ type: 'list', items: [{ text: 'a', children: [{ type: 'list', items: ['b'] }] }] }] };
+  assert.equal(where('/blocks/0/items/0/children/0/items/0', nested), 'block 1 (list) › field "items" › item 1 › field "children" › block 1 (list) › field "items" › item 1');
+});
+
+test('a location is at most 1000 characters: long keys, types and ids are cut at 100, a deep path keeps its innermost steps', () => {
+  const long = 'k'.repeat(5000);
+  assert.equal(where(`/blocks/0/${long}`, { blocks: [{ type: long, id: long }] }), `block 1 (${'k'.repeat(100)}…, id "${'k'.repeat(100)}…") › field "${'k'.repeat(100)}…"`);
+  assert.equal(where(`/blocks/0/x/${long}`, { blocks: [{ x: [] }] }), `block 1 › field "x" › "${'k'.repeat(100)}…"`);
+  const deep = where('/0'.repeat(4999), []);
+  assert.ok(deep.length <= 1000, `${deep.length}`);
+  assert.ok(deep.startsWith('… › item 1 › '), deep.slice(0, 40));
+  assert.ok(deep.endsWith(' › item 1'));
+  assert.equal(where('/0'.repeat(111), []).startsWith('…'), false);
+  assert.equal(where('/0'.repeat(112), []).startsWith('…'), true);
+});
+
+test('explain answers in proportion to what it is given: a 10 MB call or a doc with a 1 MB id never answers 100s of MB', () => {
+  const errors = Array(1000).fill({ code: 'too_deep', path: '/0'.repeat(4999) });
+  assert.ok(JSON.stringify(explain(errors, [])).length < 2 * JSON.stringify(errors).length);
+  const id = 'i'.repeat(1_000_000);
+  assert.ok(JSON.stringify(explain(Array(1000).fill({ code: 'too_deep', path: '/0' }), [{ type: 'divider', id }])).length < 1_000_000);
 });
 
 test('every broken fixture: each validate error gets one explanation with its place, its message and its rule', () => {

@@ -40,7 +40,6 @@ export class BoundedStdioTransport {
     this.#stdin.off('data', this.#ondata);
     this.#stdin.off('error', this.#onerror);
     this.#stdin.off('end', this.#onend);
-    this.#stdin.pause();
     this.#chunks = [];
     this.onclose?.();
   }
@@ -87,7 +86,7 @@ export class BoundedStdioTransport {
       const id = idOf(head.toString('utf8').match(HEAD_ID)) ?? idOf(tail.toString('utf8').match(TAIL_ID));
       return this.#refuse(id, ErrorCode.InvalidRequest, `message is ${size} bytes; the limit is ${this.#limit}`);
     }
-    const line = Buffer.concat(this.#chunks).toString('utf8').replace(/\r$/, '');
+    const line = Buffer.concat(this.#chunks).toString('utf8');
     this.#chunks = [];
     this.#size = 0;
     if (line.trim() === '') return;

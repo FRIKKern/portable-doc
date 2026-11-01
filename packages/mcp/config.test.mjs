@@ -16,12 +16,16 @@ test('BARKPARK_TOKEN is read as given', () => {
   assert.equal(configFromEnv({ BARKPARK_TOKEN: 'synthetic' }).token, 'synthetic');
 });
 
-test('BARKPARK_URL: missing, not a URL, not http, a path prefix, query and hash dropped', () => {
+test('BARKPARK_URL: missing, not a URL, not http, with a user or password (never echoed), a path prefix, query and hash dropped', () => {
   assert.equal(configFromEnv({}).base, undefined);
   assert.match(readerUrl(undefined).error, /render needs BARKPARK_URL/);
   assert.match(readerUrl('').error, /render needs BARKPARK_URL/);
   assert.match(readerUrl('guerrilla').error, /is not a URL/);
   assert.match(readerUrl('ftp://x').error, /must be http or https/);
+  for (const base of ['http://[secret9f3a', 'https://user:secret9f3a@h.example', 'https://secret9f3a@h.example']) {
+    assert.doesNotMatch(readerUrl(base).error, /secret9f3a/, base);
+  }
+  assert.match(readerUrl('https://user:secret9f3a@h.example').error, /must not carry a user or password/);
   assert.equal(readerUrl('https://h.example').url, 'https://h.example/v1/plugins/bulldocs/render');
   assert.equal(readerUrl('https://h.example/w/a/p/b//').url, 'https://h.example/w/a/p/b/v1/plugins/bulldocs/render');
   assert.equal(readerUrl('http://h.example:4000/?x=1#y').url, 'http://h.example:4000/v1/plugins/bulldocs/render');
