@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 1 milestone closed
-  - Delivered: [R4.1 Equality test: Barkpark's Elixir block modules match spec/blocks.schema.json](https://github.com/FRIKKern/barkpark/issues/24955)
+- **Today** · 3 milestones closed
+  - Delivered: [R2.1 Contract truth: every editor member any app uses is declared in EMBED-CONTRACT.md and index.d.ts, with EDITOR_VERSION + sha](https://github.com/FRIKKern/barkpark/issues/24948)
 - **Yesterday** · 3 changes, 5 milestones closed
   - Delivered: [R1.5 Sync: Barkpark opens a PR to portable-doc with spec/ and goldens/ when the stamp changes; portable-doc fails on a stale stamp](https://github.com/FRIKKern/barkpark/issues/24945)
 <!-- timeline:end -->
@@ -49,7 +49,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 | The format spec | [`SPEC.md`](SPEC.md) |
 | The spec, as JSON Schema (synced from Barkpark, never edited here) | [`spec/`](spec/), source in [`SOURCE.json`](SOURCE.json) ([0003](docs/decisions/0003-pull-sync.md)) |
 | The goldens every renderer must pass, stamped (synced the same way) | [`goldens/`](goldens/) |
-| Each renderer's result on the goldens (synced the same way) | [`conformance/`](conformance/), drawn as [`conformance.svg`](docs/images/conformance.svg) |
+| Each renderer's result on the goldens (synced the same way) | [`conformance/`](conformance/), drawn as [`conformance.svg`](docs/images/conformance.svg) ([0005](docs/decisions/0005-conformance-heatmap.md)) |
+| The doc validator and its reason codes; broken and valid fixtures. Report-only: nothing calls it yet | [`packages/validate/`](packages/validate/CODES.md), [`fixtures/`](fixtures/) ([0004](docs/decisions/0004-validate.md)) |
 | The quality bar | [`QUALITY.md`](QUALITY.md) |
 | How we work | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
 | Decisions | [`docs/decisions/`](docs/decisions/), one page each |

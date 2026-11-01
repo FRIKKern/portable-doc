@@ -9,7 +9,7 @@
     "heatmap": "node scripts/generate-heatmap.mjs",
     "timeline": "node scripts/readme-timeline.mjs",
     "sync": "node scripts/sync-from-barkpark.mjs",
-    "test": "node --test scripts/*.test.mjs",
-    "check": "node scripts/check-docs.mjs && node scripts/check-pack.mjs && node --test scripts/*.test.mjs"
+    "test": "node --test scripts/*.test.mjs packages/*/*.test.mjs",
+    "check": "node scripts/check-docs.mjs && node scripts/check-pack.mjs && node --test scripts/*.test.mjs packages/*/*.test.mjs"
   }
 }

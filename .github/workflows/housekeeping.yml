@@ -1,5 +1,5 @@
 # Keeps README's timeline, the roadmap picture and the conformance heatmap current.
-# Why and how: docs/decisions/0001-one-home.md, docs/decisions/0004-conformance-heatmap.md
+# Why and how: docs/decisions/0001-one-home.md, docs/decisions/0005-conformance-heatmap.md
 name: housekeeping
 on:
   push:

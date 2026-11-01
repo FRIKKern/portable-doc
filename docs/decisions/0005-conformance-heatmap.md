@@ -1,4 +1,4 @@
-# 0004 The sync carries conformance/, housekeeping draws the heatmap
+# 0005 The sync carries conformance/, housekeeping draws the heatmap
 
 Date: 2026-11-01 · Status: accepted · Extends [0003](0003-pull-sync.md)
 
