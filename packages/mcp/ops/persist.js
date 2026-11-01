@@ -1,5 +1,4 @@
 import { get, isMap, isString, same } from './terms.js';
-import { treeAuthoredIds } from './tree.js';
 
 const isList = Array.isArray;
 const size = (map) => Object.keys(map).length;
@@ -73,61 +72,37 @@ function tableSnapshot(value) {
   return out;
 }
 
-export function ensureIds(blocks) {
-  return ensureList(blocks, 'block', new Set(treeAuthoredIds(blocks)));
-}
+export const ensureIds = (blocks) => mapList(blocks, ensureBlock);
 
-const ensureList = (blocks, prefix, taken) => mapList(blocks, (b, i) => ensureBlock(b, prefix, i, taken));
+const MINTED = Symbol('minted');
 
-function uniqueId(prefix, index, taken) {
-  const candidate = `${prefix}-${index}`;
-  if (!taken.has(candidate)) return candidate;
-  let k = 1;
-  while (taken.has(`${candidate}-${k}`)) k++;
-  return `${candidate}-${k}`;
-}
-
-function ensureIdentity(value, prefix, index, taken) {
+function ensureIdentity(value) {
   const id = get(value, 'id');
-  if (isString(id) && id !== '') return value;
-  const minted = uniqueId(prefix, index, taken);
-  taken.add(minted);
-  return { ...value, id: minted };
+  return isString(id) && id !== '' ? value : { ...value, id: MINTED };
 }
 
-function ensureBlock(block, prefix, index, taken) {
+function ensureBlock(block) {
   if (!isMap(block)) return block;
-  const b = ensureIdentity(block, prefix, index, taken);
-  const { id, type } = b;
-  if (type === 'steps' && isList(b.steps)) return put(b, 'steps', ensureSteps(b.steps, `${id}-step`, taken));
-  if (type === 'tabs') return isList(get(b, 'tabs')) ? put(b, 'tabs', ensureTabs(b.tabs, `${id}-tab`, taken)) : b;
-  if (type === 'expandable') return ensureVisibleBody(b, id, taken);
-  if (type === 'columns') return isList(b.columns) ? put(b, 'columns', ensureColumns(b.columns, id, taken)) : b;
-  if (type === 'figure') return isMap(b.child) ? put(b, 'child', ensureBlock(b.child, `${id}-child`, 0, taken)) : b;
-  if (type === 'terminal') return isList(b.children) && !Object.hasOwn(b, 'blocks') ? put(b, 'children', ensureList(b.children, id, taken)) : b;
-  return isList(b.blocks) ? put(b, 'blocks', ensureList(b.blocks, id, taken)) : b;
+  const b = ensureIdentity(block);
+  const { type } = b;
+  if (type === 'steps' && isList(b.steps)) return put(b, 'steps', mapList(b.steps, (row) => (isMap(row) ? ensureVisibleBody(ensureIdentity(row)) : row)));
+  if (type === 'tabs') return isList(get(b, 'tabs')) ? put(b, 'tabs', mapList(b.tabs, ensureTab)) : b;
+  if (type === 'expandable') return ensureVisibleBody(b);
+  if (type === 'columns') return isList(b.columns) ? put(b, 'columns', mapList(b.columns, (column) => (isList(column) ? ensureIds(column) : column))) : b;
+  if (type === 'figure') return isMap(b.child) ? put(b, 'child', ensureBlock(b.child)) : b;
+  if (type === 'terminal') return isList(b.children) && !Object.hasOwn(b, 'blocks') ? put(b, 'children', ensureIds(b.children)) : b;
+  return isList(b.blocks) ? put(b, 'blocks', ensureIds(b.blocks)) : b;
 }
 
-const ensureSteps = (rows, prefix, taken) =>
-  mapList(rows, (row, i) => {
-    if (!isMap(row)) return row;
-    const r = ensureIdentity(row, prefix, i, taken);
-    return ensureVisibleBody(r, r.id, taken);
-  });
+function ensureTab(row) {
+  if (!isMap(row)) return row;
+  const r = ensureIdentity(row);
+  return isList(get(r, 'blocks')) ? put(r, 'blocks', ensureIds(r.blocks)) : r;
+}
 
-const ensureTabs = (rows, prefix, taken) =>
-  mapList(rows, (row, i) => {
-    if (!isMap(row)) return row;
-    const r = ensureIdentity(row, prefix, i, taken);
-    return isList(get(r, 'blocks')) ? put(r, 'blocks', ensureList(r.blocks, r.id, taken)) : r;
-  });
-
-const ensureColumns = (columns, prefix, taken) =>
-  mapList(columns, (column, i) => (isList(column) ? ensureList(column, `${prefix}-column-${i}`, taken) : column));
-
-function ensureVisibleBody(container, prefix, taken) {
+function ensureVisibleBody(container) {
   const key = visibleBodyKey(container);
-  return key ? put(container, key, ensureList(container[key], prefix, taken)) : container;
+  return key ? put(container, key, ensureIds(container[key])) : container;
 }
 
 export function normalizeRenderShapes(blocks) {
@@ -273,29 +248,15 @@ function legacyTable(b) {
   const { content } = b;
   const head = isMap(content) ? orElse(get(content, 'head'), get(content, 'header')) : null;
   const rows = isMap(content) ? get(content, 'rows') : content;
-  if (!isList(rows)) return b;
-  const parsed = legacyValues(rows, legacyRow);
-  if (!parsed) return b;
-  const explicit = head === null ? null : isList(head) ? legacyValues(head, legacyInline) : false;
-  if (explicit === false) return b;
-  const cells = parsed.map((r) => r.cells);
-  const [resolvedHead, resolvedRows] = isList(explicit) ? [explicit, cells] : cells.length > 0 && parsed[0].header ? [cells[0], cells.slice(1)] : [null, cells];
-  const normalized = { ...omit(b, ['content', 'head', 'header', 'rows']), type: 'table', rows: resolvedRows };
-  return isList(resolvedHead) ? { ...normalized, head: resolvedHead } : normalized;
+  const migrates = isList(rows) && legacyValues(rows, legacyRow) !== null && (head === null || isList(head));
+  return migrates ? omit(b, ['content']) : b;
 }
 
 function legacyRow(row) {
-  if (isList(row)) return legacyCells(row, false);
+  if (isList(row)) return legacyValues(row, legacyInline);
   if (!isMap(row)) return null;
   const cells = isList(get(row, 'content')) ? row.content : get(row, 'cells');
-  if (!isList(cells)) return null;
-  const headers = cells.map((c) => isMap(c) && (c.header === true || c.type === 'tableHeader' || c.type === 'table_header'));
-  return legacyCells(cells, get(row, 'header') === true || (cells.length > 0 && headers.every(Boolean)));
-}
-
-function legacyCells(cells, header) {
-  const normalized = legacyValues(cells, legacyInline);
-  return normalized && { cells: normalized, header };
+  return isList(cells) ? legacyValues(cells, legacyInline) : null;
 }
 
 function headersKey(b) {
@@ -345,7 +306,7 @@ function arrayTable(table, rows) {
   if (declared === true && rows.length > 0) {
     const r = legacyRow(first);
     if (r) {
-      b = { ...omit(b, ['header']), head: r.cells };
+      b = { ...omit(b, ['header']), head: r };
       body = rows.slice(1);
     }
   } else if (blank(declared) && rows.length > 0 && isMap(first) && get(first, 'header') === true && isList(get(first, 'cells')) && size(first) === 2) {

@@ -106,7 +106,7 @@ test('field patches coerce like Barkpark: boolean text, number text and range, s
   for (const patch of [{ value: 11 }, { value: 'seven' }, { min: 3 }, { max: 1 }, { step: 0 }, { value: '.5' }, { value: '5.' }, { value: ' 5. ' }, { value: '1e999' }, { value: '-1e999' }, { value: [] }, { value: '', min: 5, max: 3 }]) {
     refused(applyOp(doc(num), { op: 'patch-block', id: 'n', patch }), 'invalid_op');
   }
-  refused(applyOp(doc({ id: 'n', type: 'field-number' }), { op: 'patch-block', id: 'n', patch: { value: 'seven' } }), 'invalid_op');
+  for (const value of ['seven', '1e999', '-1e999']) refused(applyOp(doc({ id: 'n', type: 'field-number' }), { op: 'patch-block', id: 'n', patch: { value } }), 'invalid_op');
   const select = { id: 's', type: 'field-select' };
   assert.ok(applyOp(doc(select), { op: 'patch-block', id: 's', patch: { options: [{ value: 'a' }, { value: 'b', label: 'B' }] } }).ok);
   for (const options of [[{ value: 'a' }, { value: 'a' }], [{ value: '' }], [{ value: 'a', extra: 1 }], [{ value: 'a', label: null }], 'a']) {
@@ -147,6 +147,9 @@ test('locked blocks hold: no remove, move, replace or displacement', () => {
   refused(applyOp(pair, { op: 'insert-after', afterId: 'a', block: para('n') }), 'locked_block', 'b');
   const nested = doc(para('a'), { id: 's', type: 'section', blocks: [para('x')] }, { ...para('l'), locked: true });
   refused(applyOp(nested, { op: 'insert-after', afterId: 'a', block: para('x') }), 'duplicate_id', 'x');
+  refused(applyOp(doc(para('p'), { ...para('b'), locked: true }, { ...para('a'), locked: true }), { op: 'remove-block', id: 'p' }), 'locked_block', 'a');
+  const objects = doc({ id: { a: 1 }, type: 'paragraph', locked: true }, para('p'), { id: { b: 2 }, type: 'paragraph', locked: true });
+  refused(applyOp(objects, { op: 'move-block', id: 'p', after: null }), 'locked_block', { a: 1 });
 });
 
 test('a figure keeps exactly one child', () => {
@@ -339,6 +342,11 @@ test('the whole-doc table check is Barkpark\'s: only a table the normalizer reac
   assert.ok(run({ id: 'p', type: 'paragraph', junk: { type: 'table', id: 'q', rows: 'x' } }).ok);
   assert.ok(run({ id: 'p', type: 'paragraph', junk: [{ type: 'table', rows: [[{ content: [], header: true }]] }] }).ok);
   assert.ok(run({ id: 's', type: 'section', blocks: [{ id: 'n', type: 'table', rows: [[[]]], blocks: [{ id: 'c', type: 'table', rows: [['s']] }] }] }).ok);
+  const legacy = { id: 'q', type: 'table', content: [['a']] };
+  assert.ok(run({ id: 'c', type: 'callout', text: 'x', blocks: [legacy] }).ok);
+  assert.ok(run({ id: 'pl', type: 'pipeline', nodes: ['n'], blocks: [legacy] }).ok);
+  assert.ok(run({ id: 'q', type: 'table', content: [['{"x":1}']] }).ok);
+  assert.ok(run({ id: 'q', type: 'table', content: { rows: [['a']], head: 'x' } }).ok);
   for (const other of [
     { id: 's', type: 'section', blocks: [{ type: 'table', rows: [] }] },
     { id: 'f', type: 'figure', child: { type: 'table', rows: [] } },
@@ -353,6 +361,15 @@ test('the whole-doc table check is Barkpark\'s: only a table the normalizer reac
     { id: 'l', type: 'bulletList', content: [{ type: 'table', id: 'q', rows: [] }] },
     { id: 'p', type: 'paragraph', content: [{ type: 'table', id: 'q', children: [{ type: 'text', text: 't' }] }] },
     { id: 'n', type: 'notes', items: [[{ type: 'table', id: 'q', rows: [], value: 'v' }]] },
+    { type: 'table', id: '', rows: [[text('x')]] },
+    { id: 'tabs', type: 'tabs', tabs: [{ id: 't1', blocks: [{ type: 'table', rows: [[text('x')]] }] }] },
+    { id: 'term', type: 'terminal', children: [{ type: 'table', rows: [[text('x')]] }] },
+    { id: 'l', type: 'list', content: [{ id: 'q', type: 'table', rows: [] }] },
+    { id: 'l', type: 'list', items: [{ content: [{ id: 'q', type: 'table', rows: [] }] }] },
+    { id: 'c', type: 'callout', blocks: [legacy] },
+    { id: 'q', type: 'table', rows: [{ cells: [{ header: true, content: [] }], x: 1 }] },
+    { id: 'q', type: 'table', content: [['{"x"']] },
+    { id: 'q', type: 'table', content: { rows: [['a']], head: [['h']] } },
   ]) refused(run(other), 'table_normalization_would_change_authored_data', undefined);
 });
 
