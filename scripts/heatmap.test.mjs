@@ -69,10 +69,20 @@ test('each status has its own colour class and glyph, and host-paint cells carry
   assert.match(svg, /@media \(prefers-color-scheme: dark\)/);
 });
 
-test('rows group by x-tier, element then widget then section, untiered types last', () => {
-  const { svg } = draw(repo());
+test('rows group by x-tier, element then widget then section, then other tiers, untiered types last', () => {
+  const tiered = { definitions: { blocks: { ...spec.definitions.blocks, b4: { 'x-tier': 'layout' } } } };
+  const { svg } = draw(repo({ spec: tiered }));
   const heads = [...svg.matchAll(/letter-spacing="1.5" class="muted">([A-Z]+) · (\d+)/g)].map((m) => `${m[1]} ${m[2]}`);
-  assert.deepEqual([...new Set(heads)], ['ELEMENT 2', 'WIDGET 1', 'SECTION 1', 'OTHER 76']);
+  assert.deepEqual([...new Set(heads)], ['ELEMENT 2', 'WIDGET 1', 'SECTION 1', 'LAYOUT 1', 'OTHER 75']);
+});
+
+test('the panels are as short as the rows allow: no empty row above the footer', () => {
+  for (const blocks of [80, 81, 83]) {
+    const { svg } = draw(repo({ blocks }));
+    const height = Number(svg.match(/<svg [^>]*height="(\d+)"/)[1]);
+    const lowest = Math.max(...[...svg.matchAll(/<g data-type="[^"]+"><text x="[\d.]+" y="([\d.]+)"/g)].map((m) => Number(m[1])));
+    assert.equal(height - lowest, 71, `${blocks} blocks`);
+  }
 });
 
 test('the heatmap refuses reports that fail the pack check and writes nothing', () => {
