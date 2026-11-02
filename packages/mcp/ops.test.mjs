@@ -3,12 +3,14 @@ import fs from 'node:fs';
 import { test } from 'node:test';
 import { applyOp, applyOps } from './ops/apply.js';
 import { applyPatch } from './ops/patch.js';
+import { normalizeRenderShapes } from './ops/persist.js';
 import { project } from './ops/table.js';
 import { digest } from './test/digest.mjs';
-import { generator, intentGenerator } from './test/random-ops.mjs';
+import { generator, intentGenerator, normalizeGenerator, shapeAnswer } from './test/random-ops.mjs';
 
 const recorded = JSON.parse(fs.readFileSync(new URL('./test/patch-elixir.json', import.meta.url), 'utf8'));
 const recordedIntents = JSON.parse(fs.readFileSync(new URL('./test/intents-elixir.json', import.meta.url), 'utf8'));
+const recordedShapes = JSON.parse(fs.readFileSync(new URL('./test/normalize-elixir.json', import.meta.url), 'utf8'));
 
 const dir = new URL('../../goldens/ops/', import.meta.url);
 const goldens = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort()
@@ -373,6 +375,23 @@ test('the whole-doc table check is Barkpark\'s: only a table the normalizer reac
   ]) refused(run(other), 'table_normalization_would_change_authored_data', undefined);
 });
 
+test('a legacy list style Elixir cannot turn into text refuses the table edit as invalid_op where Barkpark raises; chardata and scalars read as text', () => {
+  const t = grid([[text('a')]]);
+  const run = (style) => applyOp(doc(t, { id: 'l', type: 'bulleted_list', style, content: ['a'] }), { op: 'patch-table-structure', id: 'tb', shape: shapeOf(t), action: 'add-row' });
+  for (const style of [{ x: 1 }, [1.5], [-1], [55296], [['a', { x: 1 }]]]) refused(run(style), 'invalid_op');
+  for (const style of [[[111, 'rd'], 101, 'red'], 'DECIMAL', 1.5, true, 3, [], null]) assert.ok(run(style).ok, JSON.stringify(style));
+  const ordered = (style) => normalizeRenderShapes([{ type: 'bulleted_list', style, content: [] }])[0].ordered;
+  assert.deepEqual([[[111, 'rd'], 101, 'red'], [78, 'umber'], 'DECIMAL', ['ordered', []], 1.5, true].map(ordered), [true, true, true, true, false, false]);
+});
+
+test('normalizer text writes numbers as Elixir to_string does: shortest float, decimal unless scientific is shorter, integers below 1e21 plain', () => {
+  const textOf = (n) => normalizeRenderShapes([{ type: 'bulleted_list', content: [n] }])[0].items[0][0].value;
+  assert.deepEqual(
+    [0.1, 1e21, -1.5e21, 2.5e-8, 1e16, 123456.789, 0.000123, 1e-7, 100.5, 1e15 + 0.5, 5e-324, 1.7976931348623157e308, -7, 0].map(textOf),
+    ['0.1', '1.0e21', '-1.5e21', '2.5e-8', '10000000000000000', '123456.789', '1.23e-4', '1.0e-7', '100.5', '1000000000000000.5', '5.0e-324', '1.7976931348623157e308', '-7', '0'],
+  );
+});
+
 function sweep(next, n) {
   const outcomes = new Map();
   const docs = new Set();
@@ -425,4 +444,16 @@ test(`${recordedIntents.answers.length} seeded card and table intent cases answe
   });
   assert.deepEqual(misses.slice(0, 5), [], 'rerun differential.mjs --intents with this seed to see the cases');
   assert.deepEqual([...outcomes].sort(), ['block_not_found', 'duplicate_id', 'invalid_op', 'ok', 'table_normalization_would_change_authored_data', 'type_mismatch']);
+});
+
+test(`${recordedShapes.answers.length} seeded shape cases normalize and preflight as Barkpark's normalize_render_shapes + table_editor_target_ids (${recordedShapes.barkpark}) answered`, () => {
+  const next = normalizeGenerator(recordedShapes.seed);
+  const outcomes = new Set();
+  const misses = recordedShapes.answers.flatMap((answer, i) => {
+    const ours = shapeAnswer(next());
+    outcomes.add(`${ours.norm === 'raised' ? 'raised' : 'ok'} ${ours.safe.code ?? ours.safe}`);
+    return digest(ours) === answer ? [] : [i];
+  });
+  assert.deepEqual(misses.slice(0, 5), [], 'rerun differential.mjs --normalize with this seed to see the cases');
+  assert.deepEqual([...outcomes].sort(), ['ok duplicate_id', 'ok ok', 'ok table_normalization_would_change_authored_data', 'raised raised']);
 });

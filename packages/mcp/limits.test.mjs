@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
 import { applyOps } from './ops/apply.js';
+import { project } from './ops/table.js';
 
 const nest = (levels) => Array.from({ length: levels - 1 }).reduce((v) => [v], 0);
 
@@ -17,6 +18,9 @@ const SHAPE = { v: 1, head: { state: 'absent' }, rows: [{ kind: 'array', cells: 
 const TABLE = { id: 't', type: 'table', rows: [[TEXT]] };
 const sections = (levels, blocks) => Array.from({ length: levels }).reduce((inner) => [{ type: 'section', blocks: inner }], blocks);
 const repeat = (n, make) => Array.from({ length: n }, (_, i) => make(i));
+const wrap = (levels, blocks) => Array.from({ length: levels }).reduce((inner) => [{ type: 'paragraph', o: inner }], blocks);
+const WIDE = { ...TABLE, rows: [[TEXT, []]] };
+const columnFlips = repeat(100, (i) => ({ op: 'patch-table-structure', id: 't', shape: project(i % 2 ? WIDE : TABLE).shape, action: i % 2 ? 'remove-column:1' : 'add-column' }));
 
 const WORST = {
   'wide locked blocks': [{ blocks: repeat(60_000, (i) => ({ id: `b${i}`, locked: true })) }, repeat(5, (i) => ({ op: 'append-block', block: { id: `n${i}` } }))],
@@ -24,6 +28,7 @@ const WORST = {
     { blocks: [{ type: 'paragraph', junk: repeat(25_000, () => ({ id: 't', type: 'table', rows: [] })) }, ...repeat(45_000, (i) => ({ id: `p${i}` })), TABLE] },
     repeat(5, (i) => ({ op: 'patch-table-cells', id: 't', shape: SHAPE, cells: [{ area: 'body', row: 0, column: 0, content: [{ type: 'text', value: `v${i}` }] }] })),
   ],
+  'many deep tables under every table edit': [{ blocks: [TABLE, ...wrap(480, repeat(60_000, (i) => ({ id: `q${i}`, type: 'table' })))] }, columnFlips],
   'a deep section chain': [{ blocks: sections(495, repeat(90_000, (i) => ({ id: `q${i}` }))) }, repeat(5, (i) => ({ op: 'remove-block', id: `q${i}` }))],
 };
 

@@ -95,12 +95,11 @@ function moveBlock(blocks, id, after) {
   return ok([...without.slice(0, idx + 1), moved, ...without.slice(idx + 1)]);
 }
 
-const idKey = (id) => (typeof id === 'string' ? `s${id}` : `j${canonical(id)}`);
 
 function lockedIndex(blocks) {
   const index = new Map();
   blocks.forEach((b, i) => {
-    if (isMap(b) && b.locked === true) index.set(idKey(blockId(b)), { id: blockId(b), idx: i });
+    if (isMap(b) && b.locked === true) index.set(canonical(blockId(b)), { id: blockId(b), idx: i });
   });
   return index;
 }

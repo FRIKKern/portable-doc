@@ -7,7 +7,38 @@ const orElse = (a, b) => (truthy(a) ? a : b);
 const blank = (v) => v === null || (isList(v) && v.length === 0);
 const leaf = (value) => ({ type: 'text', value });
 const scalar = (v) => v === null || isString(v) || typeof v === 'number' || typeof v === 'boolean';
-const text = (v) => (v === null ? '' : String(v));
+
+export const RAISED = Symbol('raised');
+
+export function toText(v) {
+  if (v === null) return '';
+  if (isString(v)) return v;
+  if (typeof v === 'boolean') return String(v);
+  if (typeof v === 'number') return numberText(v);
+  if (isList(v)) return v.map(chardata).join('');
+  throw RAISED;
+}
+
+function chardata(v) {
+  if (isString(v)) return v;
+  if (Number.isInteger(v) && v >= 0 && v <= 0x10ffff && (v < 0xd800 || v > 0xdfff)) return String.fromCodePoint(v);
+  if (isList(v)) return v.map(chardata).join('');
+  throw RAISED;
+}
+
+function numberText(n) {
+  if (Number.isInteger(n) && Math.abs(n) < 1e21) return String(n);
+  const [mantissa, exponent] = n.toExponential().split('e');
+  const e = Number(exponent);
+  const sign = n < 0 ? '-' : '';
+  const digits = mantissa.replace('-', '').replace('.', '');
+  const scientific = `${sign}${digits[0]}.${digits.slice(1) || '0'}e${e}`;
+  const decimal =
+    e < 0 ? `${sign}0.${'0'.repeat(-e - 1)}${digits}`
+    : digits.length > e + 1 ? `${sign}${digits.slice(0, e + 1)}.${digits.slice(e + 1)}`
+    : `${sign}${digits}${'0'.repeat(e + 1 - digits.length)}.0`;
+  return decimal.length <= scientific.length ? decimal : scientific;
+}
 
 const put = (map, key, value) => (Object.hasOwn(map, key) && map[key] === value ? map : { ...map, [key]: value });
 
@@ -43,33 +74,27 @@ function visibleBodyKey(container) {
   return null;
 }
 
-export function normalizationSafe(blocks) {
-  const before = tableSnapshot(blocks);
-  const after = tableSnapshot(normalizeRenderShapes(ensureIds(blocks)));
-  return before.size === after.size && [...before].every(([path, table]) => after.has(path) && same(after.get(path), table));
+export const normalizationSafe = (blocks) => sameTables(blocks, normalizeRenderShapes(ensureIds(blocks)));
+
+const isTable = (v) => isMap(v) && v.type === 'table';
+
+function sameTables(a, b) {
+  if (a === b) return true;
+  if (isTable(a) || isTable(b)) return isTable(a) && isTable(b) && same(a, b);
+  if (isList(a) && isList(b)) {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) if (!sameTables(a[i], b[i])) return false;
+    return true;
+  }
+  if (isMap(a) && isMap(b)) {
+    return Object.keys(a).every((k) => sameTables(a[k], Object.hasOwn(b, k) ? b[k] : undefined)) &&
+      Object.keys(b).every((k) => Object.hasOwn(a, k) || !hasTable(b[k]));
+  }
+  return !hasTable(a) && !hasTable(b);
 }
 
-function tableSnapshot(value) {
-  const out = new Map();
-  const path = [];
-  const walk = (v) => {
-    if (isList(v)) {
-      v.forEach((child, i) => {
-        path.push(i);
-        walk(child);
-        path.pop();
-      });
-    } else if (isMap(v)) {
-      if (v.type === 'table') out.set(JSON.stringify(path), v);
-      for (const key of Object.keys(v)) {
-        path.push(key);
-        walk(v[key]);
-        path.pop();
-      }
-    }
-  };
-  walk(value);
-  return out;
+function hasTable(v) {
+  if (isList(v)) return v.some(hasTable);
+  return isMap(v) && (v.type === 'table' || Object.values(v).some(hasTable));
 }
 
 export const ensureIds = (blocks) => mapList(blocks, ensureBlock);
@@ -125,7 +150,7 @@ function listItem(item) {
     return d.ok && isList(d.value) && d.value.length > 0 && isMap(d.value[0]) ? d.value : [leaf(item)];
   }
   if (item === null) return [];
-  return typeof item === 'number' ? [leaf(String(item))] : item;
+  return typeof item === 'number' ? [leaf(toText(item))] : item;
 }
 
 const LEGACY_LISTS = ['bulletList', 'bullet_list', 'bullet-list', 'bulletedList', 'bulleted_list', 'bulleted-list', 'orderedList', 'ordered_list', 'ordered-list'];
@@ -186,7 +211,7 @@ function rescueInline(inline, key) {
 function plainText(node) {
   if (isList(node)) return node.map(plainText).join('');
   if (isString(node)) return node;
-  if (typeof node === 'number') return String(node);
+  if (typeof node === 'number') return toText(node);
   if (!isMap(node)) return '';
   if (isString(get(node, 'value'))) return node.value;
   if (isString(get(node, 'text'))) return node.text;
@@ -200,7 +225,7 @@ function legacyList(b, orderedDefault) {
   if (!source) return b;
   const items = legacyValues(source, legacyListItem);
   if (!items) return b;
-  const style = String(orElse(get(b, 'style'), orElse(get(b, 'listStyle'), ''))).toLowerCase();
+  const style = toText(orElse(get(b, 'style'), orElse(get(b, 'listStyle'), ''))).toLowerCase();
   const ordered = orderedDefault || get(b, 'ordered') === true || ['ordered', 'number', 'numbered', 'decimal'].includes(style);
   return { ...omit(b, ['content', 'children', 'items', 'style', 'listStyle']), type: 'list', ordered, items };
 }
@@ -231,7 +256,7 @@ function legacyInline(v) {
     return d.ok && (isList(d.value) || isMap(d.value)) ? legacyInline(d.value) : [leaf(v)];
   }
   if (v === null) return [];
-  if (typeof v === 'number' || typeof v === 'boolean') return [leaf(String(v))];
+  if (typeof v === 'number' || typeof v === 'boolean') return [leaf(toText(v))];
   if (isList(v)) {
     const parts = legacyValues(v, legacyInline);
     return parts && parts.flat();
@@ -248,15 +273,29 @@ function legacyTable(b) {
   const { content } = b;
   const head = isMap(content) ? orElse(get(content, 'head'), get(content, 'header')) : null;
   const rows = isMap(content) ? get(content, 'rows') : content;
-  const migrates = isList(rows) && legacyValues(rows, legacyRow) !== null && (head === null || isList(head));
-  return migrates ? omit(b, ['content']) : b;
+  if (!isList(rows)) return b;
+  const parsed = legacyValues(rows, legacyRow);
+  if (!parsed) return b;
+  const explicit = head === null ? null : isList(head) ? legacyValues(head, legacyInline) : false;
+  if (explicit === false) return b;
+  const cells = parsed.map((r) => r.cells);
+  const [resolvedHead, resolvedRows] = isList(explicit) ? [explicit, cells] : cells.length > 0 && parsed[0].header ? [cells[0], cells.slice(1)] : [null, cells];
+  const normalized = { ...omit(b, ['content', 'head', 'header', 'rows']), type: 'table', rows: resolvedRows };
+  return isList(resolvedHead) ? { ...normalized, head: resolvedHead } : normalized;
 }
 
 function legacyRow(row) {
-  if (isList(row)) return legacyValues(row, legacyInline);
+  if (isList(row)) return legacyCells(row, false);
   if (!isMap(row)) return null;
   const cells = isList(get(row, 'content')) ? row.content : get(row, 'cells');
-  return isList(cells) ? legacyValues(cells, legacyInline) : null;
+  if (!isList(cells)) return null;
+  const headers = cells.map((c) => isMap(c) && (c.header === true || c.type === 'tableHeader' || c.type === 'table_header'));
+  return legacyCells(cells, get(row, 'header') === true || (cells.length > 0 && headers.every(Boolean)));
+}
+
+function legacyCells(cells, header) {
+  const normalized = legacyValues(cells, legacyInline);
+  return normalized && { cells: normalized, header };
 }
 
 function headersKey(b) {
@@ -282,7 +321,7 @@ function recordTable(b, rows) {
   return {
     ...omit(b, ['columns']),
     head: columns.map((c) => [leaf(orElse(get(c, 'label'), get(c, 'key')))]),
-    rows: rows.map((row) => keys.map((k) => [leaf(text(get(row, k)))])),
+    rows: rows.map((row) => keys.map((k) => [leaf(toText(get(row, k)))])),
   };
 }
 
@@ -298,7 +337,7 @@ function arrayTable(table, rows) {
   const columns = get(b, 'columns');
   if (blank(headOrHeader(b)) && isList(columns) && columns.length > 0) {
     if (columns.every((c) => isMap(c) && isString(get(c, 'text')) && size(c) === 1)) b = { ...omit(b, ['columns']), head: columns.map((c) => [leaf(c.text)]) };
-    else if (columns.every(scalar)) b = { ...omit(b, ['columns']), head: columns.map((v) => [leaf(text(v))]) };
+    else if (columns.every(scalar)) b = { ...omit(b, ['columns']), head: columns.map((v) => [leaf(toText(v))]) };
   }
   let body = rows;
   const declared = headOrHeader(b);
@@ -306,7 +345,7 @@ function arrayTable(table, rows) {
   if (declared === true && rows.length > 0) {
     const r = legacyRow(first);
     if (r) {
-      b = { ...omit(b, ['header']), head: r };
+      b = { ...omit(b, ['header']), head: r.cells };
       body = rows.slice(1);
     }
   } else if (blank(declared) && rows.length > 0 && isMap(first) && get(first, 'header') === true && isList(get(first, 'cells')) && size(first) === 2) {

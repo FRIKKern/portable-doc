@@ -1,5 +1,5 @@
 import { validCardInline } from './inline.js';
-import { normalizationSafe } from './persist.js';
+import { RAISED, normalizationSafe } from './persist.js';
 import { applyAction, mergeCells, project } from './table.js';
 import { exactKeys, isMap, isString, refusal } from './terms.js';
 import { blocksWithId, treeAuthoredIds } from './tree.js';
@@ -20,14 +20,25 @@ export function lowerEditorOp(blocks, op) {
   return ok(op);
 }
 
-function tablePreflight(blocks, op) {
+export function tableSafety(blocks) {
   const ids = treeAuthoredIds(blocks);
   const counts = ids.reduce((m, id) => m.set(id, (m.get(id) ?? 0) + 1), new Map());
   const dup = ids.find((id) => counts.get(id) > 1);
-  if (dup !== undefined) return { ok: false, error: { code: 'duplicate_id', target: dup } };
-  if (!normalizationSafe(blocks)) return { ok: false, error: { code: 'table_normalization_would_change_authored_data' } };
-  const found = isString(op.id) && op.id !== '' ? blocksWithId(blocks, op.id) : [];
-  return found.length === 1 && found[0].type === 'table' && project(found[0]) ? null : invalid(op);
+  if (dup !== undefined) return { code: 'duplicate_id', target: dup };
+  return normalizationSafe(blocks) ? null : { code: 'table_normalization_would_change_authored_data' };
+}
+
+function tablePreflight(blocks, op) {
+  let unsafe;
+  try {
+    unsafe = tableSafety(blocks);
+  } catch (e) {
+    if (e === RAISED) return invalid(op);
+    throw e;
+  }
+  if (unsafe) return { ok: false, error: unsafe };
+  const [found] = isString(op.id) && op.id !== '' ? blocksWithId(blocks, op.id) : [];
+  return found?.type === 'table' && project(found) ? null : invalid(op);
 }
 
 function lowerCardBody(blocks, op) {

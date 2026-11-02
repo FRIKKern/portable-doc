@@ -1,3 +1,5 @@
+import { tableSafety } from '../ops/intents.js';
+import { RAISED, normalizeRenderShapes } from '../ops/persist.js';
 import { project } from '../ops/table.js';
 
 export function mulberry32(seed) {
@@ -183,4 +185,46 @@ export function intentGenerator(seed) {
     if (chance(0.3)) doc.blocks.splice(int(doc.blocks.length + 1), 0, chance(0.2) ? wrap(noise()) : noise());
     return { doc, op: op(doc) };
   };
+}
+
+const SHAPE_TYPES = ['list', 'bulletList', 'bullet_list', 'bullet-list', 'bulletedList', 'bulleted_list', 'bulleted-list', 'orderedList', 'ordered_list', 'ordered-list', 'table', 'table', 'callout', 'notes', 'cards', 'pipeline', 'section', 'steps', 'tabs', 'columns', 'expandable', 'figure', 'terminal', 'paragraph', 'text', 'listItem', 'list_item', 'tableCell', 'table_cell', 'tableHeader', 'table_header', 'heading', 'strong', '', 7];
+const SHAPE_KEYS = ['content', 'items', 'children', 'blocks', 'rows', 'rows', 'head', 'header', 'headers', 'columns', 'cells', 'text', 'value', 'style', 'listStyle', 'ordered', 'slots', 'nodes', 'label', 'key', 'title', 'inline', 'steps', 'tabs', 'child', 'x'];
+const SHAPE_SCALARS = [null, true, false, 0, 3, -1.5, 0.000123, 2.5e-8, 123456.789, 1.5e21, '', ' ', 'a', 'b c', 'ordered', 'Number', 'DECIMAL', '[]', '[{"type":"text","value":"j"}]', '{"type":"text","text":"m"}', '[1]', '{bad', '"q"'];
+const STYLES = ['ordered', 'Decimal', 'bullet', true, 3, 1.5, [111, 114, 100, 101, 114, 101, 100], ['Num', ['ber']], [55296], [1.5], [-1], { x: 1 }, [], null, false];
+
+export function normalizeGenerator(seed) {
+  const rand = mulberry32(seed);
+  const pick = (list) => list[Math.floor(rand() * list.length)];
+  const chance = (p) => rand() < p;
+  const int = (n) => Math.floor(rand() * n);
+  let n = 0;
+
+  function value(depth) {
+    if (depth > 4 || chance(0.35)) return pick(SHAPE_SCALARS);
+    if (chance(0.45)) return Array.from({ length: int(4) }, () => value(depth + 1));
+    return node(depth + 1);
+  }
+
+  function node(depth) {
+    const o = {};
+    if (chance(0.85)) o.type = pick(SHAPE_TYPES);
+    if (chance(0.5)) o.id = chance(0.9) ? `i${n++}` : pick(['', null, 3, 'dup']);
+    for (let i = int(4); i > 0; i--) o[pick(SHAPE_KEYS)] = value(depth);
+    if (chance(0.1)) o[pick(['style', 'listStyle'])] = pick(STYLES);
+    return o;
+  }
+
+  return () => ({ blocks: Array.from({ length: 1 + int(4) }, () => (chance(0.05) ? pick(SHAPE_SCALARS) : node(0))) });
+}
+
+export function shapeAnswer({ blocks }) {
+  const raised = (fun) => {
+    try {
+      return fun();
+    } catch (e) {
+      if (e === RAISED) return 'raised';
+      throw e;
+    }
+  };
+  return { norm: raised(() => normalizeRenderShapes(blocks)), safe: raised(() => tableSafety(blocks) ?? 'ok') };
 }
