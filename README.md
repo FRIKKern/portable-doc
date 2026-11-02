@@ -33,10 +33,11 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 4 milestones closed
-  - Delivered: [R4.3 @portable-doc/validate with shared broken-doc fixtures; Elixir refuses the same docs with the same reason codes](https://github.com/FRIKKern/barkpark/issues/24957)
-- **Yesterday** · 3 changes, 5 milestones closed
-  - Delivered: [R1.5 Sync: Barkpark opens a PR to portable-doc with spec/ and goldens/ when the stamp changes; portable-doc fails on a stale stamp](https://github.com/FRIKKern/barkpark/issues/24945)
+- **Today** · 2 milestones closed
+  - Delivered: [R4.4a Barkpark: stateless render endpoint, POST blocks in, reader HTML out, nothing stored](https://github.com/FRIKKern/barkpark/issues/25034)
+- **Yesterday** · 5 milestones closed
+  - Delivered: [R1.7 Heatmap: docs/images/conformance.svg in the portable-doc README, red clusters filed under R6](https://github.com/FRIKKern/barkpark/issues/24946)
+- **Last week** · 3 changes, 5 milestones closed
 <!-- timeline:end -->
 
 ## Where things live (one fact, one home)
