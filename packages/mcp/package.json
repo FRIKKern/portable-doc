@@ -1,0 +1,14 @@
+{
+  "name": "@portable-doc/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "bin": { "portable-doc-mcp": "./bin/portable-doc-mcp.mjs" },
+  "exports": { ".": "./index.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@portable-doc/validate": "0.0.0"
+  }
+}
