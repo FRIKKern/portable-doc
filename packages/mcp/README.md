@@ -4,7 +4,7 @@
 MCP client ──stdio──► portable-doc-mcp
                         validate   ─► @portable-doc/validate (packages/validate)
                         explain    ─► reason codes + paths in plain words (CODES.md)
-                        apply_ops  ─► ops/ : Barkpark Patch + editor intents, all or nothing
+                        apply_ops  ─► ops/ : Barkpark Patch + editor intents, all or nothing, duplicates judged at the end
                         render     ─► POST $BARKPARK_URL/v1/plugins/bulldocs/render ─► { html }
 ```
 
@@ -31,11 +31,14 @@ BARKPARK_URL=https://barkpark.example BARKPARK_TOKEN=<ingest token> node package
 
 | What | Command |
 |---|---|
-| Ops goldens, server, explain, transcript, 5,000 recorded answers each from `patch.ex`, the intents and the normalizer | `npm run check` |
+| Ops goldens, server, explain, transcript, 5,000 recorded answers each from `patch.ex`, its batch fold, the intents and the normalizer, and the seven batch duplicate vectors | `npm run check` |
 | The SDK client runs all four tools on one doc | `node packages/mcp/transcript.mjs` → [`TRANSCRIPT.md`](TRANSCRIPT.md) |
 | The same steps against a real Barkpark (one render call) | `BARKPARK_URL=… BARKPARK_TOKEN=… node packages/mcp/transcript.mjs --live` → [`LIVE.md`](LIVE.md) |
 | The six Patch ops against Barkpark's own Elixir | `node packages/mcp/differential.mjs ../barkpark 20000` |
 | Re-record the answers `npm run check` replays | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/patch-elixir.json` |
+| Batches against `Patch.apply_patches`: duplicates judged at the end ([0007](../../docs/decisions/0007-batch-duplicates.md)) | `node packages/mcp/differential.mjs ../barkpark 20000 1 --batch` |
+| Re-record the batch answers | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/batch-elixir.json --batch` |
+| Re-record the seven batch duplicate vectors (`test/batch-vectors.json`, full answers, for a second fold) | `node packages/mcp/vectors.mjs ../barkpark` |
 | The three editor intents against `BlockOps.lower_editor_op` (needs a compiled `../barkpark/api`) | `node packages/mcp/differential.mjs ../barkpark 20000 1 --intents` |
 | Re-record the intent answers | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/intents-elixir.json --intents` |
 | `normalize_render_shapes` and the table preflight on random shapes | `node packages/mcp/differential.mjs ../barkpark 20000 1 --normalize` |
