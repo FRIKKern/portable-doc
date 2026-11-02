@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 2 milestones closed
-  - Delivered: [R4.4a Barkpark: stateless render endpoint, POST blocks in, reader HTML out, nothing stored](https://github.com/FRIKKern/barkpark/issues/25034)
+- **Today** · 3 milestones closed
+  - Delivered: [R4.4 @portable-doc/mcp: validate, explain, apply ops, render through Barkpark's reader](https://github.com/FRIKKern/barkpark/issues/24958)
 - **Yesterday** · 5 milestones closed
   - Delivered: [R1.7 Heatmap: docs/images/conformance.svg in the portable-doc README, red clusters filed under R6](https://github.com/FRIKKern/barkpark/issues/24946)
 - **Last week** · 3 changes, 5 milestones closed
