@@ -68,10 +68,19 @@ test('a table edit counts the JSON inside strings, which the normalizer decodes,
   assert.equal(measure({ s: json(3) }).nodes, 2);
 });
 
-test('a JSON-looking string is read once, not once per table edit', () => {
-  const doc = { blocks: [TABLE, { id: 'l', type: 'bulletList', content: [`[${'1,'.repeat(5_000_000)}x`] }] };
-  const started = Date.now();
-  const result = applyOps(doc, columnFlips);
-  assert.ok(result.ok, JSON.stringify(result.error));
-  assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms for ${columnFlips.length} ops`);
-});
+const nearJson = (count, length) => Array.from({ length: count }, (_, i) => `[${'1,'.repeat((length - 12) / 2)}x${String(i).padStart(10, '0')}`);
+
+for (const [name, block] of [
+  ['one 10 MB string', { id: 'l', type: 'bulletList', content: nearJson(1, 10_000_012) }],
+  ['700 same-length 20,000-char list items', { id: 'l', type: 'list', items: nearJson(700, 20_000) }],
+  ['700 same-length 20,000-char legacy rows before a bad row', { id: 'l', type: 'table', content: [...nearJson(700, 20_000).map((s) => [s]), 5] }],
+  ['700 same-length 20,000-char legacy head cells before a bad cell', { id: 'l', type: 'table', content: { head: [...nearJson(700, 20_000), {}], rows: [] } }],
+]) {
+  test(`a JSON-looking string is read once per call, not once per table edit: ${name}`, () => {
+    const doc = { blocks: [TABLE, block] };
+    const started = Date.now();
+    const result = applyOps(doc, columnFlips);
+    assert.ok(result.ok, JSON.stringify(result.error));
+    assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms for ${columnFlips.length} ops`);
+  });
+}

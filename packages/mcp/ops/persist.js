@@ -57,31 +57,22 @@ function mapList(list, fun) {
   return out ?? list;
 }
 
-const DECODED_BUDGET = 32 * 1024 * 1024;
-const decoded = new Map();
-let decodedLength = 0;
-
 function decode(string) {
-  const known = decoded.get(string);
-  if (known) return known;
-  const result = parse(string);
-  decoded.set(string, result);
-  decodedLength += string.length;
-  for (const key of decoded.keys()) {
-    if (decodedLength <= DECODED_BUDGET) break;
-    decoded.delete(key);
-    decodedLength -= key.length;
-  }
-  return result;
-}
-
-function parse(string) {
   try {
     return { ok: true, value: JSON.parse(string) };
   } catch {
     return { ok: false };
   }
 }
+
+function byList(fun) {
+  const seen = new WeakMap();
+  return (list) => {
+    if (!seen.has(list)) seen.set(list, fun(list));
+    return seen.get(list);
+  };
+}
+
 
 function visibleBodyKey(container) {
   const children = get(container, 'children');
@@ -154,9 +145,11 @@ const normalizeListItems = (blocks) => (isList(blocks) ? mapList(blocks, blockLi
 
 function blockListItems(b) {
   if (!isMap(b)) return b;
-  if (b.type === 'list' && isList(b.items)) return put(b, 'items', mapList(b.items, listItem));
+  if (b.type === 'list' && isList(b.items)) return put(b, 'items', listItems(b.items));
   return isList(get(b, 'blocks')) ? put(b, 'blocks', normalizeListItems(b.blocks)) : b;
 }
+
+const listItems = byList((items) => mapList(items, listItem));
 
 function listItem(item) {
   if (isList(item)) return item;
@@ -241,12 +234,16 @@ function plainText(node) {
 function legacyList(b, orderedDefault) {
   const source = ['items', 'content', 'children'].map((k) => get(b, k)).find(isList);
   if (!source) return b;
-  const items = legacyValues(source, legacyListItem);
+  const items = legacyListItems(source);
   if (!items) return b;
   const style = toText(orElse(get(b, 'style'), orElse(get(b, 'listStyle'), ''))).toLowerCase();
   const ordered = orderedDefault || get(b, 'ordered') === true || ['ordered', 'number', 'numbered', 'decimal'].includes(style);
   return { ...omit(b, ['content', 'children', 'items', 'style', 'listStyle']), type: 'list', ordered, items };
 }
+
+const legacyListItems = byList((source) => legacyValues(source, legacyListItem));
+const legacyRows = byList((rows) => legacyValues(rows, legacyRow));
+const legacyHead = byList((head) => legacyValues(head, legacyInline));
 
 function legacyValues(values, fun) {
   const out = [];
@@ -292,9 +289,9 @@ function legacyTable(b) {
   const head = isMap(content) ? orElse(get(content, 'head'), get(content, 'header')) : null;
   const rows = isMap(content) ? get(content, 'rows') : content;
   if (!isList(rows)) return b;
-  const parsed = legacyValues(rows, legacyRow);
+  const parsed = legacyRows(rows);
   if (!parsed) return b;
-  const explicit = head === null ? null : isList(head) ? legacyValues(head, legacyInline) ?? false : false;
+  const explicit = head === null ? null : isList(head) ? legacyHead(head) ?? false : false;
   if (explicit === false) return b;
   const cells = parsed.map((r) => r.cells);
   const [resolvedHead, resolvedRows] = isList(explicit) ? [explicit, cells] : cells.length > 0 && parsed[0].header ? [cells[0], cells.slice(1)] : [null, cells];
