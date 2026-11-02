@@ -1,5 +1,6 @@
 import { lowerEditorOp } from './intents.js';
 import { applyPatch } from './patch.js';
+import { withDecodeMemo } from './persist.js';
 import { get, refusal } from './terms.js';
 
 export function applyOp(doc, op) {
@@ -9,7 +10,9 @@ export function applyOp(doc, op) {
   return lowered.ok ? applyPatch(doc, lowered.value) : lowered;
 }
 
-export function applyOps(doc, ops) {
+export const applyOps = (doc, ops) => withDecodeMemo(() => applyAll(doc, ops));
+
+function applyAll(doc, ops) {
   let current = doc;
   for (const [index, op] of ops.entries()) {
     const r = applyOp(current, op);

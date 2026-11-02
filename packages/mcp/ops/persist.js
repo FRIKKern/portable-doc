@@ -65,9 +65,23 @@ function decode(string) {
   }
 }
 
+let memos = null;
+
+export function withDecodeMemo(run) {
+  if (memos) return run();
+  memos = new Map();
+  try {
+    return run();
+  } finally {
+    memos = null;
+  }
+}
+
 function byList(fun) {
-  const seen = new WeakMap();
   return (list) => {
+    if (!memos) return fun(list);
+    if (!memos.has(fun)) memos.set(fun, new WeakMap());
+    const seen = memos.get(fun);
     if (!seen.has(list)) seen.set(list, fun(list));
     return seen.get(list);
   };
@@ -242,8 +256,7 @@ function legacyList(b, orderedDefault) {
 }
 
 const legacyListItems = byList((source) => legacyValues(source, legacyListItem));
-const legacyRows = byList((rows) => legacyValues(rows, legacyRow));
-const legacyHead = byList((head) => legacyValues(head, legacyInline));
+const inlineCells = byList((cells) => legacyValues(cells, legacyInline));
 
 function legacyValues(values, fun) {
   const out = [];
@@ -289,9 +302,9 @@ function legacyTable(b) {
   const head = isMap(content) ? orElse(get(content, 'head'), get(content, 'header')) : null;
   const rows = isMap(content) ? get(content, 'rows') : content;
   if (!isList(rows)) return b;
-  const parsed = legacyRows(rows);
+  const parsed = legacyValues(rows, legacyRow);
   if (!parsed) return b;
-  const explicit = head === null ? null : isList(head) ? legacyHead(head) ?? false : false;
+  const explicit = head === null ? null : isList(head) ? inlineCells(head) ?? false : false;
   if (explicit === false) return b;
   const cells = parsed.map((r) => r.cells);
   const [resolvedHead, resolvedRows] = isList(explicit) ? [explicit, cells] : cells.length > 0 && parsed[0].header ? [cells[0], cells.slice(1)] : [null, cells];
@@ -309,7 +322,7 @@ function legacyRow(row) {
 }
 
 function legacyCells(cells, header) {
-  const normalized = legacyValues(cells, legacyInline);
+  const normalized = inlineCells(cells);
   return normalized && { cells: normalized, header };
 }
 

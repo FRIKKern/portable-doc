@@ -75,6 +75,7 @@ for (const [name, block] of [
   ['700 same-length 20,000-char list items', { id: 'l', type: 'list', items: nearJson(700, 20_000) }],
   ['700 same-length 20,000-char legacy rows before a bad row', { id: 'l', type: 'table', content: [...nearJson(700, 20_000).map((s) => [s]), 5] }],
   ['700 same-length 20,000-char legacy head cells before a bad cell', { id: 'l', type: 'table', content: { head: [...nearJson(700, 20_000), {}], rows: [] } }],
+  ['700 same-length 20,000-char cells in a declared header row', { id: 'l', type: 'table', header: true, rows: [{ content: [...nearJson(700, 20_000), {}], x: 1 }] }],
 ]) {
   test(`a JSON-looking string is read once per call, not once per table edit: ${name}`, () => {
     const doc = { blocks: [TABLE, block] };

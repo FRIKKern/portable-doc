@@ -339,6 +339,18 @@ test('table intents refuse a table outside the strict grammar, a duplicate id an
   refused(applyOp(doc(t, para('p')), { op: 'patch-table-structure', id: 'p', shape: shapeOf(t), action: 'add-row' }), 'invalid_op');
 });
 
+test('the decode memo lives for one call: a list the caller changes between calls is read again', () => {
+  const t = grid([[text('a')]]);
+  const items = ['plain'];
+  const d = doc(t, { id: 'l', type: 'list', items });
+  const op = { op: 'patch-table-structure', id: 'tb', shape: shapeOf(t), action: 'add-row' };
+  assert.ok(applyOp(d, op).ok);
+  assert.ok(applyOps(d, [op]).ok);
+  items.push('[{"type":"table","id":"q","rows":[]}]');
+  refused(applyOp(d, op), 'table_normalization_would_change_authored_data', undefined);
+  assert.equal(applyOps(d, [op]).error.code, 'table_normalization_would_change_authored_data');
+});
+
 test('the whole-doc table check is Barkpark\'s: only a table the normalizer reaches and changes, or one that gains an id, blocks an edit', () => {
   const t = grid([[text('a')]]);
   const run = (...others) => applyOp(doc(t, ...others), { op: 'patch-table-structure', id: 'tb', shape: shapeOf(t), action: 'add-row' });
