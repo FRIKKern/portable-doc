@@ -33,6 +33,7 @@ BARKPARK_URL=https://barkpark.example BARKPARK_TOKEN=<ingest token> node package
 |---|---|
 | Ops goldens, server, explain, transcript, 5,000 recorded answers each from `patch.ex`, the intents and the normalizer | `npm run check` |
 | The SDK client runs all four tools on one doc | `node packages/mcp/transcript.mjs` → [`TRANSCRIPT.md`](TRANSCRIPT.md) |
+| The same steps against a real Barkpark (one render call) | `BARKPARK_URL=… BARKPARK_TOKEN=… node packages/mcp/transcript.mjs --live` → [`LIVE.md`](LIVE.md) |
 | The six Patch ops against Barkpark's own Elixir | `node packages/mcp/differential.mjs ../barkpark 20000` |
 | Re-record the answers `npm run check` replays | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/patch-elixir.json` |
 | The three editor intents against `BlockOps.lower_editor_op` (needs a compiled `../barkpark/api`) | `node packages/mcp/differential.mjs ../barkpark 20000 1 --intents` |
