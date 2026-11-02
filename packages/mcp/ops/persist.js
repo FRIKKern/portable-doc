@@ -33,10 +33,8 @@ function numberText(n) {
   const sign = n < 0 ? '-' : '';
   const digits = mantissa.replace('-', '').replace('.', '');
   const scientific = `${sign}${digits[0]}.${digits.slice(1) || '0'}e${e}`;
-  const decimal =
-    e < 0 ? `${sign}0.${'0'.repeat(-e - 1)}${digits}`
-    : digits.length > e + 1 ? `${sign}${digits.slice(0, e + 1)}.${digits.slice(e + 1)}`
-    : `${sign}${digits}${'0'.repeat(e + 1 - digits.length)}.0`;
+  if (Number.isInteger(n)) return scientific;
+  const decimal = e < 0 ? `${sign}0.${'0'.repeat(-e - 1)}${digits}` : `${sign}${digits.slice(0, e + 1)}.${digits.slice(e + 1)}`;
   return decimal.length <= scientific.length ? decimal : scientific;
 }
 
@@ -130,10 +128,9 @@ function ensureVisibleBody(container) {
   return key ? put(container, key, ensureIds(container[key])) : container;
 }
 
-export function normalizeRenderShapes(blocks) {
-  if (!isList(blocks)) return blocks;
-  return mapList(mapList(normalizeListItems(blocks), renderBlock), leafDialect);
-}
+export const normalizeRenderShapes = (blocks) => (isList(blocks) ? level(blocks, false, 0) : blocks);
+
+const level = (blocks, listed, passes) => mapList(listed ? blocks : normalizeListItems(blocks), (b) => renderBlock(b, passes + 1));
 
 const normalizeListItems = (blocks) => (isList(blocks) ? mapList(blocks, blockListItems) : blocks);
 
@@ -156,8 +153,20 @@ function listItem(item) {
 const LEGACY_LISTS = ['bulletList', 'bullet_list', 'bullet-list', 'bulletedList', 'bulleted_list', 'bulleted-list', 'orderedList', 'ordered_list', 'ordered-list'];
 const ORDERED_LISTS = ['orderedList', 'ordered_list', 'ordered-list'];
 
-function renderBlock(b) {
+function renderBlock(b, passes) {
   if (!isMap(b)) return b;
+  const shaped = renderShape(b);
+  if (shaped) return leaves(shaped, passes);
+  const nested = (list) => level(list, false, 0);
+  if (b.type === 'steps' && isList(b.steps)) return leaves(put(b, 'steps', mapList(b.steps, (row) => visibleBody(row, nested))), passes);
+  if (b.type === 'tabs' && isList(b.tabs)) {
+    return leaves(put(b, 'tabs', mapList(b.tabs, (row) => (isMap(row) && isList(get(row, 'blocks')) ? put(row, 'blocks', nested(row.blocks)) : row))), passes);
+  }
+  if (b.type === 'columns' && isList(b.columns)) return leaves(put(b, 'columns', mapList(b.columns, (c) => (isList(c) ? nested(c) : c))), passes);
+  return localLeaves(['blocks', 'children'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, level(acc[key], key === 'blocks', passes)) : acc), b), passes);
+}
+
+function renderShape(b) {
   const { type } = b;
   if (LEGACY_LISTS.includes(type)) return legacyList(b, ORDERED_LISTS.includes(type));
   if (type === 'list' && isList(b.content)) return legacyList(b, get(b, 'ordered') === true);
@@ -167,16 +176,7 @@ function renderBlock(b) {
   if (type === 'callout' && isString(b.text)) return callout(b);
   if ((type === 'notes' || type === 'cards') && isList(b.items)) return put(b, 'items', mapList(b.items, widgetItem));
   if (type === 'pipeline' && isList(b.nodes)) return put(b, 'nodes', mapList(b.nodes, pipelineNode));
-  return childLists(b, normalizeRenderShapes);
-}
-
-function childLists(b, fun) {
-  if (b.type === 'steps' && isList(b.steps)) return put(b, 'steps', mapList(b.steps, (row) => visibleBody(row, fun)));
-  if (b.type === 'tabs' && isList(b.tabs)) {
-    return put(b, 'tabs', mapList(b.tabs, (row) => (isMap(row) && isList(get(row, 'blocks')) ? put(row, 'blocks', fun(row.blocks)) : row)));
-  }
-  if (b.type === 'columns' && isList(b.columns)) return put(b, 'columns', mapList(b.columns, (c) => (isList(c) ? fun(c) : c)));
-  return ['blocks', 'children'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, fun(acc[key])) : acc), b);
+  return null;
 }
 
 function visibleBody(container, fun) {
@@ -205,7 +205,7 @@ const pipelineNode = (node) => (isString(node) ? { title: node } : isList(node) 
 
 function rescueInline(inline, key) {
   const plain = plainText(inline);
-  return plain === '' ? inline : { [key]: plain, inline: inlineNodes(inline) };
+  return plain === '' ? inline : { [key]: plain, inline: inlineNodes(inline, 1) };
 }
 
 function plainText(node) {
@@ -276,7 +276,7 @@ function legacyTable(b) {
   if (!isList(rows)) return b;
   const parsed = legacyValues(rows, legacyRow);
   if (!parsed) return b;
-  const explicit = head === null ? null : isList(head) ? legacyValues(head, legacyInline) : false;
+  const explicit = head === null ? null : isList(head) ? legacyValues(head, legacyInline) ?? false : false;
   if (explicit === false) return b;
   const cells = parsed.map((r) => r.cells);
   const [resolvedHead, resolvedRows] = isList(explicit) ? [explicit, cells] : cells.length > 0 && parsed[0].header ? [cells[0], cells.slice(1)] : [null, cells];
@@ -383,44 +383,54 @@ function headerCell(cell) {
 
 const flattenCell = (content) => content.flatMap((item) => (isMap(item) && item.type === 'paragraph' && isList(get(item, 'content')) ? item.content : [item]));
 
-function leafDialect(b) {
+function leaves(b, passes) {
   if (!isMap(b)) return b;
-  return nestedLeaves(tableLeaves(listItemLeaves(inlineUnder(b, 'content'))));
+  return ['blocks', 'children'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, mapList(acc[key], (c) => leaves(c, passes))) : acc), localLeaves(b, passes));
 }
 
-const inlineUnder = (b, key) => (isList(get(b, key)) ? put(b, key, inlineNodes(b[key])) : b);
-
-function listItemLeaves(b) {
-  if (b.type !== 'list' || !isList(b.items)) return b;
-  return put(b, 'items', mapList(b.items, (item) => (isList(item) ? inlineNodes(unwrap(item)) : item)));
-}
-
-function unwrap(nodes) {
-  const wrapped = (n) => isMap(n) && isList(get(n, 'content')) && n.content.length > 0;
-  return nodes.some(wrapped) ? nodes.flatMap((n) => (wrapped(n) ? n.content : [n])) : nodes;
-}
-
-function tableLeaves(b) {
-  if (b.type !== 'table') return b;
-  let out = isList(get(b, 'rows')) ? put(b, 'rows', mapList(b.rows, rowLeaves)) : b;
-  for (const key of ['head', 'header']) if (isList(get(out, key))) out = put(out, key, cellsLeaves(out[key]));
+function localLeaves(b, passes) {
+  let out = isList(get(b, 'content')) ? put(b, 'content', inlineNodes(b.content, passes)) : b;
+  if (out.type === 'list' && isList(out.items)) out = put(out, 'items', mapList(out.items, (item) => (isList(item) ? itemNodes(item, passes) : item)));
+  if (out.type !== 'table') return out;
+  if (isList(get(out, 'rows'))) out = put(out, 'rows', mapList(out.rows, (row) => rowLeaves(row, passes)));
+  for (const key of ['head', 'header']) if (isList(get(out, key))) out = put(out, key, cellsLeaves(out[key], passes));
   return out;
 }
 
-function rowLeaves(row) {
-  if (isList(row)) return cellsLeaves(row);
-  return isMap(row) && isList(get(row, 'cells')) ? put(row, 'cells', cellsLeaves(row.cells)) : row;
+const wrapped = (n) => isMap(n) && isList(get(n, 'content')) && n.content.length > 0;
+
+function itemNodes(nodes, passes) {
+  const out = [];
+  for (const n of nodes) lift(n, passes, 0, out);
+  return out;
 }
 
-const cellsLeaves = (cells) =>
-  mapList(cells, (c) => (isList(c) ? inlineNodes(c) : isMap(c) && isList(get(c, 'content')) ? put(c, 'content', inlineNodes(c.content)) : c));
-
-const nestedLeaves = (b) => ['blocks', 'children'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, mapList(acc[key], leafDialect)) : acc), b);
-
-const inlineNodes = (nodes) => mapList(nodes, inlineNode);
-
-function inlineNode(n) {
-  if (!isMap(n)) return n;
-  if (n.type === 'text' && isString(get(n, 'text'))) return isString(get(n, 'value')) ? n : { ...omit(n, ['text']), value: n.text };
-  return ['children', 'content'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, inlineNodes(acc[key])) : acc), n);
+function lift(n, passes, applied, out) {
+  if (passes === 0 || !wrapped(n)) out.push(inlineNode(n, applied + passes));
+  else for (const c of n.content) lift(c, passes - 1, reached(n, applied) + 1, out);
 }
+
+const isTextLeaf = (n) => n.type === 'text' && isString(get(n, 'text'));
+
+function reached(n, applied) {
+  if (!isTextLeaf(n)) return applied;
+  return isString(get(n, 'value')) ? 0 : Math.max(applied - 1, 0);
+}
+
+function rowLeaves(row, passes) {
+  if (isList(row)) return cellsLeaves(row, passes);
+  return isMap(row) && isList(get(row, 'cells')) ? put(row, 'cells', cellsLeaves(row.cells, passes)) : row;
+}
+
+const cellsLeaves = (cells, passes) =>
+  mapList(cells, (c) => (isList(c) ? inlineNodes(c, passes) : isMap(c) && isList(get(c, 'content')) ? put(c, 'content', inlineNodes(c.content, passes)) : c));
+
+const inlineNodes = (nodes, passes) => mapList(nodes, (n) => inlineNode(n, passes));
+
+function inlineNode(n, passes) {
+  if (passes === 0 || !isMap(n)) return n;
+  if (!isTextLeaf(n)) return inlineChildren(n, passes);
+  return isString(get(n, 'value')) ? n : inlineChildren({ ...omit(n, ['text']), value: n.text }, passes - 1);
+}
+
+const inlineChildren = (n, passes) => ['children', 'content'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, inlineNodes(acc[key], passes)) : acc), n);

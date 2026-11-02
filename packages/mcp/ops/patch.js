@@ -95,7 +95,6 @@ function moveBlock(blocks, id, after) {
   return ok([...without.slice(0, idx + 1), moved, ...without.slice(idx + 1)]);
 }
 
-
 function lockedIndex(blocks) {
   const index = new Map();
   blocks.forEach((b, i) => {

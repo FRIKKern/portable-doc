@@ -190,7 +190,10 @@ export function intentGenerator(seed) {
 const SHAPE_TYPES = ['list', 'bulletList', 'bullet_list', 'bullet-list', 'bulletedList', 'bulleted_list', 'bulleted-list', 'orderedList', 'ordered_list', 'ordered-list', 'table', 'table', 'callout', 'notes', 'cards', 'pipeline', 'section', 'steps', 'tabs', 'columns', 'expandable', 'figure', 'terminal', 'paragraph', 'text', 'listItem', 'list_item', 'tableCell', 'table_cell', 'tableHeader', 'table_header', 'heading', 'strong', '', 7];
 const SHAPE_KEYS = ['content', 'items', 'children', 'blocks', 'rows', 'rows', 'head', 'header', 'headers', 'columns', 'cells', 'text', 'value', 'style', 'listStyle', 'ordered', 'slots', 'nodes', 'label', 'key', 'title', 'inline', 'steps', 'tabs', 'child', 'x'];
 const SHAPE_SCALARS = [null, true, false, 0, 3, -1.5, 0.000123, 2.5e-8, 123456.789, 1.5e21, '', ' ', 'a', 'b c', 'ordered', 'Number', 'DECIMAL', '[]', '[{"type":"text","value":"j"}]', '{"type":"text","text":"m"}', '[1]', '{bad', '"q"'];
-const STYLES = ['ordered', 'Decimal', 'bullet', true, 3, 1.5, [111, 114, 100, 101, 114, 101, 100], ['Num', ['ber']], [55296], [1.5], [-1], { x: 1 }, [], null, false];
+const SHAPE_LISTS = SHAPE_TYPES.filter((t) => /list/i.test(t) && !/item/i.test(t) && t !== 'list');
+const INLINE_WRAPPERS = ['paragraph', 'listItem', 'list_item', 'tableCell', 'table_cell', 'tableHeader', 'table_header'];
+const WORDS = ['a', 'b c', '', ' ', 'Number', 'ordered', '[]', '[{"type":"text","value":"j"}]', '{"type":"text","text":"m"}', '[1]', '{bad', '[{"x":1}]'];
+const STYLES = ['ordered', '', 0, 'Decimal', 'bullet', true, 3, 1.5, [111, 114, 100, 101, 114, 101, 100], ['Num', ['ber']], [55296], [1.5], [-1], { x: 1 }, [], null, false];
 
 export function normalizeGenerator(seed) {
   const rand = mulberry32(seed);
@@ -214,7 +217,126 @@ export function normalizeGenerator(seed) {
     return o;
   }
 
-  return () => ({ blocks: Array.from({ length: 1 + int(4) }, () => (chance(0.05) ? pick(SHAPE_SCALARS) : node(0))) });
+  const some = (make, max = 4) => Array.from({ length: int(max) }, make);
+  const word = () => pick(WORDS);
+  const id = () => (chance(0.9) ? `i${n++}` : pick(['', null, 3, 'dup']));
+  const withId = (o) => (chance(0.6) ? { id: id(), ...o } : o);
+  const jolt = (o) => (chance(0.15) ? { ...o, [pick(SHAPE_KEYS)]: value(3) } : o);
+  const optional = (key, make) => (chance(0.5) ? { [key]: make() } : {});
+
+  const inline = (d = 0) => pick([
+    () => ({ type: 'text', value: word() }),
+    () => ({ type: 'text', text: word() }),
+    () => ({ type: 'text', text: word(), value: word() }),
+    () => ({ type: 'text', text: word(), marks: [] }),
+    () => ({ type: 'text', text: word(), [pick(['children', 'content'])]: inlines(d + 1), ...optional('value', word) }),
+    () => ({ text: word() }),
+    () => ({ content: inlines(d + 1) }),
+    () => ({ type: pick(['strong', 'em', 'link']), [pick(['children', 'content'])]: inlines(d + 1) }),
+    () => ({ type: pick(INLINE_WRAPPERS), content: inlines(d + 1) }),
+    word,
+    () => pick(SHAPE_SCALARS),
+  ])();
+  const inlines = (d = 0) => (d > 3 ? [] : some(() => inline(d), 3));
+  const para = () => withId({ type: 'paragraph', content: inlines() });
+
+  const listItem = () => pick([
+    () => null, word, () => pick([3, -1.5, 0.000123, true]), inlines,
+    () => ({ content: inlines() }), () => ({ text: word() }),
+    () => ({ id: id(), content: inlines() }), () => ({ id: id(), text: word() }), () => ({ id: id(), content: inlines(), x: 1 }),
+    () => ({ type: pick(['listItem', 'list_item']), content: [para()] }), para, inline,
+  ])();
+  const list = () => jolt(withId({
+    type: pick([...SHAPE_LISTS, 'list', 'list']),
+    [pick(['items', 'content', 'children'])]: some(listItem),
+    ...(chance(0.3) ? { [pick(['style', 'listStyle'])]: pick(STYLES) } : {}),
+    ...optional('ordered', () => pick([true, false, 'yes'])),
+  }));
+
+  const cell = () => pick([
+    inlines, word, () => pick(SHAPE_SCALARS),
+    () => ({ content: chance(0.5) ? [para(), ...inlines()] : inlines() }), () => ({ text: word() }),
+    () => ({ header: pick([true, false]), content: chance(0.5) ? [para()] : inlines() }), () => ({ header: true, text: word() }),
+    () => ({ type: pick(['tableHeader', 'table_header', 'tableCell']), content: inlines() }),
+  ])();
+  const cells = () => some(cell, 3);
+  const row = () => pick([
+    cells, cells,
+    () => ({ cells: cells() }), () => ({ cells: cells(), header: pick([true, false, null, 'x']) }),
+    () => ({ content: cells() }), () => ({ cells: cells(), header: true, x: 1 }), () => ({ cells: some(() => ({ header: true, content: inlines() }), 3) }),
+  ])();
+  const rows = () => some(row);
+  const records = () => {
+    const keys = pick([['k'], ['k', 'l'], ['k', 'k'], ['', 'k'], [3], ['k', 'l', 'm']]);
+    const columns = keys.map((key) => ({ key, ...optional('label', () => pick(['K', null, 3, ''])) }));
+    const record = () => Object.fromEntries([...keys.filter(() => chance(0.85)).map((k) => [k, pick([...SHAPE_SCALARS, true, false, { x: 1 }, [1]])]), ...(chance(0.15) ? [['z', 'a']] : [])]);
+    return { columns: chance(0.1) ? [...columns, 'x'] : columns, rows: some(record) };
+  };
+  const table = () => jolt(withId(pick([
+    () => ({ type: 'table', rows: rows() }),
+    () => ({ type: 'table', rows: rows(), ...optional('head', () => pick([cells(), [], null, true, 'x'])), ...optional('header', () => pick([true, false, cells(), []])) }),
+    () => ({ type: 'table', rows: rows(), headers: pick([cells(), [], 'x']), ...optional('head', () => pick([[], null, cells()])) }),
+    () => ({ type: 'table', ...records() }),
+    () => ({ type: 'table', rows: rows(), columns: pick([[{ text: 'a' }, { text: 'b' }], [{ text: 'a', x: 1 }], ['a', 3, true, null, 1.5], [{ x: 1 }], []]), ...optional('head', () => pick([[], null])) }),
+    () => ({ type: 'table', content: rows() }),
+    () => ({ type: 'table', content: { rows: rows(), ...optional(pick(['head', 'header']), () => pick([cells(), null, 'x', '', 0, [[{ x: 1 }]]])) } }),
+  ])()));
+
+  const blocks = (d) => some(() => block(d), 3);
+  const body = (d) => ({ [pick(['children', 'blocks'])]: blocks(d), ...(chance(0.5) ? { children: pick([null, false, 'x', blocks(d)]), blocks: blocks(d) } : {}) });
+  const container = (d) => jolt(withId(pick([
+    () => ({ type: 'section', blocks: blocks(d) }),
+    () => ({ type: 'terminal', children: blocks(d), ...optional('blocks', () => blocks(d)) }),
+    () => ({ type: 'expandable', ...body(d) }),
+    () => ({ type: 'steps', steps: some(() => withId(body(d)), 3) }),
+    () => ({ type: 'tabs', tabs: some(() => withId({ blocks: blocks(d) }), 3) }),
+    () => ({ type: 'columns', columns: some(() => blocks(d), 3) }),
+    () => ({ type: 'figure', child: block(d) }),
+    () => ({ type: 'callout', text: pick(['', ' ', 'x']), ...optional('content', () => pick([null, [], '', inlines()])), ...optional('slots', () => pick([null, {}, { a: 1 }])), ...optional('blocks', () => blocks(d)) }),
+    () => ({ type: pick(['notes', 'cards']), items: some(() => pick([word, inlines, () => ({ text: word() })])()) }),
+    () => ({ type: 'pipeline', nodes: some(() => pick([word, inlines, () => ({ title: word() })])()) }),
+    () => ({ type: pick(['paragraph', 'quote', 'list']), content: inlines(), ...body(d) }),
+  ])()));
+  const block = (d) => (d > 3 ? pick([para, list, table])() : pick([para, list, table, table, () => container(d + 1), () => node(1)])());
+
+  const passInline = (d) => {
+    if (d > 6 || chance(0.2)) return pick([word, () => ({ type: 'text', value: word() }), () => ({ type: 'text', text: word() }), () => ({ type: 'text', text: word(), value: word() }), () => pick(SHAPE_SCALARS)])();
+    const kids = () => some(() => passInline(d + 1), 3);
+    return pick([
+      () => ({ type: 'text', text: word(), [pick(['children', 'content'])]: kids() }),
+      () => ({ type: 'text', text: word(), value: word(), content: kids() }),
+      () => ({ content: kids() }),
+      () => ({ type: pick(['strong', 'paragraph', 'x']), [pick(['children', 'content'])]: kids() }),
+      () => withId({ type: 'table', rows: [[kids()]] }),
+    ])();
+  };
+  const passInlines = () => some(() => passInline(0), 3);
+  const passBlock = (d) => {
+    if (d > 7 || chance(0.25)) {
+      return pick([
+        () => ({ type: 'list', items: some(() => (chance(0.8) ? passInlines() : word()), 3) }),
+        () => withId({ type: 'table', rows: some(() => pick([passInlines, () => ({ cells: some(passInlines, 3) })])(), 3), ...optional('head', passInlines) }),
+        () => ({ type: 'paragraph', content: passInlines() }),
+        () => ({ type: pick(SHAPE_LISTS), content: some(word, 3), children: [passBlock(8)] }),
+      ])();
+    }
+    const kids = () => some(() => passBlock(d + 1), 3);
+    return pick([
+      () => ({ type: 'section', blocks: kids(), content: passInlines() }),
+      () => ({ type: 'expandable', children: kids(), blocks: kids() }),
+      () => ({ type: 'x', children: kids() }),
+      () => ({ type: 'steps', steps: [{ children: kids() }], blocks: kids() }),
+      () => ({ type: 'tabs', tabs: [{ blocks: kids() }], children: kids() }),
+      () => ({ type: 'columns', columns: [kids()], blocks: kids() }),
+      () => ({ type: 'callout', text: 'c', blocks: kids() }),
+      () => ({ type: 'table', rows: [], blocks: kids() }),
+    ])();
+  };
+
+  return () => {
+    if (chance(0.2)) return { blocks: some(() => passBlock(0), 3) };
+    return { blocks: Array.from({ length: 1 + int(4) }, () => (chance(0.05) ? pick(SHAPE_SCALARS) : chance(0.5) ? block(0) : node(0))) };
+  };
 }
 
 export function shapeAnswer({ blocks }) {

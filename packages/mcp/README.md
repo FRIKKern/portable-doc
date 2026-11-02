@@ -15,7 +15,7 @@ MCP client ──stdio──► portable-doc-mcp
 | `apply_ops` | `doc`, `ops` (≤ 100) | `{ ok: true, doc }`, or a tool error `{ ok: false, index, error }` |
 | `render` | `doc` | `{ html }` from Barkpark's reader, or a tool error |
 
-Bad arguments are `InvalidParams` (-32602), and so are `tools/call` params that are not `{ name, arguments: {…} }`; `apply_ops` and `render` need a blocks array (`{ blocks: [...] }` or `[...]`), `validate` checks any object. A refused op and a failed render are tool results with `isError`. Limits: 16 MiB per message, 200,000 JSON values per call, 1,000 JSON levels for `apply_ops` and `render` (`validate` takes any depth and answers `too_deep`). An `explain` location is at most 1,000 characters: a deep path keeps its innermost steps, and long keys, types and ids are cut at 100.
+Bad arguments are `InvalidParams` (-32602), and so are `tools/call` params that are not `{ name, arguments: {…} }`; `apply_ops` and `render` need a blocks array (`{ blocks: [...] }` or `[...]`), `validate` checks any object. A refused op and a failed render are tool results with `isError`. Limits: 16 MiB per message, 200,000 JSON values per call, 1,000 JSON levels for `apply_ops` and `render` (`validate` takes any depth and answers `too_deep`). A call with a table edit also counts the JSON inside strings that start with `[` or `{`, because Barkpark's normalizer decodes it. An `explain` location is at most 1,000 characters: a deep path keeps its innermost steps, and long keys, types and ids are cut at 100.
 
 ## Run
 

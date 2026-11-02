@@ -3,6 +3,7 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { explain } from './explain.js';
 import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
 import { applyOps } from './ops/apply.js';
+import { TABLE_OPS } from './ops/intents.js';
 import { render } from './render.js';
 
 export const MAX_OPS = 100;
@@ -73,6 +74,12 @@ function checkDoc(doc, size, { walked }) {
   if (size.over === 'depth') throw bad(`arguments nest deeper than ${MAX_DEPTH} JSON levels`);
 }
 
+function checkDecoded(args) {
+  const over = measure(args, { strings: true }).over;
+  if (over === 'nodes') throw bad(`a table edit reads the JSON inside strings, and with it the arguments hold more than ${MAX_NODES} JSON values`);
+  if (over === 'depth') throw bad(`a table edit reads the JSON inside strings, and with it the arguments nest deeper than ${MAX_DEPTH} JSON levels`);
+}
+
 const result = (value, isError = false) => ({
   content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
   structuredContent: value,
@@ -105,6 +112,7 @@ export function handlers(config) {
       checkDoc(args.doc, size, { walked: true });
       if (!Array.isArray(args.ops)) throw bad('ops must be an array');
       if (args.ops.length > MAX_OPS) throw bad(`ops holds more than ${MAX_OPS} ops`);
+      if (args.ops.some((op) => TABLE_OPS.includes(op?.op))) checkDecoded(args);
       const applied = applyOps(args.doc, args.ops);
       return applied.ok ? result({ ok: true, doc: applied.value }) : result({ ok: false, index: applied.index, error: applied.error }, true);
     },

@@ -4,7 +4,7 @@ import { applyAction, mergeCells, project } from './table.js';
 import { exactKeys, isMap, isString, refusal } from './terms.js';
 import { blocksWithId, treeAuthoredIds } from './tree.js';
 
-const TABLE_OPS = ['patch-table-cells', 'patch-table-structure'];
+export const TABLE_OPS = ['patch-table-cells', 'patch-table-structure'];
 const ok = (value) => ({ ok: true, value });
 const fail = (code, target, op) => ({ ok: false, error: refusal(code, target, op) });
 const invalid = (op) => ({ ok: false, error: { code: 'invalid_op', op } });

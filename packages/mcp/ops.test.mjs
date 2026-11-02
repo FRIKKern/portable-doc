@@ -152,6 +152,8 @@ test('locked blocks hold: no remove, move, replace or displacement', () => {
   refused(applyOp(doc(para('p'), { ...para('b'), locked: true }, { ...para('a'), locked: true }), { op: 'remove-block', id: 'p' }), 'locked_block', 'a');
   const objects = doc({ id: { a: 1 }, type: 'paragraph', locked: true }, para('p'), { id: { b: 2 }, type: 'paragraph', locked: true });
   refused(applyOp(objects, { op: 'move-block', id: 'p', after: null }), 'locked_block', { a: 1 });
+  const twins = doc(para('p'), { id: { k: 1 }, locked: true }, { id: { k: 1 }, locked: true });
+  assert.ok(applyOp(twins, { op: 'move-block', id: 'p', after: { k: 1 } }).ok, 'equal locked ids are one entry, the last one, as in an Elixir map');
 });
 
 test('a figure keeps exactly one child', () => {
@@ -349,6 +351,7 @@ test('the whole-doc table check is Barkpark\'s: only a table the normalizer reac
   assert.ok(run({ id: 'pl', type: 'pipeline', nodes: ['n'], blocks: [legacy] }).ok);
   assert.ok(run({ id: 'q', type: 'table', content: [['{"x":1}']] }).ok);
   assert.ok(run({ id: 'q', type: 'table', content: { rows: [['a']], head: 'x' } }).ok);
+  assert.ok(run({ id: 'term', type: 'terminal', children: [{ type: 'table', rows: [[text('x')]] }], blocks: [] }).ok, 'a terminal with blocks mints no ids under children');
   for (const other of [
     { id: 's', type: 'section', blocks: [{ type: 'table', rows: [] }] },
     { id: 'f', type: 'figure', child: { type: 'table', rows: [] } },
@@ -384,11 +387,19 @@ test('a legacy list style Elixir cannot turn into text refuses the table edit as
   assert.deepEqual([[[111, 'rd'], 101, 'red'], [78, 'umber'], 'DECIMAL', ['ordered', []], 1.5, true].map(ordered), [true, true, true, true, false, false]);
 });
 
+test('the leaf pass runs once per enclosing level, as Barkpark runs it: a list item two levels down converts one level deeper', () => {
+  const text = (value, more = {}) => ({ type: 'text', text: value, ...more });
+  const item = { content: [text('t', { value: 'v', content: [text('c', { children: [text('d')] })] })] };
+  const list = { type: 'list', id: 'l', items: [[item]] };
+  assert.deepEqual(normalizeRenderShapes([list])[0].items, [item.content]);
+  assert.deepEqual(normalizeRenderShapes([{ type: 'section', id: 's', blocks: [list] }])[0].blocks[0].items, [[{ type: 'text', children: [text('d')], value: 'c' }]]);
+});
+
 test('normalizer text writes numbers as Elixir to_string does: shortest float, decimal unless scientific is shorter, integers below 1e21 plain', () => {
   const textOf = (n) => normalizeRenderShapes([{ type: 'bulleted_list', content: [n] }])[0].items[0][0].value;
   assert.deepEqual(
-    [0.1, 1e21, -1.5e21, 2.5e-8, 1e16, 123456.789, 0.000123, 1e-7, 100.5, 1e15 + 0.5, 5e-324, 1.7976931348623157e308, -7, 0].map(textOf),
-    ['0.1', '1.0e21', '-1.5e21', '2.5e-8', '10000000000000000', '123456.789', '1.23e-4', '1.0e-7', '100.5', '1000000000000000.5', '5.0e-324', '1.7976931348623157e308', '-7', '0'],
+    [0.1, 1e21, -1.5e21, 2.5e-8, 1e16, 123456.789, 0.000123, 1e-7, 100.5, 1e15 + 0.5, 5e-324, 1.7976931348623157e308, -7, 0, 0.0001, 1e-5, 12.5].map(textOf),
+    ['0.1', '1.0e21', '-1.5e21', '2.5e-8', '10000000000000000', '123456.789', '1.23e-4', '1.0e-7', '100.5', '1000000000000000.5', '5.0e-324', '1.7976931348623157e308', '-7', '0', '0.0001', '1.0e-5', '12.5'],
   );
 });
 
