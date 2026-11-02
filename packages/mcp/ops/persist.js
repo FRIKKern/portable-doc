@@ -57,7 +57,25 @@ function mapList(list, fun) {
   return out ?? list;
 }
 
+const DECODED_BUDGET = 32 * 1024 * 1024;
+const decoded = new Map();
+let decodedLength = 0;
+
 function decode(string) {
+  const known = decoded.get(string);
+  if (known) return known;
+  const result = parse(string);
+  decoded.set(string, result);
+  decodedLength += string.length;
+  for (const key of decoded.keys()) {
+    if (decodedLength <= DECODED_BUDGET) break;
+    decoded.delete(key);
+    decodedLength -= key.length;
+  }
+  return result;
+}
+
+function parse(string) {
   try {
     return { ok: true, value: JSON.parse(string) };
   } catch {

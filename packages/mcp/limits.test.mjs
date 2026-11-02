@@ -67,3 +67,11 @@ test('a table edit counts the JSON inside strings, which the normalizer decodes,
   assert.equal(measure({ s: json(3) }, { strings: true }).nodes, measure({ s: JSON.parse(json(3)) }).nodes + 1);
   assert.equal(measure({ s: json(3) }).nodes, 2);
 });
+
+test('a JSON-looking string is read once, not once per table edit', () => {
+  const doc = { blocks: [TABLE, { id: 'l', type: 'bulletList', content: [`[${'1,'.repeat(5_000_000)}x`] }] };
+  const started = Date.now();
+  const result = applyOps(doc, columnFlips);
+  assert.ok(result.ok, JSON.stringify(result.error));
+  assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms for ${columnFlips.length} ops`);
+});

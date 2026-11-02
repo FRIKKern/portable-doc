@@ -363,6 +363,8 @@ test('the whole-doc table check is Barkpark\'s: only a table the normalizer reac
     { id: 'n', type: 'table', rows: [[{ text: 'a' }]] },
     { id: 'n', type: 'table', rows: [[[{ type: 'em', children: [{ type: 'text', text: 'a' }] }]]] },
     { id: 'l', type: 'list', items: ['[{"type":"table","id":"q","rows":[]}]'] },
+    { type: 'bulletList', content: ['[{"type":"table","id":"q","rows":[]}]'] },
+    { type: 'list', content: ['[{"type":"table","id":"q","rows":[]}]'] },
     { id: 'l', type: 'bulletList', content: [{ type: 'table', id: 'q', rows: [] }] },
     { id: 'p', type: 'paragraph', content: [{ type: 'table', id: 'q', children: [{ type: 'text', text: 't' }] }] },
     { id: 'n', type: 'notes', items: [[{ type: 'table', id: 'q', rows: [], value: 'v' }]] },
@@ -393,6 +395,9 @@ test('the leaf pass runs once per enclosing level, as Barkpark runs it: a list i
   const list = { type: 'list', id: 'l', items: [[item]] };
   assert.deepEqual(normalizeRenderShapes([list])[0].items, [item.content]);
   assert.deepEqual(normalizeRenderShapes([{ type: 'section', id: 's', blocks: [list] }])[0].blocks[0].items, [[{ type: 'text', children: [text('d')], value: 'c' }]]);
+  const deeper = { type: 'list', id: 'l', items: [[{ content: [{ type: 'x', content: [text('t', { value: 'v', content: [text('c', { children: [text('d', { children: [text('e')] })] })] })] }] }]] };
+  const nested = normalizeRenderShapes([{ type: 'section', id: 's', blocks: [{ type: 'section', id: 's2', blocks: [deeper] }] }]);
+  assert.deepEqual(nested[0].blocks[0].blocks[0].items, [[{ type: 'text', children: [text('d', { children: [text('e')] })], value: 'c' }]], 'a text leaf with a value passes no pass to its content');
 });
 
 test('normalizer text writes numbers as Elixir to_string does: shortest float, decimal unless scientific is shorter, integers below 1e21 plain', () => {

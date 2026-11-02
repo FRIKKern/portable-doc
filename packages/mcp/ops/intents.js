@@ -38,7 +38,7 @@ function tablePreflight(blocks, op) {
   }
   if (unsafe) return { ok: false, error: unsafe };
   const [found] = isString(op.id) && op.id !== '' ? blocksWithId(blocks, op.id) : [];
-  return found?.type === 'table' && project(found) ? null : invalid(op);
+  return found && project(found) ? null : invalid(op);
 }
 
 function lowerCardBody(blocks, op) {
