@@ -27,6 +27,8 @@ const CASES = [
   { criterion: 5, name: 'an op on a legacy repeat edits the first match', doc: legacy(), ops: [{ op: 'patch-block', id: 'p-d', patch: { content: [{ type: 'text', value: 'Top!' }] } }] },
   { criterion: 6, name: 'a leftover repeat plus a later bad op answers the later error', doc: twoSections(), ops: [intoS2, { op: 'patch-block', id: 'p-missing', patch: { tone: 'info' } }] },
   { criterion: 7, name: 'an incoming block that repeats an id inside itself is refused', doc: twoSections(), ops: [{ op: 'append-block', block: section('s-3', [para('p-n', 'One.'), para('p-n', 'Two.')]) }] },
+  { criterion: null, name: 'append-block and insert-after still refuse an id already in the doc at that op, so a later bad op does not win', doc: twoSections(), ops: [{ op: 'append-block', block: para('p-a', 'Copy.') }, { op: 'patch-block', id: 'p-missing', patch: { tone: 'info' } }] },
+  { criterion: null, name: 'insert-after refuses an id already in the doc at that op, even when a later op would remove the old copy', doc: twoSections(), ops: [{ op: 'insert-after', afterId: 'p-b', block: para('p-x', 'Copy.') }, outOfS1] },
 ];
 
 const sources = portable(['patch.ex', 'field_number.ex']);

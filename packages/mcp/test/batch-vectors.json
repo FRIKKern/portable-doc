@@ -765,6 +765,182 @@
         },
         "ok": false
       }
+    },
+    {
+      "criterion": null,
+      "name": "append-block and insert-after still refuse an id already in the doc at that op, so a later bad op does not win",
+      "doc": {
+        "title": "Vectors",
+        "blocks": [
+          {
+            "id": "s-1",
+            "type": "section",
+            "blocks": [
+              {
+                "id": "p-a",
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Alpha."
+                  }
+                ]
+              },
+              {
+                "id": "p-x",
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Moved."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "s-2",
+            "type": "section",
+            "blocks": [
+              {
+                "id": "p-b",
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Beta."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "append-block",
+          "block": {
+            "id": "p-a",
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "value": "Copy."
+              }
+            ]
+          }
+        },
+        {
+          "op": "patch-block",
+          "id": "p-missing",
+          "patch": {
+            "tone": "info"
+          }
+        }
+      ],
+      "answer": {
+        "error": {
+          "code": "duplicate_id",
+          "op": "append-block",
+          "target": "p-a"
+        },
+        "ok": false
+      }
+    },
+    {
+      "criterion": null,
+      "name": "insert-after refuses an id already in the doc at that op, even when a later op would remove the old copy",
+      "doc": {
+        "title": "Vectors",
+        "blocks": [
+          {
+            "id": "s-1",
+            "type": "section",
+            "blocks": [
+              {
+                "id": "p-a",
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Alpha."
+                  }
+                ]
+              },
+              {
+                "id": "p-x",
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Moved."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "s-2",
+            "type": "section",
+            "blocks": [
+              {
+                "id": "p-b",
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Beta."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert-after",
+          "afterId": "p-b",
+          "block": {
+            "id": "p-x",
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "value": "Copy."
+              }
+            ]
+          }
+        },
+        {
+          "op": "replace-block",
+          "id": "s-1",
+          "block": {
+            "id": "s-1",
+            "type": "section",
+            "blocks": [
+              {
+                "id": "p-a",
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Alpha."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "answer": {
+        "error": {
+          "code": "duplicate_id",
+          "op": "insert-after",
+          "target": "p-x"
+        },
+        "ok": false
+      }
     }
   ]
 }

@@ -55,8 +55,8 @@ test('a batch is all or nothing: the first refused op names its index and nothin
   assert.deepEqual(ok(applyOps(d, [])), d);
 });
 
-test(`the ${vectors.cases.length} batch duplicate vectors answer what Barkpark's apply_patches (${vectors.barkpark}) answered, through Patch and through the op fold`, () => {
-  assert.deepEqual(vectors.cases.map((c) => c.criterion), [1, 2, 3, 4, 5, 6, 7]);
+test(`the seven batch duplicate criteria and the insert guard, ${vectors.cases.length} vectors, answer what Barkpark's apply_patches (${vectors.barkpark}) answered, through Patch and through the op fold`, () => {
+  assert.deepEqual(vectors.cases.map((c) => c.criterion), [1, 2, 3, 4, 5, 6, 7, null, null]);
   for (const c of vectors.cases) {
     assert.deepEqual(applyPatches(c.doc, c.ops), c.answer, c.name);
     const { index, ...folded } = applyOps(c.doc, c.ops);

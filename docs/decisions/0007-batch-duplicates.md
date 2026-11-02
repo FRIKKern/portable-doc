@@ -21,6 +21,7 @@ start ──op 1──► ──op 2──► … ──op n──► end
 | 5 an op on a legacy repeat | edits the first match |
 | 6 a leftover repeat plus a later bad op | the later op's error |
 | 7 an incoming block that repeats an id inside itself | `duplicate_id` |
+| also: `append-block` or `insert-after` of an id already in the doc | `duplicate_id` at that op, still (Patch's own guard), so a later bad op or a later removal does not change it |
 
 ## Context
 
@@ -32,4 +33,4 @@ Barkpark main at `0db4b40d89` (barkpark#25056) moved the duplicate-id check out 
 - **`applyOps` is the BlockOps fold.** Same fold, each op lowered against the current doc first. Its `index` for an end refusal is the op that last added a copy, the op Barkpark names.
 - **The adding op comes from the fold's own steps**, not a replay: Barkpark replays the same ops from the same start, which gives the same steps.
 - **`applyPatch(doc, op)` alone is unchanged.**
-- **Checked three ways.** `differential.mjs --batch` runs seeded random batches (moves between sections, ops naming the moved id, legacy repeats, random ops) through both folds: 0 mismatches. `test/batch-elixir.json` replays 5,000 of Barkpark's answers in `npm run check`. `test/batch-vectors.json` holds the seven cases above with Barkpark's full answers, written by `vectors.mjs`, for any second fold to replay.
+- **Checked three ways.** `differential.mjs --batch` runs seeded random batches (moves between sections, ops naming the moved id, legacy repeats, random ops) through both folds: 0 mismatches. `test/batch-elixir.json` replays 5,000 of Barkpark's answers in `npm run check`. `test/batch-vectors.json` holds nine vectors, the seven cases and two for the guard, with Barkpark's full answers, written by `vectors.mjs`, for any second fold to replay.
