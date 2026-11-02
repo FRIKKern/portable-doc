@@ -31,11 +31,13 @@ BARKPARK_URL=https://barkpark.example BARKPARK_TOKEN=<ingest token> node package
 
 | What | Command |
 |---|---|
-| Ops goldens, server, explain, transcript, 5,000 recorded `patch.ex` and 5,000 recorded intent answers | `npm run check` |
+| Ops goldens, server, explain, transcript, 5,000 recorded answers each from `patch.ex`, the intents and the normalizer | `npm run check` |
 | The SDK client runs all four tools on one doc | `node packages/mcp/transcript.mjs` → [`TRANSCRIPT.md`](TRANSCRIPT.md) |
 | The six Patch ops against Barkpark's own Elixir | `node packages/mcp/differential.mjs ../barkpark 20000` |
 | Re-record the answers `npm run check` replays | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/patch-elixir.json` |
 | The three editor intents against `BlockOps.lower_editor_op` (needs a compiled `../barkpark/api`) | `node packages/mcp/differential.mjs ../barkpark 20000 1 --intents` |
 | Re-record the intent answers | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/intents-elixir.json --intents` |
+| `normalize_render_shapes` and the table preflight on random shapes | `node packages/mcp/differential.mjs ../barkpark 20000 1 --normalize` |
+| Re-record the normalizer answers | `node packages/mcp/differential.mjs ../barkpark 5000 11 packages/mcp/test/normalize-elixir.json --normalize` |
 
 Why it looks like this: [0006](../../docs/decisions/0006-mcp.md).
