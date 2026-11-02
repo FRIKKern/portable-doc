@@ -2,15 +2,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { applyOp, applyOps } from './ops/apply.js';
-import { applyPatch } from './ops/patch.js';
+import { applyPatch, applyPatches } from './ops/patch.js';
 import { normalizeRenderShapes } from './ops/persist.js';
 import { project } from './ops/table.js';
 import { digest } from './test/digest.mjs';
-import { generator, intentGenerator, normalizeGenerator, shapeAnswer } from './test/random-ops.mjs';
+import { batchGenerator, generator, intentGenerator, normalizeGenerator, shapeAnswer } from './test/random-ops.mjs';
 
 const recorded = JSON.parse(fs.readFileSync(new URL('./test/patch-elixir.json', import.meta.url), 'utf8'));
 const recordedIntents = JSON.parse(fs.readFileSync(new URL('./test/intents-elixir.json', import.meta.url), 'utf8'));
 const recordedShapes = JSON.parse(fs.readFileSync(new URL('./test/normalize-elixir.json', import.meta.url), 'utf8'));
+const recordedBatches = JSON.parse(fs.readFileSync(new URL('./test/batch-elixir.json', import.meta.url), 'utf8'));
+const vectors = JSON.parse(fs.readFileSync(new URL('./test/batch-vectors.json', import.meta.url), 'utf8'));
 
 const dir = new URL('../../goldens/ops/', import.meta.url);
 const goldens = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort()
@@ -51,6 +53,21 @@ test('a batch is all or nothing: the first refused op names its index and nothin
   assert.deepEqual(r, { ok: false, index: 1, error: { code: 'block_not_found', target: 'nope', op: 'patch-block' } });
   assert.equal(d.blocks.length, 2);
   assert.deepEqual(ok(applyOps(d, [])), d);
+});
+
+test(`the ${vectors.cases.length} batch duplicate vectors answer what Barkpark's apply_patches (${vectors.barkpark}) answered, through Patch and through the op fold`, () => {
+  assert.deepEqual(vectors.cases.map((c) => c.criterion), [1, 2, 3, 4, 5, 6, 7]);
+  for (const c of vectors.cases) {
+    assert.deepEqual(applyPatches(c.doc, c.ops), c.answer, c.name);
+    const { index, ...folded } = applyOps(c.doc, c.ops);
+    assert.deepEqual(folded, c.answer, c.name);
+  }
+});
+
+test('a batch refused at its end names the index of the last op that added a copy', () => {
+  const [, leaves, , names] = vectors.cases;
+  assert.equal(applyOps(leaves.doc, leaves.ops).index, 3);
+  assert.equal(applyOps(names.doc, names.ops).index, 1);
 });
 
 test('ops thread: each op sees the result of the one before', () => {
@@ -484,4 +501,18 @@ test(`${recordedShapes.answers.length} seeded shape cases normalize and prefligh
   });
   assert.deepEqual(misses.slice(0, 5), [], 'rerun differential.mjs --normalize with this seed to see the cases');
   assert.deepEqual([...outcomes].sort(), ['ok duplicate_id', 'ok ok', 'ok table_normalization_would_change_authored_data', 'raised raised']);
+});
+
+test(`${recordedBatches.answers.length} seeded Patch batches answer what Barkpark's apply_patches (${recordedBatches.barkpark}) answered; where it raised, invalid_op`, () => {
+  const next = batchGenerator(recordedBatches.seed);
+  const outcomes = new Set();
+  const misses = recordedBatches.answers.flatMap((answer, i) => {
+    const { doc, ops } = next();
+    const ours = applyPatches(doc, ops);
+    outcomes.add(ours.ok ? 'ok' : ours.error.code);
+    const got = answer === 'raised' ? (ours.ok ? 'ok' : ours.error.code) : digest(ours);
+    return got === (answer === 'raised' ? 'invalid_op' : answer) ? [] : [i];
+  });
+  assert.deepEqual(misses.slice(0, 5), [], 'rerun differential.mjs --batch with this seed to see the cases');
+  assert.deepEqual([...outcomes].sort(), ['block_not_found', 'constraint', 'duplicate_id', 'invalid_op', 'locked_block', 'ok', 'type_mismatch']);
 });

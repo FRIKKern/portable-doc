@@ -6,14 +6,39 @@ const FIGURE_CHILD = 'figure must contain exactly one child';
 
 const has = (op, ...keys) => keys.every((k) => Object.hasOwn(op, k));
 
-export function applyPatch(docOrBlocks, op) {
+export function applyPatch(docOrBlocks, op, batchStart = null) {
   if (isMap(docOrBlocks) && Array.isArray(docOrBlocks.blocks)) {
-    const r = applyPatch(docOrBlocks.blocks, op);
+    const r = applyPatch(docOrBlocks.blocks, op, batchStart);
     return r.ok ? { ok: true, value: { ...docOrBlocks, blocks: r.value } } : r;
   }
+  const named = batchStart && checkNamedRepeat(docOrBlocks, op, batchStart);
+  if (named) return named;
   const r = applyToBlocks(docOrBlocks, op);
   if (!r.ok) return r;
-  return checkLockedPlacement(docOrBlocks, r.value, op) ?? checkDuplicateRatchet(docOrBlocks, r.value, op) ?? r;
+  return checkLockedPlacement(docOrBlocks, r.value, op) ?? (batchStart ? null : checkDuplicateRatchet(docOrBlocks, r.value, op)) ?? r;
+}
+
+export function applyPatches(docOrBlocks, ops) {
+  const r = foldBatch(docOrBlocks, ops, (_, op) => ({ ok: true, value: op }));
+  return r.ok ? r : { ok: false, error: r.error };
+}
+
+export function foldBatch(doc, ops, lower) {
+  if (ops.length === 0) return { ok: true, value: doc };
+  const start = blocksOf(doc);
+  let current = doc;
+  const steps = [];
+  for (const [index, op] of ops.entries()) {
+    const lowered = lower(current, op);
+    const r = lowered.ok ? applyPatch(current, lowered.value, start) : lowered;
+    if (!r.ok) return { ok: false, index, error: r.error };
+    steps.push({ op: lowered.value, before: blocksOf(current), after: blocksOf(r.value) });
+    current = r.value;
+  }
+  const dup = newDuplicate(start, blocksOf(current));
+  if (dup === undefined) return { ok: true, value: current };
+  const index = steps.findLastIndex((s) => idCount(s.after, dup) > idCount(s.before, dup));
+  return { ok: false, index, error: refusal('duplicate_id', dup, opKind(steps[index].op)) };
 }
 
 const ok = (value) => ({ ok: true, value });
@@ -112,11 +137,33 @@ function checkLockedPlacement(before, after, op) {
 }
 
 function checkDuplicateRatchet(before, after, op) {
-  const tally = new Map();
-  for (const id of patchAuthoredIds(before)) tally.set(id, (tally.get(id) ?? 0) - 1);
-  const ids = patchAuthoredIds(after);
-  const now = new Map();
-  for (const id of ids) now.set(id, (now.get(id) ?? 0) + 1);
-  const dup = ids.find((id) => now.get(id) > 1 && now.get(id) + (tally.get(id) ?? 0) > 0);
+  const dup = newDuplicate(before, after);
   return dup === undefined ? null : fail('duplicate_id', dup, op.op);
 }
+
+function checkNamedRepeat(blocks, op, start) {
+  if (!isMap(op)) return null;
+  const counts = idCounts(blocks);
+  const startCounts = idCounts(start);
+  const named = ['after', 'afterId', 'id'].filter((k) => Object.hasOwn(op, k)).map((k) => op[k]).find((id) => addedRepeat(counts, startCounts, id));
+  return named === undefined ? null : fail('duplicate_id', named, opKind(op));
+}
+
+function newDuplicate(before, after) {
+  const beforeCounts = idCounts(before);
+  const ids = patchAuthoredIds(after);
+  const counts = idCounts(after);
+  return ids.find((id) => addedRepeat(counts, beforeCounts, id));
+}
+
+const addedRepeat = (counts, before, id) => (counts.get(id) ?? 0) > 1 && counts.get(id) > (before.get(id) ?? 0);
+
+function idCounts(blocks) {
+  const counts = new Map();
+  for (const id of patchAuthoredIds(blocks)) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return counts;
+}
+
+const idCount = (blocks, id) => patchAuthoredIds(blocks).filter((x) => x === id).length;
+const opKind = (op) => (isMap(op) && typeof op.op === 'string' ? op.op : 'batch');
+const blocksOf = (doc) => (isMap(doc) && Array.isArray(doc.blocks) ? doc.blocks : doc);

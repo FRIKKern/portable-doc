@@ -19,6 +19,61 @@ const CONTAINERS = ['section', 'expandable', 'steps', 'tabs', 'columns', 'figure
 const OPS = ['append-block', 'insert-after', 'patch-block', 'replace-block', 'remove-block', 'move-block'];
 
 export function generator(seed) {
+  const { doc, op } = parts(seed);
+  return () => ({ doc: doc(), op: op() });
+}
+
+export function batchGenerator(seed) {
+  const { doc, op, leaf, pick, chance, int } = parts(seed);
+  const sections = () => ({ title: 'Synthetic', blocks: Array.from({ length: 2 + int(2) }, () => ({ id: pick(IDS), type: 'section', blocks: Array.from({ length: 1 + int(3) }, leaf) })) });
+  return () => {
+    const d = chance(0.5) ? sections() : doc();
+    const found = subtrees(d.blocks);
+    if (chance(0.7)) found.forEach((b, i) => (b.id = `${b.id}${i}`));
+    const ids = found.map((b) => b.id);
+    const named = () => (ids.length && chance(0.85) ? pick(ids) : pick(IDS));
+    const copy = () => structuredClone(found.length && chance(0.8) ? pick(found) : { id: pick(IDS), type: 'paragraph' });
+    const holders = found.filter((b) => Array.isArray(b.blocks));
+    const drop = () => {
+      const holder = pick(holders);
+      return pick([
+        () => ({ op: 'replace-block', id: holder.id, block: { ...holder, blocks: holder.blocks.slice(1) } }),
+        () => ({ op: 'patch-block', id: holder.id, patch: { blocks: [] } }),
+        () => ({ op: 'remove-block', id: holder.id }),
+      ])();
+    };
+    const movable = holders.flatMap((h) => h.blocks.filter((b) => isMapLike(b) && typeof b.id === 'string').map((b) => [h, b]));
+    const move = () => {
+      if (!movable.length || holders.length < 2) return op();
+      const [from, x] = pick(movable);
+      const to = pick(holders.filter((h) => h !== from));
+      const into = { op: 'replace-block', id: to.id, block: { ...to, blocks: [...to.blocks, x] } };
+      const out = { op: 'replace-block', id: from.id, block: { ...from, blocks: from.blocks.filter((b) => b !== x) } };
+      const between = chance(0.3) ? [{ op: pick(['patch-block', 'remove-block', 'move-block']), id: x.id, patch: { tone: 'x' } }] : [];
+      return chance(0.5) ? [into, ...between, out] : [out, ...between, into];
+    };
+    const steps = [
+      op,
+      move,
+      () => ({ op: 'append-block', block: copy() }),
+      () => ({ op: 'insert-after', afterId: named(), block: copy() }),
+      () => (holders.length ? drop() : op()),
+      () => (holders.length ? { op: 'replace-block', id: pick(holders).id, block: { ...pick(holders), blocks: [copy()] } } : op()),
+      () => ({ op: pick(['move-block', 'patch-block', 'remove-block']), id: named(), ...(chance(0.5) ? { after: named() } : { patch: { tone: 'x' } }) }),
+    ];
+    return { doc: d, ops: Array.from({ length: 1 + int(4) }, () => pick(steps)()).flat() };
+  };
+}
+
+function subtrees(blocks) {
+  const out = [];
+  JSON.stringify(blocks, (_k, v) => (isMapLike(v) && typeof v.id === 'string' && v.id !== '' && typeof v.type === 'string' && out.push(v), v));
+  return out;
+}
+
+const isMapLike = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+function parts(seed) {
   const rand = mulberry32(seed);
   const pick = (list) => list[Math.floor(rand() * list.length)];
   const chance = (p) => rand() < p;
@@ -81,10 +136,7 @@ export function generator(seed) {
     return o;
   }
 
-  return () => {
-    const doc = { title: 'Synthetic', blocks: blocks(0, 1 + int(5)) };
-    return { doc, op: op() };
-  };
+  return { doc: () => ({ title: 'Synthetic', blocks: blocks(0, 1 + int(5)) }), op, leaf, pick, chance, int };
 }
 
 const INLINE = [
