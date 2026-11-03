@@ -149,6 +149,8 @@ const words = (s) =>
     .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
     .filter(Boolean);
 
+const wordsSplitPunctuation = (s) => s.toLowerCase().split(/[^\p{L}\p{N}]+/gu).filter(Boolean);
+
 export const htmlText = (html) => html.replace(/<[^>]*>/g, "").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
 
 export function goldenWords(shape) {
@@ -159,8 +161,15 @@ export function goldenWords(shape) {
 }
 
 export function diffWords(actualText, expected) {
+  return diffWordsFrom(words(actualText), expected);
+}
+
+export function diffWordsSplitPunctuation(actualText, expected) {
+  return diffWordsFrom(normalizeFigureWords(wordsSplitPunctuation(actualText)), wordsSplitPunctuation(expected.join(" ")));
+}
+
+function diffWordsFrom(seen, expected) {
   if (expected.length === 0) return UNCHECKED;
-  const seen = words(actualText);
   const out = [];
   let at = 0;
   expected.forEach((word, i) => {
@@ -169,6 +178,142 @@ export function diffWords(actualText, expected) {
     else at = found + 1;
   });
   return out;
+}
+
+export function diffWordsUnordered(actualText, expected) {
+  if (expected.length === 0) return UNCHECKED;
+  const available = new Map();
+  for (const word of normalizeFigureWords(words(actualText))) available.set(word, (available.get(word) || 0) + 1);
+  const out = [];
+  expected.forEach((word, i) => {
+    if (!available.get(word)) out.push(`word ${i + 1}/${expected.length} "${word}" not found`);
+    else available.set(word, available.get(word) - 1);
+  });
+  return out;
+}
+
+const normalizeFigureWords = (seen) => seen.map((word) => word === "kilde" ? "source" : word === "kilder" ? "sources" : word);
+
+export function diffFigureWords(actualText, expected) {
+  return diffWordsFrom(normalizeFigureWords(words(actualText)), expected);
+}
+
+export function diffTrackedEyebrow(actualText, expected) {
+  let seen = words(actualText);
+  if (seen.length > 1 && seen.every((word) => [...word].length === 1)) seen = [seen.join("")];
+  return diffWordsFrom(seen, expected);
+}
+
+const hasClass = (node, name) => !("text" in node) && (node.classes || []).includes(name);
+
+export function tabPanelWords(shape) {
+  const panels = [];
+  const collect = (node) => "text" in node ? words(node.text) : (node.children || []).flatMap(collect);
+  const walk = (node) => {
+    if (hasClass(node, "bp-code-tabs__panel") || hasClass(node, "bp-tabs__panel")) {
+      panels.push(collect(node));
+      return;
+    }
+    for (const child of node.children || []) if (!("text" in child)) walk(child);
+  };
+  for (const node of shape) walk(node);
+  return panels;
+}
+
+export function diffTabSections(actualText, labels, panels) {
+  if (labels.length !== panels.length) return [`tab labels/panels: ${labels.length} != ${panels.length}`];
+  const expected = labels.flatMap((label, i) => [...words(label), ...panels[i]]);
+  return diffWordsFrom(words(actualText), expected);
+}
+
+const SCRIPT_DIGITS = new Map([..."⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉"].map((digit, i) => [digit, String(i % 10)]));
+
+const equationRunes = (text) => [...text.toLowerCase()]
+  .map((rune) => SCRIPT_DIGITS.get(rune) || rune)
+  .filter((rune) => /[\p{L}\p{N}]/u.test(rune));
+
+export function diffEquation(actualText, expected) {
+  return diffWordsFrom(equationRunes(actualText), equationRunes(expected.join(" ")));
+}
+
+const structuralTypes = new Set(["divider", "image", "video"]);
+
+export function pdrenderStructuralVerdict(golden, actualText, renderedInput = golden.input) {
+  if (!structuralTypes.has(golden.type)) return undefined;
+  const diff = [];
+  const require = (ok, message) => { if (!ok) diff.push(message); };
+  const requireBox = (name) => require(actualText.includes("╭") && actualText.includes("╰"), `${name}: missing visible box`);
+
+  if (golden.type === "divider") {
+    const at = actualText.indexOf("§");
+    require(actualText.split("§").length === 2, "divider: missing single section mark");
+    require(at > 0 && actualText.slice(0, at).includes("─") && actualText.slice(at + 1).includes("─"), "divider: missing rule on both sides of mark");
+  }
+
+  if (golden.type === "image") {
+    require(renderedInput.src === golden.input.src, `image src: ${JSON.stringify(renderedInput.src)} != ${JSON.stringify(golden.input.src)}`);
+    let head = `🖼 ${String(golden.input.alt || "").trim()}`;
+    if (Number(golden.input.width) > 0 && Number(golden.input.height) > 0) head += ` · ${golden.input.width}×${golden.input.height}`;
+    head += " (view in Studio)";
+    require(actualText.includes(head), `image: missing canonical placeholder ${JSON.stringify(head)}`);
+    requireBox("image");
+  }
+
+  if (golden.type === "video") {
+    require(renderedInput.src === golden.input.src, `video src: ${JSON.stringify(renderedInput.src)} != ${JSON.stringify(golden.input.src)}`);
+    require(actualText.includes("▶ Video"), "video: missing honest degrade label");
+    const captions = Array.isArray(golden.input.captions) ? golden.input.captions.filter((caption) => caption && typeof caption === "object").length : 0;
+    if (captions > 0) {
+      const label = `${captions} caption track${captions === 1 ? "" : "s"}`;
+      require(actualText.includes(label), `video: missing ${label}`);
+    }
+    require(actualText.includes("open in browser"), "video: missing handoff label");
+    requireBox("video");
+  }
+
+  return { via: "native-structure", diff };
+}
+
+export function columnMajorText(actualText) {
+  const lines = actualText.split("\n");
+  const starts = [];
+  for (const line of lines) {
+    for (const match of line.matchAll(/\S+/g)) {
+      if (starts.length === 0 || match.index - starts.at(-1) >= 3) starts.push(match.index);
+    }
+    break;
+  }
+  if (starts.length < 2) return actualText;
+  const cells = [];
+  const footer = [];
+  starts.forEach((start, column) => {
+    const end = starts[column + 1];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (/^(?:Kilde|Kilder|Source|Sources):/.test(trimmed)) {
+        if (column === 0) footer.push(trimmed);
+        continue;
+      }
+      const part = line.slice(start, end).trim();
+      if (part) cells.push(part);
+    }
+  });
+  return [...cells, ...footer].join("\n");
+}
+
+export function columnWiseText(actualText) {
+  const columns = [];
+  for (const raw of actualText.split("\n")) {
+    const line = raw.replace(/[ \t]+$/, "");
+    if (!line) continue;
+    const parts = line.split(/[ \t]{3,}/);
+    while (columns.length < parts.length) columns.push([]);
+    parts.forEach((part, i) => {
+      part = part.trim();
+      if (part) columns[i].push(part);
+    });
+  }
+  return columns.flat().join("\n");
 }
 
 function row(type, verdict) {
