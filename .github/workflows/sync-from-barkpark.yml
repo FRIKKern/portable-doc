@@ -28,6 +28,9 @@ jobs:
         id: fresh
         run: |
           if node scripts/check-pack.mjs --against .barkpark; then echo same=true >> "$GITHUB_OUTPUT"; else echo same=false >> "$GITHUB_OUTPUT"; fi
+      - name: Install workspace dependencies
+        if: steps.fresh.outputs.same == 'false'
+        run: npm ci
       - name: Open or update the sync PR
         if: steps.fresh.outputs.same == 'false'
         env:
