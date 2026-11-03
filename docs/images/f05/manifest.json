@@ -1,0 +1,13 @@
+{
+  "journey": "F05",
+  "status": "candidate-dry-run",
+  "package": "@portable-doc/react@1.0.0",
+  "package_spec": "/Volumes/SATECHI/dev-caches/tmp/pd-react-extensions-hosted.JffSl7/portable-doc-react-1.0.0.tgz",
+  "tarball_sha256": "db6de8019ba132a2a6eeb8676e7ffd87ae6cb016081ed99720e12cbf13da6293",
+  "gif_sha256": "7ba4fa93564f7f61cb24cc32fcbbb2f460440412422642ef8a403eef559aa19e",
+  "react_source_sha": "361b7cc9dfc8766a6a48b55a35073c8e69f056b2",
+  "source_lines": 8,
+  "install_commands": 1,
+  "chrome": "Google Chrome for Testing 148.0.7778.167",
+  "ffmpeg": "ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers"
+}
