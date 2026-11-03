@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/FRIKKern/barkpark",
+  "commit": "cbd5282b4dce9c4c2ee7a567d24b23b4a8bae1d3",
+  "root": "js/packages/react/src/PortableDoc.tsx",
+  "stylesheet": "api/assets/paper-surface/paper-surface.css",
+  "scope": "PortableDoc.tsx and its pure renderer dependency graph"
+}

@@ -1,0 +1,1577 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Barkpark contributors
+//
+// Core + task-tracking block emitters — the JS twins of walk.ex / compose.ex /
+// figures.ex / components.ex at style=:article. Every function returns an HTML
+// string; container blocks recurse through the shared dispatcher.
+
+import {
+  type Block,
+  escapeHtml,
+  escapeAttr,
+  safeUrl,
+  str,
+  num,
+  asList,
+  isMap,
+  capitalize,
+  renderInlines,
+  glyphHtml,
+  draftHtml,
+  roleOf,
+  labelForRole,
+  meaningForRole,
+  LEGEND_ROLES,
+  textLeafValue,
+  codeSource,
+  MAX_DEPTH,
+} from '../inline'
+import { renderBlock, renderBlocks } from './registry'
+import { listChildren } from '../list-children'
+import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
+import type { RenderCtx } from './chrome'
+
+type Emit = (block: Block, ctx: RenderCtx) => string
+
+/* ── prose core (walk.ex) ─────────────────────────────────────────────────── */
+
+function paragraphInline(b: Block): unknown {
+  const content = b.content
+  if (Array.isArray(content) && content.length) return content
+  const text = str(b.text)
+  return text !== '' ? text : []
+}
+
+const heading: Emit = (b) => {
+  const raw = b.level
+  const level =
+    raw === 1 || raw === 2 || raw === 3 || raw === '1' || raw === '2' || raw === '3'
+      ? Number(raw)
+      : 2
+  // Dual-shape body, byte-for-byte the compose.ex heading twin (compose_block
+  // heading): a non-empty `content` inline array composes through the shared
+  // inline dispatcher; otherwise the bare `text` string (escaped). The 16/16
+  // capstone headings persist the `content[]` shape — reading `text` alone left
+  // them rendering an empty `<h2></h2>`.
+  return `<h${level}>${renderInlines(paragraphInline(b))}</h${level}>`
+}
+
+// The h1/h2/h3 authoring-drift aliases (charter D57), the JS twin of compose.ex's
+// @heading_aliases clause. The level comes from the TYPE, not from `level`: SIX
+// of the 18 drifted headings (1 h2 + all 5 h3s) carry no `level` key, so
+// `h3: heading` alone would emit `<h2>`. Spreading the level in makes the type
+// authoritative — zero live blocks contradict their own type spelling.
+const headingAtLevel =
+  (level: 1 | 2 | 3): Emit =>
+  (b, ctx) =>
+    heading({ ...b, level } as Block, ctx)
+
+// Swept sibling of the heading/list content[] defect: eyebrow read `text` alone,
+// so the 3 live eyebrows persisted as `{content:[…]}` rendered an empty
+// `<p class="bp-role-eyebrow"></p>`. The `text` path is byte-identical (the
+// fallback only fires when `content` is absent/empty), so the golden parity
+// fixture is untouched.
+const eyebrow: Emit = (b) => `<p class="bp-role-eyebrow">${renderInlines(paragraphInline(b))}</p>`
+
+// scaffy:add-block-type Tabs MARK:js-emitter-tabs
+// Mirrors compose_block(tabs) (compose.ex, :article leg): a tab strip
+// (role=tablist) + every panel, each panel's `blocks` recursed through the
+// shared `renderBlocks` dispatcher (the columns/steps precedent). NO-JS
+// DEGRADE = every panel stays visible in this markup — the client.ts /
+// bulldocs.html.heex hydration legs add `hidden` to every non-active panel
+// post-mount (I1 dual hydration). Empty `tabs` renders nothing.
+interface TabEntry {
+  label: string
+  blocks: Block[]
+}
+
+function tabEntries(b: Block): TabEntry[] {
+  return asList(b.tabs)
+    .filter(isMap)
+    .map((t) => ({ label: str(t.label), blocks: asList<Block>(t.blocks) }))
+}
+
+const tabs: Emit = (b, ctx) => {
+  const entries = tabEntries(b)
+  if (entries.length === 0) return ''
+
+  const strip = entries
+    .map((t, i) => {
+      const activeClass = i === 0 ? ' bp-tabs__tab--active' : ''
+      return (
+        `<button type="button" class="bp-tabs__tab${activeClass}" role="tab" ` +
+        `aria-selected="${i === 0}" data-tab-index="${i}">${escapeHtml(t.label)}</button>`
+      )
+    })
+    .join('')
+
+  const panels = entries
+    .map((t, i) => `<div class="bp-tabs__panel" data-tab-index="${i}">${renderBlocks(t.blocks, ctx)}</div>`)
+    .join('')
+
+  return (
+    `<div class="bp-tabs"><div class="bp-tabs__strip" role="tablist">${strip}</div>` +
+    `<div class="bp-tabs__panels">${panels}</div></div>`
+  )
+}
+
+// scaffy:add-block-type CodeTabs MARK:js-emitter-code-tabs
+// Mirrors compose_block(code-tabs) (compose.ex, :article leg): a tab strip
+// (role=tablist) + every panel via the SAME inline-styled markup the `code`
+// emitter uses (byte-identical to Figures.code_block_html/1 — see the
+// `code` emitter below; codeBlockHtml factors it out so both share one
+// literal). NO-JS DEGRADE = every panel stays visible in this markup; the
+// client.ts / bulldocs.html.heex hydration legs are what add `hidden` to
+// every non-active panel post-mount (I1 dual hydration — this emitter only
+// paints the shell). Empty `tabs` renders nothing.
+interface CodeTabEntry {
+  label: string
+  language: string
+  value: string
+}
+
+function codeTabEntries(b: Block): CodeTabEntry[] {
+  return asList(b.tabs)
+    .filter(isMap)
+    .map((t) => ({
+      label: str(t.label),
+      language: str(t.language),
+      value: str(t.value ?? t.code),
+    }))
+}
+
+const codeTabs: Emit = (b) => {
+  const tabs = codeTabEntries(b)
+  if (tabs.length === 0) return ''
+
+  const syncKey = str(b.syncKey)
+  const syncAttr = syncKey === '' ? '' : ` data-sync-key="${escapeAttr(syncKey)}"`
+
+  const strip = tabs
+    .map((t, i) => {
+      const activeClass = i === 0 ? ' bp-code-tabs__tab--active' : ''
+      return (
+        `<button type="button" class="bp-code-tabs__tab${activeClass}" role="tab" ` +
+        `aria-selected="${i === 0}" data-lang="${escapeAttr(t.language)}">` +
+        `${escapeHtml(t.label)}</button>`
+      )
+    })
+    .join('')
+
+  const panels = tabs
+    .map(
+      (t) =>
+        `<div class="bp-code-tabs__panel" data-lang="${escapeAttr(t.language)}">${codeBlockHtml(t.value)}</div>`,
+    )
+    .join('')
+
+  return (
+    `<div class="bp-code-tabs"${syncAttr}>` +
+    `<div class="bp-code-tabs__strip" role="tablist">${strip}</div>` +
+    `<div class="bp-code-tabs__panels">${panels}</div></div>`
+  )
+}
+
+// scaffy:add-block-type ApiEndpoint MARK:js-emitter-api-endpoint
+// Mirrors compose_block(api-endpoint) (compose.ex): a method badge + path
+// line, then a params table (name/in/type/required) — byte-identical to
+// the Elixir _raw clause. No method and no path is the honest empty state.
+function apiEndpointParamRow(param: unknown): string {
+  if (!isMap(param)) return ''
+  const required = param.required === true || String(param.required).trim().toLowerCase() === 'true'
+  return (
+    `<tr><td>${escapeHtml(str(param.name))}</td><td>${escapeHtml(str(param.in))}</td>` +
+    `<td>${escapeHtml(str(param.type))}</td><td>${required ? 'Yes' : 'No'}</td></tr>`
+  )
+}
+
+const apiEndpoint: Emit = (b) => {
+  const method = str(b.method).toUpperCase()
+  const path = str(b.path)
+  if (method === '' && path === '') return ''
+
+  // The method-class modifier is a FAIL-CLOSED lowercase [a-z0-9-] slug of the
+  // user-controlled method (hyphen kept) — mirrors compose.ex's slug so a value
+  // like `"><img src=x onerror=alert(1)>` cannot break out of the class
+  // attribute into live markup. An empty slug drops the modifier class entirely.
+  const methodSlug = method.toLowerCase().replace(/[^a-z0-9-]/g, '')
+  const methodClass =
+    methodSlug === ''
+      ? 'bp-api-endpoint__method'
+      : `bp-api-endpoint__method bp-api-endpoint__method--${methodSlug}`
+
+  const head =
+    `<div class="bp-api-endpoint__head">` +
+    `<span class="${methodClass}">${escapeHtml(method)}</span>` +
+    `<code class="bp-api-endpoint__path">${escapeHtml(path)}</code>` +
+    `</div>`
+
+  const params = asList(b.params)
+  const paramsHtml =
+    params.length === 0
+      ? ''
+      : `<table class="bp-api-endpoint__params">` +
+        `<thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr></thead>` +
+        `<tbody>${params.map(apiEndpointParamRow).join('')}</tbody></table>`
+
+  return `<div class="bp-api-endpoint">${head}${paramsHtml}</div>`
+}
+
+// scaffy:add-block-type Expandable MARK:js-emitter-expandable
+// Mirrors compose_block(expandable): starter emit — `text` escaped into
+// the bp-expandable wrapper, byte-identical to the Elixir _raw clause.
+// Mirrors compose_block(expandable): a generic collapsible container — the
+// same native-<details> pattern `callout` ships, minus the callout chrome
+// (I0: zero-JS). `open` reflects the block's own state (this emitter only
+// ever renders the :article View surface). Empty (no summary, no children)
+// renders nothing.
+const expandable: Emit = (b, ctx) => {
+  const summary = str(b.summary)
+  const blocks = asList(b.blocks ?? b.children)
+  if (summary === '' && blocks.length === 0) return ''
+
+  const inner = renderBlocks(blocks, ctx)
+  const openAttr = b.open === true ? ' open' : ''
+  return `<details${openAttr} class="bp-expandable"><summary>${escapeHtml(summary)}</summary><div class="bp-expandable__body">${inner}</div></details>`
+}
+
+// scaffy:add-block-type Footnote MARK:js-emitter-footnote
+// Mirrors compose_block(footnote): starter emit — `text` escaped into
+// the bp-footnote wrapper, byte-identical to the Elixir _raw clause.
+// Mirrors compose_block(footnote): a numbered reference apparatus — `notes` is
+// a list of {id, text}. Each shown note carries an `id="fn-<id>"` anchor (the
+// backlink target an inline marker elsewhere could point at); a semantic
+// `<ol>` numbers natively, like `steps`. A note with no text is dropped.
+function footnoteRowHtml(note: unknown): string {
+  if (!isMap(note)) return ''
+  const text = str(note.text)
+  if (text === '') return ''
+  const id = str(note.id)
+  const idAttr = id === '' ? '' : ` id="fn-${escapeAttr(id)}"`
+  return `<li${idAttr} class="bp-footnote__note">${escapeHtml(text)}</li>`
+}
+
+const footnote: Emit = (b) => {
+  const rows = asList(b.notes).map(footnoteRowHtml).join('')
+  return rows === '' ? '' : `<ol class="bp-footnote">${rows}</ol>`
+}
+
+// scaffy:add-block-type Steps MARK:js-emitter-steps
+// Mirrors compose_block(steps): starter emit — `text` escaped into
+// the bp-steps wrapper, byte-identical to the Elixir _raw clause.
+// Mirrors compose_block(steps): a numbered procedure — `steps` is a list of
+// {title, blocks}, each recursed through the shared `renderBlocks` dispatcher
+// (the columns/terminal precedent). A semantic `<ol>` carries the numbering
+// natively; a step with neither a title nor any blocks contributes nothing.
+function stepRowHtml(step: unknown, ctx: RenderCtx): string {
+  if (!isMap(step)) return ''
+  const title = str(step.title)
+  const blocks = asList(step.blocks ?? step.children)
+  if (title === '' && blocks.length === 0) return ''
+
+  const body = renderBlocks(blocks, ctx)
+  const titleHtml = title === '' ? '' : `<div class="bp-steps__title">${escapeHtml(title)}</div>`
+  return `<li class="bp-steps__step">${titleHtml}<div class="bp-steps__body">${body}</div></li>`
+}
+
+const steps: Emit = (b, ctx) => {
+  const rows = asList(b.steps).map((step) => stepRowHtml(step, ctx)).join('')
+  return rows === '' ? '' : `<ol class="bp-steps">${rows}</ol>`
+}
+
+// scaffy:add-block-type Toc MARK:js-emitter-toc
+// Mirrors compose_block(toc): a static, author-supplied outline — `items` is a
+// flat list of {text, level, anchor}, never derived by walking sibling blocks
+// (this emitter, like compose_block/2, only ever sees ONE block). `depth` caps
+// how many RELATIVE levels show, counted from the shallowest level present
+// (default 2); `numbered` prefixes each item with a hierarchical counter
+// (1, 1.1, 1.2, 2, …); `sticky` adds the View-only CSS affordance class.
+interface TocItem {
+  text: string
+  level: number
+  anchor: string
+}
+
+function tocItems(raw: unknown): TocItem[] {
+  const out: TocItem[] = []
+  for (const it of asList(raw)) {
+    if (!isMap(it)) continue
+    const text = str(it.text)
+    if (text === '') continue
+    const n = num(it.level)
+    const level = n != null && n > 0 ? n : 1
+    out.push({ text, level, anchor: str(it.anchor) })
+  }
+  return out
+}
+
+const toc: Emit = (b) => {
+  const items = tocItems(b.items)
+  if (items.length === 0) return ''
+
+  const depth = Number.isInteger(b.depth) && (b.depth as number) > 0 ? Math.min(b.depth as number, 6) : 2
+  const numbered = b.numbered === true
+  const minLevel = Math.min(...items.map((i) => i.level))
+  const counters = new Array(depth + 1).fill(0)
+
+  const rows: string[] = []
+  for (const item of items) {
+    const rel = item.level - minLevel + 1
+    if (rel > depth) continue
+    counters[rel] += 1
+    for (let lvl = rel + 1; lvl <= depth; lvl++) counters[lvl] = 0
+
+    let label = escapeHtml(item.text)
+    if (numbered) {
+      const numStr = counters.slice(1, rel + 1).join('.')
+      label = `${numStr}. ${label}`
+    }
+    const inner =
+      item.anchor !== '' ? `<a href="#${escapeAttr(item.anchor)}">${label}</a>` : label
+    rows.push(`<li class="bp-toc__item" data-level="${rel}">${inner}</li>`)
+  }
+
+  const sticky = b.sticky === true
+  const navClass = sticky ? 'bp-toc bp-toc--sticky' : 'bp-toc'
+  return `<nav class="${navClass}"><ol class="bp-toc__list">${rows.join('')}</ol></nav>`
+}
+
+// scaffy:add-block-type Blockquote MARK:js-emitter-blockquote
+// Mirrors compose_block(blockquote) + walk.ex blockquote/3 (:article): a
+// semantic `<blockquote class="bp-blockquote">` wrapping a `<p>` body, with an
+// optional `<cite>` attribution. Body reads a `content` inline array (else a
+// bare `text`) exactly like pullquote/paragraph, so the inner is shape-equal to
+// the Elixir article golden the parity harness compares against.
+const blockquote: Emit = (b) => {
+  const inner = renderInlines(paragraphInline(b))
+  const rawCite = str(b.cite) || str(b.attribution)
+  const cite = rawCite ? `<cite class="bp-blockquote__cite">${escapeHtml(rawCite)}</cite>` : ''
+  return `<blockquote class="bp-blockquote"><p>${inner}</p>${cite}</blockquote>`
+}
+
+/* ── code-story blocks: diff + filetree (components.ex, W7 D75–D78) ────────── */
+//
+// The verbatim-text front-end over the SHARED chat diff-row back-end (D76):
+// rows render through chat.ts diffRowsHtml/rowStyle/rowPrefix and fold at the
+// same CHAT_DIFF_BUDGET. Byte-identical to Components.diff_html/1 +
+// filetree_html/1.
+
+// Order matters: '+++ '/'--- ' match before the bare '+'/'-' ops (D77: git file
+// headers never count as +/- rows; each '+++' transition becomes a bold path
+// sub-header; '@@' hunk headers stay verbatim dim context rows).
+function diffLineRow(line: string): DiffLine[] {
+  if (line.startsWith('+++ ')) {
+    const path = line.slice(4)
+    return [{ op: 'file', text: path.startsWith('b/') ? path.slice(2) : path }]
+  }
+  if (line.startsWith('--- ')) return []
+  if (line.startsWith('diff --git ')) return []
+  if (line.startsWith('index ')) return []
+  if (line.startsWith('@@')) return [{ op: '', text: line }]
+  if (line.startsWith('+')) return [{ op: '+', text: line.slice(1) }]
+  if (line.startsWith('-')) return [{ op: '-', text: line.slice(1) }]
+  if (line.startsWith(' ')) return [{ op: '', text: line.slice(1) }]
+  return [{ op: '', text: line }]
+}
+
+// Shared rows via diffRowsHtml; only the diff-only bold path sub-header is
+// emitted here (twin of components.ex diff_section_rows_html/1).
+function diffSectionRowsHtml(rows: DiffLine[]): string {
+  return rows
+    .map((row) =>
+      row.op === 'file'
+        ? `<div style="font-weight: 600; margin: 4px 0 1px; white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(row.text)}</div>`
+        : diffRowsHtml([row]),
+    )
+    .join('')
+}
+
+// scaffy:add-block-type Diff MARK:js-emitter-diff
+// Mirrors compose_block(diff) → Components.diff_html/1 (W7 grow): the verbatim
+// unified-diff `diff` attr parsed at render time (D75), optional file/lang
+// metadata leading the +N −M tally, details-fold past CHAT_DIFF_BUDGET rows.
+const diff: Emit = (b) => {
+  const rows = splitLines(str(b.diff)).flatMap(diffLineRow)
+  const added = rows.filter((r) => r.op === '+').length
+  const removed = rows.filter((r) => r.op === '-').length
+  const head = rows.slice(0, CHAT_DIFF_BUDGET)
+  const rest = rows.slice(CHAT_DIFF_BUDGET)
+
+  const file = str(b.file)
+  const lang = str(b.lang)
+  const lead = [
+    file === '' ? '' : `<span style="font-weight: 600;">${escapeHtml(file)}</span>`,
+    lang === '' ? '' : escapeHtml(lang),
+  ]
+    .filter((p) => p !== '')
+    .join(' · ')
+  const leadHtml = lead === '' ? '' : `${lead} · `
+
+  const counts =
+    `<div class="text-dim" style="font-size: 12px; margin-bottom: 4px;">` +
+    leadHtml +
+    `<span style="color: var(--ok);">+${added}</span> ` +
+    `<span style="color: var(--danger);">−${removed}</span></div>`
+
+  let body: string
+  if (rows.length > CHAT_DIFF_BUDGET) {
+    const overflow = rows.length - CHAT_DIFF_BUDGET
+    body =
+      `<details><summary style="cursor: pointer; list-style: none;">` +
+      diffSectionRowsHtml(head) +
+      `<div class="text-dim" style="font-size: 12px; padding: 1px 0;">… +${overflow} more lines</div>` +
+      `</summary>${diffSectionRowsHtml(rest)}</details>`
+  } else {
+    body = diffSectionRowsHtml(head)
+  }
+
+  return (
+    `<div class="bp-diff text-xs" style="font-family: var(--font-mono); margin: 4px var(--bp-evidence-pull, 0px); width: var(--bp-evidence-width, 100%); box-sizing: border-box; background: var(--muted-surface); border-radius: 6px; padding: 6px 8px; overflow-x: auto; line-height: 1.5;">` +
+    counts +
+    body +
+    `</div>`
+  )
+}
+
+// The D78 annotation markers and the modifier class paper-surface.css paints
+// each one's colour through (glyph is the semantic carrier; the legend row
+// disambiguates locally). No colour rides the markup (task-2c5d3da1b7f7db25).
+const FILETREE_MARKERS: Array<[string, string]> = [
+  [' ● ', 'ok'],
+  [' ○ ', 'soft'],
+  [' ✕ ', 'danger'],
+]
+
+function filetreeRowHtml(line: string): string {
+  let hit: { idx: number; glyph: string; tone: string } | null = null
+  for (const [glyph, tone] of FILETREE_MARKERS) {
+    const idx = line.indexOf(glyph)
+    if (idx !== -1 && (hit === null || idx < hit.idx)) hit = { idx, glyph, tone }
+  }
+  if (hit === null) return `<div style="white-space: pre;">${escapeHtml(line)}</div>`
+  const path = line.slice(0, hit.idx)
+  const note = hit.glyph + line.slice(hit.idx + hit.glyph.length)
+  return (
+    `<div style="white-space: pre;">${escapeHtml(path)}` +
+    `<span class="bp-filetree-note bp-filetree-note--${hit.tone}">${escapeHtml(note)}</span></div>`
+  )
+}
+
+// scaffy:add-block-type Filetree MARK:js-emitter-filetree
+// Mirrors compose_block(filetree) → Components.filetree_html/1 (W7 grow):
+// verbatim tree lines (white-space: pre), trailing ` ● `/` ○ `/` ✕ `
+// annotation spans, optional dim `legend` row (D78).
+const filetree: Emit = (b) => {
+  const rows = splitLines(str(b.text)).map(filetreeRowHtml).join('')
+  const legend = str(b.legend)
+  const legendHtml =
+    legend === ''
+      ? ''
+      : `<div class="bp-filetree-legend text-dim" style="font-size: 12px; margin-top: 4px;">${escapeHtml(legend)}</div>`
+  return (
+    `<div class="bp-filetree text-xs" style="font-family: var(--font-mono); margin: 4px var(--bp-evidence-pull, 0px); width: var(--bp-evidence-width, 100%); box-sizing: border-box; background: var(--muted-surface); border-radius: 6px; padding: 6px 8px; overflow-x: auto; line-height: 1.5;">` +
+    rows +
+    legendHtml +
+    `</div>`
+  )
+}
+
+const byline: Emit = (b) => {
+  const items = b.items
+  const text = Array.isArray(items) ? items.map((i) => str(i)).join(' · ') : str(b.text)
+  return `<p class="bp-role-byline">${escapeHtml(text)}</p>`
+}
+
+const ingress: Emit = (b) => `<p class="bp-role-ingress">${renderInlines(paragraphInline(b))}</p>`
+
+// The reader-synthesised pre-gate badge (#17199). It is NEVER stored: Elixir's
+// `Content.Papers.PreGateRegister.annotate/3` mints it into the block stream a
+// reader receives, so the JS renderer meets it in `value` like any other block
+// and must emit the same mark as compose.ex's `pre-gate-badge` clause +
+// walk.ex's `pre_gate_class/1`: one `<p>`, the `bp-pregate` family root, a tone
+// modifier from a two-value WHITELIST (anything but "warning" is "neutral", so a
+// stray value can never mint a class), the `--tucked` modifier only under a
+// byline anchor, and the register's reader_behaviour as `title=` — omitted
+// entirely when empty, matching walk.ex's title_attr.
+const preGateBadge: Emit = (b) => {
+  const tone = str(b.tone) === 'warning' ? 'warning' : 'neutral'
+  const tucked = str(b.anchor) === 'byline' ? ' bp-pregate--tucked' : ''
+  const title = str(b.title)
+  const titleAttr = title === '' ? '' : ` title="${escapeAttr(title)}"`
+  return `<p class="bp-pregate bp-pregate--${tone}${tucked}"${titleAttr}>${escapeHtml(str(b.label))}</p>`
+}
+
+// Reader-Owned Spacing Doctrine (/papers/mechanical-spacing-doctrine, flipped
+// 2026-07-31): published readers emit only visible semantic groups — an empty
+// paragraph scaffold (Enter, Enter) is editable authoring state, NEVER published
+// layout, so it renders NOTHING (no element at all), not an empty `<p>`.
+// Suppression is exact and narrow (doctrine invariant 4): only a paragraph whose
+// inline run is nothing but whitespace text vanishes — any authored non-text
+// inline (link/code/tag/valueref/…) or marked run keeps its `<p>` byte-faithful.
+// Cadence between the REMAINING blocks stays reader-owned CSS margins (invariant
+// 3 — `renderBlocks` joins emitted strings, never spacing by raw array index).
+// The Elixir twin is walk.ex `paragraph/3`; legacy cached `<p></p>` HTML is
+// belt-and-braces suppressed by `.bp-paper-surface p:empty` in paper-surface.css.
+function isBlankParagraphRun(nodes: unknown, depth = 0): boolean {
+  if (typeof nodes === 'string') return nodes.trim() === ''
+  if (!Array.isArray(nodes)) return false
+  return nodes.every((n) => isBlankParagraphNode(n, depth))
+}
+
+function isBlankParagraphNode(n: unknown, depth: number): boolean {
+  if (depth >= MAX_DEPTH) return false
+  if (typeof n === 'string') return n.trim() === ''
+  if (typeof n === 'number') return false // renders its digits
+  if (Array.isArray(n)) return isBlankParagraphRun(n, depth + 1) // shallow-flattened shape
+  if (!isMap(n)) return true // null/bool — renderInline emits '' for these
+  // Only an UNMARKED whitespace text leaf counts as scaffold; every other node
+  // type (and any marked run) is authored content and keeps the paragraph.
+  // Dual-read value || legacy text (textLeafValue): a legacy-keyed leaf with
+  // real prose must NOT count as scaffold, or the whole paragraph vanishes.
+  return str(n.type) === 'text' && asList(n.marks).length === 0 && textLeafValue(n).trim() === ''
+}
+
+const paragraph: Emit = (b) => {
+  const inline = paragraphInline(b)
+  if (isBlankParagraphRun(inline)) return ''
+  return `<p>${renderInlines(inline)}</p>`
+}
+
+// Pullquote is a PdParagraph with _role pullquote + italic:true → the role class
+// plus the inline italic author mark (walk.ex paragraph/3).
+const pullquote: Emit = (b) =>
+  `<p class="bp-role-pullquote" style="font-style:italic">${renderInlines(paragraphInline(b))}</p>`
+
+// An ordered list's first number: the block's integer `start` when it is not 1,
+// else null (numbering from 1). Mirrors compose.ex list_start/1 + walk.ex
+// list_start_attr/1 — absent or 1 keeps the bare `<ol>` bytes.
+export function listStart(b: Block): number | null {
+  const start = (b as { start?: unknown }).start
+  return typeof start === 'number' && Number.isInteger(start) && start !== 1 ? start : null
+}
+
+const list: Emit = (b, ctx) => {
+  const tag = b.ordered === true ? 'ol' : 'ul'
+  const start = b.ordered === true && (b as { task?: unknown }).task !== true ? listStart(b) : null
+  return `<${tag}${start === null ? '' : ` start="${start}"`}>${asList(b.items)
+    .map(
+      (item) =>
+        `<li><span>${renderInlines(itemInlines(item))}</span>${renderBlocks(listChildren(item), ctx)}</li>`,
+    )
+    .join('')}</${tag}>`
+}
+
+// The inline content of ONE list item, whatever authored shape it took. The RN
+// twin is apps/mobile/src/papers/portabledoc/model.ts `itemInlines` (shipped
+// af9d64d61) — the reference normalization, ported here rather than re-derived:
+//
+//   array  → inline nodes verbatim
+//   string → JSON-decoded inline array (see normalizeListItem), else plain text
+//   map    → its own `content` inline array, else its bare `text` (the D12
+//            content||text law the heading emitter already carries)
+//
+// The MAP arm is the fix: it is the DOMINANT authored shape in the live corpus
+// (2,033 of 10,455 published list items scanned 2026-07-25 across 537 papers),
+// and `renderInlines` returns '' for a map — so every one of those items shipped
+// as an empty `<li><span></span></li>` on web. Same defect class as the
+// content[]-shape heading fix (289b46b1a / PR #6009), a different emitter.
+function itemInlines(item: unknown): unknown {
+  const n = normalizeListItem(item)
+  return isMap(n) ? paragraphInline(n as Block) : n
+}
+
+// Decode a list item persisted as a JSON-encoded inline array (the drifted
+// `bullet_list` authoring shape, aliased onto `list` below) into that array;
+// otherwise return it verbatim so plain-text items stay plain text. Mirrors
+// compose.ex normalize_list_item/1 + pdrender itemNodes.
+function normalizeListItem(item: unknown): unknown {
+  if (typeof item !== 'string') return item
+  const trimmed = item.trim()
+  if (!trimmed.startsWith('[')) return item
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (Array.isArray(parsed) && parsed.length > 0 && isMap(parsed[0])) return parsed
+  } catch {
+    // not JSON — keep the plain string
+  }
+  return item
+}
+
+// `numbered_list` authoring-drift alias → an ORDERED list (mirrors compose.ex,
+// which maps numbered_list → list with ordered:true).
+const numberedList: Emit = (b, ctx) => list({ ...b, ordered: true } as Block, ctx)
+
+/* callout (walk.ex callout/3, article) */
+
+// The four named callout tones; anything else (including a missing tone) falls
+// back to `info`. Both derived strings come off this ONE list: the CSS modifier
+// IS the tone slug, and the default summary label is its sentence-cased form.
+// This replaced two parallel five-arm switches that between them spelled every
+// tone word three times — the class switch even repeated each word on its own
+// arm (`case 'success': return 'success'`) — so a fifth tone meant editing two
+// functions in lockstep and a label could silently drift from its class.
+// 'loss' and 'peace' are the two VERDICT tones (design/tokens.json color.verdict):
+// the same `tone` field, a different token family (`--bp-verdict-*`, resolved by
+// paper-surface.css `.bp-callout--loss` / `--peace`). MIRROR of walk.ex
+// callout_tone_class/1 + tone_label/1 — the parity suite renders both halves and
+// byte-compares, so adding a tone on one side alone reds.
+const CALLOUT_TONES = ['success', 'warning', 'danger', 'neutral', 'loss', 'peace']
+
+function calloutToneClass(tone: unknown): string {
+  const slug = str(tone)
+  return CALLOUT_TONES.includes(slug) ? slug : 'info'
+}
+
+function toneLabel(tone: unknown, ctx: RenderCtx): string {
+  return ctx.t(capitalize(calloutToneClass(tone)))
+}
+
+const callout: Emit = (b, ctx) => {
+  const toneMod = calloutToneClass(b.tone)
+  // The callout body slot flattens to ONE PdText wrapping the composed inline
+  // children — walk.ex renders it as a bare `<span>`.
+  const body = `<span>${renderInlines(paragraphInline(b))}</span>`
+
+  if (b.collapsible === true) {
+    const open = b.collapsed === true ? '' : ' open'
+    const title = str(b.title)
+    const summary = escapeHtml(title !== '' ? title : toneLabel(b.tone, ctx))
+    return (
+      `<details${open} class="bp-callout bp-callout--${toneMod}">` +
+      `<summary class="bp-callout__summary">${summary}</summary>` +
+      `<div class="bp-callout__body">${body}</div></details>`
+    )
+  }
+
+  const title = str(b.title)
+  const titleHtml = title !== '' ? `<strong>${escapeHtml(title)}</strong> ` : ''
+  return `<div class="bp-callout bp-callout--${toneMod}">${titleHtml}${body}</div>`
+}
+
+/* code / divider / image (figures.ex + walk.ex) */
+
+const MONO = 'ui-monospace,Menlo,monospace'
+
+// Shared with `codeTabs` (byte-identical to Figures.code_block_html/1) so a
+// code-tabs panel and a standalone `code` block render the same chrome. A bare
+// --paper-bg-deep slab on the --paper-bg page — no left bar: the 3px
+// reading-accent bar was retired with task-ddb1e0ab09a62466 once the reader
+// body stopped painting the fill token as the page. The slab's ground and ink
+// ride the `bp-codeblock` class paper-surface.css paints; layout and type stay
+// inline (task-2c5d3da1b7f7db25).
+function codeBlockHtml(value: string, emphasis: EmphasisRange[] = []): string {
+  const escaped = codeBodyHtml(value, emphasis)
+  return (
+    `<pre class="bp-codeblock" style="border:0;border-radius:var(--bp-codeblock-radius, 0);padding:var(--bp-codeblock-pad, 0.9rem 1.1rem);` +
+    `margin:var(--bp-codeblock-margin, 1.2rem 0);font-family:var(--paper-font-mono, ${MONO});font-size:var(--bp-codeblock-size, 0.9rem);line-height:var(--bp-codeblock-lh, 1.5);` +
+    `overflow-x:auto;white-space:pre">${escaped}</pre>`
+  )
+}
+
+/* ── THE code-block LINE-EMPHASIS contract (pe-bl-code-emphasis) ──────────────
+ *
+ * A `code` block MAY carry `emphasis`: an ARRAY of {from, to, tone} ranges over
+ * the selected source, 1-BASED and INCLUSIVE, `to` optional (defaults to
+ * `from`). The tone vocabulary is CLOSED — comment / offending / fixed — and a
+ * range with an unknown tone, a non-integer/`< 1` `from`, or a `to` below
+ * `from` is DROPPED. Overlaps resolve first-in-array-order. A block whose
+ * ranges all drop renders through the legacy single-escape path, byte-identical
+ * to a block with no `emphasis` key — which is what keeps this emitter a
+ * byte-faithful mirror of Figures.code_block_html/2 for the 9711-row corpus
+ * that carries no emphasis at all.
+ *
+ * `Number.isInteger` is the strict read on purpose: it rejects the string "3"
+ * exactly as Elixir's `is_integer/1` guard does. The shared fixture
+ * api/test/support/fixtures/code-block-emphasis-parity.json (read by the Go,
+ * Elixir and JS legs) carries a `"from": "3"` case to hold that line. */
+type EmphasisRange = { from: number; to: number; tone: string }
+
+const EMPHASIS_TONES = ['comment', 'offending', 'fixed']
+
+function codeEmphasis(b: Block): EmphasisRange[] {
+  const raw = (b as Record<string, unknown>).emphasis
+  if (!Array.isArray(raw)) return []
+  const out: EmphasisRange[] = []
+  for (const entry of raw) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const r = entry as Record<string, unknown>
+    const tone = str(r.tone).trim()
+    if (!EMPHASIS_TONES.includes(tone)) continue
+    const from = r.from
+    if (!Number.isInteger(from) || (from as number) < 1) continue
+    const to = r.to === undefined || r.to === null ? from : r.to
+    if (!Number.isInteger(to) || (to as number) < (from as number)) continue
+    out.push({ from: from as number, to: to as number, tone })
+  }
+  return out
+}
+
+// Split/join on "\n" round-trips the source exactly, so an emphasized block
+// differs from the legacy one ONLY by the spans.
+function codeBodyHtml(value: string, emphasis: EmphasisRange[]): string {
+  if (emphasis.length === 0) return escapeHtml(value)
+  return value
+    .split('\n')
+    .map((line, i) => {
+      const hit = emphasis.find((r) => i + 1 >= r.from && i + 1 <= r.to)
+      return hit
+        ? `<span class="bp-code-em bp-code-em--${hit.tone}">${escapeHtml(line)}</span>`
+        : escapeHtml(line)
+    })
+    .join('\n')
+}
+
+// The FOUR accepted source keys, first non-blank wins — `codeSource` in
+// ../inline.tsx carries the contract and the corpus counts. A blank/whitespace
+// source renders NOTHING (no empty `<pre>` slab), matching compose.ex's
+// `blank_code_source?/1` arm and pdrender's blank guard; the `image` emitter
+// below takes the same "sourceless block is editor scaffolding" exit.
+const code: Emit = (b) => {
+  const source = codeSource(b)
+  return source.trim() === '' ? '' : codeBlockHtml(source, codeEmphasis(b))
+}
+
+// The `bp-section-divider` classes are the handle the reader shell needs to say
+// something about a divider's POSITION (one directly in front of a section head
+// draws a boundary the head already draws), and they carry its COLOURS: the
+// rule keeps its width and style inline, and paper-surface.css paints its
+// colour, the § mark's ground (the PAGE token, --paper-bg: it masks the
+// hairline) and its ink (task-2c5d3da1b7f7db25). The same bytes figures.ex emits.
+const divider: Emit = () =>
+  `<div class="bp-section-divider" style="position:relative;text-align:center;margin:2.4rem 0;border-top:1px solid">` +
+  `<span class="bp-section-divider__mark" style="position:relative;top:-0.7rem;display:inline-block;padding:0 0.8rem;` +
+  `font-size:1.1rem">§</span></div>`
+
+const image: Emit = (b) => {
+  const rawSrc = str(b.src).trim()
+  if (rawSrc === '') return '' // asset-less image = editor scaffolding, skip on read
+  const w = b.width
+  const h = b.height
+  let dims = ''
+  if (w !== null && w !== undefined) dims += ` width="${escapeAttr(str(w) || String(w))}"`
+  if (h !== null && h !== undefined) dims += ` height="${escapeAttr(str(h) || String(h))}"`
+  // Mirrors walk.ex's `:article` image/2: the reader shell progressively enhances
+  // ONLY images carrying this hook, so a Paper's chrome images never become
+  // lightbox triggers. This registry renders the :article surface exclusively —
+  // Elixir's email/default legs stay bare, and so does anything not routed here.
+  return `<img src="${safeUrl(str(b.src))}" alt="${escapeAttr(str(b.alt))}" data-bp-lightboxable="true" style="max-width:100%;height:auto"${dims}>`
+}
+
+/* figure / diagram / asciicast (figures.ex) */
+
+// Bold "Figure N." run-in split (Figures.figcaption_inner/1).
+function figcaptionInner(caption: string): string {
+  if (caption === '') return ''
+  const m = /^(Figure\s+\S+?\.)\s*([\s\S]*)$/.exec(caption)
+  if (m) {
+    const rest = m[2]
+    const restHtml = rest === '' ? '' : ' ' + escapeHtml(rest)
+    return `<b>${escapeHtml(m[1])}</b>${restHtml}`
+  }
+  return escapeHtml(caption)
+}
+
+// ONE caption for all three article figure emitters (figure / diagram / asciicast),
+// mirroring Figures.diagram_html + Figures.asciicast_html + Compose.figure_frame_html.
+// There used to be TWO functions here because the Elixir asciicast emitter had
+// drifted to a bare ink hex where its siblings read `var(--paper-ink-soft, …)` —
+// 2.97:1 on the dark ground — and this fork had to reproduce the drift byte for
+// byte. papers/captions-floor moved all three to the ONE `.bp-figcaption` class in
+// paper-surface.css, so the divergence (and the second function) is gone.
+function articleFigcaption(caption: string): string {
+  if (caption === '') return ''
+  return `<figcaption class="bp-figcaption">${figcaptionInner(caption)}</figcaption>`
+}
+
+// Entity-encode ONLY & < > for the Mermaid source (Figures.encode_mermaid/1).
+function encodeMermaid(source: string): string {
+  return source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+const figure: Emit = (b, ctx) => {
+  const child = b.child
+  const caption = str(b.caption)
+  const childHtml = isMap(child) ? renderBlock(child as Block, ctx) : ''
+  return `<figure style="margin:var(--bp-air-figure, 1.6rem) 0 0;margin-inline:var(--bp-evidence-pull, 0px);width:var(--bp-evidence-width, 100%);box-sizing:border-box;overflow-x:auto">${childHtml}${articleFigcaption(caption)}</figure>`
+}
+
+const diagram: Emit = (b) => {
+  const source = str(b.source)
+  const caption = str(b.caption)
+  return (
+    `<figure class="bp-diagram" style="margin:var(--bp-air-figure, 1.6rem) 0 0;margin-inline:var(--bp-evidence-pull, 0px);width:var(--bp-evidence-width, 100%);box-sizing:border-box;padding:1.2rem;border:1px solid;border-radius:4px;overflow-x:auto">` +
+    `<pre class="mermaid">${encodeMermaid(source)}</pre>` +
+    articleFigcaption(caption) +
+    `</figure>`
+  )
+}
+
+// `poster` (optional) is the block's resting frame — the asciinema-player
+// `poster` option, an npt timestamp (`"npt:1:23"`) or `"end"`. It rides
+// `data-cast-poster` and is emitted ONLY when set, so an unset poster keeps
+// the mount byte-identical to Figures.asciicast_html's and leaves the
+// `npt:0:1` fallback with the hydrating clients (client.ts / the LiveView
+// hook). Attribute-escaped, NOT `safeUrl` — a poster is a timestamp, not a URL.
+// `rows` mirrors the Elixir renderer's compact-player contract: only integer
+// terminal heights from 6 through 40 reach the DOM.
+const asciicast: Emit = (b) => {
+  const src = str(b.src)
+  const caption = str(b.caption)
+  const poster = str(b.poster).trim()
+  const posterAttr = poster === '' ? '' : ` data-cast-poster="${escapeAttr(poster)}"`
+  const rows = typeof b.rows === 'number' && Number.isInteger(b.rows) ? b.rows : undefined
+  const rowsAttr = rows !== undefined && rows >= 6 && rows <= 40 ? ` data-cast-rows="${rows}"` : ''
+  return (
+    `<figure style="margin:var(--bp-air-asciicast, 1.6rem) 0 0;margin-inline:var(--bp-evidence-pull, 0px);width:var(--bp-evidence-width, 100%);box-sizing:border-box;overflow-x:auto">` +
+    `<div class="bp-asciicast" data-cast-src="${safeUrl(src)}"${posterAttr}${rowsAttr} style="border:1px solid;border-radius:6px;overflow:hidden"></div>` +
+    articleFigcaption(caption) +
+    `</figure>`
+  )
+}
+
+// scaffy:add-block-type Video MARK:js-emitter-video
+// Mirrors compose_block(video) (:article) — the JS twin of Figures.video_html.
+// Plain <video> file block (B062): a native <video controls> element, zero
+// client JS. An asset-less video (no `src`) renders nothing — the `image`
+// precedent (editor scaffolding, skipped). `captions` is filtered to maps.
+const video: Emit = (b) => {
+  const src = str(b.src).trim()
+  if (src === '') return ''
+
+  const poster = str(b.poster).trim()
+  const posterAttr = poster === '' ? '' : ` poster="${safeUrl(poster)}"`
+  const loopAttr = b.loop === true ? ' loop' : ''
+
+  const tracks = asList(b.captions)
+    .filter(isMap)
+    .map((c) => {
+      const lang = str(c.lang)
+      const trackSrc = str(c.src)
+      const langAttr = lang === '' ? '' : ` srclang="${escapeAttr(lang)}"`
+      return `<track kind="captions"${langAttr} src="${safeUrl(trackSrc)}">`
+    })
+    .join('')
+
+  return (
+    `<figure style="margin:var(--bp-air-figure, 1.6rem) 0 0;margin-inline:var(--bp-evidence-pull, 0px);width:var(--bp-evidence-width, 100%);box-sizing:border-box;overflow-x:auto">` +
+    `<video controls playsinline style="max-width:100%;border-radius:6px"${posterAttr}${loopAttr} src="${safeUrl(src)}">` +
+    tracks +
+    `</video></figure>`
+  )
+}
+
+/* action (walk.ex button/2) */
+
+const action: Emit = (b) => {
+  const label = escapeHtml(str(b.label))
+  const href = safeUrl(str(b.href))
+  const cls = b.priority === 'primary' ? 'bp-button bp-button--primary' : 'bp-button'
+  return `<a href="${href}" class="${cls}">${label}</a>`
+}
+
+/* paper-links (compose.ex paper_links_html) — authored refs render everywhere;
+ * `_paper_links` may carry transient live metadata injected by a reader. Theme
+ * colours ride classes (`bp-plinks*`, `bp-plink*`) the paper-surface stylesheet
+ * paints; geometry and type stay inline, a border keeping its width and style
+ * with only its colour moved (task-ef9f386f8cb5e32a). */
+
+interface PaperLinkRef {
+  slug: string
+  title: string
+  description: string
+  reason: string
+  eventType: string
+  rev: string
+  updatedAt: string
+}
+
+function nonblank(v: unknown): string {
+  return str(v).trim()
+}
+
+function paperLinkRef(
+  raw: unknown,
+  resolved: Record<string, unknown>,
+  reasons: Record<string, unknown>,
+): PaperLinkRef | undefined {
+  const ref = typeof raw === 'string' ? { slug: raw } : isMap(raw) ? raw : undefined
+  if (ref === undefined) return undefined
+  const slug = nonblank(ref.slug)
+  if (slug === '') return undefined
+  const live = isMap(resolved[slug]) ? resolved[slug] : {}
+
+  return {
+    slug,
+    title: nonblank(live.title) || nonblank(ref.title) || slug,
+    description: nonblank(live.description) || nonblank(ref.description),
+    reason: nonblank(ref.reason) || nonblank(reasons[slug]),
+    eventType: nonblank(live.event_type),
+    rev: nonblank(live.rev),
+    updatedAt: nonblank(live.updated_at),
+  }
+}
+
+function normalizedCopy(copy: string): string {
+  return copy.trim().replace(/\.+$/, '').toLowerCase()
+}
+
+function paperLinkCard(ref: PaperLinkRef, ctx: RenderCtx): string {
+  const description =
+    ref.description === ''
+      ? ''
+      : `<span class="bp-plink__desc" style="display:block;margin-top:0.42rem;line-height:1.55">${escapeHtml(ref.description)}</span>`
+  const reason =
+    ref.reason !== '' && normalizedCopy(ref.reason) !== normalizedCopy(ref.description)
+      ? `<span class="bp-plink__reason" style="display:block;margin-top:0.65rem;font-size:0.88rem;line-height:1.45"><strong>${ctx.t('Why it matters:')}</strong> ${escapeHtml(ref.reason)}</span>`
+      : ''
+  const metadataParts = [ref.eventType, ref.rev === '' ? '' : ctx.t('rev %{n}', { n: ref.rev }), ref.updatedAt].filter(Boolean)
+  const metadata =
+    metadataParts.length === 0
+      ? ''
+      : `<span class="bp-plink__meta" style="display:block;margin-top:0.7rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.75rem;letter-spacing:0.025em">${escapeHtml(metadataParts.join(' · '))}</span>`
+
+  return (
+    `<a data-paper-link-card class="bp-plink bp-plink--list" href="${safeUrl(`/papers/${ref.slug}`)}" style="display:block;padding:1.15rem 1.2rem;border:1px solid;border-left:3px solid;border-radius:0.65rem;color:inherit;text-decoration:none">` +
+    `<strong class="bp-plink__title bp-plink__title--list" style="display:block;font-size:1.02rem;line-height:1.35">${escapeHtml(ref.title)}</strong>` +
+    description +
+    reason +
+    metadata +
+    `</a>`
+  )
+}
+
+const paperLinks: Emit = (b, ctx) => {
+  const resolved = isMap(b._paper_links) ? b._paper_links : {}
+  const reasons = isMap(b.reasons) ? b.reasons : {}
+  const cards = asList(b.refs)
+    .map((ref) => paperLinkRef(ref, resolved, reasons))
+    .filter((ref): ref is PaperLinkRef => ref !== undefined)
+    .map((ref) => paperLinkCard(ref, ctx))
+    .join('')
+  if (cards === '') return ''
+
+  const title = nonblank(b.title) || ctx.t('Explore the work')
+  const description = nonblank(b.description)
+  const intro =
+    description === ''
+      ? ''
+      : `<p class="bp-plinks__desc" style="margin:0.45rem 0 0;line-height:1.6">${escapeHtml(description)}</p>`
+
+  return (
+    `<section data-paper-links class="bp-plinks bp-plinks--list" aria-label="${escapeAttr(title)}" style="margin:2.8rem 0 0;padding-top:1.35rem;border-top:1px solid">` +
+    `<header style="margin:0 0 1.15rem"><h2 class="bp-plinks__title" style="margin:0;font-size:1.15rem;line-height:1.25">${escapeHtml(title)}</h2>${intro}</header>` +
+    `<div class="bp-plinks__grid bp-plinks__grid--list" style="display:grid;gap:0.85rem">${cards}</div></section>`
+  )
+}
+
+/* section (compose.ex section_grid_html / compose_section_stack) */
+
+function gridTracks(n: unknown): number {
+  if (typeof n === 'number' && Number.isInteger(n) && n > 0) return n
+  if (typeof n === 'string' && /^\d+$/.test(n)) {
+    const i = Number.parseInt(n, 10)
+    if (i > 0) return i
+  }
+  return 2
+}
+
+function gapTokenVar(gap: unknown): string {
+  switch (gap) {
+    case 'none':
+      return 'var(--bp-space-none,0)'
+    case 'sm':
+      return 'var(--bp-space-sm,0.8rem)'
+    case 'lg':
+      return 'var(--bp-space-lg,2.4rem)'
+    default:
+      return 'var(--bp-space-md,1.6rem)'
+  }
+}
+
+function spanInt(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isInteger(v) && v > 0) return v
+  if (typeof v === 'string' && /^\d+$/.test(v)) {
+    const i = Number.parseInt(v, 10)
+    if (i > 0) return i
+  }
+  return null
+}
+
+function orderInt(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isInteger(v)) return v
+  if (typeof v === 'string' && /^-?\d+$/.test(v)) return Number.parseInt(v, 10)
+  return null
+}
+
+// Present-only `order:K;grid-column:span N` (order-then-span join, matching
+// cell_layout_attr/1).
+function cellLayoutAttr(child: unknown): string {
+  if (!isMap(child)) return ''
+  const parts: string[] = []
+  const order = orderInt(child.order)
+  if (order !== null) parts.push(`order:${order}`)
+  const span = spanInt(child.span)
+  if (span !== null) parts.unshift(`grid-column:span ${span}`)
+  return parts.length ? ` style="${parts.join(';')}"` : ''
+}
+
+const HR = '<hr class="bp-hr">'
+const HR_STACK = '<hr class="bp-hr" style="border-top-width:1px">'
+
+/** ONE RULE PER BOUNDARY (task-a4d1ae76fdb2a6b0) — the mirror of compose.ex's
+ * `SectionLayout.stack_rules?/2` and of blocks.go `sectionStackRules`. Returns
+ * true (draw the boundary rule pair) unless ALL of:
+ *
+ *   - the section carries NO title. Elixir gates on `is_nil`, so an
+ *     empty-STRING title is still a title and keeps the pair — hence `!= null`
+ *     (which also covers `undefined`) rather than a truthiness check.
+ *   - the section is NOT declared grid mode. A grid section is a layout box,
+ *     not a chapter: `section_grid_html` keeps its pair unconditionally.
+ *   - its FIRST child is a heading of any level.
+ *
+ * The heading IS the boundary in that one shape — paper-surface.css gives a
+ * container head the same beat/rule/gap a top-level `h2` gets (#15806), so a
+ * rule pair around it stacks three lines for one boundary. The Elixir engine
+ * settled this in #16233 and this SDK kept drawing both rules on the same
+ * published papers. Locked across all three engines by the shared fixture
+ * api/test/support/fixtures/section-boundary-rules.json.
+ *
+ * `blocks` and `isGrid` are passed in rather than re-derived: the caller has
+ * already computed both, and this subpath is at its size-limit ceiling. */
+const sectionStackRules = (b: Block, blocks: Block[], isGrid: boolean): boolean =>
+  b.title != null || isGrid || !(isMap(blocks[0]) && blocks[0].type === 'heading')
+
+const section: Emit = (b, ctx) => {
+  const layout = b.layout
+  const isGrid = isMap(layout) && layout.mode === 'grid'
+  const blocks = asList<Block>(b.blocks)
+
+  if (isGrid) {
+    const tracks = gridTracks(layout.tracks)
+    const gap = gapTokenVar(layout.gap)
+    const titleHtml =
+      b.title != null
+        ? `<div class="bp-section__title" style="font-weight:bold">${escapeHtml(str(b.title))}</div>`
+        : ''
+    const cells = blocks
+      .map(
+        (child) =>
+          `<div class="bp-section__cell"${cellLayoutAttr(child)}>${renderBlocks([child], ctx)}</div>`,
+      )
+      .join('')
+    return (
+      `<div style="display:flex;flex-direction:column">` +
+      HR +
+      titleHtml +
+      `<div class="bp-section__grid" style="--bp-tracks:${tracks};--bp-grid-gap:${gap}">` +
+      cells +
+      `</div>` +
+      HR +
+      `</div>`
+    )
+  }
+
+  // Stack section: [PdHr], [bold title span], inner blocks, [PdHr] — the pair is
+  // present only when `sectionStackRules` says this section's boundary is not
+  // already carried by its own opening heading.
+  const rule = sectionStackRules(b, blocks, isGrid) ? HR_STACK : ''
+  const titleSpan =
+    b.title != null ? `<span style="font-weight:bold">${escapeHtml(str(b.title))}</span>` : ''
+  const inner = blocks.map((child) => renderBlock(child, ctx)).join('')
+  return (
+    `<div style="display:flex;flex-direction:column">` + rule + titleSpan + inner + rule + `</div>`
+  )
+}
+
+/* columns (compose.ex :article) */
+
+const columns: Emit = (b, ctx) => {
+  const cols = asList(b.columns)
+  const n = Math.max(cols.length, 1)
+  const inner = cols
+    .map((col) => `<div class="bp-cols__c">${renderBlocks(asList<Block>(col), ctx)}</div>`)
+    .join('')
+  return `<div class="bp-cols" style="--bp-cols:${n}">${inner}</div>`
+}
+
+/* terminal (compose.ex :article) */
+
+const terminal: Emit = (b, ctx) => {
+  const title = escapeHtml(str(b.title))
+  const footer = str(b.footer)
+  const kids = asList<Block>(b.children ?? b.blocks)
+  const body = renderBlocks(kids, ctx)
+  const live =
+    b.live === true || b.live === 'true' || b.live === 'live'
+      ? `<span class="bp-term__live">${ctx.t('live')}</span>`
+      : ''
+  const foot = footer === '' ? '' : `<div class="bp-term__foot">${escapeHtml(footer)}</div>`
+  return (
+    `<div class="bp-term"><div class="bp-term__bar"><span class="bp-term__dots"><i></i><i></i><i></i></span>` +
+    `<span class="bp-term__title">${title}</span>${live}</div>` +
+    `<div class="bp-term__body">${body}</div>${foot}</div>`
+  )
+}
+
+/* ── task-tracking / composition family (components.ex) ────────────────────── */
+
+function priorityHtml(p: unknown): string {
+  const s = str(p).trim()
+  if (s === '') return ''
+  const digits = s.replace(/[^0-9]/g, '')
+  const label = digits === '' ? 'P?' : 'P' + digits
+  return `<span class="bp-trow__p" data-p="${digits}">${label}</span>`
+}
+
+function criteriaHtml(c: unknown): string {
+  if (!isMap(c)) return ''
+  const m = c.met
+  const t = c.total
+  if (typeof m === 'number' && typeof t === 'number' && t > 0) {
+    return `<span class="bp-trow__cn">${m}/${t}</span>`
+  }
+  return ''
+}
+
+function workerHtml(w: unknown): string {
+  const s = str(w).trim()
+  return s === '' ? '' : `<span class="bp-trow__w">${escapeHtml(s)}</span>`
+}
+
+function blockedHtml(b: unknown): string {
+  const s = str(b).trim()
+  return s === '' ? '' : `<span class="bp-trow__blk">! ${escapeHtml(s)}</span>`
+}
+
+function truthy(v: unknown): boolean {
+  return v === true || v === 'true' || v === 1
+}
+
+function countRole(rows: Block[], r: string): number {
+  return rows.filter((row) => roleOf(row.status) === r).length
+}
+
+const statusLegend: Emit = (_b, ctx) => {
+  // LEGEND_ROLES (not STATUS_ROLES) — the manifest-scoped vocabulary key, frozen
+  // to the Elixir golden. The fail-open `unknown` sentinel and the not-yet-in-
+  // manifest thought states are excluded (see inline.tsx LEGEND_ROLES).
+  const rows = LEGEND_ROLES.map((r) => {
+    const name = escapeHtml(ctx.t(labelForRole(r.role)))
+    const meaning = ctx.t(meaningForRole(r.role))
+    return `<div class="bp-legend__r">${glyphHtml(r.role, ctx)}<span class="bp-legend__n">${name}</span><span class="bp-legend__d">${meaning}</span></div>`
+  }).join('')
+  return `<div class="bp-legend">${rows}</div>`
+}
+
+function noteItemHtml(item: unknown): string {
+  const m = isMap(item) ? item : {}
+  const label = escapeHtml(str(m.label))
+  // Swept sibling of the heading/list content[] defect: the note body read
+  // `text` alone, blanking the live note persisted as `{content:[…]}`. The
+  // `text` path is byte-identical, so notes.golden.json is untouched.
+  const text = renderInlines(paragraphInline(m as Block))
+  const lead = str(m.lead).trim()
+  const leadHtml = lead === '' ? '' : `<b>${escapeHtml(lead)}</b> `
+  return `<div class="bp-note"><span class="bp-note__k">${label}</span><div class="bp-note__d">${leadHtml}${text}</div></div>`
+}
+
+const notes: Emit = (b) => {
+  const items = asList(b.items)
+  if (items.length === 0) return ''
+  return `<div class="bp-notes">${items.map(noteItemHtml).join('')}</div>`
+}
+
+const note: Emit = (b) => noteItemHtml(b)
+
+const cards: Emit = (b) => {
+  const items = asList(b.items)
+  if (items.length === 0) return ''
+  const inner = items
+    .map((it) => {
+      const m = isMap(it) ? it : {}
+      const title = escapeHtml(str(m.title))
+      const text = escapeHtml(str(m.text))
+      const tone = str(m.tone)
+      const toneCls = ['info', 'ok', 'warn', 'danger'].includes(tone) ? ` bp-card--${tone}` : ''
+      const titleHtml = title === '' ? '' : `<div class="bp-card__t">${title}</div>`
+      const textHtml = text === '' ? '' : `<div class="bp-card__d">${text}</div>`
+      return `<div class="bp-card${toneCls}">${titleHtml}${textHtml}</div>`
+    })
+    .join('')
+  return `<div class="bp-cards">${inner}</div>`
+}
+
+// card (MODEL B) — slot children recursed in order media/title/body/action.
+function slotElements(block: Block, name: string): Block[] {
+  if (!isMap(block.slots)) return []
+  return asList<Block>(block.slots[name])
+}
+
+function normalizeMedia(el: unknown): Block {
+  if (isMap(el) && 'type' in el) return el as Block
+  if (isMap(el)) return { ...(el as Record<string, unknown>), type: 'image' } as Block
+  return el as Block
+}
+
+const card: Emit = (b, ctx) => {
+  const tone = str(b.tone)
+  const toneCls = ['info', 'ok', 'warn', 'danger'].includes(tone) ? ` bp-card--${tone}` : ''
+  const media = renderBlocks(slotElements(b, 'media').map(normalizeMedia), ctx)
+  const inner =
+    media +
+    renderBlocks(slotElements(b, 'title'), ctx) +
+    renderBlocks(slotElements(b, 'body'), ctx) +
+    renderBlocks(slotElements(b, 'action'), ctx)
+  return `<div class="bp-card${toneCls}">${inner}</div>`
+}
+
+// pnode source coercion (Components.pnode_source/1).
+function pnodeSource(node: Record<string, unknown>): [string, string] {
+  const s = node.source
+  if (s === true) return [' bp-pnode--src', '']
+  if (typeof s === 'string' && s !== '')
+    return ['', `<div class="bp-pnode__src">${escapeHtml(s)}</div>`]
+  return ['', '']
+}
+
+function pnodeCell(n: Record<string, unknown>): string {
+  const k = escapeHtml(str(n.kind))
+  const t = escapeHtml(str(n.title))
+  const d = escapeHtml(str(n.detail))
+  const f = escapeHtml(str(n.files))
+  const [srcClass, srcHtml] = pnodeSource(n)
+  const kh = k === '' ? '' : `<div class="bp-pnode__k">${k}</div>`
+  const th = t === '' ? '' : `<div class="bp-pnode__t">${t}</div>`
+  const dh = d === '' ? '' : `<div class="bp-pnode__d">${d}</div>`
+  const fh = f === '' ? '' : `<div class="bp-pnode__f">${f}</div>`
+  return `<div class="bp-pnode${srcClass}">${kh}${th}${dh}${fh}${srcHtml}</div>`
+}
+
+const pipeline: Emit = (b) => {
+  const nodes = asList(b.nodes)
+  if (nodes.length === 0) return ''
+  const cells = nodes
+    .map((n) => pnodeCell(isMap(n) ? n : {}))
+    .join(`<span class="bp-pipe__arr">→</span>`)
+  return `<div class="bp-pipe-scroll"><div class="bp-pipe">${cells}</div></div>`
+}
+
+// stage — the editable per-node twin of ONE pipeline node (slots OR scalars).
+const stage: Emit = (b) => {
+  const stageField = (name: string): unknown => {
+    if (isMap(b.slots)) {
+      const els = asList(b.slots[name])
+      if (els.length) {
+        // slot-materialized: join the text of its element children
+        return els.map((e) => (isMap(e) ? str(e.text) : str(e))).join('')
+      }
+    }
+    return b[name]
+  }
+  return pnodeCell({
+    kind: stageField('kind'),
+    title: stageField('title'),
+    detail: stageField('detail'),
+    files: b.files,
+    source: b.source,
+  })
+}
+
+/* task-detail (components.ex task_detail_html) */
+
+function priorityLabel(p: unknown): string | null {
+  const digits = str(p)
+    .trim()
+    .replace(/[^0-9]/g, '')
+  return digits === '' ? null : 'P' + digits
+}
+
+function taskDetail(b: Block, ctx: RenderCtx): string {
+  const t = isMap(b.task) ? b.task : b
+  const title = str(t.title).trim()
+  // Mirrors Render.Components.task_detail_html/1: an unresolved task-detail is
+  // still a block, so it keeps its place with the same placeholder the sibling
+  // live-query widgets use instead of collapsing to nothing.
+  if (title === '') return `<div class="bp-tdetail bp-tdetail--empty">${ctx.t('No matching tasks.')}</div>`
+  const role = roleOf(t.status)
+
+  const sections: string[] = []
+
+  // meta
+  {
+    const parts = [
+      str(t.status) || null,
+      priorityLabel(t.priority),
+      str(t.kind) || null,
+      str(t.worker) || null,
+    ]
+      .filter((x): x is string => x != null && x !== '')
+      .map(escapeHtml)
+      .join(' · ')
+    sections.push(`<div class="bp-tdetail__meta">${glyphHtml(role, ctx)}<span>${parts}</span></div>`)
+  }
+  // stamp
+  {
+    const c = str(t.created).trim()
+    const u = str(t.updated).trim()
+    const line = [
+      c !== '' ? ctx.t('created %{when}', { when: escapeHtml(c) }) : '',
+      u !== '' ? ctx.t('updated %{when}', { when: escapeHtml(u) }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    if (line !== '') sections.push(`<div class="bp-tdetail__stamp">${line}</div>`)
+  }
+  // timeline
+  {
+    const segs = asList(t.timeline)
+    if (segs.length) {
+      const cells = segs
+        .map((s) => {
+          const m = isMap(s) ? s : {}
+          const r = roleOf(m.status)
+          const lbl = escapeHtml(str(m.label))
+          return `<span class="bp-tl__seg">${glyphHtml(r, ctx)}<span>${lbl}</span></span>`
+        })
+        .join(`<span class="bp-tl__arr">→</span>`)
+      sections.push(`<div class="bp-tdetail__timeline">${cells}</div>`)
+    }
+  }
+  // description
+  {
+    const d = str(t.description).trim()
+    if (d !== '') sections.push(`<div class="bp-tdetail__desc">${escapeHtml(d)}</div>`)
+  }
+  // criteria
+  {
+    const items = asList(t.criteria)
+    if (items.length) {
+      const met = items.filter((c) => truthy(isMap(c) ? c.met : false)).length
+      const total = items.length
+      const rows = items
+        .map((c) => {
+          const m = isMap(c) ? c : {}
+          const done = truthy(m.met)
+          const g = done ? glyphHtml('done', ctx) : glyphHtml('ready', ctx)
+          const txtRaw = str(m.text) !== '' ? str(m.text) : str(m.criterion)
+          const txt = escapeHtml(txtRaw)
+          const ev = str(m.evidence).trim()
+          const evHtml = ev === '' ? '' : `<div class="bp-crit__ev">↳ ${escapeHtml(ev)}</div>`
+          const cls = done ? ' bp-crit--met' : ''
+          return `<div class="bp-crit${cls}">${g}<span class="bp-crit__t">${txt}</span></div>${evHtml}`
+        })
+        .join('')
+      sections.push(
+        `<div class="bp-tdetail__lbl">${ctx.t('Criteria · %{met}/%{total}', { met, total })}</div><div class="bp-tdetail__crit">${rows}</div>`,
+      )
+    }
+  }
+  // deps
+  {
+    const blocks = typeof t.blocks === 'number' ? t.blocks : 0
+    const blocked = typeof t.blocked_by === 'number' ? t.blocked_by : 0
+    const words = [
+      blocks > 0
+        ? blocks === 1
+          ? ctx.t('blocks %{n} task', { n: blocks })
+          : ctx.t('blocks %{n} tasks', { n: blocks })
+        : '',
+      blocked > 0 ? ctx.t('blocked by %{n}', { n: blocked }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    if (words !== '')
+      sections.push(
+        `<div class="bp-tdetail__lbl">${ctx.t('Dependencies')}</div><div class="bp-tdetail__deps">${words}</div>`,
+      )
+  }
+  // children rail
+  sections.push(detailRail(t, 'children', ctx.t('Children'), ctx))
+  // papers rail
+  {
+    const rows = asList(t.papers)
+    if (rows.length) {
+      const shown = rows.slice(0, 10)
+      const extra = rows.length - shown.length
+      const body = shown
+        .map((p) => `<div class="bp-rail__r bp-rail__paper">▸ ${escapeHtml(str(p))}</div>`)
+        .join('')
+      const more = extra <= 0 ? '' : `<div class="bp-rail__more">${ctx.t('… and %{n} more', { n: extra })}</div>`
+      sections.push(
+        `<div class="bp-tdetail__lbl">${ctx.t('Papers')}</div><div class="bp-tdetail__rail">${body}${more}</div>`,
+      )
+    }
+  }
+  // labels
+  {
+    const labels = asList(t.labels)
+      .map((l) => str(l))
+      .filter((l) => l !== '')
+    if (labels.length)
+      sections.push(`<div class="bp-tdetail__labels">${labels.map(escapeHtml).join(' · ')}</div>`)
+  }
+
+  const joined = sections.filter((s) => s !== '').join('')
+  return `<div class="bp-tdetail"><div class="bp-tdetail__title">${escapeHtml(title)}</div>${joined}</div>`
+}
+
+function detailRail(t: Record<string, unknown>, key: string, label: string, ctx: RenderCtx): string {
+  const rows = asList(t[key])
+  if (rows.length === 0) return ''
+  const shown = rows.slice(0, 20)
+  const extra = rows.length - shown.length
+  const done = rows.filter((r) => roleOf(isMap(r) ? r.status : undefined) === 'done').length
+  const body = shown
+    .map((r) => {
+      const m = isMap(r) ? r : {}
+      const role = roleOf(m.status)
+      const title = escapeHtml(str(m.title))
+      return `<div class="bp-rail__r">${glyphHtml(role, ctx)}<span>${title}</span></div>`
+    })
+    .join('')
+  const more = extra <= 0 ? '' : `<div class="bp-rail__more">${ctx.t('… and %{n} more', { n: extra })}</div>`
+  return `<div class="bp-tdetail__lbl">${ctx.t('%{label} · %{done}/%{total} done', { label, done, total: rows.length })}</div><div class="bp-tdetail__rail">${body}${more}</div>`
+}
+
+const taskDetailEmit: Emit = (b, ctx) => taskDetail(b, ctx)
+
+/* roadmap (components.ex roadmap_html) */
+
+function clampf(n: unknown): number {
+  return typeof n === 'number' ? Math.min(Math.max(n, 0), 100) : 0
+}
+function clampfWidth(n: unknown, left: number): number {
+  return typeof n === 'number' ? Math.min(Math.max(n, 1), 100 - left) : Math.max(1, 100 - left)
+}
+
+// The two cannot-place strings: components.ex roadmap_unplaced_copy/0 and
+// roadmap_lane_unplaced_copy/0. An Elixir test reads these literals (and the Go
+// twin's) so the three surfaces cannot drift (roadmap_unplaced_copy_lock_test.exs).
+export const ROADMAP_UNPLACED_COPY = 'No schedule to place these items on.'
+export const ROADMAP_LANE_UNPLACED_COPY = 'not scheduled'
+
+// Is a row's position READ from the author, or invented by the clamp? Author
+// pct only: a NUMBER in left or width (components.ex roadmap_placeable?/2's pct
+// arm; this reader has no date rails). A live-query row has neither, and the
+// clamp would paint it as the same full-width bar as every other such lane.
+const placeable = (m: Record<string, unknown>) =>
+  typeof m.left === 'number' || typeof m.width === 'number'
+
+const roadmap: Emit = (b, ctx) => {
+  const rows = asList(b.snapshot)
+  if (rows.length === 0) return `<div class="bp-tasks bp-tasks--empty">${ctx.t('No roadmap items.')}</div>`
+  // NOT ONE row has geometry: say so, then list the items (never drop them).
+  if (!rows.some((r) => isMap(r) && placeable(r)))
+    return (
+      `<div class="bp-tasks bp-tasks--empty">${ctx.t(ROADMAP_UNPLACED_COPY)}</div>` +
+      renderBlock({ type: 'tasks', snapshot: rows }, ctx)
+    )
+  const todayVal = b.today
+  const today =
+    typeof todayVal === 'number'
+      ? `<span class="bp-rm__today" style="left:${clampf(todayVal)}%"></span>`
+      : ''
+  const scaleCells = asList(b.scale)
+  const scale =
+    scaleCells.length === 0
+      ? ''
+      : `<div class="bp-rm__scale">${scaleCells.map((c) => `<span>${escapeHtml(str(c))}</span>`).join('')}</div>`
+  const lanes = rows
+    .map((r) => {
+      const m = isMap(r) ? r : {}
+      const role = roleOf(m.status)
+      const title = escapeHtml(str(m.title))
+      const placed = placeable(m)
+      const left = clampf(m.left)
+      const width = clampfWidth(m.width, left)
+      const cls =
+        'bp-rm__lane' +
+        (truthy(m.phase_row) ? ' bp-rm__lane--phase' : '') +
+        (placed ? '' : ' bp-rm__lane--unplaced')
+      const body = placed
+        ? `<span class="bp-rm__bar bp-rm__bar--${role}" style="left:${left}%;width:${width}%"></span>`
+        : `<span class="bp-rm__unplaced">${ctx.t(ROADMAP_LANE_UNPLACED_COPY)}</span>`
+      return `<div class="${cls}"><span class="bp-rm__lbl">${draftHtml(m, ctx)}${title}</span><div class="bp-rm__track">${body}${today}</div></div>`
+    })
+    .join('')
+  return `<div class="bp-roadmap">${scale}<div class="bp-rm__lanes">${lanes}</div></div>`
+}
+
+/* ── exported emitter map ──────────────────────────────────────────────────── */
+
+export const coreEmitters: Record<string, Emit> = {
+  heading,
+  // h-tag spellings → heading at the level the TYPE names (charter D57): 18 live
+  // blocks emitted `bp-unknown-block` on every surface until this landed.
+  h1: headingAtLevel(1),
+  h2: headingAtLevel(2),
+  h3: headingAtLevel(3),
+  eyebrow,
+  byline,
+  'pre-gate-badge': preGateBadge,
+  ingress,
+  paragraph,
+  pullquote,
+  list,
+  // authoring-drift aliases → list / blockquote (the JS twins of compose.ex's
+  // alias choke point; agents hand-typed these TipTap/snake/kebab spellings via
+  // raw mutate, leaving 77 live prod blocks unrenderable). No data migration.
+  bulletList: list,
+  bullet_list: list,
+  'bulleted-list': list,
+  bulleted_list: list,
+  numbered_list: numberedList,
+  // `ordered-list` is the same emitter under a second spelling (charter D57) — 2
+  // live blocks, both with map-shaped items the list emitter already normalizes.
+  'ordered-list': numberedList,
+  quote: blockquote,
+  callout,
+  code,
+  divider,
+  image,
+  figure,
+  diagram,
+  asciicast,
+  action,
+  'paper-links': paperLinks,
+  section,
+  columns,
+  terminal,
+  'status-legend': statusLegend,
+  notes,
+  note,
+  cards,
+  card,
+  pipeline,
+  stage,
+  'task-detail': taskDetailEmit,
+  roadmap,
+  // scaffy:add-block-type Tabs MARK:js-map-tabs
+  'tabs': tabs,
+  // scaffy:add-block-type CodeTabs MARK:js-map-code-tabs
+  'code-tabs': codeTabs,
+  // scaffy:add-block-type ApiEndpoint MARK:js-map-api-endpoint
+  'api-endpoint': apiEndpoint,
+  // scaffy:add-block-type Video MARK:js-map-video
+  'video': video,
+  // scaffy:add-block-type Expandable MARK:js-map-expandable
+  'expandable': expandable,
+  // scaffy:add-block-type Footnote MARK:js-map-footnote
+  'footnote': footnote,
+  // scaffy:add-block-type Steps MARK:js-map-steps
+  'steps': steps,
+  // scaffy:add-block-type Toc MARK:js-map-toc
+  'toc': toc,
+  // scaffy:add-block-type Blockquote MARK:js-map-blockquote
+  'blockquote': blockquote,
+  // scaffy:add-block-type Filetree MARK:js-map-filetree
+  'filetree': filetree,
+  // scaffy:add-block-type Diff MARK:js-map-diff
+  'diff': diff,
+}
+
+// shared task-row meta helpers (reused by taskboard.ts)
+export { priorityHtml, criteriaHtml, workerHtml, blockedHtml, truthy, countRole }
+
+// re-export so PortableDoc's own empty-state check can share the utils
+export { escapeHtml, str, asList, num, isMap }
