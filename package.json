@@ -14,6 +14,7 @@
     "check": "node scripts/check-docs.mjs && node scripts/check-pack.mjs && node --test scripts/*.test.mjs packages/*/*.test.mjs && npm run typecheck --workspace @portable-doc/react && npm run test --workspace @portable-doc/react && npm run build --workspace @portable-doc/react",
     "react:build": "npm run build --workspace @portable-doc/react",
     "react:test": "npm run test --workspace @portable-doc/react",
+    "react:pack": "node scripts/pack-react-release.mjs",
     "react:smoke": "node scripts/smoke-react-tarball.mjs"
   }
 }
