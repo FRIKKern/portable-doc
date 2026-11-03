@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PortableDoc, renderPortableDocument, type Block } from '../src'
+import {
+  PortableDoc,
+  renderPortableDocument,
+  type Block,
+  type CoreBlockRenderer,
+} from '../src'
 import { REGISTERED_TYPES } from '../src/blocks/registry'
 
 // One authored block per IN-SCOPE type + the distinctive marker its :article
@@ -1399,5 +1404,61 @@ describe('opt-in block emitters', () => {
         },
       }),
     ).toBe(expected)
+  })
+
+  it('consults only own host-registry keys, including prototype-named extensions', () => {
+    for (const type of ['constructor', 'toString', '__proto__']) {
+      expect(renderPortableDocument([{ type }])).toContain(`Unsupported block: ${type}`)
+      expect(renderPortableDocument([{ type }], { blocks: {} })).toContain(`Unsupported block: ${type}`)
+    }
+
+    const blocks = Object.create(null) as Record<string, () => string>
+    blocks.constructor = () => '<aside>constructor card</aside>'
+    blocks.toString = () => '<aside>toString card</aside>'
+    blocks.__proto__ = () => '<aside>__proto__ card</aside>'
+    expect(
+      renderPortableDocument(
+        [{ type: 'constructor' }, { type: 'toString' }, { type: '__proto__' }],
+        { blocks },
+      ),
+    ).toBe(
+      '<aside>constructor card</aside><aside>toString card</aside><aside>__proto__ card</aside>',
+    )
+
+    const inherited = Object.create({ image: () => '<p>inherited override</p>' }) as Record<
+      string,
+      CoreBlockRenderer
+    >
+    const image = renderPortableDocument([{ type: 'image', src: '/safe.png' }], {
+      blockOverrides: inherited,
+    })
+    expect(image).toContain('<img src="/safe.png"')
+    expect(image).not.toContain('inherited override')
+
+    const inlineValue: Block[] = [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'constructor', text: 'Constructor' },
+          { type: 'toString', text: 'To string' },
+          { type: '__proto__', text: 'Proto' },
+        ],
+      },
+    ]
+    const fallback = renderPortableDocument(inlineValue, { inlineObjects: {} })
+    expect(fallback).toContain('data-inline-type="constructor">Constructor</span>')
+    expect(fallback).toContain('data-inline-type="toString">To string</span>')
+    expect(fallback).toContain('data-inline-type="__proto__">Proto</span>')
+
+    const inlineObjects = Object.create(null) as Record<
+      string,
+      (node: Record<string, unknown>) => string
+    >
+    inlineObjects.constructor = () => '<i>constructor chip</i>'
+    inlineObjects.toString = () => '<i>toString chip</i>'
+    inlineObjects.__proto__ = () => '<i>__proto__ chip</i>'
+    expect(renderPortableDocument(inlineValue, { inlineObjects })).toBe(
+      '<p><i>constructor chip</i><i>toString chip</i><i>__proto__ chip</i></p>',
+    )
   })
 })

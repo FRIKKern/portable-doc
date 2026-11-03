@@ -601,7 +601,10 @@ export function renderInline(node: Inline, depth = 0, insideLink = false): strin
       // A block-shaped node (`content` key) is not an inline object.
       if (kids.length || 'content' in node) return renderInlineChildren(kids, depth + 1, insideLink)
       const type = str(node.type)
-      const own = inlineObjectRenderers?.[type]
+      const own =
+        inlineObjectRenderers && Object.hasOwn(inlineObjectRenderers, type)
+          ? inlineObjectRenderers[type]
+          : undefined
       if (own) {
         // A renderer that throws or returns a non-string falls back to the
         // span, as walk.ex does.

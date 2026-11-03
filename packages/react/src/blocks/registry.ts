@@ -21,6 +21,10 @@ import { mathEmitters } from './math'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
+function ownRenderer<T>(registry: Record<string, T> | undefined, type: string): T | undefined {
+  return registry && Object.hasOwn(registry, type) ? registry[type] : undefined
+}
+
 const HOST_ATTRIBUTE_NAME = /^(?:data|aria)-[a-z][a-z0-9_.:-]*$/
 
 function rootHasAttribute(html: string, name: string): boolean {
@@ -58,7 +62,7 @@ function withBlockAttributes(html: string, block: Block, ctx: RenderCtx): string
 }
 
 function renderCore(block: Block, ctx: RenderCtx, emit: Emit): string {
-  const override = ctx.blockOverrides?.[str(block.type)]
+  const override = ownRenderer(ctx.blockOverrides, str(block.type))
   if (!override) return emit(block, ctx)
   let defaultHtml: string | undefined
   const renderDefault = () => (defaultHtml ??= emit(block, ctx))
@@ -95,8 +99,8 @@ export function renderBlock(block: Block, ctx: RenderCtx): string {
   const type = str(block.type)
   // An opt-in emitter (ctx.blocks, e.g. @barkpark/react/field-blocks) adds a
   // type the core does not ship; it never replaces a core one.
-  const core = DISPATCH[type]
-  const emit = core || (ctx.blocks?.[type] as Emit | undefined)
+  const core = ownRenderer(DISPATCH, type)
+  const emit = core || (ownRenderer(ctx.blocks, type) as Emit | undefined)
   if (emit) {
     const html = core ? renderCore(block, ctx, core) : emit(block, ctx)
     return withBlockAttributes(html, block, ctx)
