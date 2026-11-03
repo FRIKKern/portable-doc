@@ -20,25 +20,42 @@ const files = [
   'package.json',
 ]
 
-test('release pack verifier accepts the intended dependency-free private package', () => {
+test('release pack verifier accepts the intended dependency-free public candidate', () => {
   assert.deepEqual(validatePackedManifest(manifest, files), [])
 })
 
-test('release pack verifier rejects a missing export, leaked source and a publishable manifest', () => {
+test('release pack verifier rejects a missing export, leaked source and unsafe release metadata', () => {
   const failures = validatePackedManifest(
-    { ...manifest, private: false, exports: { '.': './dist/missing.mjs' } },
+    {
+      ...manifest,
+      version: '0.0.0',
+      private: true,
+      publishConfig: { access: 'restricted' },
+      exports: { '.': './dist/missing.mjs' },
+    },
     [...files, 'src/PortableDoc.tsx'],
   )
-  assert(failures.some((failure) => failure.includes('must remain private')))
+  assert(failures.some((failure) => failure.includes('differs from source')))
+  assert(failures.some((failure) => failure.includes('must be 1.0.0')))
+  assert(failures.some((failure) => failure.includes('must not set private')))
+  assert(failures.some((failure) => failure.includes('must be public')))
   assert(failures.some((failure) => failure.includes('dist/missing.mjs')))
   assert(failures.some((failure) => failure.includes('leaks src/PortableDoc.tsx')))
 })
 
-test('release workflow is dispatch-only and carries no publish authority', () => {
+test('release workflow defaults to dry-run and protects manual publishing', () => {
   const workflow = readFileSync(resolve(root, '.github/workflows/portable-doc-react-release.yml'), 'utf8')
   assert.match(workflow, /workflow_dispatch:/)
   assert.match(workflow, /permissions:\n  contents: read/)
-  assert.doesNotMatch(workflow, /npm publish|id-token|environment:|registry-url|NODE_AUTH_TOKEN|NPM_TOKEN/)
+  assert.match(workflow, /publish:[\s\S]*type: boolean[\s\S]*default: false/)
+  assert.match(workflow, /if: inputs\.publish && github\.ref == 'refs\/heads\/main'/)
+  assert.match(workflow, /environment: portable-doc-react-release/)
+  assert.match(workflow, /PORTABLE_DOC_REACT_PUBLISH_ENABLED/)
+  assert.match(workflow, /approved_sha256/)
+  assert.match(workflow, /id-token: write/)
+  assert.match(workflow, /npm publish portable-doc-react-\*\.tgz --access public --dry-run/)
+  assert.match(workflow, /npm publish portable-doc-react-\*\.tgz --access public --provenance/)
+  assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN|NPM_TOKEN/)
   assert.match(workflow, /SHA256SUMS/)
   assert.match(workflow, /provenance\.json/)
   assert.match(workflow, /actions\/upload-artifact@v4/)

@@ -1,7 +1,15 @@
-name: PortableDoc React release dry run
+name: PortableDoc React release
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish after the release gates and owner bootstrap are complete
+        type: boolean
+        default: false
+      approved_sha256:
+        description: SHA-256 of the tarball tested by consumers (required for publish)
+        type: string
 
 permissions:
   contents: read
@@ -14,10 +22,13 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22.22.0'
+          registry-url: https://registry.npmjs.org
       - run: npm install --global npm@11.18.0
       - run: npm ci
-      - name: Verify and pack the exact private release candidate
+      - name: Verify the exact release tarball and dry-run publish
         run: |
+          test "$(node -p 'require("./packages/react/package.json").name')" = '@portable-doc/react'
+          test "$(node -p 'require("./packages/react/package.json").version')" = '1.0.0'
           npm run react:pack -- "$RUNNER_TEMP/portable-doc-react-release"
           version="$(node -p 'require("./packages/react/package.json").version')"
           tarball="$RUNNER_TEMP/portable-doc-react-release/portable-doc-react-${version}.tgz"
@@ -25,8 +36,39 @@ jobs:
           cd "$RUNNER_TEMP/portable-doc-react-release"
           sha256sum --check SHA256SUMS
           test -s provenance.json
+          npm publish portable-doc-react-*.tgz --access public --dry-run
       - uses: actions/upload-artifact@v4
         with:
-          name: portable-doc-react-dry-run
+          name: portable-doc-react
           path: ${{ runner.temp }}/portable-doc-react-release/
           if-no-files-found: error
+
+  publish:
+    if: inputs.publish && github.ref == 'refs/heads/main'
+    needs: pack
+    runs-on: ubuntu-24.04
+    environment: portable-doc-react-release
+    permissions:
+      id-token: write
+    concurrency: portable-doc-react-publish
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.22.0'
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.18.0
+      - uses: actions/download-artifact@v4
+        with:
+          name: portable-doc-react
+      - name: Verify approved digest and publish with provenance
+        env:
+          PUBLISH_ENABLED: ${{ vars.PORTABLE_DOC_REACT_PUBLISH_ENABLED }}
+          APPROVED_SHA256: ${{ inputs.approved_sha256 }}
+        run: |
+          test "$PUBLISH_ENABLED" = true
+          test -n "$APPROVED_SHA256"
+          sha256sum --check SHA256SUMS
+          test "$(cut -d ' ' -f 1 SHA256SUMS)" = "$APPROVED_SHA256"
+          test "$(node -p 'require("./provenance.json").source.commit')" = "$GITHUB_SHA"
+          test "$(node -p 'require("./provenance.json").package.version')" = '1.0.0'
+          npm publish portable-doc-react-*.tgz --access public --provenance
