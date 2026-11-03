@@ -11,12 +11,13 @@ const MAX_ERRORS = 1_000;
 const MAX_PATH = 10_000;
 
 const DOC = { description: 'A PortableDoc: an object with a blocks array, or a blocks array', type: ['object', 'array'] };
+const VALIDATE_DOC = { description: 'Any JSON value. Invalid PortableDoc shapes are returned as validator diagnostics.' };
 
 export const TOOLS = [
   {
     name: 'validate',
     description: 'Check a PortableDoc against the synced spec. Returns { ok: true } or { ok: false, errors: [{ code, path, message }] }.',
-    inputSchema: { type: 'object', properties: { doc: DOC }, required: ['doc'], additionalProperties: false },
+    inputSchema: { type: 'object', properties: { doc: VALIDATE_DOC }, required: ['doc'], additionalProperties: false },
   },
   {
     name: 'explain',
@@ -99,8 +100,7 @@ function checkErrors(errors) {
 
 export function handlers(config) {
   return {
-    validate(args, size) {
-      checkDoc(args.doc, size, { walked: false });
+    validate(args) {
       return result(validate(args.doc));
     },
     explain(args, size) {
