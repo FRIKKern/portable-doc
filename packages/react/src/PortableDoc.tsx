@@ -55,7 +55,7 @@ export interface PortableDocProps {
   inlineObjects?: Record<string, InlineObjectRenderer>
   /**
    * Opt-in block emitters for types the core renderer does not ship, keyed by
-   * block type — e.g. `fieldBlocks` from `@barkpark/react/field-blocks` for the
+   * block type — e.g. `fieldBlocks` from `@portable-doc/react/field-blocks` for the
    * schema field blocks. They never replace a core type.
    */
   blocks?: RenderCtx['blocks']
@@ -72,7 +72,7 @@ export interface PortableDocProps {
  * Render a type-keyed PortableDocument block array to Phoenix-faithful HTML,
  * wrapped in the canonical `.bp-paper-surface` container. Drop this into a
  * Next/Astro surface where you want the same output the Phoenix `/papers` reader
- * produces. Ship `@barkpark/react/paper-surface.css` (or your own copy of
+ * produces. Ship `@portable-doc/react/paper-surface.css` (or your own copy of
  * `api/assets/paper-surface/paper-surface.css`) to skin it.
  */
 export function PortableDoc({ value, className, ...options }: PortableDocProps) {

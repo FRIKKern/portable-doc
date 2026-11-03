@@ -97,7 +97,7 @@ export const REGISTERED_TYPES: string[] = Object.keys(DISPATCH)
 export function renderBlock(block: Block, ctx: RenderCtx): string {
   if (!isMap(block)) return `<div class="bp-unknown-block">invalid block</div>`
   const type = str(block.type)
-  // An opt-in emitter (ctx.blocks, e.g. @barkpark/react/field-blocks) adds a
+  // An opt-in emitter (ctx.blocks, e.g. @portable-doc/react/field-blocks) adds a
   // type the core does not ship; it never replaces a core one.
   const core = ownRenderer(DISPATCH, type)
   const emit = core || (ownRenderer(ctx.blocks, type) as Emit | undefined)

@@ -21,6 +21,26 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./field-blocks": {
+      "import": {
+        "types": "./dist/field-blocks.d.ts",
+        "default": "./dist/field-blocks.mjs"
+      },
+      "require": {
+        "types": "./dist/field-blocks.d.cts",
+        "default": "./dist/field-blocks.cjs"
+      }
+    },
+    "./embed": {
+      "import": {
+        "types": "./dist/embed.d.ts",
+        "default": "./dist/embed.mjs"
+      },
+      "require": {
+        "types": "./dist/embed.d.cts",
+        "default": "./dist/embed.cjs"
+      }
+    },
     "./paper-surface.css": "./dist/paper-surface.css",
     "./package.json": "./package.json"
   },
