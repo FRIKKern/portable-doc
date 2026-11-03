@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 6 milestones closed
-  - Delivered: [R6 conformance: Mobile cuts paper-links blurbs and the route destination](https://github.com/FRIKKern/barkpark/issues/25027)
+- **Today** · 10 milestones closed
+  - Delivered: [R2.5 Seven host pages + journeys E01-E12 on one pinned chrome-headless-shell, with screenshots and GIFs](https://github.com/FRIKKern/barkpark/issues/24951)
 - **Yesterday** · 8 milestones closed
   - Delivered: [R4.5 follow-up: PortableDoc ratchet on the remaining block-doc writes (sessions, generic doc ops, mutate, PlanPapers)](https://github.com/FRIKKern/barkpark/issues/25057)
 - **Last week** · 3 changes, 10 milestones closed
