@@ -1,0 +1,143 @@
+{
+  "baseline": {
+    "label": "baseline",
+    "sourceCommit": "cb84d693f189b6ec6705624f114d54ae8edcfced",
+    "expectedBundleSha256": "215e8a30efae8c0b196a7a521ee93d5020cd7209d910888d352b7971e6458fcf",
+    "loaded": {
+      "label": "baseline",
+      "sha": "cb84d693f189b6ec6705624f114d54ae8edcfced",
+      "bundleSha256": "215e8a30efae8c0b196a7a521ee93d5020cd7209d910888d352b7971e6458fcf"
+    },
+    "ops": [
+      {
+        "seq": 1,
+        "ops": [
+          {
+            "op": "patch-block",
+            "id": "s-paragraph",
+            "patch": {
+              "content": [
+                {
+                  "type": "text",
+                  "value": "A body paragraph with "
+                },
+                {
+                  "marks": [
+                    {
+                      "type": "bold"
+                    }
+                  ],
+                  "type": "text",
+                  "value": "bold emphasis"
+                },
+                {
+                  "type": "text",
+                  "value": " inside it, "
+                },
+                {
+                  "marks": [
+                    {
+                      "href": "https://example.com/mark",
+                      "type": "link"
+                    }
+                  ],
+                  "type": "text",
+                  "value": "a marked link"
+                },
+                {
+                  "type": "text",
+                  "value": " and "
+                },
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "a link node"
+                    }
+                  ],
+                  "href": "https://example.com/node",
+                  "type": "link"
+                },
+                {
+                  "type": "text",
+                  "value": ". upgrade-replay-save"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "candidate": {
+    "label": "candidate",
+    "sourceCommit": "4c3da92cb152105b074637e6182feadc4026ff4c",
+    "expectedBundleSha256": "d4ea08e72dac5438143e982811e04e24fcbffe639d405d99187c1e141770ba0d",
+    "loaded": {
+      "label": "candidate",
+      "sha": "4c3da92cb152105b074637e6182feadc4026ff4c",
+      "bundleSha256": "d4ea08e72dac5438143e982811e04e24fcbffe639d405d99187c1e141770ba0d"
+    },
+    "ops": [
+      {
+        "seq": 1,
+        "ops": [
+          {
+            "op": "patch-block",
+            "id": "s-paragraph",
+            "patch": {
+              "content": [
+                {
+                  "type": "text",
+                  "value": "A body paragraph with "
+                },
+                {
+                  "marks": [
+                    {
+                      "type": "bold"
+                    }
+                  ],
+                  "type": "text",
+                  "value": "bold emphasis"
+                },
+                {
+                  "type": "text",
+                  "value": " inside it, "
+                },
+                {
+                  "marks": [
+                    {
+                      "href": "https://example.com/mark",
+                      "type": "link"
+                    }
+                  ],
+                  "type": "text",
+                  "value": "a marked link"
+                },
+                {
+                  "type": "text",
+                  "value": " and "
+                },
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "a link node"
+                    }
+                  ],
+                  "href": "https://example.com/node",
+                  "type": "link"
+                },
+                {
+                  "type": "text",
+                  "value": ". upgrade-replay-save"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "compatible": true
+}
