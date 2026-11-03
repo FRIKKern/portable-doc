@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 15 milestones closed
-  - Delivered: [R6 conformance: Canvas inline editors add role=textbox, aria-* and span wrappers the reader has none of](https://github.com/FRIKKern/barkpark/issues/25014)
+- **Today** · 1 change, 15 milestones closed
+  - Prepare PortableDoc React alpha release ([#22](https://github.com/FRIKKern/portable-doc/pull/22))
 - **Yesterday** · 8 milestones closed
   - Delivered: [R4.5 follow-up: PortableDoc ratchet on the remaining block-doc writes (sessions, generic doc ops, mutate, PlanPapers)](https://github.com/FRIKKern/barkpark/issues/25057)
 - **Last week** · 3 changes, 10 milestones closed
