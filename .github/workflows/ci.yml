@@ -18,5 +18,11 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install LibreOffice
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libreoffice
       - run: pnpm typecheck
       - run: pnpm test
