@@ -14,6 +14,9 @@ import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs'
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const TIMEOUT = { timeout: 20_000 };
+const brokenDir = new URL('../../fixtures/broken/', import.meta.url);
+const broken = fs.readdirSync(brokenDir).filter((file) => file.endsWith('.json')).sort()
+  .map((file) => ({ file, ...JSON.parse(fs.readFileSync(new URL(file, brokenDir), 'utf8')) }));
 
 const golden = (name) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${name}.golden.json`, import.meta.url), 'utf8')).input;
 const SAMPLE = { title: 'Sample', blocks: [{ id: 'h', ...golden('heading') }, { id: 'c', ...golden('callout') }] };
@@ -80,6 +83,15 @@ describe('over stdio with the SDK client', () => {
     assert.equal(reader.requests.at(-1).auth, `Bearer ${FAKE_TOKEN}`);
   });
 
+  test('validate returns the shared broken fixtures exact codes and paths over SDK stdio', async () => {
+    assert.ok(broken.length >= 20, `only ${broken.length} broken fixtures`);
+    for (const { file, doc, expect } of broken) {
+      const checked = (await call(client, 'validate', { doc })).structuredContent;
+      assert.equal(checked.ok, false, file);
+      assert.deepEqual(checked.errors.map(({ code, path }) => ({ code, path })), expect, file);
+    }
+  });
+
   test('every op golden applies through the server', async () => {
     const dir = new URL('../../goldens/ops/', import.meta.url);
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
@@ -96,7 +108,9 @@ describe('over stdio with the SDK client', () => {
       await protocolError(call(client, name, { ...args, extra: 1 }), /takes no argument "extra"/);
     }
     for (const doc of ['x', 5, null, true]) {
-      for (const name of ['validate', 'apply_ops', 'render']) await protocolError(call(client, name, { ...ARGS[name], doc }), /doc must be an object with a blocks array/);
+      for (const name of ['apply_ops', 'render']) await protocolError(call(client, name, { ...ARGS[name], doc }), /doc must be an object with a blocks array/);
+      const checked = (await call(client, 'validate', { doc })).structuredContent;
+      assert.deepEqual(checked.errors.map(({ code, path }) => ({ code, path })), [{ code: 'not_a_doc', path: '' }]);
     }
     for (const doc of [{}, { title: 'T' }, { blocks: 'x' }, { blocks: null }]) {
       for (const name of ['apply_ops', 'render']) await protocolError(call(client, name, { ...ARGS[name], doc }), /doc must be an object with a blocks array/);
