@@ -1,0 +1,32 @@
+name: PortableDoc React release dry run
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.22.0'
+      - run: npm install --global npm@11.18.0
+      - run: npm ci
+      - name: Verify and pack the exact private release candidate
+        run: |
+          npm run react:pack -- "$RUNNER_TEMP/portable-doc-react-release"
+          version="$(node -p 'require("./packages/react/package.json").version')"
+          tarball="$RUNNER_TEMP/portable-doc-react-release/portable-doc-react-${version}.tgz"
+          npm run react:smoke -- "$tarball"
+          cd "$RUNNER_TEMP/portable-doc-react-release"
+          sha256sum --check SHA256SUMS
+          test -s provenance.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable-doc-react-dry-run
+          path: ${{ runner.temp }}/portable-doc-react-release/
+          if-no-files-found: error
