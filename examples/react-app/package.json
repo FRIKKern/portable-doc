@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@portable-doc/react": "1.0.0",
+    "@portable-doc/react": "0.1.0-alpha.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

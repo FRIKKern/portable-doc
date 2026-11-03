@@ -34,7 +34,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 ![A fresh React app rendering a PortableDoc after one install](docs/images/f05/react-one-install.gif)
 
-One `npm i @portable-doc/react`, then [eight lines](examples/react-app/src/main.jsx). This is a [candidate rehearsal](examples/react-app/README.md), not registry proof; F05 stays open until the public install reproduces it.
+One `npm i @portable-doc/react@0.1.0-alpha.1`, then [eight lines](examples/react-app/src/main.jsx). This is a [candidate rehearsal](examples/react-app/README.md), not registry proof; F05 stays open until the public install reproduces it.
 
 ## What happened
 

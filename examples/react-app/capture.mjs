@@ -3,16 +3,18 @@ import { spawn, spawnSync } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const candidateSha256 = 'db6de8019ba132a2a6eeb8676e7ffd87ae6cb016081ed99720e12cbf13da6293'
+const candidateSha256 = '5aa1eed120d95ecc5f09fed68c366a85ca61f3c6f66df10d835b1575c4f855a4'
 const here = dirname(fileURLToPath(import.meta.url))
-const spec = process.env.PORTABLE_DOC_REACT_SPEC || '@portable-doc/react@1.0.0'
+const packageSpec = '@portable-doc/react@0.1.0-alpha.1'
+const spec = process.env.PORTABLE_DOC_REACT_SPEC || packageSpec
 const output = resolve(process.env.F05_OUTPUT_DIR || join(here, '../../docs/images/f05'))
 const chrome = process.env.F05_CHROME || join(homedir(), '.cache/puppeteer/chrome-headless-shell/mac_arm-148.0.7778.167/chrome-headless-shell-mac-arm64/chrome-headless-shell')
 const ffmpeg = process.env.F05_FFMPEG || 'ffmpeg'
 const candidate = spec.endsWith('.tgz')
+if (!candidate && spec !== packageSpec) throw new Error(`registry spec must be ${packageSpec}`)
 
 function run(command, args, cwd, capture = false) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit' })
@@ -121,6 +123,8 @@ try {
   }
   await writeFile(join(app, 'package.json'), `${JSON.stringify({ private: true, type: 'module' }, null, 2)}\n`)
   run('npm', ['install', installSpec, 'react@19.2.0', 'react-dom@19.2.0', 'vite@8.3.5'], app)
+  const installed = JSON.parse(await readFile(join(app, 'node_modules/@portable-doc/react/package.json'), 'utf8'))
+  if (`${installed.name}@${installed.version}` !== packageSpec) throw new Error(`installed package must be ${packageSpec}`)
   run('npm', ['exec', 'vite', 'build'], app)
 
   const port = await freePort()
@@ -136,8 +140,8 @@ try {
   const manifest = {
     journey: 'F05',
     status: candidate ? 'candidate-dry-run' : 'registry-install',
-    package: '@portable-doc/react@1.0.0',
-    package_spec: spec,
+    package: packageSpec,
+    package_spec: candidate ? basename(spec) : spec,
     tarball_sha256: candidate ? candidateSha256 : null,
     gif_sha256: createHash('sha256').update(await readFile(gif)).digest('hex'),
     react_source_sha: process.env.F05_REACT_SOURCE_SHA || run('git', ['rev-parse', 'HEAD'], here, true),
