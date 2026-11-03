@@ -1,7 +1,7 @@
 # Releasing `@portable-doc/react`
 
 The `PortableDoc React release` workflow always builds, smoke-tests, verifies,
-and dry-runs publication of the exact `1.0.0` tarball. Its `publish` input is
+and dry-runs publication of the exact `0.1.0-alpha.1` tarball. Its `publish` input is
 `false` by default.
 
 Publishing additionally requires all of these owner-controlled gates:
