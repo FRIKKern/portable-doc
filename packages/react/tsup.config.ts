@@ -2,7 +2,7 @@ import { copyFile } from 'node:fs/promises'
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/field-blocks.ts', 'src/embed.ts'],
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,

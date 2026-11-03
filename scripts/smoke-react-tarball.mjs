@@ -43,6 +43,22 @@ try {
   assert.equal(installedManifest.dependencies, undefined)
   const html = run('npm', ['start', '--silent'], app)
   assert.match(html, /^<div class="bp-paper-surface"><h1>Hello PortableDoc<\/h1><\/div>$/)
+  for (const load of [
+    "const load = (name) => import(name)",
+    "const load = (name) => Promise.resolve(require(name))",
+  ]) {
+    const output = run('node', ['-e', `${load}
+      Promise.all(['', '/field-blocks', '/embed'].map((path) => load('@portable-doc/react' + path)))
+        .then(([{ renderPortableDocument }, { fieldBlocks }, { embedBlocks }]) => {
+          console.log(renderPortableDocument([
+            { type: 'field-boolean', label: 'Featured', value: true },
+            { type: 'embed', target: '<paper>' },
+          ], { blocks: { ...fieldBlocks, ...embedBlocks() } }))
+        })
+    `], app)
+    assert.match(output, /<span>Yes<\/span>/)
+    assert.match(output, /data-embed="&lt;paper&gt;"/)
+  }
   await access(join(app, 'node_modules/@portable-doc/react/dist/paper-surface.css'))
   console.log(`react tarball smoke ok: ${packed.filename} (${packed.size} bytes)`)
 } finally {

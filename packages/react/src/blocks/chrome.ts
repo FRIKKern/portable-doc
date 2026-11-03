@@ -34,7 +34,7 @@ export interface RenderCtx {
   /** The chrome word `english` in this render's language (English when absent). */
   t: (english: string, vars?: Record<string, string | number>) => string
   /** Opt-in block emitters for types the core registry does not ship (e.g.
-   * `@barkpark/react/field-blocks`), consulted after the core dispatch. */
+   * `@portable-doc/react/field-blocks`), consulted after the core dispatch. */
   blocks?: Record<string, (block: never, ctx: RenderCtx) => string> | undefined
   /** Opt-in replacements for registered core types. Unlike `blocks`, this map
    * is consulted only when the core registry already owns the type. */
