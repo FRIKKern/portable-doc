@@ -24,14 +24,17 @@
 import {
   type Block,
   type InlineObjectRenderer,
+  type WikilinkRenderer,
   withInlineObjects,
   withTooDeepNotice,
+  withWikilinkRenderer,
 } from './inline'
 import { renderBlocks } from './blocks/registry'
 import { capDepth } from './blocks/depth'
 import { type ChromeStrings, type RenderCtx, makeCtx } from './blocks/chrome'
 
-export type { Block, Inline, InlineObjectRenderer } from './inline'
+export type { Block, Inline, InlineObjectRenderer, WikilinkRenderer } from './inline'
+export type { BlockAttributes, CoreBlockRenderer } from './blocks/chrome'
 
 export interface PortableDocProps {
   /** The type-keyed PortableDocument block array (Barkpark's block grammar). */
@@ -56,6 +59,13 @@ export interface PortableDocProps {
    * schema field blocks. They never replace a core type.
    */
   blocks?: RenderCtx['blocks']
+  /** Opt-in replacements for registered core block types. Existing `blocks`
+   * remain extension-only; `renderDefault` keeps a replacement composable. */
+  blockOverrides?: RenderCtx['blockOverrides']
+  /** Extra escaped data-* or aria-* attributes for each block's emitted root. */
+  blockAttributes?: RenderCtx['blockAttributes']
+  /** Opt-in renderer for core wikilink nodes and marks. */
+  wikilink?: WikilinkRenderer
 }
 
 /**
@@ -83,9 +93,13 @@ export function renderPortableDocument(
 ): string {
   const ctx = makeCtx(options.strings)
   ctx.blocks = options.blocks
+  ctx.blockOverrides = options.blockOverrides
+  ctx.blockAttributes = options.blockAttributes
   const notice = ctx.t('Nested too deep to show')
   const blocks = Array.isArray(value) ? value.map((b) => capDepth(b, notice)) : []
-  return withInlineObjects(options.inlineObjects, () =>
-    withTooDeepNotice(notice, () => renderBlocks(blocks, ctx)),
+  return withWikilinkRenderer(options.wikilink, () =>
+    withInlineObjects(options.inlineObjects, () =>
+      withTooDeepNotice(notice, () => renderBlocks(blocks, ctx)),
+    ),
   )
 }

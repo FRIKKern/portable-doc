@@ -349,7 +349,8 @@ function applyMarks(escaped: string, marks: unknown[]): string {
         const target = escapeHtml(markAttr(m, 'target'))
         const alias = markAttr(m, 'alias')
         const label = alias !== '' ? escapeHtml(alias) : acc
-        acc = `<span data-wikilink="${target}" class="bp-wikilink bp-wikilink--unresolved">${label}</span>`
+        const html = `<span data-wikilink="${target}" class="bp-wikilink bp-wikilink--unresolved">${label}</span>`
+        acc = renderWikilink(isMap(m) ? m : { type: 'wikilink' }, html)
         bare = false
         break
       }
@@ -572,7 +573,8 @@ export function renderInline(node: Inline, depth = 0, insideLink = false): strin
       const kids = renderInlineChildren(node.children, depth + 1, insideLink)
       const label =
         alias !== '' ? escapeHtml(alias) : kids !== '' ? kids : escapeHtml(str(node.target))
-      return `<span data-wikilink="${target}" class="bp-wikilink bp-wikilink--unresolved">${label}</span>`
+      const html = `<span data-wikilink="${target}" class="bp-wikilink bp-wikilink--unresolved">${label}</span>`
+      return renderWikilink(node, html)
     }
     case 'blockref': {
       const target = escapeHtml(str(node.target))
@@ -620,9 +622,25 @@ export function renderInline(node: Inline, depth = 0, insideLink = false): strin
  * function owns escaping; `escapeHtml` is exported for it. */
 export type InlineObjectRenderer = (node: Record<string, unknown>) => string
 
+/** Renders a core wikilink node or mark. The callback may enrich or replace
+ * `defaultHtml`; throwing or returning a non-string preserves the default. It
+ * returns trusted host HTML and therefore owns escaping its author data. */
+export type WikilinkRenderer = (node: Record<string, unknown>, defaultHtml: string) => string
+
 // The renderers registered for the current synchronous render (see
 // withInlineObjects). Module state is safe here: a render never yields.
 let inlineObjectRenderers: Record<string, InlineObjectRenderer> | undefined
+let wikilinkRenderer: WikilinkRenderer | undefined
+
+function renderWikilink(node: Record<string, unknown>, defaultHtml: string): string {
+  if (!wikilinkRenderer) return defaultHtml
+  try {
+    const html: unknown = wikilinkRenderer(node, defaultHtml)
+    return typeof html === 'string' ? html : defaultHtml
+  } catch {
+    return defaultHtml
+  }
+}
 
 export const MAX_DEPTH = 100
 
@@ -649,6 +667,17 @@ export function withInlineObjects<T>(
     return fn()
   } finally {
     inlineObjectRenderers = prev
+  }
+}
+
+/** Run `fn` with an opt-in core wikilink renderer, then restore. */
+export function withWikilinkRenderer<T>(renderer: WikilinkRenderer | undefined, fn: () => T): T {
+  const prev = wikilinkRenderer
+  wikilinkRenderer = renderer
+  try {
+    return fn()
+  } finally {
+    wikilinkRenderer = prev
   }
 }
 

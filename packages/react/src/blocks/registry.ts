@@ -9,7 +9,7 @@
 // terminal, card, figure) recurse back through here.
 
 import type { RenderCtx } from './chrome'
-import { type Block, escapeHtml, str, isMap } from '../inline'
+import { type Block, escapeAttr, escapeHtml, str, isMap } from '../inline'
 import { coreEmitters } from './core'
 import { datavizEmitters } from './dataviz'
 import { formsEmitters } from './forms'
@@ -20,6 +20,55 @@ import { taskboardEmitters } from './taskboard'
 import { mathEmitters } from './math'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
+
+const HOST_ATTRIBUTE_NAME = /^(?:data|aria)-[a-z][a-z0-9_.:-]*$/
+
+function rootHasAttribute(html: string, name: string): boolean {
+  const end = html.indexOf('>')
+  if (end === -1) return true
+  const opening = html.slice(0, end + 1).toLowerCase()
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`\\s${escaped}(?:\\s*=|\\s|/?>)`).test(opening)
+}
+
+function withBlockAttributes(html: string, block: Block, ctx: RenderCtx): string {
+  if (html === '' || !ctx.blockAttributes) return html
+  let attributes: ReturnType<NonNullable<RenderCtx['blockAttributes']>>
+  try {
+    attributes = ctx.blockAttributes(block)
+  } catch {
+    return html
+  }
+  if (!attributes || typeof attributes !== 'object') return html
+  const suffix = Object.entries(attributes)
+    .filter(
+      ([name, value]) =>
+        HOST_ATTRIBUTE_NAME.test(name) &&
+        value !== false &&
+        value != null &&
+        !rootHasAttribute(html, name),
+    )
+    .map(([name, value]) => (value === true ? ` ${name}` : ` ${name}="${escapeAttr(value)}"`))
+    .join('')
+  if (suffix === '') return html
+  return html.replace(
+    /^<([A-Za-z][A-Za-z0-9:-]*)(?=[\s/>])/,
+    (_match, tag: string) => `<${tag}${suffix}`,
+  )
+}
+
+function renderCore(block: Block, ctx: RenderCtx, emit: Emit): string {
+  const override = ctx.blockOverrides?.[str(block.type)]
+  if (!override) return emit(block, ctx)
+  let defaultHtml: string | undefined
+  const renderDefault = () => (defaultHtml ??= emit(block, ctx))
+  try {
+    const html: unknown = override(block, ctx, renderDefault)
+    return typeof html === 'string' ? html : renderDefault()
+  } catch {
+    return renderDefault()
+  }
+}
 
 const DISPATCH: Record<string, Emit> = {
   ...coreEmitters,
@@ -46,10 +95,18 @@ export function renderBlock(block: Block, ctx: RenderCtx): string {
   const type = str(block.type)
   // An opt-in emitter (ctx.blocks, e.g. @barkpark/react/field-blocks) adds a
   // type the core does not ship; it never replaces a core one.
-  const emit = DISPATCH[type] || (ctx.blocks?.[type] as Emit | undefined)
-  if (emit) return emit(block, ctx)
+  const core = DISPATCH[type]
+  const emit = core || (ctx.blocks?.[type] as Emit | undefined)
+  if (emit) {
+    const html = core ? renderCore(block, ctx, core) : emit(block, ctx)
+    return withBlockAttributes(html, block, ctx)
+  }
   // Unknown/unregistered type → degrade, never throw (compose.ex unknown_block_node/1).
-  return `<div class="bp-unknown-block">Unsupported block: ${escapeHtml(type)}</div>`
+  return withBlockAttributes(
+    `<div class="bp-unknown-block">Unsupported block: ${escapeHtml(type)}</div>`,
+    block,
+    ctx,
+  )
 }
 
 /** Render a block array to a joined HTML string. */

@@ -1,3 +1,5 @@
+import type { Block } from '../inline'
+
 /**
  * The renderer's own words — chrome, never author content — in the caller's
  * language (task-8e96278fc4ee7097).
@@ -12,6 +14,21 @@
  */
 export type ChromeStrings = Record<string, string>
 
+/** An opt-in replacement for one registered core block. `renderDefault`
+ * returns the canonical renderer's HTML for the same block. The callback
+ * returns trusted host HTML and therefore owns escaping its author data. */
+export type CoreBlockRenderer = (
+  block: Block,
+  ctx: RenderCtx,
+  renderDefault: () => string,
+) => string
+
+/** Extra data-* or aria-* attributes for a rendered block's root element.
+ * Names are validated and values are escaped by the renderer. */
+export type BlockAttributes = (
+  block: Block,
+) => Record<string, string | number | boolean | null | undefined> | undefined
+
 /** Per-render context threaded through every emitter. */
 export interface RenderCtx {
   /** The chrome word `english` in this render's language (English when absent). */
@@ -19,6 +36,11 @@ export interface RenderCtx {
   /** Opt-in block emitters for types the core registry does not ship (e.g.
    * `@barkpark/react/field-blocks`), consulted after the core dispatch. */
   blocks?: Record<string, (block: never, ctx: RenderCtx) => string> | undefined
+  /** Opt-in replacements for registered core types. Unlike `blocks`, this map
+   * is consulted only when the core registry already owns the type. */
+  blockOverrides?: Record<string, CoreBlockRenderer> | undefined
+  /** Attributes appended to the first/root element emitted for each block. */
+  blockAttributes?: BlockAttributes | undefined
 }
 
 /** Build the render context for `strings` (English when omitted or malformed). */

@@ -1254,4 +1254,150 @@ describe('opt-in block emitters', () => {
     )
     expect(html).toContain('<span>Inner</span>')
   })
+
+  it('keeps default bytes unchanged when host hooks are absent', () => {
+    const value: Block[] = [
+      {
+        type: 'paragraph',
+        id: 'p1',
+        content: [
+          { type: 'text', value: 'See ' },
+          { type: 'wikilink', target: 'Ada', docId: 'author-ada' },
+        ],
+      },
+      { type: 'image', id: 'img1', src: '/tea.png', alt: 'Tea' },
+    ]
+    expect(renderPortableDocument(value, {})).toBe(renderPortableDocument(value))
+  })
+
+  it('adds escaped host attributes to core, nested, extension, and unknown block roots', () => {
+    const html = renderPortableDocument(
+      [
+        {
+          type: 'section',
+          id: 'section&1',
+          blocks: [{ type: 'paragraph', id: 'p"1', text: 'Nested' }],
+        },
+        { type: 'image', id: 'img1', src: '/tea.png', alt: 'Tea' },
+        { type: 'custom', id: 'custom1' },
+        { type: 'other', id: 'other1' },
+      ],
+      {
+        blocks: { custom: () => '<article>Custom</article>' },
+        blockAttributes: (block) => ({
+          'data-bp-id': String(block.id),
+          'aria-current': block.type === 'section' || undefined,
+          'bad name': 'ignored',
+          onmouseover: 'ignored',
+          style: 'ignored',
+          src: 'ignored',
+          href: 'ignored',
+          'data-bp-lightboxable': block.type === 'image' ? 'false' : undefined,
+        }),
+      },
+    )
+    expect(html).toContain('<div data-bp-id="section&amp;1" aria-current')
+    expect(html).toContain('<p data-bp-id="p&quot;1">Nested</p>')
+    expect(html).toContain('<img data-bp-id="img1" src="/tea.png"')
+    expect(html.match(/data-bp-lightboxable=/g)).toHaveLength(1)
+    expect(html).toContain('data-bp-lightboxable="true"')
+    expect(html).toContain('<article data-bp-id="custom1">Custom</article>')
+    expect(html).toContain('<div data-bp-id="other1" class="bp-unknown-block">')
+    expect(html).not.toContain('bad name')
+    expect(html).not.toContain('onmouseover=')
+    expect(html).not.toContain('style="ignored"')
+    expect(html).not.toContain('src="ignored"')
+    expect(html).not.toContain('href="ignored"')
+  })
+
+  it('treats replacement tokens in host attribute values as literal text', () => {
+    const html = renderPortableDocument([{ type: 'paragraph', id: 'p1', text: 'Safe' }], {
+      blockAttributes: () => ({ 'data-probe': "$' $& $` $1" }),
+    })
+    expect(html).toBe('<p data-probe="$&#39; $&amp; $` $1">Safe</p>')
+    expect(html.match(/<p/g)).toHaveLength(1)
+    expect(html.match(/Safe/g)).toHaveLength(1)
+  })
+
+  it('overrides a core image without weakening extension-only blocks', () => {
+    const html = renderPortableDocument(
+      [
+        { type: 'image', id: 'img1', src: '/tea.png', alt: 'Tea' },
+        { type: 'custom', id: 'card1' },
+      ],
+      {
+        blocks: {
+          image: () => '<p>extension must not win</p>',
+          custom: () => '<article class="pd-object">Card</article>',
+        },
+        blockOverrides: {
+          image: (block, _ctx, renderDefault) =>
+            `<figure class="pd-image" data-name="${String(block.alt)}">${renderDefault()}</figure>`,
+        },
+      },
+    )
+    expect(html).toContain('<figure class="pd-image" data-name="Tea"><img')
+    expect(html).toContain('<article class="pd-object">Card</article>')
+    expect(html).not.toContain('extension must not win')
+  })
+
+  it('enriches wikilink nodes and marks with host navigation semantics', () => {
+    const seen: string[] = []
+    const html = renderPortableDocument(
+      [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'wikilink', target: 'Ada', docId: 'author-ada' },
+            {
+              type: 'text',
+              value: 'Grace',
+              marks: [{ type: 'wikilink', target: 'Grace', docId: 'author-grace' }],
+            },
+          ],
+        },
+      ],
+      {
+        wikilink: (node, defaultHtml) => {
+          const docId = String(node.docId)
+          seen.push(docId)
+          return defaultHtml.replace(
+            '<span ',
+            `<span data-doc-id="${docId}" role="link" tabindex="0" `,
+          )
+        },
+      },
+    )
+    expect(seen).toEqual(['author-ada', 'author-grace'])
+    expect(html).toContain('data-doc-id="author-ada" role="link" tabindex="0"')
+    expect(html).toContain('data-doc-id="author-grace" role="link" tabindex="0"')
+    expect(html).toContain('data-wikilink="Ada"')
+    expect(html).toContain('data-wikilink="Grace"')
+  })
+
+  it('falls back to canonical core HTML when a host override fails', () => {
+    const value: Block[] = [
+      {
+        type: 'paragraph',
+        content: [{ type: 'wikilink', target: 'Ada', docId: 'author-ada' }],
+      },
+      { type: 'image', src: '/tea.png', alt: 'Tea' },
+    ]
+    const expected = renderPortableDocument(value)
+    expect(
+      renderPortableDocument(value, {
+        blockAttributes: () => {
+          throw new Error('attribute failure')
+        },
+        blockOverrides: {
+          image: () => {
+            throw new Error('block failure')
+          },
+        },
+        wikilink: () => {
+          throw new Error('wikilink failure')
+        },
+      }),
+    ).toBe(expected)
+  })
 })
