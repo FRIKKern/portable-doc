@@ -1,7 +1,6 @@
 {
   "name": "@portable-doc/react",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.0.0",
   "description": "The canonical React renderer for PortableDoc documents.",
   "type": "module",
   "license": "Apache-2.0",
@@ -9,6 +8,9 @@
     "type": "git",
     "url": "git+https://github.com/FRIKKern/portable-doc.git",
     "directory": "packages/react"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
