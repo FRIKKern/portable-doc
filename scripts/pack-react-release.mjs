@@ -51,7 +51,7 @@ export function validatePackedManifest(manifest, files) {
   if (manifest.version !== packageManifest.version) {
     fail(`packed version ${manifest.version} differs from source ${packageManifest.version}`)
   }
-  if (manifest.version !== '1.0.0') fail(`release candidate version must be 1.0.0, got ${manifest.version}`)
+  if (manifest.version !== '0.1.0-alpha.1') fail(`release candidate version must be 0.1.0-alpha.1, got ${manifest.version}`)
   if (manifest.private != null) fail('release candidate must not set private')
   if (manifest.publishConfig?.access !== 'public') fail('release candidate publishConfig.access must be public')
   if (manifest.dependencies != null) fail('renderer package must have no runtime dependencies')
