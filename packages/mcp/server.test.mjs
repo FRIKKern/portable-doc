@@ -147,8 +147,9 @@ describe('over stdio with the SDK client', () => {
     toolError(await call(client, 'render', { doc: { blocks: [{ type: 'divider', tone: 'x' }] } }), /answered 422/);
   });
 
-  test('a 2500-section doc (5000 JSON levels, the most the SDK client can send): validate answers too_deep, apply_ops and render refuse it, explain names its path', async () => {
-    const doc = deepDoc(2500);
+  test('a 600-section doc (over the server depth limit): validate answers too_deep, apply_ops and render refuse it, explain names its path', async () => {
+    // Stay below the SDK serializer’s platform-dependent stack limit.
+    const doc = deepDoc(600);
     const checked = (await call(client, 'validate', { doc })).structuredContent;
     assert.deepEqual(checked.errors.map((e) => e.code), ['too_deep']);
     const words = (await call(client, 'explain', { errors: checked.errors, doc })).structuredContent.explanations;
