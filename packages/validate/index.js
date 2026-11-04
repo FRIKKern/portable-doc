@@ -80,6 +80,40 @@ export function compile(root) {
   audit(root, resolve);
   const typeSchema = root.properties?.type;
   const deref = (node) => ('$ref' in node ? deref(resolve(node.$ref)) : node);
+  const exactKeys = (value, keys) => {
+    if (!isObject(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    const ownKeys = Reflect.ownKeys(value);
+    if (ownKeys.length !== keys.length) return false;
+    for (const key of keys) {
+      const property = Object.getOwnPropertyDescriptor(value, key);
+      if (!property?.enumerable || !Object.hasOwn(property, 'value')) return false;
+    }
+    for (const key of KEYWORDS) {
+      if (!Object.hasOwn(value, key) && key in value) return false;
+    }
+    return true;
+  };
+  const dispatchType = (branch) => {
+    if (!exactKeys(branch, ['if', 'then'])) return undefined;
+    const condition = branch.if;
+    if (!exactKeys(condition, ['properties', 'required']) || !Array.isArray(condition.required)
+      || condition.required.length !== 1 || condition.required[0] !== 'type') return undefined;
+    if (!exactKeys(condition.properties, ['type']) || !exactKeys(condition.properties.type, ['const'])) return undefined;
+    return typeof condition.properties.type.const === 'string' ? condition.properties.type.const : undefined;
+  };
+  const typeDispatch = Array.isArray(root.allOf)
+    ? root.allOf.reduce((dispatch, branch) => {
+      if (dispatch === null) return null;
+      const type = dispatchType(branch);
+      if (type === undefined) return null;
+      const matches = dispatch.get(type) ?? [];
+      matches.push(branch);
+      dispatch.set(type, matches);
+      return dispatch;
+    }, new Map())
+    : null;
 
   const accepts = (node, value) => {
     const target = deref(node);
@@ -134,7 +168,13 @@ export function compile(root) {
       }
     }
     if (Array.isArray(value) && node.items) value.forEach((item, i) => check(item, node.items, pointer(path, i), out, depth));
-    for (const child of node.allOf ?? []) check(value, child, path, out, depth);
+    let allOf = node.allOf ?? [];
+    if (node === root && typeDispatch) {
+      const typeProperty = isObject(value) ? Object.getOwnPropertyDescriptor(value, 'type') : undefined;
+      if (!typeProperty) allOf = [];
+      else if (Object.hasOwn(typeProperty, 'value')) allOf = typeDispatch.get(typeProperty.value) ?? [];
+    }
+    for (const child of allOf) check(value, child, path, out, depth);
     if (node.if && node.then && trial(value, node.if, path, depth).errors.length === 0) check(value, node.then, path, out, depth);
     if (node.anyOf) checkAnyOf(value, node.anyOf, path, out, depth);
     if (node.not && trial(value, node.not, path, depth).errors.length === 0) out.errors.push(error('value_not_allowed', path, 'matches a shape the schema forbids here'));
