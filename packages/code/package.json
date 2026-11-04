@@ -1,0 +1,49 @@
+{
+  "name": "@portable-doc/code",
+  "version": "0.1.0-alpha.1",
+  "description": "PortableDoc code highlighting and accessible reader-tab behavior.",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FRIKKern/portable-doc.git",
+    "directory": "packages/code"
+  },
+  "exports": {
+    ".": "./src/reader-code.js",
+    "./highlight": "./src/code-highlight.js",
+    "./tabs": "./src/reader-tabs.js",
+    "./bp-paper-code.js": "./dist/bp-paper-code.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src/code-highlight.js",
+    "src/reader-code.js",
+    "src/reader-tabs.js",
+    "LICENSE",
+    "README.md",
+    "SOURCE.json"
+  ],
+  "sideEffects": [
+    "./src/reader-code.js",
+    "./dist/bp-paper-code.js"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "esbuild src/reader-code.js --bundle --format=iife --outfile=dist/bp-paper-code.js --minify",
+    "test": "node src/__code_highlight.test.mjs && node src/__reader_tabs.test.mjs && node reader-code.test.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "highlight.js": "11.12.0",
+    "lowlight": "3.3.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "jsdom": "25.0.1"
+  }
+}
