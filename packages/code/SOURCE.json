@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/FRIKKern/barkpark",
+  "commit": "c4e8f9adeb6cc86a15b7dd7f84903abbbce77f05",
+  "sources": [
+    {
+      "path": "api/assets/paper-editor/src/reader-code.js",
+      "sha256": "730f576b1a0b29fb7ebc1504f752dc9c2e047310ba6767031ad61a3c3d2aca24"
+    },
+    {
+      "path": "api/assets/paper-editor/src/code-highlight.js",
+      "sha256": "509efa7434fa390bc3a869440f64a9bb7a553fabc12c84e187b4cb0e4a7ef858"
+    },
+    {
+      "path": "api/assets/paper-editor/src/reader-tabs.js",
+      "sha256": "62b166b7aedf556ea90703fdbe2bd03684ae62913a1554d37ad3dc7b4ff802d7"
+    }
+  ],
+  "asset": {
+    "path": "api/priv/static/assets/bp-paper-code.js",
+    "sha256": "1cb902e40797ebedc061cea8d4989419c32ae3b1841f31b943752858713942dc"
+  },
+  "scope": "reader code highlighting, its canonical tokenizer, and accessible reader-tab wiring"
+}
