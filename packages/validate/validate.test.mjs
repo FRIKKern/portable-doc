@@ -255,6 +255,107 @@ test('compile follows the schema it is given, keyword by keyword', () => {
   assert.deepEqual(codes({ blocks: [{ type: 'note', 'a/b~c': 1 }] }), []);
 });
 
+test('compile dispatches only exact root type branches and preserves custom allOf semantics', () => {
+  const exact = compile({
+    type: 'object',
+    required: ['type'],
+    properties: { type: { enum: ['note'] } },
+    allOf: [
+      { if: { properties: { type: { const: 'note' } }, required: ['type'] }, then: { required: ['a'] } },
+      { if: { properties: { type: { const: 'note' } }, required: ['type'] }, then: { required: ['b'] } },
+    ],
+  });
+  assert.deepEqual(exact({ blocks: [{ type: 'note' }] }).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /blocks/0/a',
+    'missing_required_field /blocks/0/b',
+  ]);
+  assert.deepEqual(exact({ blocks: [{ type: 'unknown' }] }).errors.map((e) => `${e.code} ${e.path}`), [
+    'unknown_block_type /blocks/0/type',
+  ]);
+  assert.deepEqual(exact({ blocks: [{}] }).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /blocks/0/type',
+  ]);
+
+  const custom = compile({
+    type: 'object',
+    properties: { type: { enum: ['note'] } },
+    allOf: [
+      {
+        if: { properties: { type: { const: 'note' } }, required: ['type', 'gate'] },
+        then: { required: ['conditional'] },
+      },
+      { required: ['always'] },
+    ],
+  });
+  assert.deepEqual(custom({ blocks: [{ type: 'note' }] }).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /blocks/0/always',
+  ]);
+  assert.deepEqual(custom({ blocks: [{ type: 'note', gate: true }] }).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /blocks/0/conditional',
+    'missing_required_field /blocks/0/always',
+  ]);
+
+  const malformed = compile({
+    type: 'object',
+    allOf: [{
+      if: { properties: { type: { const: 'note' } }, required: null },
+      then: { required: ['conditional'] },
+    }],
+  });
+  assert.deepEqual(malformed({ blocks: [{ type: 'note' }] }).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /blocks/0/conditional',
+  ]);
+});
+
+test('dispatch ignores inherited type accessors and keeps own accessor behavior', () => {
+  const inherited = Object.create(Object.defineProperty({}, 'type', {
+    get() { throw new Error('inherited type getter'); },
+  }));
+  assert.deepEqual(validate([inherited]).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /0/type',
+  ]);
+
+  const own = Object.defineProperty({}, 'type', {
+    enumerable: true,
+    get() { throw new Error('own type getter'); },
+  });
+  assert.throws(() => validate([own]), /own type getter/);
+
+  const check = compile({
+    type: 'object',
+    properties: { type: { enum: ['a', 'b'] } },
+    allOf: [
+      { if: { properties: { type: { const: 'a' } }, required: ['type'] }, then: { required: ['fromA'] } },
+      { if: { properties: { type: { const: 'b' } }, required: ['type'] }, then: { required: ['fromB'] } },
+    ],
+  });
+  const reads = ['b', 'a', 'b'];
+  const changing = Object.defineProperty({}, 'type', {
+    enumerable: true,
+    get() { return reads.shift(); },
+  });
+  assert.deepEqual(check([changing]).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /0/fromA',
+    'missing_required_field /0/fromB',
+  ]);
+  assert.deepEqual(reads, []);
+});
+
+test('dispatch falls back when an apparent type condition has inherited schema semantics', () => {
+  const branch = Object.assign(Object.create({ $ref: '#/definitions/always' }), {
+    if: { properties: { type: { const: 'a' } }, required: ['type'] },
+    then: { required: ['onlyA'] },
+  });
+  const check = compile({
+    type: 'object',
+    allOf: [branch],
+    definitions: { always: { required: ['payload'] } },
+  });
+  assert.deepEqual(check([{ type: 'b' }]).errors.map((e) => `${e.code} ${e.path}`), [
+    'missing_required_field /0/payload',
+  ]);
+});
+
 test('ids count only where a block was accepted, and pointers escape ~ and /', () => {
   const check = compile({
     type: 'object',
