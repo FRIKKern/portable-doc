@@ -15,10 +15,11 @@ test('the extracted tokenizer trio stays byte-identical to its recorded Barkpark
   }
 })
 
-test('the staged package pins the tokenizer versions used by the Barkpark source', () => {
+test('the alpha candidate is public metadata with the tokenizer versions used by Barkpark', () => {
   assert.equal(manifest.name, '@portable-doc/code')
   assert.equal(manifest.version, '0.1.0-alpha.1')
-  assert.equal(manifest.private, true)
+  assert.equal(manifest.private, undefined)
+  assert.equal(manifest.publishConfig?.access, 'public')
   assert.deepEqual(manifest.dependencies, {
     'highlight.js': '11.12.0',
     lowlight: '3.3.0',

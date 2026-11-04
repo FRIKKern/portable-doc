@@ -2,13 +2,15 @@
   "name": "@portable-doc/code",
   "version": "0.1.0-alpha.1",
   "description": "PortableDoc code highlighting and accessible reader-tab behavior.",
-  "private": true,
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/FRIKKern/portable-doc.git",
     "directory": "packages/code"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     ".": "./src/reader-code.js",
@@ -24,6 +26,7 @@
     "src/reader-tabs.js",
     "LICENSE",
     "README.md",
+    "RELEASING.md",
     "SOURCE.json"
   ],
   "sideEffects": [
