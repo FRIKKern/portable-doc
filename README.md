@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 2 changes, 17 milestones closed
-  - Clarify owner bootstrap for the React alpha ([#25](https://github.com/FRIKKern/portable-doc/pull/25))
+- **Today** · 3 changes, 17 milestones closed
+  - release: prepare portable-doc code alpha ([#26](https://github.com/FRIKKern/portable-doc/pull/26))
 - **Yesterday** · 1 change, 15 milestones closed
   - Prepare PortableDoc React alpha release ([#22](https://github.com/FRIKKern/portable-doc/pull/22))
 - **This week** · 8 milestones closed
