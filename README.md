@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 5 changes, 17 milestones closed
-  - Prepare deterministic local docs site bundle ([#28](https://github.com/FRIKKern/portable-doc/pull/28))
+- **Today** · 5 changes, 40 milestones closed
+  - Delivered: [R5 prepare recorder repair through mounted table control](https://github.com/FRIKKern/barkpark/issues/25272)
 - **Yesterday** · 1 change, 15 milestones closed
   - Prepare PortableDoc React alpha release ([#22](https://github.com/FRIKKern/portable-doc/pull/22))
 - **This week** · 8 milestones closed
