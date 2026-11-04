@@ -33,6 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
+- **Today** · 1 change, 16 milestones closed
+  - R6.2: extract PortableDoc code tokenizer ([#23](https://github.com/FRIKKern/portable-doc/pull/23))
 - **Yesterday** · 1 change, 15 milestones closed
   - Prepare PortableDoc React alpha release ([#22](https://github.com/FRIKKern/portable-doc/pull/22))
 - **This week** · 8 milestones closed
