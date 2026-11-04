@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 3 changes, 17 milestones closed
-  - release: prepare portable-doc code alpha ([#26](https://github.com/FRIKKern/portable-doc/pull/26))
+- **Today** · 4 changes, 17 milestones closed
+  - Dispatch PortableDoc validation by block type ([#24](https://github.com/FRIKKern/portable-doc/pull/24))
 - **Yesterday** · 1 change, 15 milestones closed
   - Prepare PortableDoc React alpha release ([#22](https://github.com/FRIKKern/portable-doc/pull/22))
 - **This week** · 8 milestones closed
