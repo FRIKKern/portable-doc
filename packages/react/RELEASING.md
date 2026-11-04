@@ -12,17 +12,31 @@ Publishing additionally requires all of these owner-controlled gates:
 - that environment defines `PORTABLE_DOC_REACT_PUBLISH_ENABLED=true`; and
 - npm trusted publishing authorizes this repository and workflow.
 
-The registry currently has no `@portable-doc/react` package. An npm scope owner
-must bootstrap it before the workflow can publish. One option is npm staged
-publishing: `npm stage publish` creates the public `0.0.0-stage` placeholder,
-then an owner reviews the exact staged tarball and approves it with 2FA. Do not
-stage or approve from automation in this repository.
+### First release
 
-Create the trusted-publisher configuration only when the first real release is
-ready. npm expires a new configuration if it does not complete a successful
-validation within two days. Creating the environment, setting its variable,
-configuring npm, staging, approving, and publishing are deliberately outside
-this release-preparation change.
+The npm scope owner handles bootstrap and 2FA. When the package name is new,
+the owner can reserve it by staging the exact tarball from the reviewed GitHub
+Actions run with an explicit prerelease tag.
+
+```sh
+npm stage publish ./portable-doc-react-0.1.0-alpha.1.tgz --access public --tag alpha
+```
+
+This creates a public `0.0.0-stage` placeholder and reserves the alpha version
+in the staging queue. In the placeholder's npm settings, configure trusted
+publishing for `FRIKKern/portable-doc`, workflow
+`portable-doc-react-release.yml`, environment `portable-doc-react-release`.
+Create that GitHub environment with the owner approval and publish variable
+described above.
+
+For the first release with CI provenance, the owner rejects the bootstrap
+staging entry with 2FA to free the alpha version. Verify the package and its
+trusted publisher are still present in npm settings and the staging queue no
+longer contains the alpha before dispatching the protected workflow. Approving
+the bootstrap entry would publish it immediately and consume the version.
+
+Configure trust when the protected workflow is ready to run. npm expires a new
+configuration if it does not complete a successful validation within two days.
 
 References:
 
