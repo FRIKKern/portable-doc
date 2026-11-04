@@ -111,3 +111,25 @@ test('an owned output rejects extra or modified files and preserves them', () =>
   assert.match(fs.readFileSync(path.join(out, 'index.html'), 'utf8'), /changed$/);
   assert.deepEqual(fs.readdirSync(tmp).filter((name) => name.startsWith('.portable-doc-docs-site-')), []);
 });
+
+test('a mid-generation failure preserves the owned output and removes staging', () => {
+  const out = path.join(tmp, 'mid-generation');
+  generateDocsSite(out);
+  const before = tree(out);
+  const stagingBefore = fs.readdirSync(tmp).filter((name) => name.startsWith('.portable-doc-docs-site-')).sort();
+  const copyFileSync = fs.copyFileSync;
+  let copies = 0;
+  fs.copyFileSync = (...args) => {
+    copies += 1;
+    if (copies === 2) throw new Error('planted mid-generation copy failure');
+    return copyFileSync(...args);
+  };
+  try {
+    assert.throws(() => generateDocsSite(out), /planted mid-generation copy failure/);
+  } finally {
+    fs.copyFileSync = copyFileSync;
+  }
+  assert.equal(copies, 2);
+  assert.deepEqual(tree(out), before);
+  assert.deepEqual(fs.readdirSync(tmp).filter((name) => name.startsWith('.portable-doc-docs-site-')).sort(), stagingBefore);
+});

@@ -147,42 +147,42 @@ export function generateDocsSite(output = defaultOutput) {
 
   fs.mkdirSync(path.dirname(out), { recursive: true });
   const staging = fs.mkdtempSync(path.join(path.dirname(out), '.portable-doc-docs-site-'));
-  fs.mkdirSync(path.join(staging, 'fixtures'));
-  fs.mkdirSync(path.join(staging, 'hosts'));
-
-  const fixtureFiles = [];
-  for (const [id] of variants) {
-    const sourceFile = path.join(root, 'goldens', 'pages', `${id}.html`);
-    const outputFile = path.join(staging, 'fixtures', `${id}.html`);
-    const html = fs.readFileSync(sourceFile, 'utf8');
-    fs.copyFileSync(sourceFile, outputFile);
-    fixtureFiles.push({ file: `fixtures/${id}.html`, sha256: sha256(sourceFile), unresolvedLocalReferences: localReferences(html) });
-  }
-  const hostCards = hosts.map((host) => {
-    const shots = ['desktop-light', 'desktop-dark'].map((variant) => {
-      const name = `${host.id}--${variant}.png`;
-      const sourceFile = path.join(root, 'docs', 'images', 'hosts', name);
-      fs.copyFileSync(sourceFile, path.join(staging, 'hosts', name));
-      return `<a href="hosts/${name}"><img src="hosts/${name}" alt="${escapeHtml(host.title)} in ${variant.replace('-', ' ')}"></a>`;
-    }).join('');
-    return `<article class="card"><h3>${escapeHtml(host.title)}</h3><p>Manifest state: ${escapeHtml(host.state)}</p><p class="stamp"><code>${escapeHtml(host.source)}</code></p><div class="shots">${shots}</div></article>`;
-  }).join('\n');
-  const fixtureCards = variants.map(([id, label]) => `<article class="card"><h3>${escapeHtml(label)}</h3><p>Exact synced HTML snapshot. Barkpark-local assets are inventoried in the build manifest.</p><a href="fixtures/${id}.html" download>Download HTML snapshot</a></article>`).join('\n');
-  const indexBody = `<h1>PortableDoc reference</h1><p class="lede">Browse the canonical format, exact golden HTML snapshots, and recorded synthetic host fixture captures from the existing manifest.</p><p class="stamp">Pack stamp <code>${stamp}</code><br>Synced from Barkpark <code>${escapeHtml(source.commit)}</code><br><a href="build-manifest.json">Build manifest and unresolved fixture references</a></p><h2 id="fixtures">Golden HTML snapshots</h2><section class="grid">${fixtureCards}</section><h2 id="hosts">Recorded host fixtures</h2><section class="grid">${hostCards}</section>`;
-  fs.writeFileSync(path.join(staging, 'index.html'), page('Docs', stamp, indexBody));
-  const spec = escapeHtml(fs.readFileSync(path.join(root, 'SPEC.md'), 'utf8'));
-  fs.writeFileSync(path.join(staging, 'spec.html'), page('Specification', stamp, `<h1>PortableDoc specification</h1><p class="stamp">Pack stamp <code>${stamp}</code></p><pre class="spec">${spec}</pre>`));
-  const buildManifest = {
-    schema: 1,
-    packStamp: stamp,
-    source: { repo: source.repo, path: source.path, commit: source.commit },
-    fixtures: fixtureFiles,
-    hostManifest: { file: 'docs/images/hosts/manifest.json', sha256: sha256(hostManifestFile) },
-    hosts: hosts.map(({ id, title, state, source: hostSource }) => ({ id, title, state, source: hostSource })),
-  };
-  fs.writeFileSync(path.join(staging, 'build-manifest.json'), `${JSON.stringify(buildManifest, null, 2)}\n`);
-  writeMarker(staging);
   try {
+    fs.mkdirSync(path.join(staging, 'fixtures'));
+    fs.mkdirSync(path.join(staging, 'hosts'));
+
+    const fixtureFiles = [];
+    for (const [id] of variants) {
+      const sourceFile = path.join(root, 'goldens', 'pages', `${id}.html`);
+      const outputFile = path.join(staging, 'fixtures', `${id}.html`);
+      const html = fs.readFileSync(sourceFile, 'utf8');
+      fs.copyFileSync(sourceFile, outputFile);
+      fixtureFiles.push({ file: `fixtures/${id}.html`, sha256: sha256(sourceFile), unresolvedLocalReferences: localReferences(html) });
+    }
+    const hostCards = hosts.map((host) => {
+      const shots = ['desktop-light', 'desktop-dark'].map((variant) => {
+        const name = `${host.id}--${variant}.png`;
+        const sourceFile = path.join(root, 'docs', 'images', 'hosts', name);
+        fs.copyFileSync(sourceFile, path.join(staging, 'hosts', name));
+        return `<a href="hosts/${name}"><img src="hosts/${name}" alt="${escapeHtml(host.title)} in ${variant.replace('-', ' ')}"></a>`;
+      }).join('');
+      return `<article class="card"><h3>${escapeHtml(host.title)}</h3><p>Manifest state: ${escapeHtml(host.state)}</p><p class="stamp"><code>${escapeHtml(host.source)}</code></p><div class="shots">${shots}</div></article>`;
+    }).join('');
+    const fixtureCards = variants.map(([id, label]) => `<article class="card"><h3>${escapeHtml(label)}</h3><p>Exact synced HTML snapshot. Barkpark-local assets are inventoried in the build manifest.</p><a href="fixtures/${id}.html" download>Download HTML snapshot</a></article>`).join('\n');
+    const indexBody = `<h1>PortableDoc reference</h1><p class="lede">Browse the canonical format, exact golden HTML snapshots, and recorded synthetic host fixture captures from the existing manifest.</p><p class="stamp">Pack stamp <code>${stamp}</code><br>Synced from Barkpark <code>${escapeHtml(source.commit)}</code><br><a href="build-manifest.json">Build manifest and unresolved fixture references</a></p><h2 id="fixtures">Golden HTML snapshots</h2><section class="grid">${fixtureCards}</section><h2 id="hosts">Recorded host fixtures</h2><section class="grid">${hostCards}</section>`;
+    fs.writeFileSync(path.join(staging, 'index.html'), page('Docs', stamp, indexBody));
+    const spec = escapeHtml(fs.readFileSync(path.join(root, 'SPEC.md'), 'utf8'));
+    fs.writeFileSync(path.join(staging, 'spec.html'), page('Specification', stamp, `<h1>PortableDoc specification</h1><p class="stamp">Pack stamp <code>${stamp}</code></p><pre class="spec">${spec}</pre>`));
+    const buildManifest = {
+      schema: 1,
+      packStamp: stamp,
+      source: { repo: source.repo, path: source.path, commit: source.commit },
+      fixtures: fixtureFiles,
+      hostManifest: { file: 'docs/images/hosts/manifest.json', sha256: sha256(hostManifestFile) },
+      hosts: hosts.map(({ id, title, state, source: hostSource }) => ({ id, title, state, source: hostSource })),
+    };
+    fs.writeFileSync(path.join(staging, 'build-manifest.json'), `${JSON.stringify(buildManifest, null, 2)}\n`);
+    writeMarker(staging);
     installGeneratedOutput(staging, out);
   } finally {
     if (fs.existsSync(staging)) fs.rmSync(staging, { recursive: true, force: true });
