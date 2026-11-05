@@ -33,12 +33,12 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 5 changes, 40 milestones closed
-  - Delivered: [R5 prepare recorder repair through mounted table control](https://github.com/FRIKKern/barkpark/issues/25272)
-- **Yesterday** · 1 change, 15 milestones closed
+- **Today** · 1 milestone closed
+  - Delivered: [R5: package owns its seven build outputs, explicit outward sync to Barkpark (private)](https://github.com/FRIKKern/barkpark/issues/25315)
+- **Yesterday** · 5 changes, 66 milestones closed
+  - Delivered: [R5 compose complete editor facades and verify the copied folder](https://github.com/FRIKKern/barkpark/issues/25313)
+- **This week** · 1 change, 23 milestones closed
   - Prepare PortableDoc React alpha release ([#22](https://github.com/FRIKKern/portable-doc/pull/22))
-- **This week** · 8 milestones closed
-  - Delivered: [R4.5 follow-up: PortableDoc ratchet on the remaining block-doc writes (sessions, generic doc ops, mutate, PlanPapers)](https://github.com/FRIKKern/barkpark/issues/25057)
 - **Last week** · 3 changes, 10 milestones closed
 <!-- timeline:end -->
 
