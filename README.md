@@ -33,10 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Yesterday** · 1 milestone closed
+- **This week** · 6 changes, 90 milestones closed
   - Delivered: [R5: package owns its seven build outputs, explicit outward sync to Barkpark (private)](https://github.com/FRIKKern/barkpark/issues/25315)
-- **This week** · 6 changes, 89 milestones closed
-  - Delivered: [R5 compose complete editor facades and verify the copied folder](https://github.com/FRIKKern/barkpark/issues/25313)
 - **Last week** · 3 changes, 10 milestones closed
 <!-- timeline:end -->
 
