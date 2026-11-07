@@ -7,6 +7,22 @@ import { callTool } from './tools.js';
 
 const nest = (levels) => Array.from({ length: levels - 1 }).reduce((v) => [v], 0);
 
+// CPU time, not wall time: on a loaded machine wall time measures the queue. 3656 ms of wall was 656 of CPU.
+function underBudget(limitMs, work) {
+  const started = process.cpuUsage();
+  const result = work();
+  const { user, system } = process.cpuUsage(started);
+  const used = Math.round((user + system) / 1000);
+  assert.ok(used < limitMs, `${used} ms of CPU, budget ${limitMs} ms`);
+  return result;
+}
+
+test('the budget fails on work that burns CPU and ignores time spent waiting', () => {
+  const spin = (ms) => { const started = process.cpuUsage(); while (process.cpuUsage(started).user < ms * 1000); };
+  assert.throws(() => underBudget(50, () => spin(100)), /ms of CPU, budget 50 ms/);
+  underBudget(50, () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100));
+});
+
 test(`measure: ${MAX_NODES} JSON values and ${MAX_DEPTH} levels are in, one more is over`, () => {
   assert.equal(measure(Array(MAX_NODES - 1).fill(0)).over, null);
   assert.equal(measure(Array(MAX_NODES).fill(0)).over, 'nodes');
@@ -43,10 +59,8 @@ for (const [name, [doc, ops]] of Object.entries(WORST)) {
     const size = measure({ doc, ops });
     assert.equal(size.over, null);
     assert.ok(size.nodes > 140_000, `${size.nodes} values`);
-    const started = Date.now();
-    const result = applyOps(doc, ops);
+    const result = underBudget(3000, () => applyOps(doc, ops));
     assert.ok(result.ok, JSON.stringify(result.error));
-    assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms for ${ops.length} ops`);
   });
 }
 
@@ -79,9 +93,7 @@ for (const [name, block] of [
 ]) {
   test(`a JSON-looking string is read once per call, not once per table edit: ${name}`, () => {
     const doc = { blocks: [TABLE, block] };
-    const started = Date.now();
-    const result = applyOps(doc, columnFlips);
+    const result = underBudget(3000, () => applyOps(doc, columnFlips));
     assert.ok(result.ok, JSON.stringify(result.error));
-    assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms for ${columnFlips.length} ops`);
   });
 }
