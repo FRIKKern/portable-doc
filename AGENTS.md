@@ -30,3 +30,4 @@ the format    ─► SPEC.md; until R4.2 the source is Barkpark api/lib/barkpark
 - **`spec/`, `goldens/` and `conformance/` are written only by the sync** (`sync/barkpark` PRs, [0003](docs/decisions/0003-pull-sync.md)). `npm run check` fails on a hand edit.
 - **No secrets** in prompts, files or output. **Fixtures are synthetic.**
 - **Ask before pushing** or anything destructive.
+- **Trial until 2026-11-09 overrides these rules:** [0008](docs/decisions/0008-review-trial.md).
