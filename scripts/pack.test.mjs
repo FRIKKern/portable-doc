@@ -271,13 +271,27 @@ case "$1 $2" in
   "pr list") cat "${dir}/open" 2>/dev/null || true ;;
   "pr create") echo 7 > "${dir}/open"; echo https://example.test/pull/7 ;;
   "pr edit") echo "https://example.test/pull/$3" ;;
+  "pr merge")
+    left=$(cat "${dir}/merge-failures" 2>/dev/null || echo 0)
+    if [ "$left" -gt 0 ]; then
+      echo $((left - 1)) > "${dir}/merge-failures"
+      [ -f "${dir}/cleanup-only" ] && touch "${dir}/merged"
+      exit 1
+    fi
+    [ -f "${dir}/never-merged" ] || touch "${dir}/merged" ;;
+  "pr view") if [ -f "${dir}/merged" ]; then echo MERGED; else echo OPEN; fi ;;
 esac
 `);
   fs.chmodSync(gh, 0o755);
   return {
-    env: { ...process.env, PATH: `${path.dirname(gh)}${path.delimiter}${process.env.PATH}` },
+    env: { ...process.env, SYNC_PR_WAIT_MS: '1', PATH: `${path.dirname(gh)}${path.delimiter}${process.env.PATH}` },
     log: () => (fs.existsSync(`${dir}/log`) ? fs.readFileSync(`${dir}/log`, 'utf8') : ''),
     close: () => fs.rmSync(`${dir}/open`),
+    neverMerge: () => fs.writeFileSync(`${dir}/never-merged`, ''),
+    failMerge: (times, { cleanupOnly = false } = {}) => {
+      fs.writeFileSync(`${dir}/merge-failures`, `${times}\n`);
+      if (cleanupOnly) fs.writeFileSync(`${dir}/cleanup-only`, '');
+    },
   };
 }
 
@@ -297,7 +311,7 @@ function clone() {
   return { work, git, head };
 }
 
-function workflowRun(c, bp, gh) {
+function workflowRun(c, bp, gh, flags = []) {
   c.git('switch', '-q', '-f', 'main');
   c.git('clean', '-fdq');
   const title = path.join(tmp, `title-${n++}`);
@@ -305,10 +319,10 @@ function workflowRun(c, bp, gh) {
   const sync = run(c.work, 'sync-from-barkpark.mjs', bp, '--pr-body', body);
   assert.equal(sync.code, 0, sync.out);
   fs.writeFileSync(title, sync.stdout);
-  return { title: sync.stdout.trim(), ...node(path.join(c.work, 'scripts/sync-pr.mjs'), [title, body], gh.env) };
+  return { title: sync.stdout.trim(), ...node(path.join(c.work, 'scripts/sync-pr.mjs'), [...flags, title, body], gh.env) };
 }
 
-test('sync-pr opens one PR on main, pushes nothing while that PR already carries the pack, and updates it when the pack changes', () => {
+test('sync-pr opens one PR on main, and pushes and updates it on every run, so the merged commit is the one just checked', () => {
   const c = clone();
   const gh = ghStub();
   const first = workflowRun(c, barkpark({ tag: 'b' }), gh);
@@ -320,9 +334,9 @@ test('sync-pr opens one PR on main, pushes nothing while that PR already carries
   const same = workflowRun(c, barkpark({ tag: 'b' }), gh);
   assert.equal(same.code, 0, same.out);
   assert.notEqual(same.title, first.title);
-  assert.match(same.out, /sync PR #7 already carries this pack: nothing pushed/);
-  assert.equal(c.head(), pushed);
-  assert.doesNotMatch(gh.log(), /^pr edit/m);
+  assert.match(same.out, /updated https:\/\/example.test\/pull\/7/);
+  assert.notEqual(c.head(), pushed);
+  assert.equal(gh.log().match(/^pr edit 7 /gm).length, 1);
 
   const moved = workflowRun(c, barkpark({ tag: 'c' }), gh);
   assert.equal(moved.code, 0, moved.out);
@@ -330,6 +344,54 @@ test('sync-pr opens one PR on main, pushes nothing while that PR already carries
   assert.notEqual(c.head(), pushed);
   assert.match(gh.log(), /^pr edit 7 --title Sync from Barkpark /m);
   assert.equal(gh.log().match(/^pr create/gm).length, 1);
+  assert.doesNotMatch(gh.log(), /^pr merge/m);
+});
+
+test('sync-pr asks gh for open PRs from this repo only, so a fork branch named sync/barkpark is never taken for the sync PR', () => {
+  const c = clone();
+  const gh = ghStub();
+  assert.equal(workflowRun(c, barkpark({ tag: 'b' }), gh).code, 0);
+  assert.ok(gh.log().includes('pr list --head sync/barkpark --base main --state open --json number,isCrossRepository --jq .[] | select(.isCrossRepository | not) | .number\n'), gh.log());
+});
+
+test('sync-pr --merge merges by number at the head it pushed, then confirms the PR is merged', () => {
+  const c = clone();
+  const gh = ghStub();
+  const r = workflowRun(c, barkpark({ tag: 'b' }), gh, ['--merge']);
+  assert.equal(r.code, 0, r.out);
+  assert.match(gh.log(), new RegExp(`^pr merge 7 --squash --delete-branch --match-head-commit ${c.head()}$`, 'm'));
+  assert.match(gh.log(), /^pr view 7 --json state --jq \.state$/m);
+  assert.match(r.out, new RegExp(`merged #7 at ${c.head()}`));
+});
+
+test('sync-pr --merge tries again when GitHub refuses, and counts a merge whose cleanup failed as merged', () => {
+  for (const [times, opts, calls] of [[2, {}, 3], [1, { cleanupOnly: true }, 1]]) {
+    const c = clone();
+    const gh = ghStub();
+    gh.failMerge(times, opts);
+    const r = workflowRun(c, barkpark({ tag: 'b' }), gh, ['--merge']);
+    assert.equal(r.code, 0, r.out);
+    assert.equal(gh.log().match(/^pr merge/gm).length, calls);
+  }
+});
+
+test('sync-pr --merge fails the run when the PR never merges, even though gh ran', () => {
+  const c = clone();
+  const gh = ghStub();
+  gh.failMerge(99);
+  const r = workflowRun(c, barkpark({ tag: 'b' }), gh, ['--merge']);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /sync-pr: #7 is not merged after 5 tries/);
+  assert.equal(gh.log().match(/^pr merge/gm).length, 5);
+});
+
+test('sync-pr --merge fails the run when gh exits 0 on a PR that stayed open', () => {
+  const c = clone();
+  const gh = ghStub();
+  gh.neverMerge();
+  const r = workflowRun(c, barkpark({ tag: 'b' }), gh, ['--merge']);
+  assert.equal(r.code, 1, r.out);
+  assert.equal(gh.log().match(/^pr merge/gm).length, 5);
 });
 
 test('the tests run with no credentials, no gh token, git confined to the test dir, and GitHub push URLs sent to a blocked dir', () => {
