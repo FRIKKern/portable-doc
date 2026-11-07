@@ -126,6 +126,14 @@ test('a thrown or odd call leaves nothing behind for the next', () => {
   assert.deepEqual(validate(nest(MAX_DEPTH, wraps.section)), { ok: true });
 });
 
+for (const [value, name] of [[NaN, 'NaN'], [Infinity, 'Infinity'], [-Infinity, '-Infinity']]) {
+  test(`wrong_field_type names ${name}, which JSON.stringify would call null`, () => {
+    const error = { code: 'wrong_field_type', path: '/blocks/0/level', message: `no allowed shape takes ${name}` };
+    assert.deepEqual(validate({ blocks: [{ type: 'heading', level: value }] }), { ok: false, errors: [error] });
+    assert.equal(validate({ blocks: [{ type: 'heading', level: null }] }).errors[0].message, 'no allowed shape takes null');
+  });
+}
+
 const wellFormed = (r) =>
   r.ok === true ? Object.keys(r).length === 1
     : r.ok === false && r.errors.length > 0 && r.errors.every((e) => CODES.includes(e.code) && /^(\/.*)?$/.test(e.path) && typeof e.message === 'string' && e.message.length > 0);
