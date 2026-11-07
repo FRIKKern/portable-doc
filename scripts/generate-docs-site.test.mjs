@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { generateDocsSite } from './generate-docs-site.mjs';
+import { describeType, generateDocsSite } from './generate-docs-site.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'portable-doc-site-'));
@@ -62,6 +62,58 @@ test('the site is deterministic, linked and carries exact synced evidence', () =
     '/fonts/SourceSerif4Variable-Roman.woff2',
     '/papers/example-authoring-guide',
   ]);
+});
+
+test('every schema block type gets a page: its fields, its golden and every renderer\'s result', () => {
+  const out = path.join(tmp, 'blocks');
+  const result = generateDocsSite(out);
+  const definitions = JSON.parse(fs.readFileSync(path.join(root, 'spec', 'blocks.schema.json'))).definitions;
+  const types = Object.keys(definitions.blocks).sort();
+  assert.ok(types.length >= 80, `${types.length} types`);
+  assert.equal(result.blocks, types.length);
+  assert.deepEqual(fs.readdirSync(path.join(out, 'blocks')).sort(), types.map((type) => `${type}.html`).sort());
+  const index = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+  const reports = fs.readdirSync(path.join(root, 'conformance')).filter((file) => file.endsWith('.json')).map((file) => JSON.parse(fs.readFileSync(path.join(root, 'conformance', file))));
+  assert.ok(reports.length >= 6, `${reports.length} reports`);
+  const build = JSON.parse(fs.readFileSync(path.join(out, 'build-manifest.json')));
+  const known = new Set(build.blocks.flatMap((block) => block.unresolvedLocalReferences));
+  for (const type of types) {
+    const file = path.join(out, 'blocks', `${type}.html`);
+    const html = fs.readFileSync(file, 'utf8');
+    assert.ok(index.includes(`href="blocks/${type}.html"`), `index: no link to ${type}`);
+    for (const field of Object.keys(definitions.blocks[type].properties).filter((name) => name !== 'type')) assert.ok(html.includes(`<td><code>${field}</code></td>`), `${type}: no field ${field}`);
+    const goldenFile = path.join(root, 'goldens', 'blocks', `${type}.golden.json`);
+    if (fs.existsSync(goldenFile)) {
+      assert.ok(html.includes(JSON.parse(fs.readFileSync(goldenFile)).expectedHtml), `${type}: golden is not the exact bytes`);
+      for (const report of reports) {
+        const row = report.rows.find((candidate) => candidate.type === type);
+        assert.ok(row, `${report.renderer}: no row for ${type}`);
+        assert.ok(html.includes(`<td>${row.status}${row.via ? ` (${row.via})` : ''}</td>`) && html.includes(`<td>${report.renderer}`), `${type}: no result from ${report.renderer}`);
+      }
+    } else {
+      assert.equal(type, 'master-ref', 'only master-ref has no golden today');
+      assert.match(html, /The pack holds no golden/);
+    }
+    for (const target of localLinks(file)) {
+      if (target.startsWith('/')) assert.ok(known.has(target), `${type}: ${target} is not in the build manifest`);
+      else assert.ok(fs.existsSync(path.resolve(path.dirname(file), target.split('#')[0])), `${type}: missing ${target}`);
+    }
+  }
+  for (const name of ['paper-surface.css', 'code-tokens.css']) assert.deepEqual(fs.readFileSync(path.join(out, 'css', name)), fs.readFileSync(path.join(root, 'goldens', 'css', name)));
+});
+
+test('describeType says what a schema node takes', () => {
+  for (const [node, words] of [
+    [{ type: 'string' }, 'string'],
+    [{ type: ['string', 'number'] }, 'string or number'],
+    [{ type: 'integer', minimum: 1, maximum: 6 }, 'integer from 1 to 6'],
+    [{ anyOf: [{ type: 'integer', minimum: 1, maximum: 6 }, { enum: ['1', '2'] }] }, 'integer from 1 to 6 or "1" | "2"'],
+    [{ type: 'array', items: { $ref: '#' } }, 'array of block'],
+    [{ type: 'array', items: { $ref: '#/definitions/inline' } }, 'array of inline'],
+    [{ type: 'object', properties: { b: {}, a: {} } }, 'object with a, b'],
+    [{ const: 'x' }, '"x"'],
+    [{}, 'any'],
+  ]) assert.equal(describeType(node), words);
 });
 
 test('the generator rejects repository and filesystem roots as output', () => {
