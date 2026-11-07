@@ -36,7 +36,7 @@ const TYPES = {
 const pointer = (path, key) => `${path}/${String(key).replaceAll('~', '~0').replaceAll('/', '~1')}`;
 const unescape = (key) => key.replaceAll('~1', '/').replaceAll('~0', '~');
 const error = (code, path, message) => ({ code, path, message });
-const show = (v) => (isObject(v) ? 'an object' : Array.isArray(v) ? 'an array' : typeof v === 'bigint' ? `${v}n` : JSON.stringify(v));
+const show = (v) => (isObject(v) ? 'an object' : Array.isArray(v) ? 'an array' : typeof v === 'bigint' ? `${v}n` : typeof v === 'number' && !Number.isFinite(v) ? String(v) : JSON.stringify(v));
 
 const isPortableText = (block) =>
   block._type === 'block' && ['children', 'markDefs', 'listItem'].some((key) => Object.hasOwn(block, key));
