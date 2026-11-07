@@ -13,6 +13,8 @@ jobs:
   sync:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      merged: ${{ steps.pr.outputs.merged }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/checkout@v5
@@ -31,7 +33,8 @@ jobs:
       - name: Install workspace dependencies
         if: steps.fresh.outputs.same == 'false'
         run: npm ci
-      - name: Open or update the sync PR
+      - name: Open or update the sync PR, and merge it
+        id: pr
         if: steps.fresh.outputs.same == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -40,5 +43,17 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           node scripts/sync-from-barkpark.mjs .barkpark --pr-body "$RUNNER_TEMP/body.md" > "$RUNNER_TEMP/title.txt"
           npm run check
-          node scripts/sync-pr.mjs "$RUNNER_TEMP/title.txt" "$RUNNER_TEMP/body.md"
-          gh pr merge sync/barkpark --squash --delete-branch
+          node scripts/sync-pr.mjs --merge "$RUNNER_TEMP/title.txt" "$RUNNER_TEMP/body.md"
+          echo merged=true >> "$GITHUB_OUTPUT"
+  # A merge made with GITHUB_TOKEN fires no push event, so housekeeping has to be asked.
+  # Its own job, so npm ci and the check above never hold actions: write.
+  housekeeping:
+    needs: sync
+    if: needs.sync.outputs.merged == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run housekeeping.yml --ref main --repo "$GITHUB_REPOSITORY"
