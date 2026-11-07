@@ -41,3 +41,4 @@ jobs:
           node scripts/sync-from-barkpark.mjs .barkpark --pr-body "$RUNNER_TEMP/body.md" > "$RUNNER_TEMP/title.txt"
           npm run check
           node scripts/sync-pr.mjs "$RUNNER_TEMP/title.txt" "$RUNNER_TEMP/body.md"
+          gh pr merge sync/barkpark --squash --delete-branch
