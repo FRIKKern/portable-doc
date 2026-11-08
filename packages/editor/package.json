@@ -1,0 +1,104 @@
+{
+  "name": "@portable-doc/editor",
+  "version": "0.1.0-alpha.1",
+  "description": "Barkpark paper editor: the <bp-paper-canvas> and <bp-paper-editor> custom elements as one prebuilt IIFE bundle plus stylesheet. Framework-neutral; see EMBED-CONTRACT.md.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FRIKKern/barkpark.git",
+    "directory": "api/assets/paper-editor"
+  },
+  "homepage": "https://github.com/FRIKKern/barkpark/tree/main/api/assets/paper-editor#readme",
+  "bugs": {
+    "url": "https://github.com/FRIKKern/barkpark/issues"
+  },
+  "keywords": [
+    "barkpark",
+    "portabledoc",
+    "editor",
+    "tiptap",
+    "web-component",
+    "custom-element"
+  ],
+  "barkpark": {
+    "contractVersion": "1.22.0"
+  },
+  "main": "./dist/bp-paper-editor.bundle.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./dist/bp-paper-editor.bundle.js"
+    },
+    "./bundle": {
+      "types": "./index.d.ts",
+      "default": "./dist/bp-paper-editor.bundle.js"
+    },
+    "./bp-paper-editor.bundle.js": "./dist/bp-paper-editor.bundle.js",
+    "./style.css": "./dist/bp-paper-editor.css",
+    "./bp-paper-editor.css": "./dist/bp-paper-editor.css",
+    "./shell.css": "./dist/bp-paper-editor-shell.css",
+    "./bp-paper-editor-shell.css": "./dist/bp-paper-editor-shell.css",
+    "./mermaid": "./dist/bp-paper-mermaid.js",
+    "./bp-paper-mermaid.js": "./dist/bp-paper-mermaid.js",
+    "./bp-paper-surface.css": "./dist/bp-paper-surface.css",
+    "./bp-paper-code.js": "./dist/bp-paper-code.js",
+    "./contract": {
+      "types": "./contract.d.ts",
+      "default": "./dist/contract.js"
+    },
+    "./third-party-notices.json": "./third-party-notices.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "index.d.ts",
+    "contract.d.ts",
+    "EMBED-CONTRACT.md",
+    "host-profile/surface.json",
+    "THIRD-PARTY-NOTICES.txt",
+    "third-party-notices.json",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node scripts/build-local.mjs",
+    "build:dev": "node scripts/build-local.mjs --dev",
+    "sync:barkpark:check": "node scripts/sync-barkpark.mjs --check",
+    "sync:barkpark:write": "node scripts/sync-barkpark.mjs --write",
+    "try": "node src/testing-ground/server.mjs",
+    "hosts": "node hosts/run.mjs",
+    "hosts:test": "node --test hosts/*.test.mjs",
+    "host:restore": "node hosts/restore.mjs",
+    "smoke": "node src/__smoke.mjs",
+    "diff-note:keys": "node src/__diff_note_keys.mjs",
+    "picker:render": "node src/canvas/__picker_footer_render.mjs",
+    "test": "node scripts/test-chain.mjs",
+    "notices": "node scripts/third-party-notices.mjs",
+    "notices:check": "node scripts/third-party-notices.mjs --check",
+    "pack:check": "node scripts/pack-check.mjs",
+    "prepack": "npm run build && node scripts/third-party-notices.mjs --check && node scripts/pack-check.mjs --prepack"
+  },
+  "devDependencies": {
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-highlight": "3.31.4",
+    "@tiptap/extension-link": "3.31.4",
+    "@tiptap/extension-placeholder": "3.31.4",
+    "@tiptap/extension-subscript": "3.31.4",
+    "@tiptap/extension-superscript": "3.31.4",
+    "@tiptap/extension-task-item": "3.31.4",
+    "@tiptap/extension-task-list": "3.31.4",
+    "@tiptap/extension-text-align": "3.31.4",
+    "@tiptap/extension-typography": "3.31.4",
+    "@tiptap/extension-underline": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4",
+    "highlight.js": "11.12.0",
+    "lowlight": "3.3.0",
+    "esbuild": "0.28.2",
+    "jsdom": "^25.0.0"
+  }
+}

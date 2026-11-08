@@ -1,0 +1,4 @@
+node_modules/
+# Local build output (scripts/build-local.mjs) and npm pack output
+/dist/
+*.tgz
