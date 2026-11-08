@@ -33,6 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
+- **Today** · 1 milestone closed
+  - Dropped: [R5: extract Canvas block-kind catalogs](https://github.com/FRIKKern/barkpark/issues/25239)
 - **Yesterday** · 3 milestones closed
   - Delivered: [R7.1: one docs-site page per block type, generated from the schema, with its golden and every renderer's result](https://github.com/FRIKKern/barkpark/issues/25380)
 - **This week** · 6 changes, 90 milestones closed
