@@ -33,6 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
+- **Today** · 1 milestone closed
+  - Delivered: [R5.3: mirror the editor package history from barkpark into portable-doc packages/editor](https://github.com/FRIKKern/barkpark/issues/25446)
 - **Yesterday** · 1 milestone closed
   - Dropped: [R5: extract Canvas block-kind catalogs](https://github.com/FRIKKern/barkpark/issues/25239)
 - **Last week** · 6 changes, 93 milestones closed
