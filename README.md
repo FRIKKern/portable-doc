@@ -33,12 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Yesterday** · 1 milestone closed
-  - Delivered: [R3.2 Prepare the @portable-doc/editor release workflow](https://github.com/FRIKKern/barkpark/issues/25124)
-- **This week** · 1 milestone closed
-  - Delivered: [R5.3: mirror the editor package history from barkpark into portable-doc packages/editor](https://github.com/FRIKKern/barkpark/issues/25446)
-- **Last week** · 6 changes, 94 milestones closed
-- **This month** · 5 milestones closed
+- **Last week** · 2 milestones closed
+- **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
 <!-- timeline:end -->
 
