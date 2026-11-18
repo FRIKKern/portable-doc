@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { EDITOR_DIR } from './lib/editor.mjs';
 import { PACK_DIRS } from './lib/pack.mjs';
 
 const BASE = 'main';
@@ -40,7 +41,7 @@ if (top !== fs.realpathSync(root)) {
   process.exit(1);
 }
 run('git', 'switch', '-q', '-C', BRANCH);
-run('git', 'add', '-A', '--', ...PACK_DIRS, 'SOURCE.json');
+run('git', 'add', '-A', '--', ...PACK_DIRS, EDITOR_DIR, 'SOURCE.json');
 run('git', 'commit', '-q', '-m', title);
 // --head also matches a fork's branch of the same name, which anyone can open. That PR is not the sync PR.
 const open = run('gh', 'pr', 'list', '--head', BRANCH, '--base', BASE, '--state', 'open', '--json', 'number,isCrossRepository', '--jq', '.[] | select(.isCrossRepository | not) | .number');

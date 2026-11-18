@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 8 changes
-  - cli: render -o refuses any link to the input file ([#65](https://github.com/FRIKKern/portable-doc/pull/65))
+- **Today** · 9 changes
+  - Sync: packages/editor is copied from Barkpark by the sync job, and the check fails on a hand edit ([#66](https://github.com/FRIKKern/portable-doc/pull/66))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
