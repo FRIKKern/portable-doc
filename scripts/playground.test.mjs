@@ -9,6 +9,8 @@ import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
 import { parseJson, prettyLength, tidyJson } from './playground/parse.js';
 import { decodeShare, encodeShare, MAX_DOC_BYTES } from './playground/share.js';
+import { docFromMarkdown, outputsOf } from './playground/outputs.js';
+import { toMarkdown, toPlainText } from '@portable-doc/text';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -77,4 +79,21 @@ test('a doc from a link is pretty-printed only while the laid-out text stays und
   assert.ok(performance.now() - started < 500, 'the size check is cheap');
   assert.equal(tidyJson('{"blocks":[]}', MAX_DOC_BYTES), '{\n  "blocks": []\n}');
   assert.equal(tidyJson('{"blocks":', MAX_DOC_BYTES), '{"blocks":');
+});
+
+test('the bundle carries the HTML, Markdown and text views, and pasted Markdown becomes a valid doc', () => {
+  const text = bundlePlayground().toString('utf8');
+  for (const label of ['Render', 'HTML', 'Markdown', 'Text', 'Paste Markdown', 'Make a doc']) assert.ok(text.includes(`"${label}"`), `bundle has no "${label}"`);
+  const [starter] = playgroundExamples();
+  const out = outputsOf(starter.doc);
+  assert.deepEqual([out.markdown, out.text], [toMarkdown(starter.doc), toPlainText(starter.doc)]);
+  assert.ok(out.markdown.includes('**') && !out.text.includes('**'), 'Markdown has marks, text has none');
+  const made = docFromMarkdown('## Plan\n\nShip **it** with [docs](https://example.com).\n\n- [x] parse\n- [ ] render\n\n| a | b |\n| - | - |\n| 1 | 2 |\n');
+  const parsed = parseJson(made.text);
+  assert.ok(parsed.ok);
+  assert.deepEqual(validate(parsed.value), { ok: true });
+  assert.deepEqual(parsed.value.blocks.map((b) => b.type), ['heading', 'paragraph', 'list', 'table']);
+  assert.equal(made.blocks, 4);
+  assert.equal(made.text, JSON.stringify(parsed.value, null, 2));
+  for (const odd of ['', '<script>alert(1)</script>', '>'.repeat(5000)]) assert.deepEqual(validate(parseJson(docFromMarkdown(odd).text).value), { ok: true }, odd.slice(0, 20));
 });
