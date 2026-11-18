@@ -3,11 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import { validate } from '@portable-doc/validate';
 import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
 import { parseJson } from './playground/parse.js';
-import { decodeShare, encodeShare } from './playground/share.js';
+import { decodeShare, encodeShare, MAX_DOC_BYTES } from './playground/share.js';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -45,8 +46,23 @@ test('share links round-trip a doc, compressed or not, and bad JSON says its lin
   assert.match(plain, /^#doc=json\.[A-Za-z0-9_-]+$/);
   assert.equal(await decodeShare(plain), text);
   assert.equal(await decodeShare('#blocks'), null);
-  await assert.rejects(decodeShare('#doc=zip.AAAA'), /unknown link format/);
+  await assert.rejects(decodeShare('#doc=zip.AAAA'), /unknown format "zip"/);
   assert.deepEqual(parseJson('{\n  "blocks": [\n    { "type": "x", }\n  ]\n}').error, { line: 3, column: 20, message: 'unexpected "}"' });
   assert.deepEqual(parseJson('[1, 2').error, { line: 1, column: 6, message: 'the text ends too early' });
   assert.equal(parseJson('['.repeat(50_000) + ']'.repeat(50_000)).ok, true);
+});
+
+test('a share link refuses a doc too big to open, packed or plain, and a damaged link says so', async () => {
+  const huge = `{"blocks":[{"type":"paragraph","content":"${'a'.repeat(20_000_000)}"}]}`;
+  const bomb = `#doc=deflate.${zlib.deflateRawSync(Buffer.from(huge), { level: 9 }).toString('base64url')}`;
+  assert.ok(bomb.length < 40_000, `${bomb.length} chars`);
+  await assert.rejects(decodeShare(bomb), /^Error: This link holds a doc too big to open \(over 2 MB\)$/);
+  const over = 'a'.repeat(MAX_DOC_BYTES + 1);
+  await assert.rejects(decodeShare(`#doc=json.${Buffer.from(over).toString('base64url')}`), /too big to open/);
+  await assert.rejects(decodeShare(`#doc=deflate.${zlib.deflateRawSync(Buffer.from(over)).toString('base64url')}`), /too big to open/);
+  await assert.rejects(encodeShare(over), /too big to share/);
+  const fits = 'a'.repeat(MAX_DOC_BYTES);
+  assert.equal(await decodeShare(await encodeShare(fits)), fits);
+  await assert.rejects(decodeShare(`#doc=deflate.${Buffer.from('not deflate at all, just text').toString('base64url')}`), /^Error: This link is damaged: its compressed doc does not unpack$/);
+  await assert.rejects(decodeShare(`#doc=json.${Buffer.from([0xff, 0xfe]).toString('base64url')}`), /not valid UTF-8/);
 });

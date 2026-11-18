@@ -17,6 +17,11 @@ const renderOptions = { blocks: { ...fieldBlocks, ...embedBlocks() } };
 const DEBOUNCE_MS = 200;
 const LONG_LINK = 8000;
 const pretty = (value) => JSON.stringify(value, null, 2);
+// A doc from a link is laid out like the examples; text that is not JSON stays as sent.
+const tidy = (text) => {
+  const parsed = parseJson(text);
+  return parsed.ok ? pretty(parsed.value) : text;
+};
 
 // Everything the page shows for one text. `previous` supplies the last good render.
 function viewOf(text, previous) {
@@ -86,11 +91,12 @@ function App({ examples, initial }) {
   useEffect(() => {
     const onHash = () => decodeShare(location.hash).then((shared) => {
       if (shared === null) return;
-      setText(shared);
-      setSettled(shared);
+      const next = tidy(shared);
+      setText(next);
+      setSettled(next);
       setExampleId('');
       setStatus('Opened the doc from the link.');
-    }, (error) => setStatus(`Could not open the link: ${error.message}.`));
+    }, (error) => setStatus(`${error.message}. The editor still holds your doc.`));
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -116,7 +122,12 @@ function App({ examples, initial }) {
   };
   const share = async () => {
     const parsed = parseJson(text);
-    const hash = await encodeShare(parsed.ok ? JSON.stringify(parsed.value) : text);
+    let hash;
+    try {
+      hash = await encodeShare(parsed.ok ? JSON.stringify(parsed.value) : text);
+    } catch (error) {
+      return setStatus(`${error.message}.`);
+    }
     try {
       history.replaceState(null, '', hash);
     } catch {
@@ -145,9 +156,12 @@ function App({ examples, initial }) {
     event.preventDefault();
     shiftLines(event.currentTarget, event.shiftKey);
   };
+  // Links in the render open in a new tab, a `#doc=` link too, so a doc cannot swap
+  // out the editor. Only plain in-page anchors stay here.
   const openLinksElsewhere = (event) => {
     const anchor = event.target.closest?.('a[href]');
-    if (!anchor || anchor.getAttribute('href').startsWith('#')) return;
+    const href = anchor?.getAttribute('href');
+    if (!anchor || (href.startsWith('#') && !href.startsWith('#doc='))) return;
     event.preventDefault();
     window.open(anchor.href, '_blank', 'noopener');
   };
@@ -225,9 +239,10 @@ async function start() {
   let initial = { text: pretty(first.doc), exampleId: first.id };
   try {
     const shared = await decodeShare(location.hash);
-    if (shared !== null) initial = { text: shared, exampleId: '', status: 'Opened the doc from the link.' };
+    if (shared !== null) initial = { text: tidy(shared), exampleId: '', status: 'Opened the doc from the link.' };
   } catch (error) {
-    initial.status = `Could not open the link: ${error.message}. Showing ${first.label}.`;
+    initial.status = `${error.message}. Showing ${first.label} instead.`;
+    dropHash(); // a reload then opens the page, not the same broken link
   }
   createRoot(document.getElementById('playground')).render(<App examples={examples} initial={initial} />);
 }
