@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { MIN_BLOCK_GOLDENS } from '../../scripts/lib/pack.mjs';
-import { CODES, MAX_DEPTH, compile, validate } from './index.js';
+import { CODES, MAX_DEPTH, MAX_VALUE_DEPTH, compile, validate, walkDepth } from './index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -394,4 +394,77 @@ test('compile refuses a schema it cannot follow', () => {
   assert.throws(() => compile(block({ properties: { text: true } })), /schema at #\/definitions\/blocks\/note\/properties\/text is not an object/);
   assert.throws(() => compile({ ...tiny, allOf: [{ $ref: '#/definitions/blocks/missing' }] }), /\$ref #\/definitions\/blocks\/missing does not resolve/);
   assert.doesNotThrow(() => compile(schema));
+});
+
+// A chart whose series item carries an open field nested so that the whole doc
+// is `total` JSON levels deep: the doc 1, blocks 2, chart 3, series 4, item 5.
+const chartAt = (total) => {
+  let x = [];
+  for (let i = 6; i < total; i++) x = [x];
+  return { blocks: [{ type: 'chart', kind: 'line', series: [{ label: 's', points: [1], x }] }] };
+};
+const firstPast = '/blocks/0/series/0/x' + '/0'.repeat(MAX_VALUE_DEPTH + 1 - 6);
+
+test(`a value ${MAX_VALUE_DEPTH} JSON levels deep passes, and one level more is too_deep at the first level past it`, () => {
+  assert.equal(MAX_VALUE_DEPTH, 1000);
+  assert.deepEqual(validate(chartAt(MAX_VALUE_DEPTH)), { ok: true });
+  assert.deepEqual(validate(chartAt(MAX_VALUE_DEPTH + 1)), {
+    ok: false,
+    errors: [{ code: 'too_deep', path: firstPast, message: `values nest deeper than ${MAX_VALUE_DEPTH} levels` }],
+  });
+});
+
+test('a value 8,000 levels deep is too_deep, without a throw, and the doc it names can still be written as JSON', () => {
+  const result = validate(chartAt(8000));
+  assert.deepEqual(result.errors.map((e) => `${e.code} ${e.path}`), [`too_deep ${firstPast}`]);
+  assert.doesNotThrow(() => JSON.stringify(result));
+  const em = (n) => {
+    let node = { type: 'text', value: 'x' };
+    for (let i = 0; i < n; i++) node = { type: 'em', children: [node] };
+    return { blocks: [{ type: 'paragraph', content: [node] }] };
+  };
+  assert.deepEqual(validate(em(8000)).errors.map((e) => e.code), ['too_deep']);
+  const bare = (n) => [{ type: 'chart', series: [{ x: JSON.parse('['.repeat(n) + ']'.repeat(n)) }] }];
+  assert.deepEqual(validate(bare(MAX_VALUE_DEPTH - 4)), { ok: true });
+  assert.deepEqual(validate(bare(MAX_VALUE_DEPTH - 3)).errors.map((e) => e.code), ['too_deep']);
+  const loop = { label: 's' };
+  loop.self = loop;
+  assert.deepEqual(validate({ blocks: [{ type: 'chart', series: [loop] }] }).errors.map((e) => e.code), ['too_deep']);
+});
+
+// The deepest container sits at doc level n: an array holding a number or a
+// string, or an object. In the chart: the doc 1, blocks 2, chart 3, series 4, item 5, x 6.
+const deepestAt = (n, holds) => {
+  let x = holds === 'object' ? { k: 'v' } : [holds === 'number' ? 1 : 's'];
+  for (let level = n; level > 6; level--) x = [x];
+  return { blocks: [{ type: 'chart', kind: 'line', series: [{ label: 's', points: [1], x }] }] };
+};
+
+test(`a doc whose deepest container sits at level ${MAX_VALUE_DEPTH} is ok whether it holds a number or a string or is an object; one level more is too_deep`, () => {
+  for (const holds of ['number', 'string', 'object']) {
+    assert.equal(walkDepth(deepestAt(MAX_VALUE_DEPTH, holds)), MAX_VALUE_DEPTH, holds);
+    assert.deepEqual(validate(deepestAt(MAX_VALUE_DEPTH, holds)), { ok: true }, holds);
+    const past = validate(deepestAt(MAX_VALUE_DEPTH + 1, holds)).errors;
+    assert.deepEqual(past.map((e) => `${e.code} ${e.path}`), [`too_deep /blocks/0/series/0/x${'/0'.repeat(MAX_VALUE_DEPTH + 1 - 6)}`], holds);
+  }
+});
+
+test('walkDepth counts arrays and objects only, from level 1, does not enter past the limit, and builds paths only for onTooDeep', () => {
+  assert.deepEqual([1, 's', null, [], {}, [1, 's'], { a: [1, 's', {}] }].map((v) => walkDepth(v)), [0, 0, 0, 1, 1, 1, 3]);
+  assert.equal(walkDepth([[[]]], { limit: 3 }), 3);
+  assert.equal(walkDepth([[[[]]]], { limit: 2 }), 3, 'capped at limit + 1');
+  const paths = [];
+  assert.equal(walkDepth({ 'a/b': [[1]], '~': [[]], c: [] }, { limit: 2, onTooDeep: (p) => paths.push(p) }), 3);
+  assert.deepEqual(paths, ['/a~1b/0', '/~0/0'], 'in document order, escaped');
+  const inner = [[[]]];
+  assert.equal(walkDepth({ x: inner, y: [] }, { skip: new Set([inner]) }), 2);
+  const expand = (v) => (typeof v === 'string' ? [JSON.parse(v)] : []);
+  assert.equal(walkDepth({ s: '[[1]]' }, { expand }), 4, 'the decoded value starts one level below the string');
+  assert.equal(walkDepth({ s: '[[1]]' }), 1);
+  const loop = {};
+  loop.self = loop;
+  const cycle = [];
+  assert.equal(walkDepth(loop, { onTooDeep: (p) => cycle.push(p) }), MAX_VALUE_DEPTH + 1);
+  assert.deepEqual(cycle, ['/self'.repeat(MAX_VALUE_DEPTH)]);
+  assert.equal(walkDepth(JSON.parse('['.repeat(100_000) + ']'.repeat(100_000))), MAX_VALUE_DEPTH + 1);
 });

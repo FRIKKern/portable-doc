@@ -95,8 +95,9 @@ Where it differs from Barkpark, on purpose:
 
 - Only URLs the renderer allows become links; any other link or image keeps
   its text. A portabledoc fence must also validate, link only to allowed URLs
-  and reuse no `id` from an earlier fence, and may nest no deeper than 100
-  levels, or it stays a code block.
+  and reuse no `id` from an earlier fence, and may nest no deeper than
+  `MAX_VALUE_DEPTH` from `@portable-doc/validate` (1000 JSON levels, counted
+  in the doc), or it stays a code block.
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
