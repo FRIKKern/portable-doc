@@ -22,8 +22,11 @@ export function measure(value, { strings = false } = {}) {
   while (stack.length) {
     const [v, d] = stack.pop();
     if (++nodes > MAX_NODES) return { nodes, depth, over: 'nodes' };
-    depth = Math.max(depth, d);
-    if (v !== null && typeof v === 'object') for (const child of Object.values(v)) stack.push([child, d + 1]);
+    // Depth counts arrays and objects only, as validate does: a scalar adds no level.
+    if (v !== null && typeof v === 'object') {
+      depth = Math.max(depth, d);
+      for (const child of Object.values(v)) stack.push([child, d + 1]);
+    }
     else if (strings && typeof v === 'string' && JSON_TEXT.test(v)) for (const inner of decoded(v)) stack.push([inner, d + 1]);
   }
   return { nodes, depth, over: depth > MAX_DEPTH ? 'depth' : null };

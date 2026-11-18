@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
-import { MAX_VALUE_DEPTH } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
 import { applyOps } from './ops/apply.js';
 import { project } from './ops/table.js';
 import { callTool } from './tools.js';
 
-const nest = (levels) => Array.from({ length: levels - 1 }).reduce((v) => [v], 0);
+const nest = (levels) => Array.from({ length: levels }).reduce((v) => [v], 0);
 
 // CPU time, not wall time: on a loaded machine wall time measures the queue. 3656 ms of wall was 656 of CPU.
 function underBudget(limitMs, work) {
@@ -27,7 +27,7 @@ test('the budget fails on work that burns CPU and ignores time spent waiting', (
 test(`measure: ${MAX_NODES} JSON values and ${MAX_DEPTH} levels are in, one more is over`, () => {
   assert.equal(measure(Array(MAX_NODES - 1).fill(0)).over, null);
   assert.equal(measure(Array(MAX_NODES).fill(0)).over, 'nodes');
-  assert.deepEqual(measure(nest(MAX_DEPTH)), { nodes: MAX_DEPTH, depth: MAX_DEPTH, over: null });
+  assert.deepEqual(measure(nest(MAX_DEPTH)), { nodes: MAX_DEPTH + 1, depth: MAX_DEPTH, over: null });
   assert.equal(measure(nest(MAX_DEPTH + 1)).over, 'depth');
 });
 
@@ -66,14 +66,21 @@ for (const [name, [doc, ops]] of Object.entries(WORST)) {
 }
 
 test('a doc nested exactly MAX_VALUE_DEPTH levels fits the argument limit of render and apply_ops; one level more does not', async () => {
-  const deep = (n) => JSON.parse(`${'['.repeat(n - 5)}${']'.repeat(n - 5)}`);
-  const doc = (n) => ({ blocks: [{ type: 'chart', series: [{ x: deep(n) }] }] });
-  assert.equal(measure(doc(MAX_VALUE_DEPTH)).depth, MAX_VALUE_DEPTH);
-  const text = await callTool({}, 'render', { doc: doc(MAX_VALUE_DEPTH), format: 'text' });
-  assert.equal(text.isError, undefined);
-  const ops = await callTool({}, 'apply_ops', { doc: doc(MAX_VALUE_DEPTH), ops: [] });
-  assert.equal(ops.isError, undefined);
-  await assert.rejects(callTool({}, 'render', { doc: doc(MAX_VALUE_DEPTH + 1), format: 'text' }), /nest deeper/);
+  // The deepest container sits at level n of the doc; it holds a scalar, or a {k: "v"}, or nothing.
+  const leaves = { empty: [], scalar: [1], object: [{ k: 'v' }] };
+  const deep = (n, leaf) => Array.from({ length: n - 6 }).reduce((v) => [v], leaf);
+  const doc = (n, leaf) => ({ blocks: [{ type: 'chart', series: [{ x: deep(n, leaf) }] }] });
+  for (const [name, leaf] of Object.entries(leaves)) {
+    const at = name === 'object' ? MAX_VALUE_DEPTH - 1 : MAX_VALUE_DEPTH;
+    assert.equal(validate(doc(at, leaf)).ok, true, name);
+    assert.equal(measure(doc(at, leaf)).depth, MAX_VALUE_DEPTH, name);
+    const text = await callTool({}, 'render', { doc: doc(at, leaf), format: 'text' });
+    assert.equal(text.isError, undefined, name);
+    const ops = await callTool({}, 'apply_ops', { doc: doc(at, leaf), ops: [] });
+    assert.equal(ops.isError, undefined, name);
+    assert.equal(validate(doc(at + 1, leaf)).ok, false, name);
+    await assert.rejects(callTool({}, 'render', { doc: doc(at + 1, leaf), format: 'text' }), /nest deeper/, name);
+  }
 });
 
 test('a table edit counts the JSON inside strings, which the normalizer decodes, against the limits; other ops do not', async () => {
