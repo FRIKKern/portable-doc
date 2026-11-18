@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 2 changes
-  - portable-doc preview: a live local preview that reloads on save ([#70](https://github.com/FRIKKern/portable-doc/pull/70))
+- **Today** · 3 changes
+  - validate lists at most MAX_ERRORS errors and counts the rest in more ([#75](https://github.com/FRIKKern/portable-doc/pull/75))
 - **Yesterday** · 14 changes
   - Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
