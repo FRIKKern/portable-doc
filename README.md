@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 2 changes
-  - @portable-doc/text: Markdown and plain-text output for every block type ([#58](https://github.com/FRIKKern/portable-doc/pull/58))
+- **Today** · 3 changes
+  - Playground: keep a shared doc as sent when pretty-printing would pass the cap ([#59](https://github.com/FRIKKern/portable-doc/pull/59))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
