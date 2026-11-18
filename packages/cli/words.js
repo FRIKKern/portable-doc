@@ -30,8 +30,8 @@ const isMap = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const clip = (s) => (s.length > 60 ? `${s.slice(0, 60)}…` : s);
 
 /** The innermost typed block on a JSON pointer, in words (`the heading block
- * at /blocks/2`), or '' when there is none. */
-export function blockAt(path, doc) {
+ * at /blocks/2`), or '' when there is none. `show` makes doc text printable. */
+export function blockAt(path, doc, show = shown) {
   let node = doc;
   let at = '';
   let found = null;
@@ -45,16 +45,17 @@ export function blockAt(path, doc) {
     if (isMap(node) && typeof node.type === 'string' && node.type !== '') found = { type: node.type, at, inline };
     parent = key;
   }
-  return found ? `the ${shown(clip(found.type))} ${found.inline ? 'node' : 'block'} at ${shown(found.at)}` : '';
+  return found ? `the ${show(clip(found.type))} ${found.inline ? 'node' : 'block'} at ${show(found.at)}` : '';
 }
 
-/** The full explanation of one error, as lines. */
-export function explainError(error, doc) {
+/** The full explanation of one error, as lines. `show` makes doc text
+ * printable: `shown` for a terminal, `String` for JSON, which escapes it itself. */
+export function explainError(error, doc, show = shown) {
   const why = refusedWhen(error.code);
-  const block = blockAt(error.path, doc);
+  const block = blockAt(error.path, doc, show);
   return [
-    `${error.code} at ${shown(error.path) || '(root)'}${block ? `, in ${block}` : ''}`,
-    error.message ? shown(`${error.message.charAt(0).toUpperCase()}${error.message.slice(1)}.`) : '',
+    `${error.code} at ${show(error.path) || '(root)'}${block ? `, in ${block}` : ''}`,
+    error.message ? show(`${error.message.charAt(0).toUpperCase()}${error.message.slice(1)}.`) : '',
     why ? `Refused when ${why}.` : '',
   ].filter(Boolean);
 }
