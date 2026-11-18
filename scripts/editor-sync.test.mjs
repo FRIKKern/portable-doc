@@ -217,7 +217,6 @@ function asMain(root) {
 test('an editor Markdown file whose link leaves the folder does not fail check-docs: it is Barkpark\'s text', () => {
   const root = path.join(tmp, `docs-${n++}`);
   write(path.join(root, 'scripts/check-docs.mjs'), fs.readFileSync(path.join(scripts, 'check-docs.mjs'), 'utf8'));
-  write(path.join(root, 'scripts/lib/timeline.mjs'), fs.readFileSync(path.join(scripts, 'lib/timeline.mjs'), 'utf8'));
   write(path.join(root, 'README.md'), '# synthetic\n');
   write(path.join(root, EDITOR_DIR, 'README.md'), 'See [the app](../../../api/app.md).\n');
   execFileSync('git', ['init', '-q', root]);

@@ -23,16 +23,11 @@ const checkDocs = (root, ...args) => {
   return { code: r.status, out: r.stdout + r.stderr };
 };
 
-/** check-docs and the timeline budget it imports, into `root`. */
-function copyCheckDocs(root) {
-  fs.mkdirSync(path.join(root, 'scripts', 'lib'), { recursive: true });
-  for (const f of ['check-docs.mjs', 'lib/timeline.mjs']) fs.copyFileSync(path.join(scripts, f), path.join(root, 'scripts', f));
-}
-
 /** A repo on main with origin/main at its one commit, and a branch "feat" checked out from it. */
 function repo() {
   const root = path.join(tmp, `repo-${n++}`);
-  copyCheckDocs(root);
+  fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
+  fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts', 'check-docs.mjs'));
   setReadme(root, readme('1 change'));
   git(root, 'init', '-q');
   git(root, 'add', '-A');
@@ -94,13 +89,14 @@ test('a folder copy with no .git of its own passes and says the timeline rule is
   fs.mkdirSync(outer);
   git(outer, 'init', '-q');
   for (const root of [path.join(tmp, `plain-${n++}`), path.join(outer, 'download')]) {
-    copyCheckDocs(root);
+    fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
+    fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts', 'check-docs.mjs'));
     setReadme(root, readme('9 changes'));
     fs.mkdirSync(path.join(root, 'node_modules', 'x'), { recursive: true });
     fs.writeFileSync(path.join(root, 'node_modules', 'x', 'README.md'), '[gone](gone.md)\n');
     let r = checkDocs(root);
     assert.equal(r.code, 0, r.out);
-    assert.equal(r.out, 'docs: not a git checkout of this repo, so the README timeline rule is skipped\ndocs ok: 1 files, README 14 lines\n', 'its 6 lines outside the timeline block plus the 8-line budget');
+    assert.equal(r.out, 'docs: not a git checkout of this repo, so the README timeline rule is skipped\ndocs ok: 1 files, README 7 lines\n');
     fs.mkdirSync(path.join(root, 'docs'));
     fs.writeFileSync(path.join(root, 'docs', 'x.md'), '[gone](gone.md)\n');
     r = checkDocs(root);

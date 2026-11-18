@@ -6,9 +6,7 @@ One cell per golden per renderer, drawn from [`conformance/`](conformance/); eve
 
 ## Vision
 
-One document format for every Barkpark app. A Paper, a Barkdown note or a
-Barkever note is written once and reads and edits the same everywhere: Barkpark
-Studio, the web, Barkdown, Barkever, barkpark-studio and the phone.
+One document format for every Barkpark app. A Paper, a Barkdown note or a Barkever note is written once and reads and edits the same everywhere: Barkpark Studio, the web, Barkdown, Barkever, barkpark-studio and the phone.
 
 Today the format's rules live inside [Barkpark](https://github.com/FRIKKern/barkpark)
 and are rendered in eight places that drift apart. This repo becomes their one

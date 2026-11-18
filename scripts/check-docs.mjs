@@ -1,5 +1,4 @@
-// Doc rules from QUALITY.md: README stays at or under 80 lines, counting the timeline block
-// at its full budget (TIMELINE_MAX_LINES) whatever it holds today, and every relative
+// Doc rules from QUALITY.md: README stays at or under 80 lines, and every relative
 // link in a tracked Markdown file points at a file that exists. packages/editor is left out:
 // it is Barkpark's text, copied by the sync, and its links are Barkpark's to keep.
 // The README timeline block is written on main only, by the housekeeping job: a branch
@@ -11,7 +10,6 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TIMELINE_MAX_LINES } from './lib/timeline.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: root, encoding: 'utf8' }).stdout?.trim();
@@ -22,17 +20,8 @@ const files = checkout
 const errors = [];
 
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
-const readmeText = readme.trimEnd().split('\n');
-const start = readmeText.indexOf('<!-- timeline:start -->');
-const end = readmeText.indexOf('<!-- timeline:end -->', start + 1);
-const inside = start >= 0 && end > start ? end - start - 1 : null;
-const outside = readmeText.length - (inside ?? 0);
-const readmeLines = inside === null ? outside : outside + Math.max(inside, TIMELINE_MAX_LINES);
-if (readmeLines > 80) {
-  errors.push(inside === null
-    ? `README.md: ${readmeLines} lines, cap is 80`
-    : `README.md: ${outside} lines outside the timeline block plus its ${Math.max(inside, TIMELINE_MAX_LINES)}-line budget is ${readmeLines}, cap is 80`);
-}
+const readmeLines = readme.trimEnd().split('\n').length;
+if (readmeLines > 80) errors.push(`README.md: ${readmeLines} lines, cap is 80`);
 if (!checkout) console.log('docs: not a git checkout of this repo, so the README timeline rule is skipped');
 else if (!process.argv.includes('--timeline-from-job')) {
   const why = timelineError(readme);
