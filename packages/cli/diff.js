@@ -3,8 +3,8 @@
 // or as JSON. The comparison itself is in diff-core.js.
 
 import fs from 'node:fs';
+import { MAX_VALUE_DEPTH, walkDepth } from '@portable-doc/validate';
 import { asDoc, diffDocs } from './diff-core.js';
-import { MAX_NESTING, nestsDeeper } from './diff-shared.js';
 import { parseJson } from './json.js';
 import { shown } from './words.js';
 
@@ -59,7 +59,8 @@ async function load(file, io, git) {
   }
   const parsed = parseJson(text.replace(/^﻿/, ''));
   if (!parsed.ok) return { error: `bad JSON${parsed.line ? ` at line ${parsed.line}, column ${parsed.column}` : ''}: ${shown(parsed.message)}` };
-  if (nestsDeeper(parsed.value)) return { error: `nested deeper than ${MAX_NESTING} levels` };
+  // Counted as validate counts it, so a doc diff refuses is one validate refuses too.
+  if (walkDepth(parsed.value) > MAX_VALUE_DEPTH) return { error: `nested deeper than ${MAX_VALUE_DEPTH} levels` };
   const doc = asDoc(parsed.value);
   return doc ? { doc } : { error: 'not a doc: give a blocks array or { "blocks": [...] }' };
 }

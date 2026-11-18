@@ -6,6 +6,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { main } from './index.js';
+import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
 
 const bin = path.join(path.dirname(fileURLToPath(import.meta.url)), 'bin', 'portable-doc.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'portable-doc diff-'));
@@ -160,4 +161,27 @@ test('a doc nested past the limit is refused with a clear message, and a string 
   assert.match(r.stderr, /: nested deeper than 1000 levels\n$/);
   const quoted = await call(['diff', write([{ id: 'h', type: 'heading', level: '2', text: 'x' }]), write([{ id: 'h', type: 'heading', level: 2, text: 'x' }])]);
   assert.match(quoted.stdout, /^~ heading h: level: "2" → 2$/m);
+});
+
+test('diff and validate count depth the same way: a doc whose deepest container, holding a number, sits at level MAX_VALUE_DEPTH is diffed; one level more is refused', async () => {
+  // In { blocks: [paragraph] }: the doc 1, blocks 2, paragraph 3, x 4, down to the deepest array at level n.
+  const at = (n) => {
+    let x = [1];
+    for (let level = n; level > 4; level--) x = [x];
+    return { blocks: [{ id: 'p', type: 'paragraph', text: 'Deep.', x }] };
+  };
+  const old = write(before);
+  const fits = write(at(MAX_VALUE_DEPTH));
+  const past = write(at(MAX_VALUE_DEPTH + 1));
+  assert.equal(validate(JSON.parse(fs.readFileSync(fits, 'utf8'))).ok, true);
+  assert.equal(validate(JSON.parse(fs.readFileSync(past, 'utf8'))).ok, false);
+  const ok = await call(['diff', old, fits]);
+  assert.equal(ok.status, 1, ok.stderr);
+  assert.match(ok.stdout, /^\+ paragraph p at \[0\]$/m);
+  const refused = await call(['diff', old, past]);
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, new RegExp(`: nested deeper than ${MAX_VALUE_DEPTH} levels\n$`));
+  const git = await call(['diff', '--git', 'notes.pd.json', old, 'a'.repeat(40), '100644', past, 'b'.repeat(40), '100644']);
+  assert.equal(git.status, 0, git.stderr);
+  assert.match(git.stdout + git.stderr, new RegExp(`nested deeper than ${MAX_VALUE_DEPTH} levels`));
 });

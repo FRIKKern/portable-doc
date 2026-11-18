@@ -103,7 +103,8 @@ A moved block that also changed is `moved` and carries its fields. The order
 is stable: doc keys, then blocks by position.
 
 Exit: 0 the docs are the same, 1 they differ, 2 a usage error, a file that
-cannot be read, bad JSON, JSON nested deeper than 1,000 levels, or JSON that
+cannot be read, bad JSON, JSON nested deeper than `MAX_VALUE_DEPTH` (1,000)
+levels of arrays and objects, counted as `validate` counts them, or JSON that
 is not a doc. Docs that differ only in
 key order or layout are the same.
 
