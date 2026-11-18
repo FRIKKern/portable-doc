@@ -15,7 +15,8 @@ export interface ValidationError {
   message: string;
 }
 
-export type Result = { ok: true } | { ok: false; errors: ValidationError[] };
+/** `errors` holds at most MAX_ERRORS, the first found; `more`, present only when some were left out, counts the rest. */
+export type Result = { ok: true } | { ok: false; errors: ValidationError[]; more?: number };
 
 export const CODES: readonly Code[];
 
@@ -23,9 +24,12 @@ export const MAX_DEPTH: number;
 
 /**
  * The deepest any value may nest, in JSON levels counted from the doc root (the
- * doc itself is level 1): 1000. Past it, the first array or object is too_deep.
+ * doc itself is level 1): 1000. Each branch that goes past it is too_deep at its first array or object past the limit.
  */
 export const MAX_VALUE_DEPTH: number;
+
+/** The most errors a result lists: 1000. */
+export const MAX_ERRORS: number;
 
 export interface WalkDepthOptions {
   /** The deepest level a container may sit at; default MAX_VALUE_DEPTH. */

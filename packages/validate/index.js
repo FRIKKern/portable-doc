@@ -32,6 +32,8 @@ export const MAX_DEPTH = 100;
 // Any value, block or not, nests at most this many JSON levels, counted from the
 // doc root (the doc itself is level 1), so every valid doc can be written as JSON.
 export const MAX_VALUE_DEPTH = 1000;
+// A result keeps at most this many errors, the first found; `more` counts the rest.
+export const MAX_ERRORS = 1000;
 
 const KEYWORDS = new Set([
   '$schema', '$comment', 'title', 'description', 'definitions',
@@ -195,10 +197,19 @@ export function compile(root) {
     return out;
   };
 
+  // One at a time: a spread of 200,000 entries overflows the call stack.
   const merge = (out, from) => {
-    out.errors.push(...from.errors);
-    out.ids.push(...from.ids);
-    out.stopped.push(...from.stopped);
+    for (const e of from.errors) out.errors.push(e);
+    for (const id of from.ids) out.ids.push(id);
+    for (const block of from.stopped) out.stopped.push(block);
+  };
+
+  // The doc's own error list: past MAX_ERRORS an error is only counted.
+  const capped = () => {
+    const list = [];
+    list.more = 0;
+    list.push = (e) => (list.length < MAX_ERRORS ? Array.prototype.push.call(list, e) : list.more++, list.length);
+    return list;
   };
 
   function check(value, node, path, out, depth) {
@@ -264,7 +275,7 @@ export function compile(root) {
     if (!Array.isArray(doc) && !isObject(doc)) return { ok: false, errors: [error('not_a_doc', '', 'a doc is an object with a blocks array, or a blocks array')] };
     if (isObject(doc) && !Array.isArray(doc.blocks)) return { ok: false, errors: [error('not_a_doc', '/blocks', 'blocks must be an array')] };
     const base = Array.isArray(doc) ? '' : '/blocks';
-    const out = { errors: [], ids: [], stopped: [] };
+    const out = { errors: capped(), ids: [], stopped: [] };
     (Array.isArray(doc) ? doc : doc.blocks).forEach((block, i) => check(block, root, pointer(base, i), out, 0));
     walkDepth(doc, { skip: new Set(out.stopped), onTooDeep: (path) => out.errors.push(error('too_deep', path, TOO_DEEP_VALUE)) });
     const first = new Map();
@@ -272,7 +283,8 @@ export function compile(root) {
       if (first.has(id)) out.errors.push(error('duplicate_block_id', path, `id ${show(id)} is already used at ${first.get(id)}`));
       else first.set(id, path);
     }
-    return out.errors.length ? { ok: false, errors: out.errors } : { ok: true };
+    if (!out.errors.length) return { ok: true };
+    return out.errors.more ? { ok: false, errors: out.errors.slice(), more: out.errors.more } : { ok: false, errors: out.errors.slice() };
   };
 }
 
