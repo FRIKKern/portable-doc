@@ -31,14 +31,17 @@ export function blockAt(path, doc) {
   let node = doc;
   let at = '';
   let found = null;
+  let parent = null;
   for (const raw of path.split('/').slice(1)) {
     const key = raw.replaceAll('~1', '/').replaceAll('~0', '~');
     if (Array.isArray(node) ? !/^\d+$/.test(key) : !isMap(node) || !Object.hasOwn(node, key)) break;
+    const inline = Array.isArray(node) && parent === 'content';
     node = node[key];
     at += `/${raw}`;
-    if (isMap(node) && typeof node.type === 'string' && node.type !== '') found = { type: node.type, at };
+    if (isMap(node) && typeof node.type === 'string' && node.type !== '') found = { type: node.type, at, inline };
+    parent = key;
   }
-  return found ? `the ${clip(found.type)} block at ${found.at}` : '';
+  return found ? `the ${clip(found.type)} ${found.inline ? 'node' : 'block'} at ${found.at}` : '';
 }
 
 /** The full explanation of one error, as lines. */
