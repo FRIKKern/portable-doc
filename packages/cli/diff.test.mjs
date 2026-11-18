@@ -82,7 +82,7 @@ test('doc text, ids and file names are escaped, so control characters never reac
     const r = await call(args);
     const raw = r.stdout.replace(/\u001b\[\d+m/g, '');
     assert.doesNotMatch(raw, /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/, args.join(' '));
-    assert.match(raw, /^~ paragraph x\\u001b\[2J: text: Plain \{\+\\u001b\]0;pwned\\u0007 \+\}words \{\+\\u009b \+\}here\.$/m);
+    assert.match(raw, /^~ paragraph x\\u001b\[2J: text: Plain \{\+\\u001b\]0;pwned\\u0007 \+\}words\{\+ \\u009b\+\} here\.$/m);
   }
 });
 
@@ -98,24 +98,66 @@ test('color only on a TTY or with --color always; usage and read errors exit 2',
   }
 });
 
-test('git runs it as an external diff driver: seven arguments, a new file against /dev/null, exit 0 so git goes on', () => {
+// A temp repo set up with the README's own lines for one driver, run through sh, with `npx` a stub for this bin.
+function readmeRepo(driver) {
   const repo = path.join(tmp, `repo-${n++}`);
+  const stub = path.join(tmp, `stub-${n++}`);
   fs.mkdirSync(repo);
-  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: write(''), GIT_CEILING_DIRECTORIES: tmp, GIT_PAGER: 'cat' };
+  fs.mkdirSync(stub);
+  fs.writeFileSync(path.join(stub, 'npx'), `#!/bin/sh\nshift\nexec '${process.execPath}' '${bin}' "$@"\n`, { mode: 0o755 });
+  const env = { ...process.env, PATH: `${stub}${path.delimiter}${process.env.PATH}`, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: write(''), GIT_CEILING_DIRECTORIES: tmp, GIT_PAGER: 'cat' };
   const git = (...args) => execFileSync('git', ['-C', repo, ...args], { env, encoding: 'utf8' });
   git('init', '-q');
-  git('config', 'diff.portable-doc.command', `'${process.execPath}' '${bin}' diff --git`);
-  fs.writeFileSync(path.join(repo, '.gitattributes'), '*.json diff=portable-doc\n');
-  fs.writeFileSync(path.join(repo, 'notes.json'), JSON.stringify(before));
+  const readme = fs.readFileSync(path.join(path.dirname(bin), '..', 'README.md'), 'utf8');
+  const lines = readme.split('\n').filter((l) => l.startsWith(`echo '*.pd.json diff=${driver}'`) || l.startsWith(`git config diff.${driver}.`));
+  assert.equal(lines.length, 2, `README lines for ${driver}`);
+  for (const line of lines) execFileSync('sh', ['-c', line], { cwd: repo, env });
+  return { repo, env, git, diff: (...args) => spawnSync('git', ['-C', repo, 'diff', ...args], { env, encoding: 'utf8' }) };
+}
+
+test('the README external diff driver: seven arguments, a new file, a rename, a broken side, and always exit 0 so git goes on', () => {
+  const { repo, git, diff } = readmeRepo('portable-doc');
+  const put = (name, value) => fs.writeFileSync(path.join(repo, name), typeof value === 'string' ? value : JSON.stringify(value));
+  put('notes.pd.json', before);
+  put('old-name.pd.json', [p('r', 'Renamed only.')]);
+  put('b-broken.pd.json', [p('k', 'Fine for now.')]);
   git('add', '.');
   git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'one');
-  fs.writeFileSync(path.join(repo, 'notes.json'), JSON.stringify(afterDoc, null, 2));
-  fs.writeFileSync(path.join(repo, 'new.json'), JSON.stringify([p('a', 'Hello.')]));
-  git('add', 'new.json');
-  const r = spawnSync('git', ['-C', repo, 'diff', 'HEAD'], { env, encoding: 'utf8' });
+  put('notes.pd.json', JSON.stringify(afterDoc, null, 2));
+  put('new.pd.json', [p('a', 'Hello.')]);
+  put('b-broken.pd.json', '{"blocks": [');
+  git('mv', 'old-name.pd.json', 'z-new-name.pd.json');
+  git('add', '.');
+  const r = diff('--cached');
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /^portable-doc diff a\/new\.json b\/new\.json: 1 added, 0 removed, 0 moved, 0 changed\n\+ paragraph a at \[0\]\n/m);
-  assert.match(r.stdout, /^portable-doc diff a\/notes\.json b\/notes\.json: 1 added, 0 removed, 1 moved, 1 changed\n> paragraph m: moved \[3\] → \[0\]\n/m);
+  assert.match(r.stdout, /^portable-doc diff a\/b-broken\.pd\.json b\/b-broken\.pd\.json: b\/b-broken\.pd\.json: bad JSON at line 1, column 13: the text ends too early\n/m);
+  assert.match(r.stdout, /^portable-doc diff a\/new\.pd\.json b\/new\.pd\.json: 1 added, 0 removed, 0 moved, 0 changed\n\+ paragraph a at \[0\]\n/m);
+  assert.match(r.stdout, /^portable-doc diff a\/notes\.pd\.json b\/notes\.pd\.json: 1 added, 0 removed, 1 moved, 1 changed\n> paragraph m: moved \[3\] → \[0\]\n/m);
+  assert.match(r.stdout, /^portable-doc diff a\/old-name\.pd\.json b\/z-new-name\.pd\.json: the same blocks; only the JSON layout differs\n/m);
   const usage = spawnSync(process.execPath, [bin, 'diff', '--git', 'only', 'three', 'args'], { encoding: 'utf8' });
   assert.equal(usage.status, 2);
+});
+
+test('the README textconv driver: git diffs the rendered text, and shows the raw file when it does not parse', () => {
+  const { repo, git, diff } = readmeRepo('portable-doc-text');
+  fs.writeFileSync(path.join(repo, 'notes.pd.json'), JSON.stringify(before));
+  git('add', '.');
+  git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'one');
+  fs.writeFileSync(path.join(repo, 'notes.pd.json'), JSON.stringify(afterDoc, null, 2));
+  const r = diff();
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^-The quick brown fox jumps\.\n\+The quick red fox jumps\.$/m);
+  fs.writeFileSync(path.join(repo, 'notes.pd.json'), '{"blocks": [\n');
+  const broken = diff();
+  assert.equal(broken.status, 0, broken.stderr);
+  assert.match(broken.stdout, /^\+\{"blocks": \[$/m);
+});
+
+test('a doc nested past the limit is refused with a clear message, and a string that reads as a number prints quoted', async () => {
+  const deep = write(`{"blocks":[{"type":"paragraph","x":${'['.repeat(5000)}${']'.repeat(5000)}}]}`);
+  const r = await call(['diff', write(before), deep]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /: nested deeper than 1000 levels\n$/);
+  const quoted = await call(['diff', write([{ id: 'h', type: 'heading', level: '2', text: 'x' }]), write([{ id: 'h', type: 'heading', level: 2, text: 'x' }])]);
+  assert.match(quoted.stdout, /^~ heading h: level: "2" → 2$/m);
 });

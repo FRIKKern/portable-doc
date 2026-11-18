@@ -86,7 +86,8 @@ a removed block) when it has no id. Text gets a word diff, `[-old-]{+new+}`,
 with long unchanged runs cut to a few words around each change. Inline
 `content` is compared as Markdown, so marks and links show (`**bold**`, a
 Markdown link). Other fields show `path: old → new`, with `(none)` for a side
-that does not have the field. Changes to the doc's own keys (`title`, …) come
+that does not have the field. A string prints bare unless it would read as
+another JSON value: `"2"` prints quoted, `2` does not. Changes to the doc's own keys (`title`, …) come
 first, as `~ doc:`. Every string from a doc, and every file name, has its
 control characters escaped, as in `validate`.
 
@@ -102,16 +103,18 @@ A moved block that also changed is `moved` and carries its fields. The order
 is stable: doc keys, then blocks by position.
 
 Exit: 0 the docs are the same, 1 they differ, 2 a usage error, a file that
-cannot be read, bad JSON, or JSON that is not a doc. Docs that differ only in
+cannot be read, bad JSON, JSON nested deeper than 1,000 levels, or JSON that
+is not a doc. Docs that differ only in
 key order or layout are the same.
 
 How blocks are matched, so that a move never shows as a remove plus an add:
 
 1. By `id`: a non-empty string id pairs the first block with it on each side.
 2. The blocks left without an id (or with an id already taken on their side),
-   in order: first with an equal block, then with the most similar block of
-   the same type that shares at least half its words. Past 250,000 pairs to
-   score, this step is skipped and they show as removed and added.
+   in order: first with the first equal block, then with the most similar
+   block of the same type that shares at least half its words. Scoring stops
+   after a fixed amount of work (20 million pairs looked at and words
+   compared), and blocks not reached by then show as removed and added.
 3. A block with an id never pairs with one without, so a block that gains or
    changes its id shows as removed and added.
 4. Of the pairs, the longest run that keeps its order stays in place; the
@@ -121,11 +124,11 @@ How blocks are matched, so that a move never shows as a remove plus an add:
 ### In git
 
 Two ways, one per path. A textconv driver lets git's own line diff run on the
-rendered text:
+rendered text, and on the raw file when it does not parse:
 
 ```sh
 echo '*.pd.json diff=portable-doc-text' >> .gitattributes
-git config diff.portable-doc-text.textconv 'npx portable-doc render --format text --force'
+git config diff.portable-doc-text.textconv "sh -c 'npx portable-doc render --format text --force \"\$1\" 2>/dev/null || cat \"\$1\"' -"
 ```
 
 An external diff driver prints this command's block diff instead:
@@ -137,9 +140,12 @@ git config diff.portable-doc.command 'npx portable-doc diff --git'
 
 git runs a driver command with seven arguments (`path old-file old-hex
 old-mode new-file new-hex new-mode`, `/dev/null` for a side that does not
-exist); `--git` takes that form and exits 0 when the docs differ, since git
-stops at a driver that exits non-zero. `git diff` uses the driver; `git log -p`
-and `git show` need `--ext-diff`.
+exist), and two more for a rename (`new-path` and git's rename message).
+`--git` takes both forms and names the sides `a/<path>` and `b/<new-path>`.
+It exits 0 when the docs differ, and also when a side cannot be read or is
+not a doc, printing why in the diff, since git stops at a driver that exits
+non-zero. `git diff` uses the driver; `git log -p` and `git show` need
+`--ext-diff`.
 
 ## In a pre-commit hook or CI
 

@@ -4,6 +4,7 @@
 
 import fs from 'node:fs';
 import { asDoc, diffDocs } from './diff-core.js';
+import { MAX_NESTING, nestsDeeper } from './diff-shared.js';
 import { parseJson } from './json.js';
 import { shown } from './words.js';
 
@@ -42,7 +43,7 @@ function parse(args) {
       opts.color = value;
     } else throw new Refused(`unknown option ${shown(arg)}`);
   }
-  if (opts.git ? files.length !== 7 : files.length !== 2) throw new Refused(opts.git ? '--git takes the seven arguments git passes' : 'give two files');
+  if (opts.git ? files.length !== 7 && files.length !== 9 : files.length !== 2) throw new Refused(opts.git ? '--git takes the seven (or, for a rename, nine) arguments git passes' : 'give two files');
   if (files.filter((f) => f === '-').length > 1) throw new Refused('stdin can be read only once');
   return { files, opts };
 }
@@ -58,12 +59,15 @@ async function load(file, io, git) {
   }
   const parsed = parseJson(text.replace(/^﻿/, ''));
   if (!parsed.ok) return { error: `bad JSON${parsed.line ? ` at line ${parsed.line}, column ${parsed.column}` : ''}: ${shown(parsed.message)}` };
+  if (nestsDeeper(parsed.value)) return { error: `nested deeper than ${MAX_NESTING} levels` };
   const doc = asDoc(parsed.value);
   return doc ? { doc } : { error: 'not a doc: give a blocks array or { "blocks": [...] }' };
 }
 
 const clip = (s) => (s.length > MAX_VALUE ? `${s.slice(0, MAX_VALUE)}…` : s);
-const value = (v) => (v === undefined ? '(none)' : shown(clip(typeof v === 'string' ? v : JSON.stringify(v))));
+// A string prints bare unless it would read as another JSON value ("2", "true", ""), then quoted.
+const looksLikeJson = (s) => s === '' || parseJson(s).ok;
+const value = (v) => (v === undefined ? '(none)' : shown(clip(typeof v === 'string' && !looksLikeJson(v) ? v : JSON.stringify(v))));
 
 /** Long unchanged text keeps a few words next to each change. */
 function context(text, first, last) {
@@ -114,16 +118,19 @@ export async function diff(args, io) {
     return 2;
   }
   const [oldFile, newFile] = opts.git ? [files[1], files[4]] : files;
-  const names = opts.git ? [`a/${shown(files[0])}`, `b/${shown(files[0])}`] : files.map((f) => (f === '-' ? '<stdin>' : shown(f)));
+  // git adds the new path and a rename message after the seven arguments for a renamed file.
+  const names = opts.git ? [`a/${shown(files[0])}`, `b/${shown(files[7] ?? files[0])}`] : files.map((f) => (f === '-' ? '<stdin>' : shown(f)));
+  const head = `${opts.git ? 'portable-doc diff ' : ''}${names[0]}${opts.git ? ' ' : ' → '}${names[1]}`;
   const sides = [await load(oldFile, io, opts.git), await load(newFile, io, opts.git)];
-  const failed = sides.map((s, k) => s.error && `${names[k]}: ${s.error}\n`).filter(Boolean);
-  if (failed.length) return io.stderr(failed.join('')), 2;
+  const failed = sides.map((s, k) => s.error && `${names[k]}: ${s.error}`).filter(Boolean);
+  // Under git, a side that cannot be read is reported in the diff, and git goes on to the next file.
+  if (failed.length && opts.git) return io.stdout(failed.map((f) => `${head}: ${f}\n`).join('')), 0;
+  if (failed.length) return io.stderr(failed.map((f) => `${f}\n`).join('')), 2;
   const result = diffDocs(sides[0].doc, sides[1].doc);
   const ok = result.equal ? 0 : 1;
   if (opts.json) return io.stdout(`${json({ equal: result.equal, from: names[0], to: names[1], summary: result.summary, changes: result.changes })}\n`), opts.git ? 0 : ok;
   const color = opts.color === 'always' || (opts.color === 'auto' && io.stdoutIsTTY && !process.env.NO_COLOR);
   const paint = (op, text) => (color ? `\u001b[${SGR[op]}m${text}\u001b[0m` : text);
-  const head = `${opts.git ? 'portable-doc diff ' : ''}${names[0]}${opts.git ? ' ' : ' → '}${names[1]}`;
   if (result.equal) {
     if (opts.git) io.stdout(`${head}: the same blocks; only the JSON layout differs\n`);
     return 0;
