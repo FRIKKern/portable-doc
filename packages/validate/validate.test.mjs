@@ -459,7 +459,7 @@ test('walkDepth counts arrays and objects only, from level 1, does not enter pas
   const inner = [[[]]];
   assert.equal(walkDepth({ x: inner, y: [] }, { skip: new Set([inner]) }), 2);
   const expand = (v) => (typeof v === 'string' ? [JSON.parse(v)] : []);
-  assert.equal(walkDepth({ s: '[[1]]' }, { expand }), 4, 'the decoded value starts one level below the string');
+  assert.equal(walkDepth({ s: '[[1]]' }, { expand }), 3, 'the decoded value takes the string\'s place');
   assert.equal(walkDepth({ s: '[[1]]' }), 1);
   const loop = {};
   loop.self = loop;
