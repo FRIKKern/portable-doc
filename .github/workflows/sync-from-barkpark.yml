@@ -22,7 +22,9 @@ jobs:
           repository: FRIKKern/barkpark
           ref: main
           path: .barkpark
-          sparse-checkout: api/priv/portable_doc
+          sparse-checkout: |
+            api/priv/portable_doc
+            api/assets/paper-editor
           persist-credentials: false
       - uses: actions/setup-node@v5
         with: { node-version: 22 }

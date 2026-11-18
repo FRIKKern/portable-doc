@@ -1,0 +1,136 @@
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { after, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { BARKPARK_EDITOR, EDITOR_DIR, editorHashes } from './lib/editor.mjs';
+import { BARKPARK_PACK, BARKPARK_REPO, hashes } from './lib/pack.mjs';
+import { editor, pack, write } from './lib/synthetic.mjs';
+
+const scripts = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.dirname(scripts);
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'editor sync test-'));
+after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+let n = 0;
+
+function node(file, args) {
+  assert.ok(file.startsWith(tmp + path.sep), `refusing to run ${file}: outside the test dir`);
+  const r = spawnSync(process.execPath, [file, ...args], { cwd: tmp, encoding: 'utf8' });
+  return { code: r.status, out: r.stdout + r.stderr };
+}
+
+const check = (root, ...args) => node(path.join(root, 'scripts', 'check-pack.mjs'), args);
+
+// This repo's own pack, editor copy and SOURCE.json, in a temp dir.
+function realCopy() {
+  const root = path.join(tmp, `real-${n++}`);
+  fs.cpSync(scripts, path.join(root, 'scripts'), { recursive: true, filter: (f) => !f.endsWith('.test.mjs') });
+  for (const p of ['spec', 'goldens', 'conformance', 'packages/editor', 'SOURCE.json']) fs.cpSync(path.join(repoRoot, p), path.join(root, p), { recursive: true });
+  return root;
+}
+
+test('a one-byte hand edit to packages/editor fails the check, naming the file', () => {
+  const root = realCopy();
+  const clean = check(root);
+  assert.equal(clean.code, 0, clean.out);
+  const file = path.join(root, 'packages/editor/src/index.js');
+  const bytes = fs.readFileSync(file);
+  bytes[0] ^= 1;
+  fs.writeFileSync(file, bytes);
+  const r = check(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /^packages\/editor\/src\/index.js: edited by hand \(sha256 differs from SOURCE.json\)$/m);
+});
+
+// Synthetic repos: the pack and editor stand-ins from lib/synthetic.mjs, git kept to the test dir.
+fs.writeFileSync(path.join(tmp, 'gitconfig'), '');
+Object.assign(process.env, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(tmp, 'gitconfig'), GIT_CEILING_DIRECTORIES: path.dirname(tmp), GIT_TERMINAL_PROMPT: '0' });
+
+function repo() {
+  const root = pack(path.join(tmp, `repo-${n++}`));
+  fs.cpSync(scripts, path.join(root, 'scripts'), { recursive: true, filter: (f) => !f.endsWith('.test.mjs') });
+  editor(path.join(root, EDITOR_DIR));
+  write(path.join(root, 'SOURCE.json'), JSON.stringify({ repo: BARKPARK_REPO, commit: 'a'.repeat(40), path: BARKPARK_PACK, files: hashes(root), editor: { path: BARKPARK_EDITOR, files: editorHashes(root) } }));
+  return root;
+}
+
+function barkpark({ editorTag = 'a', withEditor = true, extra = () => {} } = {}) {
+  const dir = path.join(tmp, `barkpark-${n++}`);
+  pack(path.join(dir, BARKPARK_PACK));
+  if (withEditor) editor(path.join(dir, BARKPARK_EDITOR), { tag: editorTag });
+  const git = (...args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'pipe' });
+  git('init', '-q');
+  git('add', '.');
+  extra(dir, git);
+  git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'synthetic');
+  return dir;
+}
+
+const sync = (root, bp) => node(path.join(root, 'scripts', 'sync-from-barkpark.mjs'), [bp]);
+const recorded = (root) => JSON.parse(fs.readFileSync(path.join(root, 'SOURCE.json'), 'utf8')).editor;
+
+const editSource = (edit) => (root) => {
+  const file = path.join(root, 'SOURCE.json');
+  const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  edit(value);
+  write(file, JSON.stringify(value));
+};
+
+const mutants = {
+  'a file the sync did not write': [(root) => write(path.join(root, EDITOR_DIR, 'src/extra.js'), '\n'), /^packages\/editor\/src\/extra.js: not written by the sync \(absent from SOURCE.json\)$/m],
+  'a recorded file gone from disk': [(root) => fs.rmSync(path.join(root, EDITOR_DIR, 'package.json')), /^packages\/editor\/package.json: in SOURCE.json, missing on disk$/m],
+  'a SOURCE.json with no editor section': [editSource((s) => { delete s.editor; }), /^SOURCE.json: no editor section with a files object$/m],
+  'an editor section naming another path': [editSource((s) => { s.editor.path = 'elsewhere'; }), /^SOURCE.json: editor.path is "elsewhere", not "api\/assets\/paper-editor"$/m],
+  'an empty editor, recorded as empty': [(root) => { fs.rmSync(path.join(root, EDITOR_DIR), { recursive: true }); editSource((s) => { s.editor.files = {}; })(root); }, /^SOURCE.json: editor.files is empty; the sync copies packages\/editor from Barkpark$/m],
+};
+
+for (const [name, [mutate, message]] of Object.entries(mutants)) {
+  test(`check fails on ${name}`, () => {
+    const root = repo();
+    const clean = check(root);
+    assert.equal(clean.code, 0, clean.out);
+    mutate(root);
+    const r = check(root);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, message);
+  });
+}
+
+test('sync copies only the files Barkpark tracks and does not ignore, and drops ones it no longer has', () => {
+  const root = repo();
+  write(path.join(root, EDITOR_DIR, 'src/old.js'), 'gone in Barkpark\n');
+  const bp = barkpark({
+    editorTag: 'b',
+    extra: (dir, git) => {
+      const at = (f) => path.join(dir, BARKPARK_EDITOR, f);
+      write(at('dist/forced.js'), 'built\n');
+      git('add', '-f', at('dist/forced.js'));
+      write(at('node_modules/dep/index.js'), 'dep\n');
+      write(at('scratch.txt'), 'untracked\n');
+    },
+  });
+  const r = sync(root, bp);
+  assert.equal(r.code, 0, r.out);
+  assert.deepEqual(Object.keys(editorHashes(root)), ['.gitignore', 'package.json', 'src/index.js']);
+  assert.deepEqual(recorded(root), { path: BARKPARK_EDITOR, files: editorHashes(root) });
+  assert.equal(fs.readFileSync(path.join(root, EDITOR_DIR, 'src/index.js'), 'utf8'), "export const tag = 'b';\n");
+  assert.match(check(root, '--against', bp).out, /editor 3 files, same as Barkpark\n$/);
+});
+
+test('sync refuses a Barkpark with no editor and leaves the repo as it was', () => {
+  const root = repo();
+  const before = editorHashes(root);
+  const r = sync(root, barkpark({ withEditor: false }));
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /nothing copied:\napi\/assets\/paper-editor: no tracked files/);
+  assert.deepEqual(editorHashes(root), before);
+  assert.deepEqual(recorded(root).files, before);
+});
+
+test('--against fails, naming the file, when Barkpark changed the editor', () => {
+  const r = check(repo(), '--against', barkpark({ editorTag: 'b' }));
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /^packages\/editor\/src\/index.js: stale, changed in Barkpark$/m);
+});

@@ -112,9 +112,9 @@ assert.deepEqual(Object.keys(editorModule).sort(), [
 ]);
 assert.deepEqual(Object.getOwnPropertyNames(BpPaperEditor.prototype), prototypeNames);
 assert.equal(BpPaperEditor.CONTRACT_VERSION, CONTRACT_VERSION);
-assert.equal(BpPaperEditor.EDITOR_VERSION, "0.1.0-alpha.1");
+assert.equal(BpPaperEditor.EDITOR_VERSION, "0.1.0-alpha.2");
 assert.equal(BpPaperEditor.BUILD_SHA, null);
-assert.equal(CONTRACT_VERSION, "1.22.0");
+assert.equal(CONTRACT_VERSION, "1.23.0");
 assert.equal(DEBOUNCE_MS, 300);
 assert.equal(PLACEHOLDER.paragraph, "Start typing, or press / for blocks…");
 assert.deepEqual(BpPaperEditor.observedAttributes, ["editable"]);

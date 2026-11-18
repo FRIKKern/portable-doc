@@ -21,6 +21,14 @@ export function report(packRoot, { renderer, compare, reference }, types, status
   write(path.join(packRoot, 'conformance', `${renderer}.json`), `${JSON.stringify(value, null, 2)}\n`);
 }
 
+// A stand-in for Barkpark's paper editor: three source files, plus what git ignores there.
+export function editor(dir, { tag = 'a' } = {}) {
+  write(path.join(dir, 'package.json'), `{"name":"synthetic-editor","version":"0.0.0-${tag}"}\n`);
+  write(path.join(dir, 'src', 'index.js'), `export const tag = '${tag}';\n`);
+  write(path.join(dir, '.gitignore'), 'node_modules/\n/dist/\n');
+  return dir;
+}
+
 export function pack(packRoot, { blocks = 80, types = Array.from({ length: blocks }, (_, i) => `b${i}`), tag = 'a', specTag = tag, locale = true, spec, renderers = RENDERERS, status = () => ({ status: 'pass' }) } = {}) {
   write(path.join(packRoot, 'spec', 'blocks.schema.json'), spec ? `${JSON.stringify(spec)}\n` : `{"title":"synthetic ${specTag}"}\n`);
   for (const type of types) write(path.join(packRoot, 'goldens', 'blocks', `${type}.golden.json`), `{"type":"${type}","tag":"${tag}"}\n`);
