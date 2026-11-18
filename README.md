@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 3 changes
-  - Playground: keep a shared doc as sent when pretty-printing would pass the cap ([#59](https://github.com/FRIKKern/portable-doc/pull/59))
+- **Today** · 4 changes
+  - MCP: render with no Barkpark server, as HTML, Markdown or text, and a blocks tool ([#61](https://github.com/FRIKKern/portable-doc/pull/61))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
