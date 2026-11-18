@@ -5,6 +5,8 @@ import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
 import { applyOps } from './ops/apply.js';
 import { TABLE_OPS } from './ops/intents.js';
 import { render } from './render.js';
+import { blockDetail, hasType, listBlocks, loadCatalog } from './catalog.js';
+import { FORMATS, renderLocal } from './local.js';
 
 export const MAX_OPS = 100;
 const MAX_ERRORS = 1_000;
@@ -51,10 +53,27 @@ export const TOOLS = [
   },
   {
     name: 'render',
-    description: "Render a PortableDoc to HTML through Barkpark's reader (BARKPARK_URL, BARKPARK_TOKEN).",
-    inputSchema: { type: 'object', properties: { doc: DOC }, required: ['doc'], additionalProperties: false },
+    description: "Render a PortableDoc. format html (the default) gives { html }: from Barkpark's reader when BARKPARK_URL is set, else locally with @portable-doc/react. markdown gives { markdown } and text gives { text }, always locally with @portable-doc/text. A local render validates first: a broken doc is a tool error with the validator's errors.",
+    inputSchema: {
+      type: 'object',
+      properties: { doc: DOC, format: { type: 'string', enum: FORMATS, default: 'html', description: 'html, markdown or text' } },
+      required: ['doc'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'blocks',
+    description: "The block types a PortableDoc can hold, read from the synced spec. No argument: every type with its tier and its own fields, plus the aliases. { type }: that type's fields (type, required, enum and limits where the spec has them) and the golden example block.",
+    inputSchema: {
+      type: 'object',
+      properties: { type: { type: 'string', description: 'A block type or alias, such as callout or h2' } },
+      required: [],
+      additionalProperties: false,
+    },
   },
 ];
+
+const catalog = loadCatalog();
 
 const bad = (message) => new McpError(ErrorCode.InvalidParams, message);
 const isMap = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -81,11 +100,23 @@ function checkDecoded(args) {
   if (over === 'depth') throw bad(`a table edit reads the JSON inside strings, and with it the arguments nest deeper than ${MAX_DEPTH} JSON levels`);
 }
 
-const result = (value, isError = false) => ({
+// An MCP stdio client reads at most 10 MiB per message (the SDK's default buffer), and a
+// reply carries its value twice: as text and as structuredContent. Every reply stays under
+// MAX_REPLY_BYTES, so a large answer is a tool error and the connection keeps working.
+export const MAX_REPLY_BYTES = 8 * 1024 * 1024;
+
+const reply = (value, isError) => ({
   content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
   structuredContent: value,
   ...(isError ? { isError: true } : {}),
 });
+
+const result = (value, isError = false, tool = 'tool') => {
+  const answer = reply(value, isError);
+  const bytes = Buffer.byteLength(JSON.stringify(answer));
+  if (bytes <= MAX_REPLY_BYTES) return answer;
+  return reply({ error: `the ${tool} reply would be ${bytes} bytes, over the ${MAX_REPLY_BYTES} one reply may carry; send fewer or smaller blocks` }, true);
+};
 
 function checkErrors(errors) {
   if (!Array.isArray(errors)) throw bad('errors must be an array');
@@ -101,12 +132,12 @@ function checkErrors(errors) {
 export function handlers(config) {
   return {
     validate(args) {
-      return result(validate(args.doc));
+      return result(validate(args.doc), false, 'validate');
     },
     explain(args, size) {
       checkErrors(args.errors);
       if (Object.hasOwn(args, 'doc')) checkDoc(args.doc, size, { walked: false });
-      return result({ explanations: explain(args.errors, args.doc) });
+      return result({ explanations: explain(args.errors, args.doc) }, false, 'explain');
     },
     apply_ops(args, size) {
       checkDoc(args.doc, size, { walked: true });
@@ -114,12 +145,25 @@ export function handlers(config) {
       if (args.ops.length > MAX_OPS) throw bad(`ops holds more than ${MAX_OPS} ops`);
       if (args.ops.some((op) => TABLE_OPS.includes(op?.op))) checkDecoded(args);
       const applied = applyOps(args.doc, args.ops);
-      return applied.ok ? result({ ok: true, doc: applied.value }) : result({ ok: false, index: applied.index, error: applied.error }, true);
+      return applied.ok ? result({ ok: true, doc: applied.value }, false, 'apply_ops') : result({ ok: false, index: applied.index, error: applied.error }, true, 'apply_ops');
     },
     async render(args, size) {
       checkDoc(args.doc, size, { walked: true });
-      const rendered = await render(args.doc, config);
-      return rendered.ok ? result({ html: rendered.html }) : result({ error: rendered.error }, true);
+      const format = Object.hasOwn(args, 'format') ? args.format : 'html';
+      if (!FORMATS.includes(format)) throw bad(`format must be one of ${FORMATS.join(', ')}`);
+      if (format === 'html' && config.base) {
+        const rendered = await render(args.doc, config);
+        return rendered.ok ? result({ html: rendered.html }, false, 'render') : result({ error: rendered.error }, true, 'render');
+      }
+      const local = await renderLocal(args.doc, format);
+      return result(local.value, !local.ok, 'render');
+    },
+    blocks(args) {
+      if (Object.hasOwn(args, 'type') && typeof args.type !== 'string') throw bad('type must be a string');
+      if (catalog.error) return result({ error: catalog.error }, true, 'blocks');
+      if (!Object.hasOwn(args, 'type')) return result(listBlocks(catalog), false, 'blocks');
+      if (!hasType(catalog, args.type)) throw bad(`no block type ${JSON.stringify(args.type.slice(0, 100))}; call blocks with no argument for the list`);
+      return result(blockDetail(catalog, args.type), false, 'blocks');
     },
   };
 }

@@ -62,9 +62,9 @@ describe('over stdio with the SDK client', () => {
     await reader.close();
   });
 
-  test('lists four tools, each with an input schema', async () => {
+  test('lists five tools, each with an input schema', async () => {
     const { tools } = await client.listTools();
-    assert.deepEqual(tools.map((t) => t.name), ['validate', 'explain', 'apply_ops', 'render']);
+    assert.deepEqual(tools.map((t) => t.name), ['validate', 'explain', 'apply_ops', 'render', 'blocks']);
     for (const t of tools) assert.equal(t.inputSchema.type, 'object');
   });
 
@@ -131,7 +131,7 @@ describe('over stdio with the SDK client', () => {
     await protocolError(call(client, 'explain', { errors: Array(1001).fill({ code: 'too_deep', path: '' }) }), /more than 1000 entries/);
     assert.equal((await call(client, 'explain', { errors: Array(1000).fill({ code: 'too_deep', path: '' }) })).structuredContent.explanations.length, 1000);
     await protocolError(call(client, 'explain', { errors: [], doc: 'x' }), /doc must be an object/);
-    await protocolError(call(client, 'nope', {}), /no tool "nope"; tools: validate, explain, apply_ops, render/);
+    await protocolError(call(client, 'nope', {}), /no tool "nope"; tools: validate, explain, apply_ops, render, blocks/);
     await assert.rejects(client.request({ method: 'tools/call', params: { name: 'validate', arguments: [] } }, CallToolResultSchema, TIMEOUT), (e) => {
       assert.equal(e.code, ErrorCode.InvalidParams);
       assert.match(e.message, /"arguments"/);
@@ -190,7 +190,7 @@ describe('over stdio with the SDK client', () => {
   });
 
   test('the server still answers after every bad call', async () => {
-    assert.equal((await client.listTools()).tools.length, 4);
+    assert.equal((await client.listTools()).tools.length, 5);
   });
 });
 
@@ -204,8 +204,8 @@ describe('render failures are tool errors, never a hang', () => {
     }
   };
 
-  test('no BARKPARK_URL, a bad URL, a non-http URL', async () => {
-    toolError(await renderWith({}), /render needs BARKPARK_URL/);
+  test('no BARKPARK_URL renders locally; a bad URL, a non-http URL', async () => {
+    for (const env of [{}, { BARKPARK_URL: '' }]) assert.deepEqual((await renderWith(env)).structuredContent, { html: readerHtml(SAMPLE.blocks) });
     toolError(await renderWith({ BARKPARK_URL: 'not a url' }), /is not a URL/);
     toolError(await renderWith({ BARKPARK_URL: 'file:///etc' }), /must be http or https/);
   });
