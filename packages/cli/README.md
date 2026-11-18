@@ -1,8 +1,8 @@
 # @portable-doc/cli
 
 The `portable-doc` command: check PortableDoc files against the schema, explain
-what is wrong, and render them as HTML, Markdown or plain text. Plain
-JavaScript; it uses [`@portable-doc/validate`](../validate/CODES.md),
+what is wrong, render them as HTML, Markdown or plain text, and import
+Markdown. Plain JavaScript; it uses [`@portable-doc/validate`](../validate/CODES.md),
 [`@portable-doc/text`](../text/README.md) and, for HTML,
 [`@portable-doc/react`](../react/README.md).
 
@@ -65,6 +65,21 @@ $ cat notes.json | npx portable-doc render --format text
 - `-o -` writes to stdout. `-o` never replaces the input file.
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.
   `--force` renders it anyway, after printing the errors.
+
+## Import
+
+```console
+$ npx portable-doc import notes.md -o notes.json
+$ cat notes.md | npx portable-doc import > notes.json
+```
+
+Reads GFM Markdown and writes a doc, `{ "blocks": [...] }`, as pretty JSON
+that `validate` accepts. The rules, and what each Markdown form becomes, are
+`fromMarkdown`'s in [`@portable-doc/text`](../text/README.md#from-markdown).
+Any Markdown imports; the exit is 2 only for a usage error, a file that cannot
+be read, or an output that cannot be written. `-o` works as in render.
+`--json` prints `{ ok, file, doc }`, or `{ ok, file, output }` with `-o`,
+and `{ ok: false, file, error }` when a file cannot be read or written.
 
 ## In a pre-commit hook or CI
 
