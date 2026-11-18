@@ -1,12 +1,13 @@
 // Doc rules from QUALITY.md: README stays at or under 80 lines, and every relative
-// link in a tracked Markdown file points at a file that exists.
+// link in a tracked Markdown file points at a file that exists. packages/editor is left out:
+// it is Barkpark's text, copied by the sync, and its links are Barkpark's to keep.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '*.md'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', '*.md', ':(exclude)packages/editor/'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
 const errors = [];
 
 const readmeLines = fs.readFileSync(path.join(root, 'README.md'), 'utf8').trimEnd().split('\n').length;

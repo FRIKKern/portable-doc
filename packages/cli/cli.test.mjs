@@ -163,3 +163,20 @@ test('--help and --version print and exit 0', async () => {
   assert.match((await call(['--help'])).stdout, /Commands:/);
   assert.match((await call(['render', '--help'])).stdout, /--format/);
 });
+
+test('import turns Markdown from a file or stdin into a doc that validate accepts', async () => {
+  const md = '## Notes\n\nSome **bold** text and [a link](https://example.com).\n\n- [x] done\n- [ ] next\n\n| a | b |\n| - | - |\n| 1 | 2 |\n';
+  const file = write('notes.md', md);
+  const fromFile = run(['import', file]);
+  assert.equal(fromFile.status, 0, fromFile.stderr);
+  assert.equal(run(['import'], md).stdout, fromFile.stdout);
+  const doc = JSON.parse(fromFile.stdout);
+  assert.deepEqual(doc.blocks.map((b) => b.type), ['heading', 'paragraph', 'list', 'table']);
+  const out = path.join(tmp, 'notes.json');
+  assert.equal((await call(['import', file, '-o', out])).status, 0);
+  assert.equal(fs.readFileSync(out, 'utf8'), fromFile.stdout);
+  assert.deepEqual([run(['validate', out]).status, run(['validate'], fromFile.stdout).status], [0, 0]);
+  assert.equal((await call(['import', path.join(tmp, 'missing.md')])).status, 2);
+  assert.equal((await call(['import', file, '-o', file])).status, 2);
+  assert.equal(fs.readFileSync(file, 'utf8'), md);
+});
