@@ -1,9 +1,10 @@
-import { MAX_VALUE_DEPTH } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, walkDepth } from '@portable-doc/validate';
 
 export const MAX_NODES = 200_000;
-// The arguments object holds the doc one level down, so a doc at the format's
-// own limit (MAX_VALUE_DEPTH, counted from the doc) always fits.
-export const MAX_DEPTH = MAX_VALUE_DEPTH + 1;
+// The arguments object holds the doc one level down. That is the only level the
+// argument limit adds, so a doc at the format's own limit always fits.
+export const ARGS_LEVEL = 1;
+export const MAX_DEPTH = MAX_VALUE_DEPTH + ARGS_LEVEL;
 
 const JSON_TEXT = /^[ \t\n\r]*[[{]/;
 
@@ -15,19 +16,25 @@ function decoded(string) {
   }
 }
 
+// Nodes count every value, scalars too. Depth is walkDepth's, as validate counts
+// it; with `strings`, the JSON inside a string is walked one level below it.
 export function measure(value, { strings = false } = {}) {
+  const read = new Map();
+  const expand = strings
+    ? (v) => {
+        if (typeof v !== 'string' || !JSON_TEXT.test(v)) return [];
+        if (!read.has(v)) read.set(v, decoded(v));
+        return read.get(v);
+      }
+    : undefined;
   let nodes = 0;
-  let depth = 0;
-  const stack = [[value, 1]];
+  const stack = [value];
   while (stack.length) {
-    const [v, d] = stack.pop();
-    if (++nodes > MAX_NODES) return { nodes, depth, over: 'nodes' };
-    // Depth counts arrays and objects only, as validate does: a scalar adds no level.
-    if (v !== null && typeof v === 'object') {
-      depth = Math.max(depth, d);
-      for (const child of Object.values(v)) stack.push([child, d + 1]);
-    }
-    else if (strings && typeof v === 'string' && JSON_TEXT.test(v)) for (const inner of decoded(v)) stack.push([inner, d + 1]);
+    const v = stack.pop();
+    if (++nodes > MAX_NODES) return { nodes, depth: null, over: 'nodes' };
+    if (v !== null && typeof v === 'object') for (const child of Object.values(v)) stack.push(child);
+    else if (expand) for (const inner of expand(v)) stack.push(inner);
   }
+  const depth = walkDepth(value, { limit: MAX_DEPTH, expand });
   return { nodes, depth, over: depth > MAX_DEPTH ? 'depth' : null };
 }

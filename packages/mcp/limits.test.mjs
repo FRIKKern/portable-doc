@@ -67,7 +67,7 @@ for (const [name, [doc, ops]] of Object.entries(WORST)) {
 
 test('a doc nested exactly MAX_VALUE_DEPTH levels fits the argument limit of render and apply_ops; one level more does not', async () => {
   // The deepest container sits at level n of the doc; it holds a scalar, or a {k: "v"}, or nothing.
-  const leaves = { empty: [], scalar: [1], object: [{ k: 'v' }] };
+  const leaves = { empty: [], number: [1], string: ['s'], object: [{ k: 'v' }] };
   const deep = (n, leaf) => Array.from({ length: n - 6 }).reduce((v) => [v], leaf);
   const doc = (n, leaf) => ({ blocks: [{ type: 'chart', series: [{ x: deep(n, leaf) }] }] });
   for (const [name, leaf] of Object.entries(leaves)) {
@@ -80,6 +80,7 @@ test('a doc nested exactly MAX_VALUE_DEPTH levels fits the argument limit of ren
     assert.equal(ops.isError, undefined, name);
     assert.equal(validate(doc(at + 1, leaf)).ok, false, name);
     await assert.rejects(callTool({}, 'render', { doc: doc(at + 1, leaf), format: 'text' }), /nest deeper/, name);
+    await assert.rejects(callTool({}, 'apply_ops', { doc: doc(at + 1, leaf), ops: [] }), /nest deeper/, name);
   }
 });
 
@@ -99,6 +100,8 @@ test('a table edit counts the JSON inside strings, which the normalizer decodes,
   assert.equal((await call(`x${'['.repeat(MAX_DEPTH)}`, edit)).isError, undefined);
   assert.equal(measure({ s: json(3) }, { strings: true }).nodes, measure({ s: JSON.parse(json(3)) }).nodes + 1);
   assert.equal(measure({ s: json(3) }).nodes, 2);
+  assert.equal(measure({ s: '[[1]]' }, { strings: true }).depth, 4, 'the decoded value starts one level below the string');
+  assert.equal(measure({ s: '[[1]]' }).depth, 1);
 });
 
 const nearJson = (count, length) => Array.from({ length: count }, (_, i) => `[${'1,'.repeat((length - 12) / 2)}x${String(i).padStart(10, '0')}`);

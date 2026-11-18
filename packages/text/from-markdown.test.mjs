@@ -132,18 +132,21 @@ test('inline <script> and <style> keep no text, in a paragraph or a heading', ()
   assert.deepEqual(fromMarkdown('a <script/> b'), [{ type: 'paragraph', content: [t('a  b')] }]);
 });
 
-test('a portabledoc fence nested past MAX_VALUE_DEPTH stays a code block, so the doc can be written as JSON', () => {
-  const deep = (n) => '['.repeat(n) + ']'.repeat(n);
-  // In { blocks: [chart] }: the doc 1, blocks 2, chart 3, series 4, item 5, then x's n arrays.
-  const md = (total) => '```portabledoc\n[{"type":"chart","series":[{"x":' + deep(total - 5) + '}]}]\n```';
-  for (const total of [MAX_VALUE_DEPTH + 1, 8000]) {
-    const out = fromMarkdown(md(total));
-    assert.deepEqual(out.map((b) => b.type), ['code'], String(total));
-    assert.doesNotThrow(() => JSON.stringify(out));
+test('a portabledoc fence whose deepest container sits at doc level MAX_VALUE_DEPTH is spliced in, whatever it holds; one level more, or 8,000, stays a code block', () => {
+  // In { blocks: [chart] }: the doc 1, blocks 2, chart 3, series 4, item 5, x 6.
+  // The deepest container, at level n, holds a number or a string, or is an object.
+  const inner = { number: '[1]', string: '["s"]', object: '{"k":"v"}' };
+  const md = (n, holds) => '```portabledoc\n[{"type":"chart","series":[{"x":' + '['.repeat(n - 6) + inner[holds] + ']'.repeat(n - 6) + '}]}]\n```';
+  for (const holds of Object.keys(inner)) {
+    const atLimit = fromMarkdown(md(MAX_VALUE_DEPTH, holds));
+    assert.equal(atLimit[0].type, 'chart', holds);
+    assert.deepEqual(validate({ blocks: atLimit }), { ok: true }, holds);
+    for (const n of [MAX_VALUE_DEPTH + 1, 8000]) {
+      const out = fromMarkdown(md(n, holds));
+      assert.deepEqual(out.map((b) => b.type), ['code'], `${holds} ${n}`);
+      assert.doesNotThrow(() => JSON.stringify(out));
+    }
   }
-  const atLimit = fromMarkdown(md(MAX_VALUE_DEPTH));
-  assert.equal(atLimit[0].type, 'chart');
-  assert.deepEqual(validate({ blocks: atLimit }), { ok: true });
 });
 
 test('round trip: every core golden survives toMarkdown then fromMarkdown, and fence types survive the portabledoc fence', () => {

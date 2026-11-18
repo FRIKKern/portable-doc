@@ -4,7 +4,7 @@
 // this one differs. Fail-soft: odd Markdown never throws, and a parser
 // failure gives the whole text back as one code block.
 
-import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { isMap, safeUrl, str } from './util.js';
 
@@ -102,23 +102,22 @@ function quote(node) {
 
 // ── code fences ─────────────────────────────────────────────────────────
 
-// A fence's array becomes the doc's blocks array, two levels below the doc root
-// ({ blocks: [...] }), so its values may nest MAX_VALUE_DEPTH less those two.
-const FENCE_ROOT_DEPTH = 2;
+// A fence's array becomes the doc's blocks array, so its depth is counted inside
+// the doc's { blocks: [...] } envelope.
+const tooDeep = (blocks) => walkDepth({ blocks }) > MAX_VALUE_DEPTH;
 
-/** Every non-blank block id in a parsed fence, or null when an `href` in it is unsafe or it nests too deep. Iterative. */
+/** Every non-blank block id in a parsed fence, or null when an `href` in it is unsafe. Iterative. */
 function scan(value) {
   const ids = [];
-  const stack = [[value, 0]];
+  const stack = [value];
   while (stack.length) {
-    const [v, depth] = stack.pop();
+    const v = stack.pop();
     if (!isMap(v) && !Array.isArray(v)) continue;
-    if (depth + FENCE_ROOT_DEPTH > MAX_VALUE_DEPTH) return null;
     if (isMap(v)) {
       if (typeof v.id === 'string' && v.id.trim() !== '' && typeof v.type === 'string') ids.push(v.id);
       if ('href' in v && safeUrl(v.href) !== v.href) return null;
     }
-    for (const child of Object.values(v)) stack.push([child, depth + 1]);
+    for (const child of Object.values(v)) stack.push(child);
   }
   return ids;
 }
@@ -139,7 +138,7 @@ function fence(source, state) {
     blocks.length > 0 &&
     blocks.length <= MAX_FENCE_BLOCKS &&
     blocks.every((b) => isMap(b) && FENCE_TYPES.has(b.type));
-  const ids = shaped ? scan(blocks) : null;
+  const ids = shaped && !tooDeep(blocks) ? scan(blocks) : null;
   if (ids === null || !validate(blocks).ok || ids.some((id) => state.ids.has(id))) return [codeBlock(source)];
   for (const id of ids) state.ids.add(id);
   return blocks;

@@ -43,32 +43,50 @@ const show = (v) => (isObject(v) ? 'an object' : Array.isArray(v) ? 'an array' :
 
 const TOO_DEEP_VALUE = `values nest deeper than ${MAX_VALUE_DEPTH} levels`;
 
-// Every array and object is one level. Iterative, and each container is walked
-// once per depth it is reached at, so neither depth nor a cycle can overflow the
-// stack: past the limit the walk stops with too_deep. `skip` holds the blocks
-// already refused as too deep; nothing under them is counted again.
-function tooDeepValues(doc, skip, errors) {
+/**
+ * The one way JSON depth is counted: every array and object is one level, a
+ * scalar adds none, and `root` is level 1. Returns the deepest level reached,
+ * at most `limit + 1`.
+ *
+ * Iterative, and each container is walked once per level it is reached at, so
+ * neither depth nor a cycle can overflow the stack. A container past `limit` is
+ * not entered. With `onTooDeep`, each such container, the first on its branch,
+ * is passed to it by JSON pointer and the walk goes on; without it the walk
+ * stops there, and no path is built. `skip` holds containers not to walk.
+ * `expand(scalar)` gives values to walk one level below the scalar's own place.
+ */
+export function walkDepth(root, { limit = MAX_VALUE_DEPTH, skip, expand, onTooDeep } = {}) {
+  const paths = typeof onTooDeep === 'function';
   const seen = new Map();
-  const stack = [[doc, '', 1]];
+  const stack = [[root, 1, '']];
+  let deepest = 0;
   while (stack.length) {
-    const [value, path, depth] = stack.pop();
-    if (skip.has(value)) continue;
-    if (depth > MAX_VALUE_DEPTH) {
-      errors.push(error('too_deep', path, TOO_DEEP_VALUE));
+    const [value, level, path] = stack.pop();
+    if (typeof value !== 'object' || value === null) {
+      if (expand) for (const inner of [...expand(value)].reverse()) stack.push([inner, level + 1, path]);
+      continue;
+    }
+    if (skip?.has(value)) continue;
+    if (level > limit) {
+      deepest = limit + 1;
+      if (!paths) return deepest;
+      onTooDeep(path);
       continue;
     }
     const at = seen.get(value);
-    if (at === depth || (at instanceof Set && at.has(depth))) continue;
-    if (at === undefined) seen.set(value, depth);
-    else if (at instanceof Set) at.add(depth);
-    else seen.set(value, new Set([at, depth]));
+    if (at === level || (at instanceof Set && at.has(level))) continue;
+    if (at === undefined) seen.set(value, level);
+    else if (at instanceof Set) at.add(level);
+    else seen.set(value, new Set([at, level]));
+    if (level > deepest) deepest = level;
     const keys = Array.isArray(value) ? null : Object.keys(value);
     for (let i = (keys ? keys.length : value.length) - 1; i >= 0; i--) {
       const key = keys ? keys[i] : i;
       const child = value[key];
-      if (typeof child === 'object' && child !== null) stack.push([child, pointer(path, key), depth + 1]);
+      if (expand || (typeof child === 'object' && child !== null)) stack.push([child, level + 1, paths ? pointer(path, key) : '']);
     }
   }
+  return deepest;
 }
 
 const isPortableText = (block) =>
@@ -232,7 +250,7 @@ export function compile(root) {
     const base = Array.isArray(doc) ? '' : '/blocks';
     const out = { errors: [], ids: [], stopped: [] };
     (Array.isArray(doc) ? doc : doc.blocks).forEach((block, i) => check(block, root, pointer(base, i), out, 0));
-    tooDeepValues(doc, new Set(out.stopped), out.errors);
+    walkDepth(doc, { skip: new Set(out.stopped), onTooDeep: (path) => out.errors.push(error('too_deep', path, TOO_DEEP_VALUE)) });
     const first = new Map();
     for (const { id, path } of out.ids) {
       if (first.has(id)) out.errors.push(error('duplicate_block_id', path, `id ${show(id)} is already used at ${first.get(id)}`));

@@ -27,6 +27,24 @@ export const MAX_DEPTH: number;
  */
 export const MAX_VALUE_DEPTH: number;
 
+export interface WalkDepthOptions {
+  /** The deepest level a container may sit at; default MAX_VALUE_DEPTH. */
+  limit?: number;
+  /** Containers not to walk. */
+  skip?: { has(value: unknown): boolean };
+  /** Values to walk one level below a scalar's own place. */
+  expand?: (scalar: unknown) => Iterable<unknown>;
+  /** Called with the JSON pointer of each container past the limit, the first on its branch; without it the walk stops at the first. */
+  onTooDeep?: (path: string) => void;
+}
+
+/**
+ * The one way JSON depth is counted: arrays and objects are one level each, a
+ * scalar none, the root is level 1. Iterative and cycle-safe. Returns the
+ * deepest level reached, at most limit + 1.
+ */
+export function walkDepth(root: unknown, options?: WalkDepthOptions): number;
+
 export function validate(doc: unknown): Result;
 
 export function compile(schema: object): (doc: unknown) => Result;
