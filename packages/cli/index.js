@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// The `portable-doc` command: validate, explain and render PortableDoc files.
+// The `portable-doc` command: validate, explain, render and import PortableDoc files.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { validate } from '@portable-doc/validate';
-import { toMarkdown, toPlainText } from '@portable-doc/text';
+import { fromMarkdown, toMarkdown, toPlainText } from '@portable-doc/text';
 import { diff } from './diff.js';
 import { parseJson } from './json.js';
 import { explainError, refusedWhen, shown } from './words.js';
@@ -19,6 +19,7 @@ Commands:
   explain [file...]    the same, with each error explained in full
   render [file]        print a doc as html, markdown or text
   diff <a> <b>         compare two docs block by block
+  import [file]        turn a Markdown file into a doc
 
 A file of "-", or no file, reads stdin. A doc is a blocks array or { "blocks": [...] }.
 Options: --help, --version. Run "portable-doc <command> --help" for its options.`,
@@ -39,12 +40,19 @@ Exit: 0 every doc is valid, 1 some doc is invalid, 2 usage error, unreadable fil
   --force               render a doc that fails validation
 Exit: 0 rendered, 1 the doc is invalid (without --force), 2 usage error, unreadable file, bad JSON,
 or html asked for before @portable-doc/react is built.`,
+  import: `Usage: portable-doc import [file] [-o out] [--json]
+
+Reads GFM Markdown and prints it as a doc, { "blocks": [...] }, that passes validate.
+  -o, --output <file>   write there instead of stdout ("-" is stdout); never the input file
+  --json                print { ok, file, doc } (with -o, { ok, file, output }), or { ok, file, error }
+Exit: 0 imported, 2 usage error, unreadable file or a file that cannot be written.`,
 };
 
 const FLAGS = {
   validate: { '--json': 'json' },
   explain: { '--json': 'json' },
   render: { '--format': 'format=', '--output': 'output=', '-o': 'output=', '--force': 'force' },
+  import: { '--output': 'output=', '-o': 'output=', '--json': 'json' },
 };
 const FORMATS = ['html', 'markdown', 'text'];
 
@@ -79,20 +87,31 @@ function parseArgs(command, args) {
   return { files, opts };
 }
 
-/** Read and parse one input: { name, doc } or { name, failure: { kind, message, line?, column? } }. */
-async function load(file, io) {
+/** Read one input: { name, text } or { name, failure: { kind: 'read', message } }. */
+async function read(file, io) {
   const name = file === '-' ? '<stdin>' : shown(file);
-  let text;
   try {
-    text = file === '-' ? await io.readStdin() : fs.readFileSync(file, 'utf8');
+    const text = file === '-' ? await io.readStdin() : fs.readFileSync(file, 'utf8');
+    return { name, text: text.replace(/^﻿/, '') };
   } catch (error) {
     return { name, failure: { kind: 'read', message: error.code === 'ENOENT' ? 'no such file' : shown(error.message) } };
   }
-  const parsed = parseJson(text.replace(/^﻿/, ''));
+}
+
+/** Read and parse one input: { name, doc } or { name, failure: { kind, message, line?, column? } }. */
+async function load(file, io) {
+  const input = await read(file, io);
+  if (input.failure) return input;
+  const { name, text } = input;
+  const parsed = parseJson(text);
   if (parsed.ok) return { name, doc: parsed.value };
   const { line, column, message } = parsed;
   return { name, failure: { kind: 'json', message: `bad JSON${line ? ` at line ${line}, column ${column}` : ''}: ${shown(message)}`, line, column } };
 }
+
+// Pretty JSON safe for a terminal: JSON.stringify escapes C0 controls; DEL and
+// C1 are escaped here, inside strings, the only place they occur.
+const jsonText = (value) => `${JSON.stringify(value, null, 2).replace(/[\u007f-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}\n`;
 
 const errorLine = (name, e) => `${name}: ${e.code} at ${shown(e.path) || '(root)'}: ${shown(e.message)}`;
 
@@ -118,9 +137,7 @@ async function check(command, files, opts, io) {
       const list = command === 'explain' ? errors.map((e) => ({ ...e, explanation: explainError(e, doc, String).join(' '), refusedWhen: refusedWhen(e.code) })) : errors;
       return { file, ok, errors: list };
     });
-    // JSON.stringify escapes C0 controls; DEL and C1 are escaped here, inside strings, the only place they occur.
-    const json = JSON.stringify({ ok: code === 0, files }, null, 2).replace(/[\u007f-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
-    io.stdout(`${json}\n`);
+    io.stdout(jsonText({ ok: code === 0, files }));
     return code;
   }
   for (const r of results) {
@@ -204,6 +221,31 @@ async function render(files, opts, io) {
   return 0;
 }
 
+async function importMarkdown(files, opts, io) {
+  if (files.length > 1) throw new UsageError('import takes one file');
+  if (!files.length && io.stdinIsTTY) throw new UsageError('give a file, or pipe Markdown to stdin');
+  const output = opts.output === '-' ? undefined : opts.output;
+  if (output !== undefined && sameFile(files[0] ?? '-', output)) throw new UsageError('-o would overwrite the input file');
+  const input = await read(files[0] ?? '-', io);
+  const fail = (file, error) => {
+    if (opts.json) io.stdout(jsonText({ ok: false, file, error }));
+    else io.stderr(`${file}: ${error.message}\n`);
+    return 2;
+  };
+  if (input.failure) return fail(input.name, input.failure);
+  const doc = { blocks: fromMarkdown(input.text) };
+  if (output !== undefined) {
+    try {
+      fs.writeFileSync(output, jsonText(doc));
+    } catch (error) {
+      return fail(shown(output), { kind: 'write', message: `cannot write: ${shown(error.message)}` });
+    }
+  }
+  if (opts.json) io.stdout(jsonText({ ok: true, file: input.name, ...(output === undefined ? { doc } : { output: shown(output) }) }));
+  else if (output === undefined) io.stdout(jsonText(doc));
+  return 0;
+}
+
 const isRenderable = (doc) => Array.isArray(doc) || (typeof doc === 'object' && doc !== null && Array.isArray(doc.blocks));
 
 /**
@@ -225,7 +267,9 @@ export async function main(argv, io) {
   if (args.includes('--help') || args.includes('-h')) return io.stdout(`${USAGE[command]}\n`), 0;
   try {
     const { files, opts } = parseArgs(command, args);
-    return command === 'render' ? await render(files, opts, io) : await check(command, files, opts, io);
+    if (command === 'render') return await render(files, opts, io);
+    if (command === 'import') return await importMarkdown(files, opts, io);
+    return await check(command, files, opts, io);
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
     io.stderr(`portable-doc ${command}: ${error.message}\n\n${USAGE[command]}\n`);

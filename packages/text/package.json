@@ -5,5 +5,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "engines": { "node": ">=22" },
-  "exports": { ".": { "types": "./index.d.ts", "default": "./index.js" } }
+  "exports": { ".": { "types": "./index.d.ts", "default": "./index.js" } },
+  "files": ["*.js", "index.d.ts", "README.md"],
+  "dependencies": { "@portable-doc/validate": "0.0.0", "markdown-it": "15.0.3" }
 }

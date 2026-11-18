@@ -1,9 +1,9 @@
 # @portable-doc/cli
 
 The `portable-doc` command: check PortableDoc files against the schema, explain
-what is wrong, render them as HTML, Markdown or plain text, and compare two of
-them block by block. Plain
-JavaScript; it uses [`@portable-doc/validate`](../validate/CODES.md),
+what is wrong, render them as HTML, Markdown or plain text, compare two of
+them block by block, and import Markdown. Plain JavaScript; it uses
+[`@portable-doc/validate`](../validate/CODES.md),
 [`@portable-doc/text`](../text/README.md) and, for HTML,
 [`@portable-doc/react`](../react/README.md).
 
@@ -146,6 +146,20 @@ It exits 0 when the docs differ, and also when a side cannot be read or is
 not a doc, printing why in the diff, since git stops at a driver that exits
 non-zero. `git diff` uses the driver; `git log -p` and `git show` need
 `--ext-diff`.
+## Import
+
+```console
+$ npx portable-doc import notes.md -o notes.json
+$ cat notes.md | npx portable-doc import > notes.json
+```
+
+Reads GFM Markdown and writes a doc, `{ "blocks": [...] }`, as pretty JSON
+that `validate` accepts. The rules, and what each Markdown form becomes, are
+`fromMarkdown`'s in [`@portable-doc/text`](../text/README.md#from-markdown).
+Any Markdown imports; the exit is 2 only for a usage error, a file that cannot
+be read, or an output that cannot be written. `-o` works as in render.
+`--json` prints `{ ok, file, doc }`, or `{ ok, file, output }` with `-o`,
+and `{ ok: false, file, error }` when a file cannot be read or written.
 
 ## In a pre-commit hook or CI
 

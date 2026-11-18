@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 9 changes
-  - Sync: packages/editor is copied from Barkpark by the sync job, and the check fails on a hand edit ([#66](https://github.com/FRIKKern/portable-doc/pull/66))
+- **Today** · 12 changes
+  - Test: the root test run fails on an empty test list, in list mode and with --run ([#74](https://github.com/FRIKKern/portable-doc/pull/74))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
@@ -53,8 +53,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 | Each renderer's result on the goldens (synced the same way) | [`conformance/`](conformance/), drawn as [`conformance.svg`](docs/images/conformance.svg) ([0005](docs/decisions/0005-conformance-heatmap.md)) |
 | The doc validator and its reason codes; broken and valid fixtures. Report-only: nothing calls it yet | [`packages/validate/`](packages/validate/CODES.md), [`fixtures/`](fixtures/) ([0004](docs/decisions/0004-validate.md)) |
 | The MCP server an agent uses to look up block types, validate, explain, apply ops to and render a doc as HTML, Markdown or text, with no server needed | [`packages/mcp/`](packages/mcp/README.md) ([0006](docs/decisions/0006-mcp.md)) |
-| A doc as Markdown or plain text, for prompts, email, search and diffs | [`packages/text/`](packages/text/README.md) |
-| The `portable-doc` command: validate, explain, render and diff files, in a hook, CI or git | [`packages/cli/`](packages/cli/README.md) |
+| A doc as Markdown or plain text, for prompts, email, search and diffs, and Markdown back into a doc | [`packages/text/`](packages/text/README.md) |
+| The `portable-doc` command: validate, explain and render files, in a hook or CI | [`packages/cli/`](packages/cli/README.md) |
 | The quality bar | [`QUALITY.md`](QUALITY.md) |
 | How we work | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
 | Decisions | [`docs/decisions/`](docs/decisions/), one page each |
