@@ -81,10 +81,12 @@ test('render markdown and text match @portable-doc/text, and an invalid doc is r
   assert.equal((await call(['render', '--format', 'text', '--force'], JSON.stringify(broken.doc))).stdout, toPlainText(broken.doc));
 });
 
-test('render html uses the built React renderer, or says to build it', () => {
-  const r = run(['render', '--format', 'html'], '[{"type":"heading","level":2,"text":"Hello"}]');
-  if (r.status === 0) assert.match(r.stdout, /^<div class="bp-paper-surface">.*Hello.*<\/div>\n$/s);
-  else assert.deepEqual([r.status, /npm run react:build/.test(r.stderr)], [2, true]);
+test('render html is the React renderer\'s markup, field and embed blocks included', () => {
+  const doc = [{ type: 'heading', level: 2, text: 'Hello' }, { type: 'field-color', label: 'Accent', value: '#1e5347' }, { type: 'embed', target: 'Notes' }];
+  const r = run(['render', '--format', 'html'], JSON.stringify(doc));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^<div class="bp-paper-surface"><h2>Hello<\/h2><div class="bp-field"><span class="bp-field__l">Accent<\/span>.*background:#1e5347.*data-embed="Notes">↪ Notes<\/section><\/div>\n$/s);
+  assert.doesNotMatch(r.stdout, /Unsupported block|invalid block/);
 });
 
 test('html says what to install or build when the React renderer cannot load', () => {
