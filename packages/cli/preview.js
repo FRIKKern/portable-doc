@@ -79,11 +79,17 @@ ${reasons}${body ?? ''}
  * with explain's words for a failure) and `renderHtml`, so the page says and
  * shows exactly what `explain` and `render --format html` do.
  * Resolves to { url, close() } once it listens; `port` undefined tries 4317, then any free port.
+ * `watch` is fs.watch, replaceable in tests.
  */
-export async function startPreview({ file, port, load, renderHtml, io }) {
+export async function startPreview({ file, port, load, renderHtml, io, watch = fs.watch }) {
   const css = stylesheet();
   const state = { title: path.basename(file), problems: [], body: null, version: 0 };
   const clients = new Set();
+
+  const reload = () => {
+    state.version++;
+    for (const res of clients) res.write(`event: reload\ndata: ${state.version}\n\n`);
+  };
 
   let running = null;
   let again = false;
@@ -104,8 +110,7 @@ export async function startPreview({ file, port, load, renderHtml, io }) {
           }
         }
         state.problems = problems;
-        state.version++;
-        for (const res of clients) res.write(`event: reload\ndata: ${state.version}\n\n`);
+        reload();
       } while (again);
     })();
     try {
@@ -120,10 +125,17 @@ export async function startPreview({ file, port, load, renderHtml, io }) {
   // file over the old one replaces the inode a file watch would hold.
   let timer = null;
   const base = path.basename(file);
-  const watcher = fs.watch(path.dirname(path.resolve(file)), (_event, name) => {
+  const watcher = watch(path.dirname(path.resolve(file)), (_event, name) => {
     if (name !== null && name !== undefined && String(name) !== base) return;
     clearTimeout(timer);
     timer = setTimeout(() => void refresh(), DEBOUNCE_MS);
+  });
+  // A watch that fails (on Windows, deleting the watched folder) is a problem
+  // on the page, as a deleted file is; the server keeps serving the last render.
+  watcher.on('error', (error) => {
+    clearTimeout(timer);
+    state.problems = [[`${state.title}: changes are no longer watched (${shown(error?.message ?? error)}); restart preview to follow them`]];
+    reload();
   });
 
   const server = http.createServer((req, res) => {
@@ -137,7 +149,7 @@ export async function startPreview({ file, port, load, renderHtml, io }) {
     if (!hostOk || (req.method !== 'GET' && req.method !== 'HEAD')) return send(404, 'text/plain; charset=utf-8', 'Not found\n');
     if (req.url === '/') {
       const nonce = crypto.randomBytes(16).toString('base64');
-      const csp = `default-src 'self'; script-src 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src * data: blob:; media-src *; frame-src *; object-src 'none'; base-uri 'none'; form-action 'none'`;
+      const csp = `default-src 'self'; script-src 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src * data: blob:; media-src *; frame-src *; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
       return send(200, 'text/html; charset=utf-8', pageHtml({ ...state, nonce }), { 'content-security-policy': csp });
     }
     if (req.url === '/paper-surface.css') return send(200, 'text/css; charset=utf-8', css);
@@ -190,7 +202,7 @@ function openBrowser(url, io) {
 }
 
 /** The `preview` command. Runs until SIGINT or SIGTERM, then resolves to its exit code. */
-export async function preview(files, opts, io, { load, renderHtml, UsageError }) {
+export async function preview(files, opts, io, { load, renderHtml, UsageError, start = startPreview }) {
   if (files.length !== 1 || files[0] === '-') throw new UsageError('give one doc file; preview watches it, so stdin will not do');
   let port;
   if (opts.port !== undefined) {
@@ -205,9 +217,10 @@ export async function preview(files, opts, io, { load, renderHtml, UsageError })
 
   let session;
   try {
-    session = await startPreview({ file, port, load, renderHtml, io });
+    session = await start({ file, port, load, renderHtml, io });
   } catch (error) {
-    return io.stderr(`portable-doc preview: cannot listen on ${HOST}:${port}: ${shown(error.message)}\n`), 2;
+    const where = port === undefined ? `${HOST}:${DEFAULT_PORT} or on any free port` : `${HOST}:${port}`;
+    return io.stderr(`portable-doc preview: cannot listen on ${where}: ${shown(error.message)}\n`), 2;
   }
   io.stdout(`Previewing ${shown(file)} at ${session.url} (Ctrl-C stops)\n`);
   if (opts.open) openBrowser(session.url, io);

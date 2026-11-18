@@ -84,11 +84,15 @@ Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
 - A doc with bad JSON or validation errors shows its problems, in the words
   `explain` uses, above the last version that rendered.
 - The server listens on 127.0.0.1 only, on port 4317, or on any free port
-  when that one is taken. `--port 0` always picks a free one. It answers
-  `GET /`, `/paper-surface.css` and `/events` (the reload stream), with
-  `127.0.0.1` or `localhost` as the host. Anything else is a 404.
+  when that one is taken. `--port 0` always picks a free one. It answers GET
+  and HEAD for `/`, `/paper-surface.css` and `/events` (the reload stream, GET
+  only), with `127.0.0.1` or `localhost` as the host. Anything else is a 404.
+  No other site may frame the page.
+- If the file can no longer be watched, the page says so above the last
+  render, and the server keeps running.
 - `--open` opens the page with `open` (macOS) or `xdg-open`. Ctrl-C closes the
   watcher and every connection, and exits 0.
+
 ## Import
 
 ```console

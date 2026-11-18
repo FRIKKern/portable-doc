@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { EventEmitter } from 'node:events';
+import { preview, startPreview } from './preview.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
@@ -172,4 +174,44 @@ test('preview refuses stdin, a missing file and a bad port, and says what to bui
   }
   const unbuilt = await run(['preview', docFile('[]'), '--port', '0'], ['@portable-doc/react']);
   assert.deepEqual([unbuilt.code, /run "npm run react:build"/.test(unbuilt.err)], [2, true], unbuilt.err);
+});
+
+// In process, with a stand-in doc and renderer: enough to reach the server and the watcher.
+const fakes = { load: async (file) => ({ name: file, doc: { blocks: [] } }), renderHtml: async () => ({ html: '<p>Rendered.</p>' }), io: { stdout() {}, stderr() {} } };
+
+test('a watcher error shows on the page as a problem, and the server stays up', async () => {
+  const watcher = Object.assign(new EventEmitter(), { close() {} });
+  const session = await startPreview({ ...fakes, file: docFile(heading('Watched')), port: 0, watch: () => watcher });
+  try {
+    const { event } = await nextEvent(session.url, 'reload');
+    watcher.emit('error', Object.assign(new Error('EPERM: operation not permitted, watch'), { code: 'EPERM' }));
+    await event;
+    const html = await page(session.url);
+    assert.match(html, /1 problem, so this version is not shown/);
+    assert.match(html, /changes are no longer watched \(EPERM: operation not permitted, watch\)/);
+    assert.match(html, /<p>Rendered\.<\/p>/, 'the last render stays');
+  } finally {
+    await session.close();
+  }
+});
+
+test("the page's CSP forbids framing it: frame-ancestors 'none'", async () => {
+  const session = await startPreview({ ...fakes, file: docFile(heading('Framed')), port: 0 });
+  try {
+    const csp = (await fetch(session.url)).headers.get('content-security-policy');
+    assert.match(csp, /(^|; )frame-ancestors 'none'(;|$)/);
+  } finally {
+    await session.close();
+  }
+});
+
+test('when the default port and the fallback both fail, the message names the default port, not undefined', async () => {
+  let err = '';
+  const io = { stdout() {}, stderr: (t) => void (err += t) };
+  const start = async () => {
+    throw Object.assign(new Error('listen EACCES: permission denied'), { code: 'EACCES' });
+  };
+  const code = await preview([docFile(heading('Busy'))], {}, io, { ...fakes, UsageError: Error, start });
+  assert.equal(code, 2);
+  assert.equal(err, 'portable-doc preview: cannot listen on 127.0.0.1:4317 or on any free port: listen EACCES: permission denied\n');
 });
