@@ -92,16 +92,26 @@ test('a table edit counts the JSON inside strings, which the normalizer decodes,
   await assert.rejects(call(json(70_000), edit), /reads the JSON inside strings, and with it the arguments hold more than 200000 JSON values/);
   await assert.rejects(call(`${'['.repeat(MAX_DEPTH)}${']'.repeat(MAX_DEPTH)}`, edit), new RegExp(`reads the JSON inside strings, and with it the arguments nest deeper than ${MAX_DEPTH} JSON levels`));
   await assert.rejects(call(` \n${'['.repeat(MAX_DEPTH)}${']'.repeat(MAX_DEPTH)}`, edit), /nest deeper/);
-  assert.equal((await call(`${'['.repeat(995)}${']'.repeat(995)}`, edit)).isError, undefined);
-  await assert.rejects(call(`${'['.repeat(996)}${']'.repeat(996)}`, edit), new RegExp(`nest deeper than ${MAX_DEPTH}`));
   assert.equal((await call(JSON.stringify(`${'['.repeat(MAX_DEPTH)}${']'.repeat(MAX_DEPTH)}`), edit)).isError, undefined, 'a JSON string literal stays a string');
   assert.equal((await call(json(60_000), edit)).isError, undefined);
   assert.equal((await call(json(70_000), patch)).isError, undefined);
   assert.equal((await call(`x${'['.repeat(MAX_DEPTH)}`, edit)).isError, undefined);
   assert.equal(measure({ s: json(3) }, { strings: true }).nodes, measure({ s: JSON.parse(json(3)) }).nodes + 1);
   assert.equal(measure({ s: json(3) }).nodes, 2);
-  assert.equal(measure({ s: '[[1]]' }, { strings: true }).depth, 4, 'the decoded value starts one level below the string');
+  assert.equal(measure({ s: '[[1]]' }, { strings: true }).depth, 3, 'the decoded value takes the string\'s place');
   assert.equal(measure({ s: '[[1]]' }).depth, 1);
+});
+
+test('a table edit whose decoded string\'s deepest container lands exactly at the argument limit, counted at the string\'s place, is accepted, and one level more is refused', async () => {
+  // The string sits at level 6: arguments 1, doc 2, blocks 3, the list 4, content 5, the item 6.
+  // The normalizer puts the decoded value in the string's place, so n brackets reach level 5 + n.
+  const n = MAX_DEPTH - 5;
+  const call = (levels) => callTool({}, 'apply_ops', {
+    doc: { blocks: [TABLE, { id: 'l', type: 'bulletList', content: [`${'['.repeat(levels)}${']'.repeat(levels)}`] }] },
+    ops: [{ op: 'patch-table-structure', id: 't', shape: SHAPE, action: 'add-row' }],
+  });
+  assert.equal((await call(n)).isError, undefined);
+  await assert.rejects(call(n + 1), new RegExp(`nest deeper than ${MAX_DEPTH}`));
 });
 
 const nearJson = (count, length) => Array.from({ length: count }, (_, i) => `[${'1,'.repeat((length - 12) / 2)}x${String(i).padStart(10, '0')}`);

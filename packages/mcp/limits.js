@@ -17,7 +17,8 @@ function decoded(string) {
 }
 
 // Nodes count every value, scalars too. Depth is walkDepth's, as validate counts
-// it; with `strings`, the JSON inside a string is walked one level below it.
+// it; with `strings`, the JSON inside a string is walked in the string's place,
+// where the normalizer puts it when it decodes the string.
 export function measure(value, { strings = false } = {}) {
   const read = new Map();
   const expand = strings
