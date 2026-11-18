@@ -8,17 +8,22 @@ export const MAX_DEPTH = MAX_VALUE_DEPTH + ARGS_LEVEL;
 
 const JSON_TEXT = /^[ \t\n\r]*[[{]/;
 
+// Where the normalizer puts what it decodes (ops/persist.js): listItem keeps a
+// decoded list in the string's place, and legacyInline flattens a list there but
+// wraps a decoded map as [map], one level down. So a map is counted inside a list.
 function decoded(string) {
   try {
-    return [JSON.parse(string)];
+    const value = JSON.parse(string);
+    return [Array.isArray(value) ? value : [value]];
   } catch {
     return [];
   }
 }
 
 // Nodes count every value, scalars too. Depth is walkDepth's, as validate counts
-// it; with `strings`, the JSON inside a string is walked in the string's place,
-// where the normalizer puts it when it decodes the string.
+// it; with `strings`, the JSON inside a string is walked where the normalizer
+// puts it when it decodes the string: a list in the string's place, a map one
+// level down, inside a list.
 export function measure(value, { strings = false } = {}) {
   const read = new Map();
   const expand = strings

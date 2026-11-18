@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
-import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { applyOps } from './ops/apply.js';
+import { ensureIds, normalizeRenderShapes } from './ops/persist.js';
 import { project } from './ops/table.js';
 import { callTool } from './tools.js';
 
@@ -112,6 +113,19 @@ test('a table edit whose decoded string\'s deepest container lands exactly at th
   });
   assert.equal((await call(n)).isError, undefined);
   await assert.rejects(call(n + 1), new RegExp(`nest deeper than ${MAX_DEPTH}`));
+});
+
+test('a decoded map string counts one level down, where the normalizer wraps it: its deepest container exactly at the argument limit is accepted, one level more is refused', async () => {
+  // The string sits at level 6. The normalizer swaps it for [map]: the list at 6, the map at 7, so k arrays in x reach 7 + k.
+  const k = MAX_DEPTH - 7;
+  const blocks = (levels) => [TABLE, { id: 'l', type: 'bulletList', content: [`{"type":"text","value":"v","x":${'['.repeat(levels)}${']'.repeat(levels)}}`] }];
+  const call = (levels) => callTool({}, 'apply_ops', { doc: { blocks: blocks(levels) }, ops: [{ op: 'patch-table-structure', id: 't', shape: SHAPE, action: 'add-row' }] });
+  assert.equal((await call(k)).isError, undefined);
+  await assert.rejects(call(k + 1), new RegExp(`nest deeper than ${MAX_DEPTH}`));
+  // What the normalizer builds at the boundary, in argument terms, stays within the limit.
+  assert.equal(walkDepth({ doc: { blocks: normalizeRenderShapes(ensureIds(blocks(k))) } }, { limit: MAX_DEPTH }), MAX_DEPTH);
+  assert.equal(measure({ s: '{"a":1}' }, { strings: true }).depth, 3, 'a map string: the object, the list around it, the map');
+  assert.equal(measure({ s: '[1]' }, { strings: true }).depth, 2, 'a list string takes the string\'s place');
 });
 
 const nearJson = (count, length) => Array.from({ length: count }, (_, i) => `[${'1,'.repeat((length - 12) / 2)}x${String(i).padStart(10, '0')}`);
