@@ -61,7 +61,8 @@ $ cat notes.json | npx portable-doc render --format text
   with `@portable-doc/react/paper-surface.css`. It loads the built package, so
   run `npm run react:build` once first; without it, or without `react`
   installed, the command exits 2 and says what to run.
-- `-o -` writes to stdout. `-o` never replaces the input file.
+- `-o -` writes to stdout. `-o` never replaces the input file, by any path,
+  symlink or hard link to it.
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.
   `--force` renders it anyway, after printing the errors.
 

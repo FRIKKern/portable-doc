@@ -124,6 +124,17 @@ test('render -o - writes to stdout, and -o never takes a flag or the input file'
   assert.equal(fs.readFileSync(file, 'utf8'), before);
 });
 
+test('render -o refuses a hard link to the input and leaves the input as it was', () => {
+  const file = write('linked.json', [{ type: 'paragraph', text: 'Keep me' }]);
+  const before = fs.readFileSync(file);
+  const link = path.join(tmp, 'linked-too.json');
+  fs.linkSync(file, link);
+  const r = run(['render', file, '-o', link]);
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /Usage: portable-doc render/);
+  assert.deepEqual(fs.readFileSync(file), before);
+});
+
 test('--json results parse, and explain adds the rule each error breaks', async () => {
   const file = write('broken.json', broken.doc);
   const v = JSON.parse(run(['validate', '--json', file, valid[0]]).stdout);
