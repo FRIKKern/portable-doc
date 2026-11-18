@@ -85,7 +85,7 @@ export function fieldDiff(a, b, at = '', out = []) {
   if (canon(a) === canon(b)) return out;
   if (a !== undefined && b !== undefined) {
     if (typeof a === 'string' && typeof b === 'string' && /\s/.test(a + b)) return out.push({ path: at, words: wordDiff(a, b) }), out;
-    if (at.endsWith('content') && Array.isArray(a) && Array.isArray(b)) {
+    if (/(^|\.)content$/.test(at) && Array.isArray(a) && Array.isArray(b)) {
       const [x, y] = [inlineText(a), inlineText(b)];
       if (x !== y) return out.push({ path: at, words: wordDiff(x, y) }), out;
     }

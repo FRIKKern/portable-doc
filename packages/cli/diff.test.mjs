@@ -42,12 +42,12 @@ test('diff reports a changed paragraph with its word diff, an added block and a 
   assert.deepEqual([same.status, same.stdout], [0, '']);
 });
 
-test('field changes, removed blocks and envelope keys each get a line', async () => {
-  const a = write({ title: 'Old', blocks: [{ id: 'h', type: 'heading', level: 2, text: 'Hi' }, { id: 'n', type: 'callout', tone: 'info', text: 'x' }, p('gone', 'Bye.')] });
-  const b = write({ title: 'New', blocks: [{ id: 'h', type: 'heading', level: 3, text: 'Hi' }, { id: 'n', type: 'callout', tone: 'warn', text: 'x' }] });
+test('field changes, marks in inline content, removed blocks and envelope keys each get a line', async () => {
+  const a = write({ title: 'Old', blocks: [{ id: 'h', type: 'heading', level: 2, text: 'Hi' }, { id: 'n', type: 'callout', tone: 'info', text: 'x' }, { id: 'q', type: 'paragraph', content: [{ type: 'text', value: 'Say it plainly' }] }, p('gone', 'Bye.')] });
+  const b = write({ title: 'New', blocks: [{ id: 'h', type: 'heading', level: 3, text: 'Hi' }, { id: 'n', type: 'callout', tone: 'warn', text: 'x' }, { id: 'q', type: 'paragraph', content: [{ type: 'text', value: 'Say it ' }, { type: 'text', value: 'plainly', marks: ['bold'] }] }] });
   const r = await call(['diff', a, b]);
   assert.equal(r.status, 1);
-  assert.deepEqual(r.stdout.split('\n').slice(1, -1), ['~ doc: title: Old → New', '~ heading h: level: 2 → 3', '~ callout n: tone: info → warn', '- paragraph gone at [2]']);
+  assert.deepEqual(r.stdout.split('\n').slice(1, -1), ['~ doc: title: Old → New', '~ heading h: level: 2 → 3', '~ callout n: tone: info → warn', '~ paragraph q: content: Say it [-plainly-]{+**plainly**+}', '- paragraph gone at [3]']);
 });
 
 test('--json parses, is the same for docs whose keys are only reordered, and never carries color', async () => {
