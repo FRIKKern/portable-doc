@@ -100,7 +100,7 @@ function scan(value) {
     if (!isMap(v) && !Array.isArray(v)) continue;
     if (isMap(v)) {
       if (typeof v.id === 'string' && v.id.trim() !== '' && typeof v.type === 'string') ids.push(v.id);
-      if ('href' in v && safeUrl(v.href) === null) return null;
+      if ('href' in v && safeUrl(v.href) !== v.href) return null;
     }
     for (const child of Object.values(v)) stack.push(child);
   }
