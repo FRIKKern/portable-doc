@@ -113,6 +113,9 @@ const jsonText = (value) => `${JSON.stringify(value, null, 2).replace(/[\u007f-\
 
 const errorLine = (name, e) => `${name}: ${e.code} at ${shown(e.path) || '(root)'}: ${shown(e.message)}`;
 
+// validate lists up to MAX_ERRORS errors; the rest are only counted.
+const moreLine = (file, more) => (more ? `${file}: ${more} more ${more === 1 ? 'error' : 'errors'}, not listed\n` : '');
+
 async function check(command, files, opts, io) {
   const inputs = files.length ? files : ['-'];
   if (inputs.filter((f) => f === '-').length > 1) throw new UsageError('stdin can be read only once');
@@ -126,26 +129,26 @@ async function check(command, files, opts, io) {
     }
     const result = validate(input.doc);
     const errors = result.ok ? [] : result.errors;
-    results.push({ file: input.name, ok: result.ok, errors, doc: input.doc });
+    results.push({ file: input.name, ok: result.ok, errors, more: result.more ?? 0, doc: input.doc });
   }
   const code = results.some((r) => r.failure) ? 2 : results.every((r) => r.ok) ? 0 : 1;
   if (opts.json) {
-    const files = results.map(({ file, ok, failure, errors, doc }) => {
+    const files = results.map(({ file, ok, failure, errors, more, doc }) => {
       if (failure) return { file, ok, error: failure };
       const list = command === 'explain' ? errors.map((e) => ({ ...e, explanation: explainError(e, doc, String).join(' '), refusedWhen: refusedWhen(e.code) })) : errors;
-      return { file, ok, errors: list };
+      return more ? { file, ok, errors: list, more } : { file, ok, errors: list };
     });
     io.stdout(jsonText({ ok: code === 0, files }));
     return code;
   }
   for (const r of results) {
     if (r.failure) io.stderr(`${r.file}: ${r.failure.message}\n`);
-    else if (command === 'validate') io.stdout(r.ok ? `${r.file}: ok\n` : r.errors.map((e) => `${errorLine(r.file, e)}\n`).join(''));
+    else if (command === 'validate') io.stdout(r.ok ? `${r.file}: ok\n` : r.errors.map((e) => `${errorLine(r.file, e)}\n`).join('') + moreLine(r.file, r.more));
     else if (r.ok) io.stdout(`${r.file}: ok, nothing to explain\n`);
     else {
-      const n = r.errors.length;
+      const n = r.errors.length + r.more;
       const body = r.errors.map((e, i) => explainError(e, r.doc).map((l, j) => `${j ? '   ' : `${i + 1}. `}${l}`).join('\n')).join('\n\n');
-      io.stdout(`${r.file}: ${n} ${n === 1 ? 'error' : 'errors'}\n\n${body}\n\n`);
+      io.stdout(`${r.file}: ${n} ${n === 1 ? 'error' : 'errors'}\n\n${body}\n\n${moreLine(r.file, r.more)}`);
     }
   }
   return code;
@@ -201,7 +204,7 @@ async function render(files, opts, io) {
   if (input.failure) return io.stderr(`${input.name}: ${input.failure.message}\n`), 2;
   const result = validate(input.doc);
   if (!result.ok) {
-    io.stderr(result.errors.map((e) => `${errorLine(input.name, e)}\n`).join(''));
+    io.stderr(result.errors.map((e) => `${errorLine(input.name, e)}\n`).join('') + moreLine(input.name, result.more));
     if (!opts.force) return io.stderr(`${input.name}: not rendered, the doc is invalid (--force renders it anyway)\n`), 1;
   }
   let out;

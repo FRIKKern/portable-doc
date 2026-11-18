@@ -21,8 +21,10 @@ broken.json: value_not_allowed at /blocks/2/level: 9 is above 6
 ```
 
 One line per error: `file: code at /path: message`. The codes and their rules
-are in [`CODES.md`](../validate/CODES.md). `--json` prints
-`{ ok, files: [{ file, ok, errors | error }] }` for scripts.
+are in [`CODES.md`](../validate/CODES.md). A doc lists at most
+`MAX_ERRORS` (1,000) errors, then one line `file: N more errors, not listed`.
+`--json` prints `{ ok, files: [{ file, ok, errors | error, more }] }` for
+scripts, with `more` only when errors were left out.
 
 Exit codes, the same for `explain`:
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
-import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
+import { MAX_ERRORS, MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
 import { applyOps } from './ops/apply.js';
 import { project } from './ops/table.js';
 import { callTool } from './tools.js';
@@ -119,3 +119,16 @@ for (const [name, block] of [
     assert.ok(result.ok, JSON.stringify(result.error));
   });
 }
+
+test('validate and render return the first MAX_ERRORS errors and how many more; explain takes at most MAX_ERRORS', async () => {
+  const doc = { blocks: Array(MAX_ERRORS + 5).fill(5) };
+  const checked = (await callTool({}, 'validate', { doc })).structuredContent;
+  assert.deepEqual([checked.ok, checked.errors.length, checked.more], [false, MAX_ERRORS, 5]);
+  const rendered = await callTool({}, 'render', { doc, format: 'text' });
+  assert.equal(rendered.isError, true);
+  assert.match(rendered.structuredContent.error, new RegExp(`\\(${MAX_ERRORS + 5} errors\\)`));
+  assert.deepEqual([rendered.structuredContent.errors.length, rendered.structuredContent.more], [MAX_ERRORS, 5]);
+  const error = { code: 'too_deep', path: '/blocks/0' };
+  assert.equal((await callTool({}, 'explain', { errors: Array(MAX_ERRORS).fill(error) })).isError, undefined);
+  await assert.rejects(callTool({}, 'explain', { errors: Array(MAX_ERRORS + 1).fill(error) }), new RegExp(`errors holds more than ${MAX_ERRORS} entries`));
+});
