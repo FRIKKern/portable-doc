@@ -31,8 +31,10 @@ function wordBag(block) {
  *    equal to it, then the most similar unpaired block of its type (a bag Dice
  *    score of at least 0.5 on their words), until MAX_SIMILARITY_WORK is spent.
  * A block with an id never pairs with a block without one.
+ * `stats`, when given, is filled with { canon, work, stopped }: the canon calls of the
+ * equality step, the similarity work spent, and whether it stopped at the cap.
  */
-export function matchBlocks(A, B) {
+export function matchBlocks(A, B, stats = {}) {
   const keyed = (list) => {
     const seen = new Map();
     list.forEach((b, i) => {
@@ -48,14 +50,18 @@ export function matchBlocks(A, B) {
   const rest = (list, keys) => list.map((_, i) => i).filter((i) => keys.get(blockId(list[i])) !== i);
 
   // Equal blocks: each canonical form holds a queue of B indexes, taken in order.
+  // One canon per block left over: stats.canon counts them.
+  stats.canon = 0;
   const queues = new Map();
   for (const j of rest(B, kb)) {
+    stats.canon++;
     const c = canon(B[j]);
     if (!queues.has(c)) queues.set(c, { list: [], next: 0 });
     queues.get(c).list.push(j);
   }
   const left = [];
   for (const i of rest(A, ka)) {
+    stats.canon++;
     const q = queues.get(canon(A[i]));
     if (q && q.next < q.list.length) {
       const j = q.list[q.next++];
@@ -75,11 +81,15 @@ export function matchBlocks(A, B) {
   }
   for (const list of byType.values()) list.sort((p, q) => p.j - q.j);
   let work = 0;
+  stats.stopped = false;
   scoring: for (const i of left) {
     const a = wordBag(A[i]);
     let best = null;
     for (const b of byType.get(blockType(A[i])) ?? []) {
-      if (++work > MAX_SIMILARITY_WORK) break scoring;
+      if (++work > MAX_SIMILARITY_WORK) {
+        stats.stopped = true;
+        break scoring;
+      }
       if (usedB.has(b.j)) continue;
       const sum = a.total + b.total;
       if (sum === 0) {
@@ -98,6 +108,7 @@ export function matchBlocks(A, B) {
     }
     if (best) pairs.push([i, best.j]), usedB.add(best.j);
   }
+  stats.work = work;
   return pairs.sort((p, q) => p[1] - q[1]);
 }
 

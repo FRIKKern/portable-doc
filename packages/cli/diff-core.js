@@ -81,27 +81,39 @@ const inlineText = (content) => toMarkdown([{ type: 'paragraph', content }]).tri
 
 const pathOf = (at, key) => (typeof key === 'number' ? `${at}[${key}]` : at ? `${at}.${key}` : key);
 
-/** What differs between two values, as [{ path, from?, to? } | { path, words }]; a side that is absent has no from or to. */
-export function fieldDiff(a, b, at = '', out = [], budget = { cells: MAX_TOTAL_CELLS }) {
-  if (canon(a) === canon(b)) return out;
+/**
+ * What differs between two values, as [{ path, from?, to? } | { path, words }]; a side that is absent has no from or to.
+ * Equality is decided bottom-up: two maps or two arrays are equal when nothing under them differs, so each
+ * value is read once, however deep. Only scalars, and values of different kinds, are compared by `canon`.
+ * Inline `content` is read as Markdown once, at the outermost `content`; below it, parts compare by position.
+ */
+export function fieldDiff(a, b, at = '', out = [], budget = { cells: MAX_TOTAL_CELLS }, inContent = false) {
   if (a !== undefined && b !== undefined) {
-    if (typeof a === 'string' && typeof b === 'string' && /\s/.test(a + b)) return out.push({ path: at, words: wordDiff(a, b, budget) }), out;
-    if (/(^|\.)content$/.test(at) && Array.isArray(a) && Array.isArray(b)) {
+    if (typeof a === 'string' && typeof b === 'string') {
+      if (a === b) return out;
+      if (/\s/.test(a + b)) return out.push({ path: at, words: wordDiff(a, b, budget) }), out;
+    }
+    if (!inContent && /(^|\.)content$/.test(at) && Array.isArray(a) && Array.isArray(b)) {
       const [x, y] = [inlineText(a), inlineText(b)];
       if (x !== y) return out.push({ path: at, words: wordDiff(x, y, budget) }), out;
+      inContent = true;
     }
     if (isMap(a) && isMap(b)) {
-      for (const k of [...Object.keys(a), ...Object.keys(b).filter((k) => !Object.hasOwn(a, k))]) fieldDiff(a[k], b[k], pathOf(at, k), out, budget);
+      for (const k of [...Object.keys(a), ...Object.keys(b).filter((k) => !Object.hasOwn(a, k))]) fieldDiff(a[k], b[k], pathOf(at, k), out, budget, inContent);
       return out;
     }
     if (Array.isArray(a) && Array.isArray(b)) {
-      for (let i = 0; i < Math.max(a.length, b.length); i++) fieldDiff(a[i], b[i], pathOf(at, i), out, budget);
+      for (let i = 0; i < Math.max(a.length, b.length); i++) fieldDiff(a[i], b[i], pathOf(at, i), out, budget, inContent);
       return out;
     }
   }
+  if (canon(a) === canon(b)) return out;
   out.push({ path: at, ...(a !== undefined && { from: a }), ...(b !== undefined && { to: b }) });
   return out;
 }
+
+/** fieldDiff of two blocks, or of the doc's own keys: one canon each first, so an equal pair costs one read. */
+const pairDiff = (a, b, budget) => (canon(a) === canon(b) ? [] : fieldDiff(a, b, '', [], budget));
 
 /**
  * Every difference between two docs, in a stable order: the doc's own keys
@@ -111,14 +123,14 @@ export function fieldDiff(a, b, at = '', out = [], budget = { cells: MAX_TOTAL_C
 export function diffDocs(a, b) {
   const changes = [];
   const budget = { cells: MAX_TOTAL_CELLS };
-  const docFields = fieldDiff(a.rest, b.rest, '', [], budget);
+  const docFields = pairDiff(a.rest, b.rest, budget);
   if (docFields.length) changes.push({ kind: 'doc', type: null, id: null, from: null, to: null, fields: docFields });
   const pairs = matchBlocks(a.blocks, b.blocks);
   const keep = inOrder(pairs);
   const block = (kind, blk, from, to, fields = []) => ({ kind, type: blockType(blk), id: blockId(blk), from, to, fields });
   const rows = [];
   pairs.forEach(([i, j], k) => {
-    const fields = fieldDiff(a.blocks[i], b.blocks[j], '', [], budget);
+    const fields = pairDiff(a.blocks[i], b.blocks[j], budget);
     if (!keep.has(k)) rows.push([j, 1, block('moved', b.blocks[j], i, j, fields)]);
     else if (fields.length) rows.push([j, 1, block('changed', b.blocks[j], i, j, fields)]);
   });
