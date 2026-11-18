@@ -19,5 +19,6 @@
     "react:smoke": "node scripts/smoke-react-tarball.mjs",
     "code:pack": "node scripts/pack-code-release.mjs",
     "code:smoke": "node scripts/smoke-code-tarball.mjs"
-  }
+  },
+  "devDependencies": { "esbuild": "0.27.7" }
 }
