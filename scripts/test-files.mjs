@@ -14,6 +14,11 @@ const packages = fs.existsSync(path.join(root, 'packages'))
   : [];
 const files = [...tests('scripts'), ...packages.flatMap((p) => tests(`packages/${p}`))];
 
+// An empty list would let `node --test` discover every test file, packages/editor included.
+if (!files.length) {
+  console.error('test-files: no test files found under scripts/ or packages/');
+  process.exit(1);
+}
 if (process.argv.includes('--run')) {
   process.exitCode = spawnSync(process.execPath, ['--test', ...files], { cwd: root, stdio: 'inherit' }).status ?? 1;
 } else console.log(files.join('\n'));

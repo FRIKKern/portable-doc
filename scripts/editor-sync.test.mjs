@@ -156,6 +156,24 @@ test('a symlink under packages/editor fails the check, naming it, in a git work 
   }
 });
 
+test('a symlinked directory under packages/editor is named once, and its contents are not listed', () => {
+  const root = realCopy();
+  fs.symlinkSync('src', path.join(root, EDITOR_DIR, 'linked-src'));
+  const r = check(root);
+  assert.equal(r.code, 1, r.out);
+  assert.deepEqual(r.out.trim().split('\n').filter((l) => l.includes('linked-src')), ['packages/editor/linked-src: a symlink; the sync writes regular files only']);
+});
+
+test('a committed file under packages/editor that a .gitignore matches still fails the check, naming it', () => {
+  const root = realCopy({ git: true });
+  write(path.join(root, EDITOR_DIR, 'dist/bp-paper-editor.bundle.js'), 'built\n');
+  assert.equal(check(root).code, 0, 'untracked build output is a local leftover');
+  execFileSync('git', ['-C', root, 'add', '-f', `${EDITOR_DIR}/dist/bp-paper-editor.bundle.js`]);
+  const r = check(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /^packages\/editor\/dist\/bp-paper-editor.bundle.js: not written by the sync \(absent from SOURCE.json\)$/m);
+});
+
 test('a global gitignore does not change what the sync copies: only the repo\'s own .gitignore files count', () => {
   const excludes = path.join(tmp, `global-ignore-${n++}`);
   const config = path.join(tmp, `global-config-${n++}`);

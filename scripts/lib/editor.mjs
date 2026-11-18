@@ -11,31 +11,45 @@ export const BARKPARK_EDITOR = 'api/assets/paper-editor';
 
 const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-// One rule for which files make up the editor, in Barkpark and here: the files git would track
-// there, judged by the repo's own .gitignore files only, never a global excludes file or
-// .git/info/exclude, so a local run lists what CI lists. Build output, node_modules and .DS_Store
-// never count. Only regular files are copied or accepted; a symlink is named as an error.
+// Ignore rules come from the repo's own .gitignore files only, never a global excludes file or
+// .git/info/exclude, so a local run lists what CI lists.
+// - Barkpark: the files it tracks under the editor path, minus any its .gitignore files match.
+// - Here: every tracked file, ignored or not, plus untracked files no .gitignore matches. So
+//   untracked build output, node_modules and .DS_Store never count, and a committed file always does.
+// Only regular files are copied or accepted; a symlink is named as an error.
 const OWN_IGNORES = '--exclude-per-directory=.gitignore';
 
-function gitFiles(repo, dir, extra = []) {
-  const list = (...args) => execFileSync('git', ['-C', repo, 'ls-files', '-z', '--full-name', ...args, '--', dir], { encoding: 'utf8' })
+function gitList(repo, dir, ...args) {
+  return execFileSync('git', ['-C', repo, 'ls-files', '-z', '--full-name', ...args, '--', dir], { encoding: 'utf8' })
     .split('\0').filter(Boolean).map((f) => f.slice(dir.length + 1));
-  const ignored = new Set(list('--cached', '--ignored', OWN_IGNORES));
-  return [...new Set(list('--cached', ...extra))].filter((f) => !ignored.has(f)).sort();
 }
+
+function trackedNotIgnored(repo, dir) {
+  const ignored = new Set(gitList(repo, dir, '--cached', '--ignored', OWN_IGNORES));
+  return [...new Set(gitList(repo, dir, '--cached'))].filter((f) => !ignored.has(f)).sort();
+}
+
+const trackedOrUnignored = (repo, dir) => [...new Set([...gitList(repo, dir, '--cached'), ...gitList(repo, dir, '--others', OWN_IGNORES)])].sort();
 
 const isGitTop = (dir) => {
   const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: dir, encoding: 'utf8' }).stdout?.trim();
   return Boolean(top) && top === fs.realpathSync(dir);
 };
 
-// Outside a git work tree (a copy in a temp dir) every file and symlink on disk counts.
+// Not at the top of a git work tree (a copy in a temp dir): every file and symlink on disk counts.
+// A symlinked directory is one entry; the walk never follows it.
 function walk(dir) {
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((e) => e.isFile() || e.isSymbolicLink())
-    .map((e) => path.relative(dir, path.join(e.parentPath, e.name)).split(path.sep).join('/'))
-    .sort();
+  const out = [];
+  const stack = [''];
+  while (stack.length) {
+    const rel = stack.pop();
+    for (const e of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
+      const name = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) stack.push(name);
+      else if (e.isFile() || e.isSymbolicLink()) out.push(name);
+    }
+  }
+  return out.sort();
 }
 
 /** { files: { path: sha256 }, symlinks: [path] } of listed files; a listed file gone from disk is left out. */
@@ -52,17 +66,17 @@ function scan(dir, list) {
 
 /** The files Barkpark tracks under its editor path, minus what its .gitignore files match. Empty when the path is not there. */
 export function trackedEditorFiles(barkpark) {
-  return fs.existsSync(path.join(barkpark, BARKPARK_EDITOR)) ? gitFiles(barkpark, BARKPARK_EDITOR) : [];
+  return fs.existsSync(path.join(barkpark, BARKPARK_EDITOR)) ? trackedNotIgnored(barkpark, BARKPARK_EDITOR) : [];
 }
 
 const barkparkEditor = (barkpark) => scan(path.join(barkpark, BARKPARK_EDITOR), trackedEditorFiles(barkpark));
 export const barkparkEditorHashes = (barkpark) => barkparkEditor(barkpark).files;
 
-/** The editor copy here, by the same rule: tracked or untracked, not ignored. */
+/** The editor copy here: every tracked file, and untracked files no .gitignore matches. */
 function localEditor(root) {
   const dir = path.join(root, EDITOR_DIR);
   if (!fs.existsSync(dir)) return { files: {}, symlinks: [] };
-  return scan(dir, isGitTop(root) ? gitFiles(root, EDITOR_DIR, ['--others', OWN_IGNORES]) : walk(dir));
+  return scan(dir, isGitTop(root) ? trackedOrUnignored(root, EDITOR_DIR) : walk(dir));
 }
 
 export const editorHashes = (root) => localEditor(root).files;
