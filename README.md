@@ -32,6 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 ## What happened
 
+The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
 - **Today** · 4 changes
   - mcp: a table edit counts decoded string JSON at the string's own level ([#76](https://github.com/FRIKKern/portable-doc/pull/76))
@@ -70,7 +71,6 @@ the JS renderers. They move here one reward at a time, with no downtime
 ```sh
 npm run roadmap    # redraw docs/images/roadmap.svg from the board
 npm run heatmap    # redraw docs/images/conformance.svg from conformance/
-npm run timeline   # rewrite the timeline above
 npm run sync -- ../barkpark   # copy spec/, goldens/ and conformance/ from a Barkpark checkout
 npm run check      # doc rules, pack stamp, reports and SOURCE.json, tests
 npm run docs:site  # build dist/docs-site; open playground.html to try the format
