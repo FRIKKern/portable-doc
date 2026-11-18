@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 5 changes
-  - portable-doc command: validate, explain and render docs from a terminal, hook or CI ([#60](https://github.com/FRIKKern/portable-doc/pull/60))
+- **Today** · 6 changes
+  - MCP: replies carry up to 10 MiB minus a margin; content always holds the full JSON ([#62](https://github.com/FRIKKern/portable-doc/pull/62))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
