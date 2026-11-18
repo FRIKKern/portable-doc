@@ -14,6 +14,7 @@ try {
     stderr: write(process.stderr),
     readStdin,
     stdinIsTTY: Boolean(process.stdin.isTTY),
+    stdoutIsTTY: Boolean(process.stdout.isTTY),
   });
 } catch (error) {
   process.stderr.write(`portable-doc: ${error?.message ?? error}\n`);
