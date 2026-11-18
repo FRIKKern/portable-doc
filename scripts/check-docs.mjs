@@ -3,20 +3,27 @@
 // it is Barkpark's text, copied by the sync, and its links are Barkpark's to keep.
 // The README timeline block is written on main only, by the housekeeping job: a branch
 // whose block differs from the one at its merge-base with origin/main fails. The job
-// itself passes --timeline-from-job, which skips that one rule.
-import { execFileSync } from 'node:child_process';
+// itself passes --timeline-from-job, which skips that one rule. Outside a git checkout of
+// this repo (a source download, or a copy inside some other repo) the Markdown files are
+// found on disk, and the timeline rule is skipped with a line that says so.
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', '*.md', ':(exclude)packages/editor/'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: root, encoding: 'utf8' }).stdout?.trim();
+const checkout = Boolean(top) && top === fs.realpathSync(root);
+const files = checkout
+  ? execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', '*.md', ':(exclude)packages/editor/'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean)
+  : markdownOnDisk();
 const errors = [];
 
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const readmeLines = readme.trimEnd().split('\n').length;
 if (readmeLines > 80) errors.push(`README.md: ${readmeLines} lines, cap is 80`);
-if (!process.argv.includes('--timeline-from-job')) {
+if (!checkout) console.log('docs: not a git checkout of this repo, so the README timeline rule is skipped');
+else if (!process.argv.includes('--timeline-from-job')) {
   const why = timelineError(readme);
   if (why) errors.push(why);
 }
@@ -57,4 +64,20 @@ function timelineError(readme) {
   } catch {}
   if (block(readme) === block(then)) return null;
   return `README.md: the timeline block differs from origin/main at ${base.slice(0, 12)}; ${rule}, so put it back as it is there`;
+}
+
+// What .gitignore leaves out, plus Barkpark's editor text; the walk never follows a symlinked directory.
+function markdownOnDisk() {
+  const skip = new Set(['.git', 'node_modules', 'dist', '.barkpark', 'packages/editor']);
+  const out = [];
+  const stack = [''];
+  while (stack.length) {
+    const rel = stack.pop();
+    for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
+      const name = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory() && !skip.has(e.name) && !skip.has(name)) stack.push(name);
+      else if (e.isFile() && name.endsWith('.md')) out.push(name);
+    }
+  }
+  return out.sort();
 }

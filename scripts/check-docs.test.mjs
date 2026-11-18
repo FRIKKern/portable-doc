@@ -84,7 +84,28 @@ test('the housekeeping job\'s --timeline-from-job lets a freshly regenerated blo
   assert.match(fs.readFileSync(path.join(scripts, '..', '.github', 'workflows', 'housekeeping.yml'), 'utf8'), /node scripts\/check-docs\.mjs --timeline-from-job\n/);
 });
 
-test('check-docs fails and says why when origin/main does not resolve or shares no commit with HEAD', () => {
+test('a folder copy with no .git of its own passes and says the timeline rule is skipped, also inside another git repo; its links are still checked', () => {
+  const outer = path.join(tmp, `outer-${n++}`);
+  fs.mkdirSync(outer);
+  git(outer, 'init', '-q');
+  for (const root of [path.join(tmp, `plain-${n++}`), path.join(outer, 'download')]) {
+    fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
+    fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts', 'check-docs.mjs'));
+    setReadme(root, readme('9 changes'));
+    fs.mkdirSync(path.join(root, 'node_modules', 'x'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules', 'x', 'README.md'), '[gone](gone.md)\n');
+    let r = checkDocs(root);
+    assert.equal(r.code, 0, r.out);
+    assert.equal(r.out, 'docs: not a git checkout of this repo, so the README timeline rule is skipped\ndocs ok: 1 files, README 7 lines\n');
+    fs.mkdirSync(path.join(root, 'docs'));
+    fs.writeFileSync(path.join(root, 'docs', 'x.md'), '[gone](gone.md)\n');
+    r = checkDocs(root);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /docs\/x\.md: broken link gone\.md/);
+  }
+});
+
+test('a git checkout fails and says why when origin/main does not resolve, with the fetch hint, or shares no commit with HEAD', () => {
   const root = repo();
   git(root, 'update-ref', '-d', 'refs/remotes/origin/main');
   let r = checkDocs(root);
