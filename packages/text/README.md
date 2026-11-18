@@ -79,8 +79,7 @@ The rules are Barkpark's `FromMarkdown`: headings keep their level, inline
 marks become `strong`, `em`, `strikethrough`, `code` and `link` nodes, a
 bullet list with `[ ]` or `[x]` items is a checklist, an ordered list keeps
 its `start`, a fence keeps the first word of its info string as `lang`, `>`
-is a quote and `> [!tone]` a callout, `---` a divider. Nested list items join
-their parent's text after " — ". Two fences do more:
+is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:
 
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
@@ -97,7 +96,8 @@ Where it differs from Barkpark, on purpose:
   its text. A portabledoc fence must also validate, link only to allowed URLs
   and reuse no `id` from an earlier fence, or it stays a code block.
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
-  item's paragraphs are joined by a space.
+  item's paragraphs are joined by a space, and a nested list stays a list in
+  the item's `children`.
 - What `toMarkdown` writes reads back: a quote's last paragraph `— Name` is
   its `cite`, and an emphasised paragraph right after a mermaid fence is the
   diagram's `caption`.

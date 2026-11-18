@@ -48,7 +48,10 @@ test('fromMarkdown follows Barkpark FromMarkdown on its own examples', () => {
   const list = (items, extra) => ({ type: 'list', ordered: true, items: items.map((v) => [t(v)]), ...extra });
   const cases = [
     ['#### Four\n\n##### Five\n\n###### Six', [4, 5, 6].map((level, i) => ({ type: 'heading', level, text: ['Four', 'Five', 'Six'][i] }))],
-    ['1. first\n2. second\n   - nested\n', [list(['first', 'second — nested'])]],
+    [
+      '1. first\n2. second\n   - nested\n',
+      [{ type: 'list', ordered: true, items: [[t('first')], { content: [t('second')], children: [{ type: 'list', ordered: false, items: [[t('nested')]] }] }] }],
+    ],
     ['5. five\n6. six\n', [list(['five', 'six'], { start: 5 })]],
     ['0. zero\n1. one\n', [list(['zero', 'one'], { start: 0 })]],
     ['```python\nprint(1)\n```', [{ type: 'code', value: 'print(1)', lang: 'python' }]],
@@ -105,6 +108,23 @@ function canon(v) {
 const ROUND_TRIP = ['heading', 'paragraph', 'list', 'code', 'table', 'blockquote', 'divider', 'diagram'];
 // These have no Markdown form of their own; they travel in a portabledoc fence.
 const FENCE_ONLY = ['callout', 'chart', 'stat', 'stats', 'heatmap', 'pullquote', 'eyebrow'];
+
+test('a nested list reads back as a list in its item, not as text: fromMarkdown(toMarkdown(doc)) keeps the tree', () => {
+  const doc = [
+    {
+      type: 'list',
+      ordered: false,
+      items: [
+        { content: [t('a')], children: [{ type: 'list', ordered: true, items: [[t('b')], { content: [t('c')], children: [{ type: 'list', ordered: false, items: [[t('d')]] }] }] }] },
+        [t('e')],
+      ],
+    },
+    { type: 'list', ordered: false, task: true, items: [{ content: [t('todo')], checked: false, children: [{ type: 'list', ordered: false, items: [[t('sub')]] }] }] },
+  ];
+  const back = fromMarkdown(toMarkdown(doc));
+  assert.deepEqual(back, doc);
+  valid(back);
+});
 
 test('round trip: every core golden survives toMarkdown then fromMarkdown, and fence types survive the portabledoc fence', () => {
   for (const type of ROUND_TRIP) {

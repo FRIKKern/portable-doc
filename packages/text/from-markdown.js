@@ -24,21 +24,21 @@ const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ?
 
 // ── lists ───────────────────────────────────────────────────────────────
 
-/** A list item as one inline run: its blocks joined by a space, a nested list's items each after " — ". */
-function itemInline(item, depth) {
+/** A list item: its blocks joined by a space as one inline run, and its nested lists kept as lists. */
+function listItem(item, depth) {
   const out = [];
+  const children = [];
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
-      for (const sub of child.children) {
-        out.push(text(' — '), ...(depth >= MAX_NEST ? [text(flattenText([sub]))] : itemInline(sub, depth + 1)));
-      }
+      if (depth >= MAX_NEST) out.push(...(out.length ? [text(' ')] : []), text(flattenText([child]).trim()));
+      else children.push(list(child, depth + 1));
       continue;
     }
     if (out.length) out.push(text(' '));
     if (child.type === 'fence' || child.type === 'code_block') out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
     else out.push(...textOf(child));
   }
-  return merge(out);
+  return { content: merge(out), children };
 }
 
 // `[ ] rest` / `[x] rest` at the head of an item: { content, checked }, else null.
@@ -50,15 +50,26 @@ function taskItem(content) {
   return { content: rest, checked: m[1] !== ' ' };
 }
 
-function list(node) {
+const withChildren = (item, children) => (children.length ? { ...item, children } : item);
+
+function list(node, depth = 0) {
   const ordered = node.type === 'ordered_list';
-  const items = node.children.filter((c) => c.type === 'list_item').map((li) => itemInline(li, 0));
+  const items = node.children.filter((c) => c.type === 'list_item').map((li) => listItem(li, depth));
   // GitHub task syntax (`- [ ] `, `- [x] `) makes the whole bullet list a checklist.
-  const tasks = ordered ? [] : items.map(taskItem);
+  const tasks = ordered ? [] : items.map((it) => taskItem(it.content));
   if (tasks.some(Boolean)) {
-    return { type: 'list', ordered: false, task: true, items: items.map((content, i) => tasks[i] ?? { content, checked: false }) };
+    return {
+      type: 'list',
+      ordered: false,
+      task: true,
+      items: items.map((it, i) => withChildren(tasks[i] ?? { content: it.content, checked: false }, it.children)),
+    };
   }
-  const block = { type: 'list', ordered, items };
+  const block = {
+    type: 'list',
+    ordered,
+    items: items.map((it) => (it.children.length ? { content: it.content, children: it.children } : it.content)),
+  };
   const start = Number(attr(node, 'start') || 1);
   if (ordered && Number.isSafeInteger(start) && start !== 1) block.start = start;
   return block;
