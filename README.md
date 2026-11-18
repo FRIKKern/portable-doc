@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 3 changes
-  - validate lists at most MAX_ERRORS errors and counts the rest in more ([#75](https://github.com/FRIKKern/portable-doc/pull/75))
+- **Today** · 4 changes
+  - mcp: a table edit counts decoded string JSON at the string's own level ([#76](https://github.com/FRIKKern/portable-doc/pull/76))
 - **Yesterday** · 14 changes
   - Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
