@@ -34,7 +34,7 @@ export function stampId(packRoot) {
   return fs.existsSync(file) ? sha256(file).slice(0, 12) : 'none';
 }
 
-function readObject(root, file, errors) {
+export function readObject(root, file, errors) {
   try {
     const value = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
     if (isObject(value) && isObject(value.files)) return value;

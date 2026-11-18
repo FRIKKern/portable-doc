@@ -6,7 +6,8 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BARKPARK_PACK, BARKPARK_REPO, hashes, sha256 } from './lib/pack.mjs';
-import { pack, write } from './lib/synthetic.mjs';
+import { BARKPARK_EDITOR, EDITOR_DIR, editorHashes } from './lib/editor.mjs';
+import { editor, pack, write } from './lib/synthetic.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pack test-'));
@@ -38,7 +39,7 @@ for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_EN
 process.chdir(tmp);
 
 function source(root) {
-  write(path.join(root, 'SOURCE.json'), JSON.stringify({ repo: BARKPARK_REPO, commit: 'a'.repeat(40), path: BARKPARK_PACK, files: hashes(root) }));
+  write(path.join(root, 'SOURCE.json'), JSON.stringify({ repo: BARKPARK_REPO, commit: 'a'.repeat(40), path: BARKPARK_PACK, files: hashes(root), editor: { path: BARKPARK_EDITOR, files: editorHashes(root) } }));
   return root;
 }
 
@@ -64,12 +65,15 @@ function scripted(dir) {
 }
 
 function repo(opts) {
-  return source(pack(scripted(path.join(tmp, `repo-${n++}`)), opts));
+  const root = pack(scripted(path.join(tmp, `repo-${n++}`)), opts);
+  editor(path.join(root, EDITOR_DIR));
+  return source(root);
 }
 
 function barkpark(opts) {
   const dir = path.join(tmp, `barkpark-${n++}`);
   pack(path.join(dir, BARKPARK_PACK), opts);
+  editor(path.join(dir, BARKPARK_EDITOR), { tag: opts?.editorTag });
   const git = (...args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'pipe' });
   git('init', '-q');
   git('add', '.');
@@ -144,10 +148,11 @@ test('only goldens/blocks/*.golden.json are pack types, and only conformance/*.j
   write(path.join(root, 'conformance/CONFORMANCE.md'), '# notes\n');
   write(path.join(root, 'conformance/fixtures/sample.json'), '{"rows":[]}\n');
   write(path.join(root, 'conformance/ref.json.orig'), '{}\n');
-  source(pack(root));
+  editor(path.join(pack(root), EDITOR_DIR));
+  source(root);
   const r = check(root);
   assert.equal(r.code, 0, r.out);
-  assert.match(r.out, /, 2 conformance reports\n$/);
+  assert.match(r.out, /, 2 conformance reports, editor 3 files\n$/);
 });
 
 for (const [name, renderers, message] of [
@@ -179,7 +184,7 @@ test('check fails on fewer than 80 block goldens, even when the stamp agrees', (
 
 test('--against passes when the pack matches Barkpark and fails when Barkpark moved', () => {
   const root = repo();
-  assert.match(check(root, '--against', barkpark()).out, /^pack ok: stamp [0-9a-f]{12}, 85 files, 2 conformance reports, same as Barkpark\n$/);
+  assert.match(check(root, '--against', barkpark()).out, /^pack ok: stamp [0-9a-f]{12}, 85 files, 2 conformance reports, editor 3 files, same as Barkpark\n$/);
   const r = check(root, '--against', barkpark({ tag: 'b', blocks: 81 }));
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /goldens\/blocks\/b3.golden.json: stale, changed in Barkpark/);
@@ -247,7 +252,7 @@ test('a first sync into an empty repo says none for what did not change', () => 
   const r = run(root, 'sync-from-barkpark.mjs', barkpark(), '--pr-body', body);
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /: stamp none → [0-9a-f]{12}\n$/);
-  assert.match(fs.readFileSync(body, 'utf8'), /### Added\n(- `.+`\n){85}\n### Changed\n- none\n\n### Removed\n- none\n$/);
+  assert.match(fs.readFileSync(body, 'utf8'), /### Added\n(- `.+`\n){88}\n### Changed\n- none\n\n### Removed\n- none\n$/);
   assert.equal(check(root).code, 0);
 });
 
@@ -444,7 +449,7 @@ test('sync-pr refuses to run, and touches nothing, when its root is not the top 
   assert.match(loose.out, /is not the top of a git repo \(git says no repo\); nothing done/);
 });
 
-for (const [name, opts] of [['a spec-only', { tag: 'b', specTag: 's' }], ['a goldens-only', { tag: 'g', specTag: 'b' }], ['a conformance-only', { tag: 'b', status: (renderer, type) => ({ status: type === 'b5' ? 'fail' : 'pass' }) }]]) {
+for (const [name, opts] of [['a spec-only', { tag: 'b', specTag: 's' }], ['a goldens-only', { tag: 'g', specTag: 'b' }], ['a conformance-only', { tag: 'b', status: (renderer, type) => ({ status: type === 'b5' ? 'fail' : 'pass' }) }], ['an editor-only', { tag: 'b', editorTag: 'e' }]]) {
   test(`sync-pr pushes and edits the open PR on ${name} change`, () => {
     const c = clone();
     const gh = ghStub();
@@ -455,6 +460,7 @@ for (const [name, opts] of [['a spec-only', { tag: 'b', specTag: 's' }], ['a gol
     assert.match(r.out, /updated https:\/\/example.test\/pull\/7/);
     assert.notEqual(c.head(), pushed);
     assert.match(gh.log(), /^pr edit 7 /m);
+    assert.equal(c.git('status', '--porcelain'), '', 'the sync commit holds everything the sync wrote');
   });
 }
 
