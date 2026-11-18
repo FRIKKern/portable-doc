@@ -1,6 +1,6 @@
 {
   "name": "@portable-doc/editor",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Barkpark paper editor: the <bp-paper-canvas> and <bp-paper-editor> custom elements as one prebuilt IIFE bundle plus stylesheet. Framework-neutral; see EMBED-CONTRACT.md.",
   "license": "Apache-2.0",
   "type": "module",
@@ -22,7 +22,7 @@
     "custom-element"
   ],
   "barkpark": {
-    "contractVersion": "1.22.0"
+    "contractVersion": "1.23.0"
   },
   "main": "./dist/bp-paper-editor.bundle.js",
   "types": "./index.d.ts",

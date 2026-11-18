@@ -177,11 +177,14 @@ async function renderHtml(doc) {
   return { html: `<div class="bp-paper-surface">${html}</div>\n` };
 }
 
-// True when writing `output` would replace the file the doc was read from.
+// True when writing `output` would replace the file the doc was read from:
+// the same device and inode, so any path, symlink or hard link to it counts.
+// An output that does not exist yet cannot be the input.
 function sameFile(input, output) {
   if (input === '-') return false;
   try {
-    return fs.realpathSync(input) === fs.realpathSync(output);
+    const [a, b] = [input, output].map((f) => fs.statSync(f, { bigint: true }));
+    return a.dev === b.dev && a.ino === b.ino;
   } catch {
     return path.resolve(input) === path.resolve(output);
   }

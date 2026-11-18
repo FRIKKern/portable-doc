@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 7 changes
-  - cli: explain --json escapes the doc's text once ([#64](https://github.com/FRIKKern/portable-doc/pull/64))
+- **Today** · 9 changes
+  - Sync: packages/editor is copied from Barkpark by the sync job, and the check fails on a hand edit ([#66](https://github.com/FRIKKern/portable-doc/pull/66))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
