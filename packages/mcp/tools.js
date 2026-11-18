@@ -1,4 +1,4 @@
-import { CODES, validate } from '@portable-doc/validate';
+import { CODES, MAX_ERRORS, validate } from '@portable-doc/validate';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { explain } from './explain.js';
 import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
@@ -9,7 +9,6 @@ import { blockDetail, hasType, listBlocks, loadCatalog } from './catalog.js';
 import { FORMATS, renderLocal } from './local.js';
 
 export const MAX_OPS = 100;
-const MAX_ERRORS = 1_000;
 const MAX_PATH = 10_000;
 
 const DOC = { description: 'A PortableDoc: an object with a blocks array, or a blocks array', type: ['object', 'array'] };
@@ -18,7 +17,7 @@ const VALIDATE_DOC = { description: 'Any JSON value. Invalid PortableDoc shapes 
 export const TOOLS = [
   {
     name: 'validate',
-    description: 'Check a PortableDoc against the synced spec. Returns { ok: true } or { ok: false, errors: [{ code, path, message }] }.',
+    description: 'Check a PortableDoc against the synced spec. Returns { ok: true } or { ok: false, errors: [{ code, path, message }] }, with at most 1000 errors and, when there were more, more: how many were left out.',
     inputSchema: { type: 'object', properties: { doc: VALIDATE_DOC }, required: ['doc'], additionalProperties: false },
   },
   {

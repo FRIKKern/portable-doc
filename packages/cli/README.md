@@ -1,8 +1,9 @@
 # @portable-doc/cli
 
 The `portable-doc` command: check PortableDoc files against the schema, explain
-what is wrong, render them as HTML, Markdown or plain text, and import
-Markdown. Plain JavaScript; it uses [`@portable-doc/validate`](../validate/CODES.md),
+what is wrong, render them as HTML, Markdown or plain text, preview one in
+the browser as you edit it, and import Markdown. Plain JavaScript; it uses
+[`@portable-doc/validate`](../validate/CODES.md),
 [`@portable-doc/text`](../text/README.md) and, for HTML,
 [`@portable-doc/react`](../react/README.md).
 
@@ -21,8 +22,10 @@ broken.json: value_not_allowed at /blocks/2/level: 9 is above 6
 ```
 
 One line per error: `file: code at /path: message`. The codes and their rules
-are in [`CODES.md`](../validate/CODES.md). `--json` prints
-`{ ok, files: [{ file, ok, errors | error }] }` for scripts.
+are in [`CODES.md`](../validate/CODES.md). A doc lists at most
+`MAX_ERRORS` (1,000) errors, then one line `file: N more errors, not listed`.
+`--json` prints `{ ok, files: [{ file, ok, errors | error, more }] }` for
+scripts, with `more` only when errors were left out.
 
 Exit codes, the same for `explain`:
 
@@ -67,6 +70,31 @@ $ cat notes.json | npx portable-doc render --format text
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.
   `--force` renders it anyway, after printing the errors.
 
+## Preview
+
+```console
+$ npx portable-doc preview notes.json --open
+Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
+```
+
+- The page is the doc as `render --format html` makes it, styled with
+  `@portable-doc/react/paper-surface.css`. That stylesheet is read from the
+  built package, so run `npm run react:build` once first, as for html. Light
+  and dark follow the system.
+- Save the file and the page reloads by itself, also when the editor saves by
+  renaming a new file over the old one.
+- A doc with bad JSON or validation errors shows its problems, in the words
+  `explain` uses, above the last version that rendered.
+- The server listens on 127.0.0.1 only, on port 4317, or on any free port
+  when that one is taken. `--port 0` always picks a free one. It answers GET
+  and HEAD for `/`, `/paper-surface.css` and `/events` (the reload stream, GET
+  only), with `127.0.0.1` or `localhost` as the host. Anything else is a 404.
+  No other site may frame the page.
+- If the file can no longer be watched, the page says so above the last
+  render, and the server keeps running.
+- `--open` opens the page with `open` (macOS) or `xdg-open`. Ctrl-C closes the
+  watcher and every connection, and exits 0.
+
 ## Import
 
 ```console
@@ -98,4 +126,4 @@ git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
 - run: npx portable-doc validate --json -- content/*.json > validate.json
 ```
 
-`node --test packages/cli/cli.test.mjs` runs the bin against the fixtures.
+`node --test packages/cli/cli.test.mjs packages/cli/preview.test.mjs` runs the bin against the fixtures and a live preview.

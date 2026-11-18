@@ -27,8 +27,9 @@ const blocksOf = (doc) => (Array.isArray(doc) ? doc : doc.blocks);
 export async function renderLocal(doc, format) {
   const checked = validate(doc);
   if (!checked.ok) {
-    const n = checked.errors.length;
-    return { ok: false, value: { error: `the doc does not validate (${n} ${n === 1 ? 'error' : 'errors'}); explain turns them into words`, errors: checked.errors } };
+    const n = checked.errors.length + (checked.more ?? 0);
+    const more = checked.more ? { more: checked.more } : {};
+    return { ok: false, value: { error: `the doc does not validate (${n} ${n === 1 ? 'error' : 'errors'}); explain turns them into words`, errors: checked.errors, ...more } };
   }
   if (format === 'markdown') return { ok: true, value: { markdown: toMarkdown(doc) } };
   if (format === 'text') return { ok: true, value: { text: toPlainText(doc) } };

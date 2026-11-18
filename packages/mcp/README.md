@@ -15,10 +15,10 @@ MCP client ──stdio──► portable-doc-mcp
 
 | Tool | Takes | Gives |
 |---|---|---|
-| `validate` | `doc` | `{ ok }` or `{ ok: false, errors: [{ code, path, message }] }` |
-| `explain` | `errors`, optional `doc` | `{ explanations: [{ code, path, where, text }] }` |
+| `validate` | `doc` | `{ ok }` or `{ ok: false, errors: [{ code, path, message }] }`, at most `MAX_ERRORS` (1,000) errors, with `more` counting any left out |
+| `explain` | `errors` (at most `MAX_ERRORS`), optional `doc` | `{ explanations: [{ code, path, where, text }] }` |
 | `apply_ops` | `doc`, `ops` (≤ 100) | `{ ok: true, doc }`, or a tool error `{ ok: false, index, error }` |
-| `render` | `doc`, optional `format`: `html` (default), `markdown`, `text` | `{ html }`, `{ markdown }` or `{ text }`; a broken doc is a tool error `{ error, errors }` |
+| `render` | `doc`, optional `format`: `html` (default), `markdown`, `text` | `{ html }`, `{ markdown }` or `{ text }`; a broken doc is a tool error `{ error, errors, more }` |
 | `blocks` | optional `type` (a block type or alias) | no `type`: `{ blocks: [{ type, description }], aliases: [{ type, aliasOf, sets }] }`, the description being the tier and the type's own fields (the spec has no prose); with one: `{ type, tier, fields: [{ name, type, required, enum?, minimum?, maximum?, description? }], example }`, `example` the golden input or `null` |
 
 Bad arguments are `InvalidParams` (-32602), and so are an unknown `format` or block `type`, and `tools/call` params that are not `{ name, arguments: {…} }`; `apply_ops` and `render` need a blocks array (`{ blocks: [...] }` or `[...]`), while `validate` accepts any JSON value and returns validator diagnostics for invalid shapes. A refused op, a doc that does not validate and a failed render are tool results with `isError`.
