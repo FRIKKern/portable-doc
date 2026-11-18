@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { MIN_BLOCK_GOLDENS } from '../../scripts/lib/pack.mjs';
-import { CODES, MAX_DEPTH, MAX_VALUE_DEPTH, compile, validate, walkDepth } from './index.js';
+import { CODES, MAX_DEPTH, MAX_ERRORS, MAX_VALUE_DEPTH, compile, validate, walkDepth } from './index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -459,7 +459,7 @@ test('walkDepth counts arrays and objects only, from level 1, does not enter pas
   const inner = [[[]]];
   assert.equal(walkDepth({ x: inner, y: [] }, { skip: new Set([inner]) }), 2);
   const expand = (v) => (typeof v === 'string' ? [JSON.parse(v)] : []);
-  assert.equal(walkDepth({ s: '[[1]]' }, { expand }), 4, 'the decoded value starts one level below the string');
+  assert.equal(walkDepth({ s: '[[1]]' }, { expand }), 3, 'the decoded value takes the string\'s place');
   assert.equal(walkDepth({ s: '[[1]]' }), 1);
   const loop = {};
   loop.self = loop;
@@ -467,4 +467,35 @@ test('walkDepth counts arrays and objects only, from level 1, does not enter pas
   assert.equal(walkDepth(loop, { onTooDeep: (p) => cycle.push(p) }), MAX_VALUE_DEPTH + 1);
   assert.deepEqual(cycle, ['/self'.repeat(MAX_VALUE_DEPTH)]);
   assert.equal(walkDepth(JSON.parse('['.repeat(100_000) + ']'.repeat(100_000))), MAX_VALUE_DEPTH + 1);
+});
+
+test(`100,000 too_deep siblings give the first ${MAX_ERRORS} errors and more: 99,000, fast and small`, () => {
+  // About 300 KB of JSON: one array at level MAX_VALUE_DEPTH holding 100,000 empty arrays.
+  let x = Array.from({ length: 100_000 }, () => []);
+  for (let level = MAX_VALUE_DEPTH; level > 6; level--) x = [x];
+  const doc = { blocks: [{ type: 'chart', kind: 'line', series: [{ label: 's', points: [1], x }] }] };
+  const started = process.cpuUsage();
+  const result = validate(doc);
+  const { user, system } = process.cpuUsage(started);
+  assert.ok((user + system) / 1000 < 1000, `${Math.round((user + system) / 1000)} ms of CPU`);
+  assert.equal(MAX_ERRORS, 1000);
+  assert.equal(result.errors.length, MAX_ERRORS);
+  assert.equal(result.more, 100_000 - MAX_ERRORS);
+  assert.deepEqual(Object.keys(result), ['ok', 'errors', 'more']);
+  const first = `/blocks/0/series/0/x${'/0'.repeat(MAX_VALUE_DEPTH - 6)}`;
+  assert.deepEqual([result.errors[0].path, result.errors.at(-1).path], [`${first}/0`, `${first}/${MAX_ERRORS - 1}`]);
+  assert.ok(JSON.stringify(result).length < 3_000_000, `${JSON.stringify(result).length} bytes`);
+});
+
+test(`exactly ${MAX_ERRORS} errors carry no more; one past it is more: 1`, () => {
+  assert.deepEqual(Object.keys(validate({ blocks: Array(MAX_ERRORS).fill(5) })), ['ok', 'errors']);
+  const over = validate({ blocks: Array(MAX_ERRORS + 1).fill(5) });
+  assert.deepEqual([over.errors.length, over.more, over.errors.at(-1).path], [MAX_ERRORS, 1, `/blocks/${MAX_ERRORS - 1}`]);
+});
+
+test('a list item with 200,000 children validates without overflowing the stack, valid or not', () => {
+  const item = (child) => ({ type: 'bulletList', items: [{ text: 'i', children: Array.from({ length: 200_000 }, child) }] });
+  assert.deepEqual(validate({ blocks: [item((_, i) => ({ id: `b${i}`, type: 'paragraph', text: 'x' }))] }), { ok: true });
+  const bad = validate({ blocks: [item(() => 5)] });
+  assert.deepEqual([bad.errors.length, bad.errors[0].code], [MAX_ERRORS, 'block_not_object']);
 });

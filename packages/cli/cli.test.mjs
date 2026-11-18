@@ -191,3 +191,23 @@ test('render | head -1 prints one line and exits 0 with nothing on stderr: a clo
   assert.equal(r.stderr, '');
   assert.equal(fs.readFileSync(code, 'utf8').trim(), '0');
 });
+
+test('validate, explain and render list the first MAX_ERRORS errors and say how many more there were', async () => {
+  const file = write('many.json', { blocks: Array(1003).fill(5) });
+  const checked = await call(['validate', file]);
+  assert.equal(checked.status, 1);
+  const lines = checked.stdout.trimEnd().split('\n');
+  assert.equal(lines.length, 1001);
+  assert.equal(lines.at(-1), `${file}: 3 more errors, not listed`);
+  const json = JSON.parse((await call(['validate', '--json', file])).stdout);
+  assert.deepEqual([json.files[0].errors.length, json.files[0].more], [1000, 3]);
+  const explained = await call(['explain', file]);
+  assert.match(explained.stdout, new RegExp(`^${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: 1003 errors\n`));
+  assert.match(explained.stdout, /\n1000\. /);
+  assert.ok(explained.stdout.endsWith(`${file}: 3 more errors, not listed\n`));
+  const rendered = await call(['render', file]);
+  assert.equal(rendered.status, 1);
+  assert.match(rendered.stderr, /: 3 more errors, not listed\n/);
+  const one = JSON.parse((await call(['validate', '--json', write('few.json', { blocks: [5] })])).stdout);
+  assert.equal(Object.hasOwn(one.files[0], 'more'), false);
+});

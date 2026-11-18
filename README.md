@@ -32,9 +32,10 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 ## What happened
 
+The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 2 changes
-  - portable-doc preview: a live local preview that reloads on save ([#70](https://github.com/FRIKKern/portable-doc/pull/70))
+- **Today** · 5 changes
+  - check-docs: the README timeline block is written on main only ([#77](https://github.com/FRIKKern/portable-doc/pull/77))
 - **Yesterday** · 14 changes
   - Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
@@ -70,7 +71,6 @@ the JS renderers. They move here one reward at a time, with no downtime
 ```sh
 npm run roadmap    # redraw docs/images/roadmap.svg from the board
 npm run heatmap    # redraw docs/images/conformance.svg from conformance/
-npm run timeline   # rewrite the timeline above
 npm run sync -- ../barkpark   # copy spec/, goldens/ and conformance/ from a Barkpark checkout
 npm run check      # doc rules, pack stamp, reports and SOURCE.json, tests
 npm run docs:site  # build dist/docs-site; open playground.html to try the format

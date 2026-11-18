@@ -15,17 +15,17 @@ MCP client ──stdio──► portable-doc-mcp
 
 | Tool | Takes | Gives |
 |---|---|---|
-| `validate` | `doc` | `{ ok }` or `{ ok: false, errors: [{ code, path, message }] }` |
-| `explain` | `errors`, optional `doc` | `{ explanations: [{ code, path, where, text }] }` |
+| `validate` | `doc` | `{ ok }` or `{ ok: false, errors: [{ code, path, message }] }`, at most `MAX_ERRORS` (1,000) errors, with `more` counting any left out |
+| `explain` | `errors` (at most `MAX_ERRORS`), optional `doc` | `{ explanations: [{ code, path, where, text }] }` |
 | `apply_ops` | `doc`, `ops` (≤ 100) | `{ ok: true, doc }`, or a tool error `{ ok: false, index, error }` |
-| `render` | `doc`, optional `format`: `html` (default), `markdown`, `text` | `{ html }`, `{ markdown }` or `{ text }`; a broken doc is a tool error `{ error, errors }` |
+| `render` | `doc`, optional `format`: `html` (default), `markdown`, `text` | `{ html }`, `{ markdown }` or `{ text }`; a broken doc is a tool error `{ error, errors, more }` |
 | `blocks` | optional `type` (a block type or alias) | no `type`: `{ blocks: [{ type, description }], aliases: [{ type, aliasOf, sets }] }`, the description being the tier and the type's own fields (the spec has no prose); with one: `{ type, tier, fields: [{ name, type, required, enum?, minimum?, maximum?, description? }], example }`, `example` the golden input or `null` |
 
 Bad arguments are `InvalidParams` (-32602), and so are an unknown `format` or block `type`, and `tools/call` params that are not `{ name, arguments: {…} }`; `apply_ops` and `render` need a blocks array (`{ blocks: [...] }` or `[...]`), while `validate` accepts any JSON value and returns validator diagnostics for invalid shapes. A refused op, a doc that does not validate and a failed render are tool results with `isError`.
 
 Every answer is JSON in `content[0].text`, because many clients read only `content`. `structuredContent` repeats it when both copies fit in one reply. A reply stays under 10 MiB − 256 KiB on the wire, inside the 10 MiB an MCP stdio client reads per message. An answer too big to send twice comes as compact JSON text alone, with no `structuredContent`. One too big to send once is a tool error that gives its size.
 
-Other limits: 16 MiB per message in, 200,000 JSON values per call, a doc no deeper than `MAX_VALUE_DEPTH` (1,000 JSON levels) for `apply_ops` and `render`, so the arguments that wrap it may nest 1,001 levels of arrays and objects (`validate` takes any depth and answers `too_deep`). A call with a table edit also counts the JSON inside strings that start with `[` or `{`, because Barkpark's normalizer decodes it. An `explain` location is at most 1,000 characters: a deep path keeps its innermost steps, and long keys, types and ids are cut at 100.
+Other limits: 16 MiB per message in, 200,000 JSON values per call, a doc no deeper than `MAX_VALUE_DEPTH` (1,000 JSON levels) for `apply_ops` and `render`, so the arguments that wrap it may nest 1,001 levels of arrays and objects (`validate` takes any depth and answers `too_deep`). A call with a table edit also counts the JSON inside strings that start with `[` or `{`, where Barkpark's normalizer puts it when it decodes the string: a list in the string's place, a map one level down, wrapped in a list. An `explain` location is at most 1,000 characters: a deep path keeps its innermost steps, and long keys, types and ids are cut at 100.
 
 ## Run
 
