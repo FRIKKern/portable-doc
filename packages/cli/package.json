@@ -1,0 +1,16 @@
+{
+  "name": "@portable-doc/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "bin": { "portable-doc": "./bin/portable-doc.mjs" },
+  "exports": { ".": "./index.js" },
+  "dependencies": {
+    "@portable-doc/react": "0.1.0-alpha.1",
+    "@portable-doc/text": "0.0.0",
+    "@portable-doc/validate": "0.0.0",
+    "react": "^19.2.0"
+  }
+}

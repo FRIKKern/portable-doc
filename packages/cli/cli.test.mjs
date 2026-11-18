@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { after, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { toMarkdown, toPlainText } from '@portable-doc/text';
+import { main } from './index.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(here, '..', '..');
+const bin = path.join(here, 'bin', 'portable-doc.mjs');
+// The bin itself, in a child process.
+const run = (args, input) => spawnSync(process.execPath, [bin, ...args], { cwd: root, input: input ?? '', encoding: 'utf8' });
+// The same entry point in-process, for the cases that need no real process.
+async function call(args, input = '') {
+  const r = { stdout: '', stderr: '' };
+  const io = { stdout: (t) => void (r.stdout += t), stderr: (t) => void (r.stderr += t), readStdin: async () => input, stdinIsTTY: false };
+  r.status = await main(args, io);
+  return r;
+}
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'portable-doc-cli-'));
+after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+const write = (name, value) => {
+  const file = path.join(tmp, name);
+  fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value));
+  return file;
+};
+const broken = JSON.parse(fs.readFileSync(path.join(root, 'fixtures/broken/mixed-three-codes.json'), 'utf8'));
+const valid = fs.readdirSync(path.join(root, 'fixtures/valid')).filter((f) => f.endsWith('.json')).map((f) => `fixtures/valid/${f}`);
+
+test('validate on a broken doc exits 1 and prints each error as file: code at /path: message', () => {
+  const file = write('broken.json', broken.doc);
+  const r = run(['validate', file]);
+  assert.equal(r.status, 1, r.stderr);
+  for (const { code, path: at } of broken.expect) assert.match(r.stdout, new RegExp(`^${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: ${code} at ${at}: \\S`, 'm'));
+});
+
+test('every valid fixture passes with exit 0', () => {
+  const r = run(['validate', ...valid]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout.trim().split('\n').length, valid.length);
+});
+
+test('stdin is read when the file is - or none is given', () => {
+  assert.equal(run(['validate'], JSON.stringify(broken.doc)).status, 1);
+  const r = run(['validate', '-'], '[{"type":"paragraph","text":"Hi"}]');
+  assert.deepEqual([r.status, r.stdout], [0, '<stdin>: ok\n']);
+});
+
+test('bad JSON, a missing file, an unknown command or flag all exit 2', async () => {
+  const bad = run(['validate', write('bad.json', '{\n  "blocks": [\n    {"type": nope}\n  ]\n}')]);
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /bad JSON at line 3, column 14: unexpected "n"/);
+  assert.equal((await call(['validate', path.join(tmp, 'missing.json')])).status, 2);
+  for (const args of [['frobnicate'], ['validate', '--strict', '-'], ['render', '--format', 'pdf', '-']]) {
+    const r = await call(args, '[]');
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /Usage: portable-doc/);
+  }
+});
+
+test('render markdown and text match @portable-doc/text, and an invalid doc is refused unless --force', async () => {
+  const doc = JSON.parse(fs.readFileSync(path.join(root, 'fixtures/valid/nested-containers.json'), 'utf8'));
+  const file = write('doc.json', doc);
+  assert.equal(run(['render', file, '--format', 'markdown']).stdout, toMarkdown(doc));
+  assert.equal(run(['render', file, '--format=text']).stdout, toPlainText(doc));
+  const out = path.join(tmp, 'out.md');
+  assert.equal((await call(['render', file, '-o', out])).status, 0);
+  assert.equal(fs.readFileSync(out, 'utf8'), toMarkdown(doc));
+  const refused = await call(['render', '--format', 'text'], JSON.stringify(broken.doc));
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /unknown_block_type at \/blocks\/1\/type/);
+  assert.equal((await call(['render', '--format', 'text', '--force'], JSON.stringify(broken.doc))).stdout, toPlainText(broken.doc));
+});
+
+test('render html uses the built React renderer, or says to build it', () => {
+  const r = run(['render', '--format', 'html'], '[{"type":"heading","level":2,"text":"Hello"}]');
+  if (r.status === 0) assert.match(r.stdout, /^<div class="bp-paper-surface">.*Hello.*<\/div>\n$/s);
+  else assert.deepEqual([r.status, /npm run react:build/.test(r.stderr)], [2, true]);
+});
+
+test('--json results parse, and explain adds the rule each error breaks', async () => {
+  const file = write('broken.json', broken.doc);
+  const v = JSON.parse(run(['validate', '--json', file, valid[0]]).stdout);
+  assert.equal(v.ok, false);
+  assert.deepEqual(v.files[0].errors.map((e) => e.code), broken.expect.map((e) => e.code));
+  assert.equal(v.files[1].ok, true);
+  const e = await call(['explain', file]);
+  assert.equal(e.status, 1);
+  assert.match(e.stdout, /3 errors[\s\S]*unknown_block_type at \/blocks\/1\/type, in the nope block at \/blocks\/1[\s\S]*Refused when a block's type is not in the schema's type enum\./);
+  assert.equal(JSON.parse((await call(['explain', '--json', file])).stdout).files[0].errors[2].refusedWhen, 'a value is outside enum, const, minimum, maximum, or matches a not');
+});
+
+test('--help and --version print and exit 0', async () => {
+  assert.equal(run(['--version']).stdout, '0.0.0\n');
+  assert.match((await call(['--help'])).stdout, /Commands:/);
+  assert.match((await call(['render', '--help'])).stdout, /--format/);
+});
