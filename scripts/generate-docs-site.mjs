@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { writePlayground } from './playground/page.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const defaultOutput = path.join(root, 'dist', 'docs-site');
@@ -25,7 +26,7 @@ function page(title, stamp, body, { base = '', htmlAttrs = '', head = '' } = {})
 <style>
   :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f6faf9; color: #18302a; }
   * { box-sizing: border-box; } body { margin: 0; }
-  @scope (body) to (.golden) {
+  @scope (body) to (.golden, .pg-render) {
   a { color: #08735d; } code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   h1 { font-size: clamp(2rem, 5vw, 4.5rem); line-height: .98; letter-spacing: -.05em; max-width: 850px; } h2 { margin-top: 42px; }
   img { width: 100%; height: auto; border-radius: 8px; border: 1px solid #d5e0dd; }
@@ -45,7 +46,7 @@ function page(title, stamp, body, { base = '', htmlAttrs = '', head = '' } = {})
 </style>
 </head>
 <body>
-  <header><a href="${base}index.html">PortableDoc</a><nav><a href="${base}spec.html">Spec</a><a href="${base}index.html#blocks">Block types</a><a href="${base}index.html#fixtures">Golden pages</a><a href="${base}index.html#hosts">Host gallery</a></nav></header>
+  <header><a href="${base}index.html">PortableDoc</a><nav><a href="${base}playground.html">Playground</a><a href="${base}spec.html">Spec</a><a href="${base}index.html#blocks">Block types</a><a href="${base}index.html#fixtures">Golden pages</a><a href="${base}index.html#hosts">Host gallery</a></nav></header>
   <main>${body}</main>
 </body>
 </html>\n`;
@@ -244,7 +245,8 @@ export function generateDocsSite(output = defaultOutput) {
     }).join('');
     const fixtureCards = variants.map(([id, label]) => `<article class="card"><h3>${escapeHtml(label)}</h3><p>Exact synced HTML snapshot. Barkpark-local assets are inventoried in the build manifest.</p><a href="fixtures/${id}.html" download>Download HTML snapshot</a></article>`).join('\n');
     const blockPages = writeBlockPages(staging, stamp);
-    const indexBody = `<h1>PortableDoc reference</h1><p class="lede">Browse the canonical format, exact golden HTML snapshots, and recorded synthetic host fixture captures from the existing manifest.</p><p class="stamp">Pack stamp <code>${stamp}</code><br>Synced from Barkpark <code>${escapeHtml(source.commit)}</code><br><a href="build-manifest.json">Build manifest and unresolved fixture references</a></p>${blockPages.section}<h2 id="fixtures">Golden HTML snapshots</h2><section class="grid">${fixtureCards}</section><h2 id="hosts">Recorded host fixtures</h2><section class="grid">${hostCards}</section>`;
+    const playground = writePlayground(staging, { page, stamp });
+    const indexBody = `<h1>PortableDoc reference</h1><p class="lede">Browse the canonical format, exact golden HTML snapshots, and recorded synthetic host fixture captures from the existing manifest.</p><p class="lede"><a href="playground.html">Try the format in the playground</a>: edit a doc as JSON, see it render and get checked as you type.</p><p class="stamp">Pack stamp <code>${stamp}</code><br>Synced from Barkpark <code>${escapeHtml(source.commit)}</code><br><a href="build-manifest.json">Build manifest and unresolved fixture references</a></p>${blockPages.section}<h2 id="fixtures">Golden HTML snapshots</h2><section class="grid">${fixtureCards}</section><h2 id="hosts">Recorded host fixtures</h2><section class="grid">${hostCards}</section>`;
     fs.writeFileSync(path.join(staging, 'index.html'), page('Docs', stamp, indexBody));
     const spec = escapeHtml(fs.readFileSync(path.join(root, 'SPEC.md'), 'utf8'));
     fs.writeFileSync(path.join(staging, 'spec.html'), page('Specification', stamp, `<h1>PortableDoc specification</h1><p class="stamp">Pack stamp <code>${stamp}</code></p><pre class="spec">${spec}</pre>`));
@@ -255,6 +257,7 @@ export function generateDocsSite(output = defaultOutput) {
       fixtures: fixtureFiles,
       css: blockPages.css,
       blocks: blockPages.pages,
+      playground,
       hostManifest: { file: 'docs/images/hosts/manifest.json', sha256: sha256(hostManifestFile) },
       hosts: hosts.map(({ id, title, state, source: hostSource }) => ({ id, title, state, source: hostSource })),
     };

@@ -1,0 +1,48 @@
+{
+  "blocks": [
+    { "type": "heading", "id": "intro", "level": 1, "text": "Hello, PortableDoc" },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "value": "Edit the JSON on the left. The page renders with " },
+        { "type": "text", "value": "@portable-doc/react", "marks": [{ "type": "code" }] },
+        { "type": "text", "value": " as you type, and checks the doc against the " },
+        { "type": "text", "value": "spec", "marks": [{ "type": "link", "href": "spec.html" }] },
+        { "type": "text", "value": ". Text can be " },
+        { "type": "text", "value": "bold", "marks": [{ "type": "bold" }] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "italic", "marks": [{ "type": "italic" }] },
+        { "type": "text", "value": " or " },
+        { "type": "text", "value": "both", "marks": [{ "type": "bold" }, { "type": "italic" }] },
+        { "type": "text", "value": "." }
+      ]
+    },
+    { "type": "heading", "level": 2, "text": "What to try" },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        [{ "type": "text", "value": "Change a heading's " }, { "type": "text", "value": "level", "marks": [{ "type": "code" }] }, { "type": "text", "value": " to 9 and read the check below." }],
+        [{ "type": "text", "value": "Pick a block type from the examples menu." }],
+        [{ "type": "text", "value": "Press Share to put this doc in a link." }]
+      ]
+    },
+    {
+      "type": "callout",
+      "tone": "info",
+      "title": "One format, many renderers",
+      "content": [{ "type": "text", "value": "The same blocks render the same way in Phoenix, Next, Astro and the terminal." }]
+    },
+    { "type": "heading", "level": 2, "text": "Code and tables" },
+    { "type": "code", "lang": "js", "value": "import { PortableDoc } from '@portable-doc/react'\n\nexport const Page = ({ doc }) => <PortableDoc value={doc.blocks} />" },
+    {
+      "type": "table",
+      "head": [[{ "type": "text", "value": "Block" }], [{ "type": "text", "value": "Holds" }]],
+      "rows": [
+        [[{ "type": "text", "value": "heading" }], [{ "type": "text", "value": "a level from 1 to 6 and its text" }]],
+        [[{ "type": "text", "value": "paragraph" }], [{ "type": "text", "value": "inline text with marks and links" }]],
+        [[{ "type": "text", "value": "callout" }], [{ "type": "text", "value": "a tone, a title and a body" }]]
+      ]
+    }
+  ]
+}
