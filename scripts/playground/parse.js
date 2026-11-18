@@ -124,3 +124,37 @@ export function blocksOf(doc) {
   if (doc && typeof doc === 'object' && Array.isArray(doc.blocks)) return doc.blocks;
   return [];
 }
+
+// The length of JSON.stringify(value, null, 2), counted without recursion. Stops
+// and returns Infinity once it passes `stop`, so deep nesting costs little.
+export function prettyLength(value, stop = Infinity) {
+  let total = 0;
+  const stack = [[value, 0]];
+  while (stack.length) {
+    const [item, depth] = stack.pop();
+    if (item === null || typeof item !== 'object') total += JSON.stringify(item).length;
+    else {
+      const keys = Array.isArray(item) ? null : Object.keys(item);
+      const children = keys ? keys.map((key) => item[key]) : item;
+      const n = children.length;
+      // "[" + n × (newline + indent) + (n - 1) commas + newline + indent + "]"
+      total += n === 0 ? 2 : 2 + n * (1 + 2 * (depth + 1)) + (n - 1) + 1 + 2 * depth;
+      if (keys) for (const key of keys) total += JSON.stringify(key).length + 2;
+      for (const child of children) stack.push([child, depth + 1]);
+    }
+    if (total > stop) return Infinity;
+  }
+  return total;
+}
+
+// A doc's text laid out with two-space indents, or the text as sent when it is not
+// JSON or its laid-out form would pass `limit` bytes (deep nesting grows it fast).
+export function tidyJson(text, limit) {
+  const parsed = parseJson(text);
+  if (!parsed.ok || prettyLength(parsed.value, limit) > limit) return text;
+  try {
+    return JSON.stringify(parsed.value, null, 2);
+  } catch {
+    return text;
+  }
+}

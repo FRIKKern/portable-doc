@@ -8,8 +8,8 @@ import { fieldBlocks } from '../../packages/react/src/field-blocks.ts';
 import { embedBlocks } from '../../packages/react/src/embed.ts';
 import { explainWith, readCodes } from '../../packages/mcp/explain-words.js';
 import codesMarkdown from '../../packages/validate/CODES.md';
-import { blocksOf, parseJson } from './parse.js';
-import { decodeShare, encodeShare } from './share.js';
+import { blocksOf, parseJson, tidyJson } from './parse.js';
+import { decodeShare, encodeShare, MAX_DOC_BYTES } from './share.js';
 import { copyText, shiftLines } from './editing.js';
 
 const explain = explainWith(readCodes(codesMarkdown));
@@ -17,11 +17,10 @@ const renderOptions = { blocks: { ...fieldBlocks, ...embedBlocks() } };
 const DEBOUNCE_MS = 200;
 const LONG_LINK = 8000;
 const pretty = (value) => JSON.stringify(value, null, 2);
-// A doc from a link is laid out like the examples; text that is not JSON stays as sent.
-const tidy = (text) => {
-  const parsed = parseJson(text);
-  return parsed.ok ? pretty(parsed.value) : text;
-};
+// A doc from a link is laid out like the examples, unless that would pass the link cap.
+const tidy = (text) => tidyJson(text, MAX_DOC_BYTES);
+// Engine messages for a blown stack differ by browser and mean nothing to a reader.
+const plainWords = (error) => (error instanceof RangeError && /call stack|recursion/i.test(error.message) ? 'the doc nests too deep to draw' : error.message);
 
 // Everything the page shows for one text. `previous` supplies the last good render.
 function viewOf(text, previous) {
@@ -33,7 +32,7 @@ function viewOf(text, previous) {
   try {
     return { html: renderPortableDocument(blocks, renderOptions), blocks: blocks.length, checks, parseError: null, renderError: null, stale: false };
   } catch (error) {
-    return { ...previous, checks, parseError: null, renderError: error.message, stale: true };
+    return { ...previous, checks, parseError: null, renderError: plainWords(error), stale: true };
   }
 }
 

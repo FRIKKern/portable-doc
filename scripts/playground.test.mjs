@@ -7,7 +7,7 @@ import zlib from 'node:zlib';
 import { validate } from '@portable-doc/validate';
 import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
-import { parseJson } from './playground/parse.js';
+import { parseJson, prettyLength, tidyJson } from './playground/parse.js';
 import { decodeShare, encodeShare, MAX_DOC_BYTES } from './playground/share.js';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -65,4 +65,16 @@ test('a share link refuses a doc too big to open, packed or plain, and a damaged
   assert.equal(await decodeShare(await encodeShare(fits)), fits);
   await assert.rejects(decodeShare(`#doc=deflate.${Buffer.from('not deflate at all, just text').toString('base64url')}`), /^Error: This link is damaged: its compressed doc does not unpack$/);
   await assert.rejects(decodeShare(`#doc=json.${Buffer.from([0xff, 0xfe]).toString('base64url')}`), /not valid UTF-8/);
+});
+
+test('a doc from a link is pretty-printed only while the laid-out text stays under the cap', () => {
+  for (const { doc } of playgroundExamples()) assert.equal(prettyLength(doc), JSON.stringify(doc, null, 2).length);
+  const nest = (depth) => '['.repeat(depth) + ']'.repeat(depth);
+  assert.equal(tidyJson(nest(1000), MAX_DOC_BYTES).length, 2_000_000, 'depth 1000 lays out to exactly the cap');
+  assert.equal(tidyJson(nest(1001), MAX_DOC_BYTES), nest(1001));
+  const started = performance.now();
+  assert.equal(tidyJson(nest(50_000), MAX_DOC_BYTES), nest(50_000), 'deep nesting kept as sent, not 5 GB of spaces or a stack overflow');
+  assert.ok(performance.now() - started < 500, 'the size check is cheap');
+  assert.equal(tidyJson('{"blocks":[]}', MAX_DOC_BYTES), '{\n  "blocks": []\n}');
+  assert.equal(tidyJson('{"blocks":', MAX_DOC_BYTES), '{"blocks":');
 });
