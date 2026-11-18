@@ -94,7 +94,8 @@ Where it differs from Barkpark, on purpose:
 
 - Only URLs the renderer allows become links; any other link or image keeps
   its text. A portabledoc fence must also validate, link only to allowed URLs
-  and reuse no `id` from an earlier fence, or it stays a code block.
+  and reuse no `id` from an earlier fence, and may nest no deeper than 100
+  levels, or it stays a code block.
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
@@ -103,7 +104,8 @@ Where it differs from Barkpark, on purpose:
   diagram's `caption`.
 - Raw HTML keeps its visible text; tags, comments, scripts and styles go.
 - The parser is markdown-it, not Earmark. It runs in linear time on hostile
-  input and caps nesting at 100.
+  input and caps nesting at 100: quotes or lists nested deeper than that are
+  left out.
 
 **Round trip.** For heading, paragraph, list, code, table, blockquote, divider
 and diagram, `fromMarkdown(toMarkdown(doc))` gives back an equivalent doc:
