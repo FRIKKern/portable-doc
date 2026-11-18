@@ -50,5 +50,7 @@ export interface WalkDepthOptions {
 export function walkDepth(root: unknown, options?: WalkDepthOptions): number;
 
 export function validate(doc: unknown): Result;
+/** The PortableDoc block schema (spec/blocks.schema.json) that `validate` checks against. Deep-frozen. */
+export const blockSchema: Readonly<Record<string, unknown>>;
 
 export function compile(schema: object): (doc: unknown) => Result;

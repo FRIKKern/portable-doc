@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
 import { fromMarkdown, toMarkdown } from './index.js';
 import { safeUrl } from './util.js';
 
@@ -200,4 +200,43 @@ test('hostile Markdown never throws, and what it gives validates and links only 
   // The second fence reuses an id, so it stays as text.
   assert.deepEqual(fromMarkdown(inputs.at(-2)).map((b) => b.type), ['divider', 'code']);
   for (const odd of [undefined, null, 42, {}, []]) assert.deepEqual(fromMarkdown(odd), []);
+});
+
+const fenceOf = (blocks) => `\`\`\`portabledoc\n${JSON.stringify(blocks)}\n\`\`\``;
+const field = { type: 'field-string', label: 'x', value: 'y' };
+const FENCE_TYPES = [...ROUND_TRIP.filter((type) => type !== 'blockquote'), ...FENCE_ONLY];
+
+test('a field-string in a list item\'s children keeps the fence as code', () => {
+  const md = fenceOf([{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }]);
+  assert.equal(validate([{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }]).ok, true);
+  assert.deepEqual(fromMarkdown(md), [{ type: 'code', value: md.split('\n')[1] }]);
+});
+
+test('a field-string in a callout\'s slots.body keeps the fence as code', () => {
+  const blocks = [{ type: 'callout', tone: 'info', content: [t('a')], slots: { body: [{ type: 'paragraph', text: 'ok' }, field] } }];
+  assert.equal(validate(blocks).ok, true);
+  assert.deepEqual(fromMarkdown(fenceOf(blocks)), [{ type: 'code', value: JSON.stringify(blocks) }]);
+});
+
+test('every allowed block type still splices in when nested in a list item or a callout body', () => {
+  const all = FENCE_TYPES.map(golden);
+  const blocks = [
+    { type: 'callout', tone: 'info', content: [t('a')], slots: { body: all } },
+    { type: 'list', ordered: false, items: [{ content: [t('b')], children: all }] },
+  ];
+  valid(blocks);
+  assert.deepEqual(fromMarkdown(fenceOf(blocks)), blocks);
+});
+
+test('the exported schema is frozen: a mutation throws and leaves validate and the fence guard as they were', () => {
+  assert.ok(Object.isFrozen(blockSchema) && Object.isFrozen(blockSchema.allOf) && Object.isFrozen(blockSchema.definitions.blocks.heading.properties.level));
+  const attempts = [
+    () => { blockSchema.definitions.blocks.heading.properties.level = { type: 'integer' }; },
+    () => { blockSchema.allOf.length = 0; },
+    () => { blockSchema.allOf[0].then.$ref = '#'; },
+  ];
+  for (const attempt of attempts) assert.throws(attempt, TypeError);
+  assert.equal(validate([{ type: 'heading', level: 9, text: 'x' }]).ok, false);
+  const list = [{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }];
+  assert.deepEqual(fromMarkdown(fenceOf(list)), [{ type: 'code', value: JSON.stringify(list) }]);
 });
