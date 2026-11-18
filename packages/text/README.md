@@ -83,9 +83,10 @@ is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:
 
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
-  every one is a heading, paragraph, list, code, table, callout, divider,
-  diagram, chart, stat, stats, heatmap, pullquote or eyebrow. Otherwise the
-  fence stays a code block.
+  every block in it is a heading, paragraph, list, code, table, callout,
+  divider, diagram, chart, stat, stats, heatmap, pullquote or eyebrow: at the
+  top, and nested wherever the schema puts blocks (a list item's `children`,
+  a callout's `slots.body`, …). Otherwise the fence stays a code block.
 
 It never throws. The result always passes `@portable-doc/validate`; if the
 parser or the walk ever fails, the whole input comes back as one code block.

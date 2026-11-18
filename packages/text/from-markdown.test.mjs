@@ -194,3 +194,29 @@ test('hostile Markdown never throws, and what it gives validates and links only 
   assert.deepEqual(fromMarkdown(inputs.at(-2)).map((b) => b.type), ['divider', 'code']);
   for (const odd of [undefined, null, 42, {}, []]) assert.deepEqual(fromMarkdown(odd), []);
 });
+
+const fenceOf = (blocks) => `\`\`\`portabledoc\n${JSON.stringify(blocks)}\n\`\`\``;
+const field = { type: 'field-string', label: 'x', value: 'y' };
+const FENCE_TYPES = [...ROUND_TRIP.filter((type) => type !== 'blockquote'), ...FENCE_ONLY];
+
+test('a field-string in a list item\'s children keeps the fence as code', () => {
+  const md = fenceOf([{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }]);
+  assert.equal(validate([{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }]).ok, true);
+  assert.deepEqual(fromMarkdown(md), [{ type: 'code', value: md.split('\n')[1] }]);
+});
+
+test('a field-string in a callout\'s slots.body keeps the fence as code', () => {
+  const blocks = [{ type: 'callout', tone: 'info', content: [t('a')], slots: { body: [{ type: 'paragraph', text: 'ok' }, field] } }];
+  assert.equal(validate(blocks).ok, true);
+  assert.deepEqual(fromMarkdown(fenceOf(blocks)), [{ type: 'code', value: JSON.stringify(blocks) }]);
+});
+
+test('every allowed block type still splices in when nested in a list item or a callout body', () => {
+  const all = FENCE_TYPES.map(golden);
+  const blocks = [
+    { type: 'callout', tone: 'info', content: [t('a')], slots: { body: all } },
+    { type: 'list', ordered: false, items: [{ content: [t('b')], children: all }] },
+  ];
+  valid(blocks);
+  assert.deepEqual(fromMarkdown(fenceOf(blocks)), blocks);
+});

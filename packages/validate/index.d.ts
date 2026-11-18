@@ -22,5 +22,7 @@ export const CODES: readonly Code[];
 export const MAX_DEPTH: number;
 
 export function validate(doc: unknown): Result;
+/** The PortableDoc block schema (spec/blocks.schema.json) that `validate` checks against. */
+export const blockSchema: Record<string, unknown>;
 
 export function compile(schema: object): (doc: unknown) => Result;

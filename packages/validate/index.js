@@ -205,3 +205,6 @@ export function compile(root) {
 }
 
 export const validate = compile(blockSchema);
+
+/** The PortableDoc block schema (spec/blocks.schema.json) that `validate` checks against. */
+export { blockSchema };
