@@ -7,7 +7,7 @@
 import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
 import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
-import { isMap, safeUrl, str } from './util.js';
+import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 
 const MAX_FENCE_BLOCKS = 50;
 // Display blocks a ```portabledoc fence may hold, at the top and nested anywhere the
@@ -108,7 +108,7 @@ function quote(node) {
 // the doc's { blocks: [...] } envelope.
 const tooDeep = (blocks) => walkDepth({ blocks }) > MAX_VALUE_DEPTH;
 
-/** Every non-blank block id in a parsed fence, or null when an `href` in it is unsafe. Iterative. */
+/** Every non-blank block id in a parsed fence, or null when an address in it (ADDRESS_KEYS) is unsafe. Iterative. */
 function scan(value) {
   const ids = [];
   const stack = [value];
@@ -117,7 +117,7 @@ function scan(value) {
     if (!isMap(v) && !Array.isArray(v)) continue;
     if (isMap(v)) {
       if (typeof v.id === 'string' && v.id.trim() !== '' && typeof v.type === 'string') ids.push(v.id);
-      if ('href' in v && safeUrl(v.href) !== v.href) return null;
+      for (const key of ADDRESS_KEYS) if (Object.hasOwn(v, key) && safeUrl(v[key]) !== v[key]) return null;
     }
     for (const child of Object.values(v)) stack.push(child);
   }
@@ -126,7 +126,7 @@ function scan(value) {
 
 // A ```portabledoc fence holds a JSON array of blocks, spliced in when it is
 // 1 to 50 blocks, every block in it of the allowed types, nested no deeper than MAX_VALUE_DEPTH, that
-// validate, link only to safe URLs and reuse no id from an earlier fence.
+// validate, hold only safe addresses (href, src, poster, url) and reuse no id from an earlier fence.
 // Anything else is a plain code block.
 function fence(source, state) {
   let blocks;

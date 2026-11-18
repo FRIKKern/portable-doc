@@ -32,8 +32,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 5 changes
-  - check-docs: the README timeline block is written on main only ([#77](https://github.com/FRIKKern/portable-doc/pull/77))
+- **Today** · 6 changes
+  - text: a portabledoc fence with an unsafe address in any field stays code ([#78](https://github.com/FRIKKern/portable-doc/pull/78))
 - **Yesterday** · 14 changes
   - Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed

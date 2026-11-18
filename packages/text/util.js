@@ -42,6 +42,12 @@ export function safeUrl(href) {
   return ALLOWED_SCHEME.test(t) || IN_DOC.test(t) ? t : null;
 }
 
+/** Fields that hold an address, wherever they sit: a link's or action's `href`, a media
+ * `src` (image, video, captions, card media), a video `poster`, and `url`. The schema has no
+ * address marker (validate refuses a `format` keyword), so a test checks that every
+ * address-like property the schema names is here. */
+export const ADDRESS_KEYS = Object.freeze(['href', 'src', 'poster', 'url']);
+
 /** A URL as a Markdown link destination: spaces, brackets and controls
  * encoded; `&` and `\` backslash-escaped, so a parser decodes no entity
  * (`/&#47;host` must stay a path, not become `//host`). */

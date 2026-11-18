@@ -162,10 +162,12 @@ function inlineNode(node, depth) {
     case 'hardbreak': return [text('\n')];
     case 'link': return link(attr(node, 'href'), inner());
     case 'image': {
-      // An image is a link to it, labelled by its alt text (Barkpark's chat rule).
+      // An image is a link to it, labelled by its alt text (Barkpark's chat rule), or by its
+      // address when that is safe. An unsafe address never shows, not even as text.
       const src = attr(node, 'src');
       const alt = flattenText(node.children) || str(node.tok.content);
-      return link(src, [text(alt || src)]);
+      const label = alt || (safeUrl(src) === null ? '' : src);
+      return link(src, label ? [text(label)] : []);
     }
     // An inline tag is dropped; the text around it is a token of its own.
     case 'html_inline': return [];
