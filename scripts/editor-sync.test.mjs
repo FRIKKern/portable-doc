@@ -209,6 +209,11 @@ test('the root test run fails when it finds no test file, in list mode and with 
   }
 });
 
+// check-docs compares the README timeline with origin/main's, so its repo needs a commit and that ref.
+function asMain(root) {
+  for (const args of [['add', '-A'], ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'docs'], ['update-ref', 'refs/remotes/origin/main', 'HEAD']]) execFileSync('git', ['-C', root, ...args]);
+}
+
 test('an editor Markdown file whose link leaves the folder does not fail check-docs: it is Barkpark\'s text', () => {
   const root = path.join(tmp, `docs-${n++}`);
   write(path.join(root, 'scripts/check-docs.mjs'), fs.readFileSync(path.join(scripts, 'check-docs.mjs'), 'utf8'));
@@ -216,6 +221,7 @@ test('an editor Markdown file whose link leaves the folder does not fail check-d
   write(path.join(root, 'README.md'), '# synthetic\n');
   write(path.join(root, EDITOR_DIR, 'README.md'), 'See [the app](../../../api/app.md).\n');
   execFileSync('git', ['init', '-q', root]);
+  asMain(root);
   const r = node(path.join(root, 'scripts', 'check-docs.mjs'), []);
   assert.equal(r.code, 0, r.out);
   write(path.join(root, 'docs/x.md'), 'See [gone](gone.md).\n');

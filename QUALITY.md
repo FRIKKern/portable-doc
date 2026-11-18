@@ -30,4 +30,4 @@
 - Picture first: README, docs and decisions open with a diagram, a table or a screenshot.
 - README stays at or under 80 lines, counting the timeline block at its full budget (`TIMELINE_MAX_LINES` in `scripts/lib/timeline.mjs`, 8 lines); `npm run check` enforces it and checks links.
 - One fact, one home. Status lives on the board, never in docs.
-- Generated files (`docs/images/roadmap.svg`, the README timeline) are never edited by hand.
+- Generated files (`docs/images/roadmap.svg`, the README timeline) are never edited by hand. The timeline is written on main only: `npm run check` fails a branch whose block differs from main's.

@@ -256,6 +256,11 @@ test('a first sync into an empty repo says none for what did not change', () => 
   assert.equal(check(root).code, 0);
 });
 
+// check-docs compares the README timeline with origin/main's, so its repo needs a commit and that ref.
+function asMain(root) {
+  for (const args of [['add', '-A'], ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'docs'], ['update-ref', 'refs/remotes/origin/main', 'HEAD']]) execFileSync('git', ['-C', root, ...args]);
+}
+
 test('every test runs its scripts from a path with a space, and check-docs finds its repo root there too', () => {
   assert.match(tmp, / /);
   const root = repo();
@@ -264,6 +269,7 @@ test('every test runs its scripts from a path with a space, and check-docs finds
   fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts/check-docs.mjs'));
   fs.mkdirSync(path.join(root, 'scripts/lib'), { recursive: true });
   fs.copyFileSync(path.join(scripts, 'lib/timeline.mjs'), path.join(root, 'scripts/lib/timeline.mjs'));
+  asMain(root);
   const r = run(root, 'check-docs.mjs');
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /docs ok: 1 files, README 1 lines/);
