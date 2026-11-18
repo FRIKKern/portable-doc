@@ -180,3 +180,14 @@ test('import turns Markdown from a file or stdin into a doc that validate accept
   assert.equal((await call(['import', file, '-o', file])).status, 2);
   assert.equal(fs.readFileSync(file, 'utf8'), md);
 });
+
+test('render | head -1 prints one line and exits 0 with nothing on stderr: a closed stdout ends the command quietly', () => {
+  // Far more text than a pipe holds, so the write is still going when head closes it.
+  const file = write('long.json', { blocks: Array.from({ length: 20_000 }, (_, i) => ({ type: 'paragraph', text: `Paragraph ${i} of a long doc, long enough to fill a pipe.` })) });
+  const code = path.join(tmp, 'render-exit-code');
+  const quote = (s) => `'${s.replaceAll("'", "'\\''")}'`;
+  const r = spawnSync('sh', ['-c', `{ ${quote(process.execPath)} ${quote(bin)} render --format text ${quote(file)}; echo $? > ${quote(code)}; } | head -1`], { encoding: 'utf8' });
+  assert.equal(r.stdout, 'Paragraph 0 of a long doc, long enough to fill a pipe.\n');
+  assert.equal(r.stderr, '');
+  assert.equal(fs.readFileSync(code, 'utf8').trim(), '0');
+});
