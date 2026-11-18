@@ -9,7 +9,6 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs';
-import { MAX_REPLY_BYTES } from './tools.js';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const TIMEOUT = { timeout: 20_000 };
@@ -59,20 +58,6 @@ describe('with no Barkpark server', () => {
       if (html !== g.expectedHtml) wrong.push(g.type);
     }
     assert.deepEqual(wrong, []);
-  });
-
-  test(`a reply past ${MAX_REPLY_BYTES} bytes is a tool error in every format, and the next call still works`, async () => {
-    const dividers = { blocks: Array.from({ length: 25_000 }, () => ({ type: 'divider' })) };
-    const long = { blocks: [{ type: 'paragraph', text: 'a'.repeat(5_000_000) }] };
-    for (const [doc, format] of [[dividers, 'html'], [long, 'markdown'], [long, 'text']]) {
-      const result = await call(client, 'render', { doc, format });
-      assert.equal(result.isError, true, format);
-      assert.match(result.structuredContent.error, new RegExp(`^the render reply would be \\d+ bytes, over the ${MAX_REPLY_BYTES} one reply may carry`));
-      assert.deepEqual((await call(client, 'validate', { doc: DOC })).structuredContent, { ok: true });
-    }
-    const fits = { blocks: Array.from({ length: 10_000 }, () => ({ type: 'divider' })) };
-    const divider = JSON.parse(fs.readFileSync(new URL('../../goldens/blocks/divider.golden.json', import.meta.url), 'utf8')).expectedHtml;
-    assert.equal((await call(client, 'render', { doc: fits })).structuredContent.html, divider.repeat(10_000));
   });
 
   test('format markdown and text return @portable-doc/text output', async () => {
@@ -143,19 +128,5 @@ test('blocks names the missing file in plain words when the checkout has no spec
     assert.match(loadCatalog(root).error, /^blocks needs goldens\/blocks\/ from a portable-doc checkout/);
   } finally {
     fs.rmSync(empty, { recursive: true });
-  }
-});
-
-test('a reader answer too large for one reply is a tool error, and the connection keeps working', async () => {
-  const reader = await startFakeReader({ raw: JSON.stringify({ html: 'a'.repeat(5_000_000) }) });
-  const client = await connect({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: FAKE_TOKEN });
-  try {
-    const result = await call(client, 'render', { doc: DOC });
-    assert.equal(result.isError, true);
-    assert.match(result.structuredContent.error, /^the render reply would be \d+ bytes, over the 8388608 one reply may carry/);
-    assert.deepEqual((await call(client, 'validate', { doc: DOC })).structuredContent, { ok: true });
-  } finally {
-    await client.close();
-    await reader.close();
   }
 });

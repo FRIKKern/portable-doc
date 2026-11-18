@@ -100,22 +100,25 @@ function checkDecoded(args) {
   if (over === 'depth') throw bad(`a table edit reads the JSON inside strings, and with it the arguments nest deeper than ${MAX_DEPTH} JSON levels`);
 }
 
-// An MCP stdio client reads at most 10 MiB per message (the SDK's default buffer), and a
-// reply carries its value twice: as text and as structuredContent. Every reply stays under
-// MAX_REPLY_BYTES, so a large answer is a tool error and the connection keeps working.
-export const MAX_REPLY_BYTES = 8 * 1024 * 1024;
+// An MCP stdio client reads at most 10 MiB per message (the SDK's default buffer, which also
+// holds the start of the next chunk), so a reply stays under MAX_REPLY_BYTES, measured on the
+// serialized reply. content always carries the full JSON, because many clients read only
+// content. structuredContent repeats it when both copies fit; when only one fits, the reply is
+// the compact JSON text alone. A reply that does not fit once is a tool error.
+export const MAX_REPLY_BYTES = 10 * 1024 * 1024 - 256 * 1024;
+const ENVELOPE_BYTES = 1024;
 
-const reply = (value, isError) => ({
-  content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
-  structuredContent: value,
-  ...(isError ? { isError: true } : {}),
-});
+const fits = (reply) => Buffer.byteLength(JSON.stringify(reply)) + ENVELOPE_BYTES <= MAX_REPLY_BYTES;
+const flag = (isError) => (isError ? { isError: true } : {});
 
 const result = (value, isError = false, tool = 'tool') => {
-  const answer = reply(value, isError);
-  const bytes = Buffer.byteLength(JSON.stringify(answer));
-  if (bytes <= MAX_REPLY_BYTES) return answer;
-  return reply({ error: `the ${tool} reply would be ${bytes} bytes, over the ${MAX_REPLY_BYTES} one reply may carry; send fewer or smaller blocks` }, true);
+  const both = { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: value, ...flag(isError) };
+  if (fits(both)) return both;
+  const once = { content: [{ type: 'text', text: JSON.stringify(value) }], ...flag(isError) };
+  if (fits(once)) return once;
+  const bytes = Buffer.byteLength(JSON.stringify(once)) + ENVELOPE_BYTES;
+  const error = { error: `the ${tool} reply would be ${bytes} bytes, over the ${MAX_REPLY_BYTES} one reply may carry; send fewer or smaller blocks` };
+  return { content: [{ type: 'text', text: JSON.stringify(error, null, 2) }], structuredContent: error, isError: true };
 };
 
 function checkErrors(errors) {
