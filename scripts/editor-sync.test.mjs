@@ -198,6 +198,17 @@ test('the root test run collects no test file from packages/editor', () => {
   for (const s of ['test', 'check']) assert.match(pkg.scripts[s], /node scripts\/test-files.mjs --run/, s);
 });
 
+test('the root test run fails when it finds no test file, in list mode and with --run, so node --test never discovers everything', () => {
+  const root = path.join(tmp, `no-tests-${n++}`);
+  write(path.join(root, 'scripts', 'test-files.mjs'), fs.readFileSync(path.join(scripts, 'test-files.mjs'), 'utf8'));
+  write(path.join(root, EDITOR_DIR, 'only.test.mjs'), "throw new Error('an editor test ran');\n");
+  for (const args of [[], ['--run']]) {
+    const r = node(path.join(root, 'scripts', 'test-files.mjs'), args);
+    assert.equal(r.code, 1, args.join(' ') || 'list');
+    assert.equal(r.out, 'test-files: no test files found under scripts/ or packages/\n');
+  }
+});
+
 test('an editor Markdown file whose link leaves the folder does not fail check-docs: it is Barkpark\'s text', () => {
   const root = path.join(tmp, `docs-${n++}`);
   write(path.join(root, 'scripts/check-docs.mjs'), fs.readFileSync(path.join(scripts, 'check-docs.mjs'), 'utf8'));
