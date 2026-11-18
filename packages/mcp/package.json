@@ -9,6 +9,9 @@
   "exports": { ".": "./index.js" },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
-    "@portable-doc/validate": "0.0.0"
+    "@portable-doc/react": "0.1.0-alpha.1",
+    "@portable-doc/text": "0.0.0",
+    "@portable-doc/validate": "0.0.0",
+    "react": "^19.2.0"
   }
 }
