@@ -1,6 +1,6 @@
 // JSON parsing for the playground editor: on failure, say where (line and column)
 // and what was found there, the same in every browser (engine messages differ).
-import { utf8Length } from './share.js';
+import { overCap, utf8Length } from './share.js';
 
 const LITERAL = /true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 const WS = new Set([' ', '\t', '\n', '\r']);
@@ -143,7 +143,7 @@ export function prettyBytes(value, stop = Infinity) {
       if (keys) for (const key of keys) total += utf8Length(JSON.stringify(key)) + 2;
       for (const child of children) stack.push([child, depth + 1]);
     }
-    if (total > stop) return Infinity;
+    if (overCap(total, stop)) return Infinity;
   }
   return total;
 }
@@ -152,7 +152,7 @@ export function prettyBytes(value, stop = Infinity) {
 // JSON or its laid-out form would pass `limit` bytes (deep nesting grows it fast).
 export function tidyJson(text, limit) {
   const parsed = parseJson(text);
-  if (!parsed.ok || prettyBytes(parsed.value, limit) > limit) return text;
+  if (!parsed.ok || overCap(prettyBytes(parsed.value, limit), limit)) return text;
   try {
     return JSON.stringify(parsed.value, null, 2);
   } catch {

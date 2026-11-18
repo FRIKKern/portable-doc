@@ -11,7 +11,7 @@ import { validate } from '@portable-doc/validate';
 import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
 import { parseJson, prettyBytes, tidyJson } from './playground/parse.js';
-import { decodeShare, encodeShare, MAX_DOC_BYTES, utf8Length } from './playground/share.js';
+import { decodeShare, encodeShare, MAX_DOC_BYTES, overCap, utf8Length } from './playground/share.js';
 import { docFromMarkdown, outputsOf } from './playground/outputs.js';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 
@@ -101,6 +101,21 @@ test('the layout cap counts UTF-8 bytes, not characters, for pasted Markdown and
   assert.equal(tidyJson(compact, Buffer.byteLength(laid)), laid);
 });
 
+test('every playground size rule counts UTF-8 bytes through overCap, the one place a size meets a cap', () => {
+  const dir = new URL('./playground/', import.meta.url);
+  const hits = [];
+  for (const name of fs.readdirSync(dir).filter((f) => /\.(js|jsx|mjs)$/.test(f))) {
+    fs.readFileSync(new URL(name, dir), 'utf8').split('\n').forEach((line, i) => {
+      if (/[<>]=?\s*(MAX_DOC_BYTES|limit|stop)\b|\b(MAX_DOC_BYTES|limit|stop)\s*[<>]/.test(line) || /\.length\s*[<>]=?\s*[A-Z_]*BYTES/.test(line)) hits.push(`${name}:${i + 1}`);
+    });
+  }
+  assert.equal(hits.length, 1, hits.join(', '));
+  assert.match(hits[0], /^share\.js:/);
+  assert.equal(overCap('é'.repeat(3), 5), true);
+  assert.equal(overCap('é'.repeat(3), 6), false);
+  assert.equal(overCap(new Uint8Array(7), 6), true);
+});
+
 test('the bundle carries the HTML, Markdown and text views, and pasted Markdown becomes a valid doc', () => {
   const text = bundlePlayground().toString('utf8');
   for (const label of ['Render', 'HTML', 'Markdown', 'Text', 'Paste Markdown', 'Make a doc']) assert.ok(text.includes(`"${label}"`), `bundle has no "${label}"`);
@@ -153,10 +168,14 @@ test('the "last good render" note sits outside the tablist, which holds only tab
   });
   // The panes, React and its server renderer in one file, so they share one React.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portable-doc-playground-'));
-  const file = path.join(dir, 'panes.cjs');
-  fs.writeFileSync(file, outputFiles[0].contents);
-  const { render } = createRequire(import.meta.url)(file);
-  fs.rmSync(dir, { recursive: true, force: true });
+  let render;
+  try {
+    const file = path.join(dir, 'panes.cjs');
+    fs.writeFileSync(file, outputFiles[0].contents);
+    ({ render } = createRequire(import.meta.url)(file));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
   const html = render({ html: '<p>x</p>', markdown: 'x', text: 'x', stale: true });
   const tablist = /<div[^>]*role="tablist"[^>]*>(.*?)<\/div>/.exec(html)?.[1];
   assert.ok(tablist, 'a tablist');

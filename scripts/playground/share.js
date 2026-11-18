@@ -7,8 +7,9 @@
 const PREFIX = '#doc=';
 export const MAX_DOC_BYTES = 2_000_000;
 
-// The UTF-8 size of a string, as TextEncoder would make it (a lone surrogate is 3
-// bytes, as U+FFFD), without building the bytes. Every cap check counts with this.
+// The one size rule. byteSize is how many UTF-8 bytes a text is, as TextEncoder
+// would make it (a lone surrogate is 3 bytes, as U+FFFD), without building them;
+// bytes and byte counts pass through. overCap is the only place a size meets a cap.
 export function utf8Length(text) {
   let n = 0;
   for (let i = 0; i < text.length; i++) {
@@ -22,6 +23,9 @@ export function utf8Length(text) {
   }
   return n;
 }
+export const byteSize = (x) => (typeof x === 'string' ? utf8Length(x) : typeof x === 'number' ? x : x.byteLength);
+export const overCap = (x, limit = MAX_DOC_BYTES) => byteSize(x) > limit;
+
 const SLICE = 1024; // compressed bytes fed per step; one step unpacks to about 1 MB at most
 
 function toBase64url(bytes) {
@@ -32,7 +36,7 @@ function toBase64url(bytes) {
 
 function fromBase64url(text) {
   if (!/^[A-Za-z0-9_-]*$/.test(text)) throw new Error('This link is broken: it has characters a share link never has');
-  if (Math.floor((text.length * 3) / 4) > MAX_DOC_BYTES) throw tooBig();
+  if (overCap(Math.floor((text.length * 3) / 4))) throw tooBig(); // base64: 4 characters carry 3 bytes
   const binary = atob(text.replaceAll('-', '+').replaceAll('_', '/') + '='.repeat((4 - (text.length % 4)) % 4));
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
@@ -74,8 +78,8 @@ async function inflate(bytes) {
       throw new Error('This link is damaged: its compressed doc does not unpack');
     }
     if (step.done) break;
-    size += step.value.length;
-    if (size > MAX_DOC_BYTES) {
+    size += step.value.byteLength;
+    if (overCap(size)) {
       reader.cancel().catch(() => {});
       throw tooBig();
     }
@@ -92,7 +96,7 @@ async function inflate(bytes) {
 
 export async function encodeShare(text, { compress: pack = typeof CompressionStream === 'function' } = {}) {
   const bytes = new TextEncoder().encode(text);
-  if (bytes.length > MAX_DOC_BYTES) throw new Error(`This doc is too big to share (over ${MAX_DOC_BYTES / 1_000_000} MB)`);
+  if (overCap(bytes)) throw new Error(`This doc is too big to share (over ${MAX_DOC_BYTES / 1_000_000} MB)`);
   const plain = `${PREFIX}json.${toBase64url(bytes)}`;
   if (!pack) return plain;
   const packed = `${PREFIX}deflate.${toBase64url(await compress(bytes))}`;
