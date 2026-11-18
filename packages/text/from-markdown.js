@@ -4,12 +4,9 @@
 // this one differs. Fail-soft: odd Markdown never throws, and a parser
 // failure gives the whole text back as one code block.
 
-import { Marked } from 'marked';
 import { validate } from '@portable-doc/validate';
-import { MAX_NEST, flattenText, inline, merge, text, visibleText } from './from-markdown-inline.js';
-import { asList, isMap, safeUrl, str } from './util.js';
-
-const parser = new Marked({ gfm: true, breaks: false, pedantic: false });
+import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
+import { isMap, safeUrl, str } from './util.js';
 
 const MAX_FENCE_BLOCKS = 50;
 // Display blocks a ```portabledoc fence may hold; never fields, forms or bound blocks.
@@ -19,78 +16,82 @@ const FENCE_TYPES = new Set([
 ]);
 const TONES = new Set(['info', 'success', 'warning', 'danger', 'neutral']);
 const TONE_ALIASES = { note: 'info', warn: 'warning', error: 'danger' };
+const LISTS = new Set(['bullet_list', 'ordered_list']);
 
 const codeBlock = (value, lang) => (lang ? { type: 'code', value, lang } : { type: 'code', value });
 const paragraph = (content) => (content.length ? [{ type: 'paragraph', content }] : []);
-const live = (tokens) => asList(tokens).filter((t) => isMap(t) && t.type !== 'space');
+const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ? inline(node.children) : [text(flattenText([node]).trim())]);
 
 // ── lists ───────────────────────────────────────────────────────────────
 
-/** A list item as one inline run: its paragraphs joined by a space, a nested list's items each after " — ". */
+/** A list item as one inline run: its blocks joined by a space, a nested list's items each after " — ". */
 function itemInline(item, depth) {
   const out = [];
-  for (const tok of live(item.tokens)) {
-    if (tok.type === 'checkbox') continue;
-    if (tok.type === 'list') {
-      for (const sub of asList(tok.items)) {
-        out.push(text(' — '), ...(depth >= MAX_NEST ? [text(flattenText(sub.tokens))] : itemInline(sub, depth + 1)));
+  for (const child of item.children) {
+    if (LISTS.has(child.type)) {
+      for (const sub of child.children) {
+        out.push(text(' — '), ...(depth >= MAX_NEST ? [text(flattenText([sub]))] : itemInline(sub, depth + 1)));
       }
       continue;
     }
     if (out.length) out.push(text(' '));
-    if (tok.type === 'paragraph' || tok.type === 'text' || tok.type === 'heading') out.push(...inline(tok.tokens ?? [tok]));
-    else if (tok.type === 'code') out.push({ type: 'code', value: str(tok.text) });
-    else out.push(text(flattenText([tok])));
+    if (child.type === 'fence' || child.type === 'code_block') out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
+    else out.push(...textOf(child));
   }
   return merge(out);
 }
 
-function list(tok) {
-  const ordered = tok.ordered === true;
-  const items = asList(tok.items).filter(isMap).map((item) => ({ item, content: itemInline(item, 0) }));
+// `[ ] rest` / `[x] rest` at the head of an item: { content, checked }, else null.
+function taskItem(content) {
+  const first = content[0];
+  const m = first?.type === 'text' ? /^\[( |x|X)\]\s+(.*)$/s.exec(first.value) : null;
+  if (!m) return null;
+  const rest = m[2] === '' && content.length === 1 ? [] : merge([text(m[2]), ...content.slice(1)]);
+  return { content: rest, checked: m[1] !== ' ' };
+}
+
+function list(node) {
+  const ordered = node.type === 'ordered_list';
+  const items = node.children.filter((c) => c.type === 'list_item').map((li) => itemInline(li, 0));
   // GitHub task syntax (`- [ ] `, `- [x] `) makes the whole bullet list a checklist.
-  if (!ordered && items.some(({ item }) => item.task)) {
-    return { type: 'list', ordered: false, task: true, items: items.map(({ item, content }) => ({ content, checked: item.task === true && item.checked === true })) };
+  const tasks = ordered ? [] : items.map(taskItem);
+  if (tasks.some(Boolean)) {
+    return { type: 'list', ordered: false, task: true, items: items.map((content, i) => tasks[i] ?? { content, checked: false }) };
   }
-  const block = {
-    type: 'list',
-    ordered,
-    items: items.map(({ item, content }) => (ordered && item.task ? merge([text(item.checked ? '[x] ' : '[ ] '), ...content]) : content)),
-  };
-  if (ordered && Number.isInteger(tok.start) && tok.start !== 1) block.start = tok.start;
+  const block = { type: 'list', ordered, items };
+  const start = Number(attr(node, 'start') || 1);
+  if (ordered && Number.isSafeInteger(start) && start !== 1) block.start = start;
   return block;
 }
 
 // ── quotes and callouts ─────────────────────────────────────────────────
 
-const quoteContent = (children) =>
-  merge(children.flatMap((k, i) => [...(i ? [text(' ')] : []), ...(k.type === 'paragraph' ? inline(k.tokens) : [text(flattenText([k]))])]));
+const quoteContent = (children) => merge(children.flatMap((c, i) => [...(i ? [text(' ')] : []), ...textOf(c)]));
 
 // `[!type]` (or `[!type]+`, `[!type]-`) at the head of a quote: { tone, rest }, else null.
 function calloutMarker(content) {
   const first = content[0];
-  if (first?.type !== 'text') return null;
-  const m = /^\[!(\w+)\][+-]?[ \t]*(.*)$/s.exec(first.value);
+  const m = first?.type === 'text' ? /^\[!(\w+)\][+-]?[ \t]*(.*)$/s.exec(first.value) : null;
   if (!m) return null;
   const raw = m[1].toLowerCase();
   const tone = TONES.has(raw) ? raw : Object.hasOwn(TONE_ALIASES, raw) ? TONE_ALIASES[raw] : 'info';
-  return { tone, rest: m[2] === '' ? content.slice(1) : [text(m[2]), ...content.slice(1)] };
+  return { tone, rest: merge([text(m[2]), ...content.slice(1)]) };
 }
 
-function quote(tok) {
-  const children = live(tok.tokens);
+function quote(node) {
+  const children = node.children;
   const marker = calloutMarker(quoteContent(children));
   if (marker) return [{ type: 'callout', tone: marker.tone, content: marker.rest }];
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
   const last = children.at(-1);
-  const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText(last.tokens).trim()) : null;
+  const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
   if (cite) return [{ type: 'blockquote', content: quoteContent(children.slice(0, -1)), cite: cite[1] }];
   return [{ type: 'blockquote', content: quoteContent(children) }];
 }
 
 // ── code fences ─────────────────────────────────────────────────────────
 
-/** Every non-blank block id in a parsed fence, and whether every `href` in it is safe. Iterative. */
+/** Every non-blank block id in a parsed fence, or null when an `href` in it is unsafe. Iterative. */
 function scan(value) {
   const ids = [];
   const stack = [value];
@@ -129,11 +130,11 @@ function fence(source, state) {
 }
 
 // A fence's language: the first word of its info string.
-const langOf = (tok) => (tok.codeBlockStyle === 'indented' ? '' : str(tok.lang).trim().split(/\s+/)[0]);
+const langOf = (node) => (node.type === 'fence' ? str(node.tok.info).trim().split(/\s+/)[0] : '');
 
-function code(tok, state) {
-  const source = str(tok.text).replace(/\n+$/, '');
-  const lang = langOf(tok);
+function code(node, state) {
+  const source = str(node.tok.content).replace(/\n+$/, '');
+  const lang = langOf(node);
   if (lang === 'mermaid') return [{ type: 'diagram', source }];
   if (lang === 'portabledoc') return fence(source, state);
   return [codeBlock(source, lang)];
@@ -141,45 +142,50 @@ function code(tok, state) {
 
 // ── blocks ──────────────────────────────────────────────────────────────
 
-function block(tok, state) {
-  switch (tok.type) {
-    case 'heading': return [{ type: 'heading', level: Math.min(6, Math.max(1, Number(tok.depth) || 1)), text: flattenText(tok.tokens) }];
-    case 'paragraph': return paragraph(inline(tok.tokens));
-    case 'text': return paragraph(inline(tok.tokens ?? [tok]));
-    case 'list': return [list(tok)];
-    case 'code': return code(tok, state);
-    case 'blockquote': return quote(tok);
-    case 'table': {
-      const cells = (row) => asList(row).map((cell) => inline(cell?.tokens));
-      return [{ type: 'table', head: cells(tok.header), rows: asList(tok.rows).map(cells) }];
-    }
+function table(node) {
+  const rows = (section) =>
+    node.children
+      .filter((c) => c.type === section)
+      .flatMap((s) => s.children.filter((r) => r.type === 'tr'))
+      .map((r) => r.children.filter((c) => c.type === 'th' || c.type === 'td').map((c) => inline(c.children)));
+  const head = rows('thead')[0];
+  return head ? { type: 'table', head, rows: rows('tbody') } : { type: 'table', rows: rows('tbody') };
+}
+
+function block(node, state) {
+  switch (node.type) {
+    case 'heading': return [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), text: flattenText(node.children) }];
+    case 'paragraph': return paragraph(inline(node.children));
+    case 'bullet_list': case 'ordered_list': return [list(node)];
+    case 'fence': case 'code_block': return code(node, state);
+    case 'blockquote': return quote(node);
+    case 'table': return [table(node)];
     case 'hr': return [{ type: 'divider' }];
-    case 'def': return [];
-    case 'html': {
-      const visible = visibleText(tok.text).trim();
+    case 'html_block': {
+      const visible = visibleText(node.tok.content).trim();
       return paragraph(visible ? [text(visible)] : []);
     }
     default: {
-      const visible = flattenText([tok]).trim();
+      const visible = flattenText([node]).trim();
       return paragraph(visible ? [text(visible)] : []);
     }
   }
 }
 
 // A paragraph that is one emphasised run, right after a diagram, is its caption.
-function caption(tok) {
-  const only = tok?.type === 'paragraph' && asList(tok.tokens).length === 1 ? tok.tokens[0] : null;
-  return only?.type === 'em' ? flattenText(only.tokens).trim() : '';
+function caption(node) {
+  if (node?.type !== 'paragraph') return '';
+  const runs = node.children.flatMap((c) => c.children).filter((c) => !(c.type === 'text' && c.tok.content === ''));
+  return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-function convert(tokens) {
+function convert(nodes) {
   const state = { ids: new Set() };
-  const list = live(tokens);
   const out = [];
-  for (let i = 0; i < list.length; i++) {
-    const tok = list[i];
-    const blocks = block(tok, state);
-    if (tok.type === 'code' && langOf(tok) === 'mermaid' && caption(list[i + 1])) blocks[0].caption = caption(list[++i]);
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const blocks = block(node, state);
+    if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
     for (const b of blocks) out.push(b);
   }
   return out;
@@ -189,7 +195,7 @@ function convert(tokens) {
 export function fromMarkdown(markdown) {
   const md = typeof markdown === 'string' ? markdown : '';
   try {
-    const blocks = convert(parser.lexer(md));
+    const blocks = convert(tree(parser.parse(md, {})));
     if (validate({ blocks }).ok) return blocks;
   } catch {
     // fall through: the text as one code block
