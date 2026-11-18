@@ -1,4 +1,20 @@
-import blockSchema from '../../spec/blocks.schema.json' with { type: 'json' };
+import schemaJson from '../../spec/blocks.schema.json' with { type: 'json' };
+
+/** Freeze a JSON value and everything in it. Iterative, so depth does not matter. */
+function deepFreeze(value) {
+  const stack = [value];
+  while (stack.length) {
+    const v = stack.pop();
+    if (typeof v !== 'object' || v === null || Object.isFrozen(v)) continue;
+    Object.freeze(v);
+    for (const x of Object.values(v)) stack.push(x);
+  }
+  return value;
+}
+
+// Frozen before it is compiled or handed out: validate and the Markdown fence guard read it
+// while they run, so a caller that edits the exported schema must not change what they accept.
+const blockSchema = deepFreeze(schemaJson);
 
 export const CODES = Object.freeze([
   'not_a_doc',
@@ -261,3 +277,6 @@ export function compile(root) {
 }
 
 export const validate = compile(blockSchema);
+
+/** The PortableDoc block schema (spec/blocks.schema.json) that `validate` checks against. Deep-frozen. */
+export { blockSchema };

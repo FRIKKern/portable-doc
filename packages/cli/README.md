@@ -2,7 +2,8 @@
 
 The `portable-doc` command: check PortableDoc files against the schema, explain
 what is wrong, render them as HTML, Markdown or plain text, compare two of
-them block by block, and import Markdown. Plain JavaScript; it uses
+them block by block, preview one in the browser as you edit it, and import
+Markdown. Plain JavaScript; it uses
 [`@portable-doc/validate`](../validate/CODES.md),
 [`@portable-doc/text`](../text/README.md) and, for HTML,
 [`@portable-doc/react`](../react/README.md).
@@ -147,6 +148,32 @@ It exits 0 when the docs differ, and also when a side cannot be read or is
 not a doc, printing why in the diff, since git stops at a driver that exits
 non-zero. `git diff` uses the driver; `git log -p` and `git show` need
 `--ext-diff`.
+
+## Preview
+
+```console
+$ npx portable-doc preview notes.json --open
+Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
+```
+
+- The page is the doc as `render --format html` makes it, styled with
+  `@portable-doc/react/paper-surface.css`. That stylesheet is read from the
+  built package, so run `npm run react:build` once first, as for html. Light
+  and dark follow the system.
+- Save the file and the page reloads by itself, also when the editor saves by
+  renaming a new file over the old one.
+- A doc with bad JSON or validation errors shows its problems, in the words
+  `explain` uses, above the last version that rendered.
+- The server listens on 127.0.0.1 only, on port 4317, or on any free port
+  when that one is taken. `--port 0` always picks a free one. It answers GET
+  and HEAD for `/`, `/paper-surface.css` and `/events` (the reload stream, GET
+  only), with `127.0.0.1` or `localhost` as the host. Anything else is a 404.
+  No other site may frame the page.
+- If the file can no longer be watched, the page says so above the last
+  render, and the server keeps running.
+- `--open` opens the page with `open` (macOS) or `xdg-open`. Ctrl-C closes the
+  watcher and every connection, and exits 0.
+
 ## Import
 
 ```console
@@ -178,4 +205,4 @@ git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
 - run: npx portable-doc validate --json -- content/*.json > validate.json
 ```
 
-`node --test packages/cli/*.test.mjs` runs the bin against the fixtures.
+`node --test packages/cli/*.test.mjs` runs the bin against the fixtures and a live preview.

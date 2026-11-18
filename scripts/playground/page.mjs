@@ -31,6 +31,14 @@ const style = `<style>
   .pg-banner + .pg-banner { margin-top: 8px; }
   .pg-errors { margin: 10px 0 0; padding-left: 22px; line-height: 1.45; } .pg-errors li + li { margin-top: 10px; } .pg-errors p { margin: 4px 0 0; overflow-wrap: anywhere; }
   .pg-error-code, .pg-error-path { font-size: .82rem; padding: 1px 6px; border-radius: 6px; background: var(--pg-chip); overflow-wrap: anywhere; } .pg-error-code { font-weight: 700; color: var(--pg-bad); }
+  .pg-tabs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0 0 8px; }
+  .pg-tabs [role=tab] { font: inherit; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; padding: 5px 12px; border: 1px solid transparent; border-radius: 99px; background: none; color: var(--pg-muted); cursor: pointer; }
+  .pg-tabs [role=tab]:hover { border-color: var(--pg-line); } .pg-tabs [role=tab][aria-selected=true] { border-color: var(--pg-line); background: var(--pg-chip); color: var(--pg-ink); font-weight: 700; }
+  .pg-source { border: 1px solid var(--pg-line); border-radius: 12px; overflow: auto; max-height: 82vh; background: var(--pg-field); }
+  .pg-source > pre { margin: 0; padding: 14px 16px; color: var(--pg-ink); font: .82rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pg-paste { margin: 0 0 16px; } .pg-paste > h2 { margin: 0 0 8px; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--pg-muted); }
+  .pg-paste .pg-markdown { height: 28vh; min-height: 180px; white-space: pre-wrap; }
+  .pg-bar button:disabled { opacity: .5; cursor: default; }
   .pg-render { border: 1px solid var(--pg-line); border-radius: 12px; overflow: auto; max-height: 82vh; }
   .pg-render > .bp-paper-surface { padding: 20px 24px; min-height: 200px; }
   @media (max-width: 880px) { .pg-editor { height: 46vh; } .pg-render { max-height: none; } .pg-render > .bp-paper-surface { padding: 16px; } }
@@ -47,7 +55,7 @@ export function writePlayground(staging, { page, stamp }) {
   fs.writeFileSync(path.join(staging, 'playground', 'playground.js'), bundle);
   fs.writeFileSync(path.join(staging, 'playground', 'paper-surface.css'), css);
   const head = `<link rel="stylesheet" href="playground/paper-surface.css">${style}<script src="playground/playground.js" defer></script>`;
-  const body = `<h1>Playground</h1><p class="lede">Write a PortableDoc document as JSON. It renders with <code>@portable-doc/react</code> and is checked with <code>@portable-doc/validate</code> as you type. Nothing leaves this page.</p><div id="playground"><p>Loading the playground…</p></div><noscript><p>The playground needs JavaScript.</p></noscript><script type="application/json" id="pd-examples">${json(examples)}</script>`;
+  const body = `<h1>Playground</h1><p class="lede">Write a PortableDoc document as JSON, or paste Markdown to start one. It renders with <code>@portable-doc/react</code>, shows as HTML, Markdown and text, and is checked with <code>@portable-doc/validate</code> as you type. Nothing leaves this page.</p><div id="playground"><p>Loading the playground…</p></div><noscript><p>The playground needs JavaScript.</p></noscript><script type="application/json" id="pd-examples">${json(examples)}</script>`;
   const html = page('Playground', stamp, body, { head });
   fs.writeFileSync(path.join(staging, 'playground.html'), html);
   return {

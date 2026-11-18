@@ -1,5 +1,6 @@
 // The docs-site playground: a JSON editor, a live render with @portable-doc/react
-// and live checks with @portable-doc/validate. Bundled into one file by build.mjs.
+// beside its HTML, Markdown and text, live checks with @portable-doc/validate,
+// and Markdown pasted in as a new doc. Bundled into one file by build.mjs.
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { validate } from '@portable-doc/validate';
@@ -11,6 +12,8 @@ import codesMarkdown from '../../packages/validate/CODES.md';
 import { blocksOf, parseJson, tidyJson } from './parse.js';
 import { decodeShare, encodeShare, MAX_DOC_BYTES } from './share.js';
 import { copyText, shiftLines } from './editing.js';
+import { docFromMarkdown, outputsOf } from './outputs.js';
+import { MarkdownBox, Outputs } from './panes.jsx';
 
 const explain = explainWith(readCodes(codesMarkdown));
 const renderOptions = { blocks: { ...fieldBlocks, ...embedBlocks() } };
@@ -30,7 +33,7 @@ function viewOf(text, previous) {
   const result = validate(parsed.value);
   const checks = result.ok ? [] : explain(result.errors, parsed.value);
   try {
-    return { html: renderPortableDocument(blocks, renderOptions), blocks: blocks.length, checks, parseError: null, renderError: null, stale: false };
+    return { html: renderPortableDocument(blocks, renderOptions), ...outputsOf(parsed.value), blocks: blocks.length, checks, parseError: null, renderError: null, stale: false };
   } catch (error) {
     return { ...previous, checks, parseError: null, renderError: plainWords(error), stale: true };
   }
@@ -76,10 +79,11 @@ function Checks({ view }) {
 function App({ examples, initial }) {
   const [text, setText] = useState(initial.text);
   const [settled, setSettled] = useState(initial.text);
-  const [view, setView] = useState(() => viewOf(initial.text, { html: '', blocks: 0, checks: [] }));
+  const [view, setView] = useState(() => viewOf(initial.text, { html: '', markdown: '', text: '', blocks: 0, checks: [] }));
   const [exampleId, setExampleId] = useState(initial.exampleId);
   const [status, setStatus] = useState(initial.status ?? '');
   const [link, setLink] = useState('');
+  const [pasting, setPasting] = useState(false);
   const tabOut = useRef(false);
 
   useEffect(() => {
@@ -111,6 +115,15 @@ function App({ examples, initial }) {
     load(pretty(example.doc));
     setLink('');
     setStatus(`Loaded ${example.label}.`);
+    dropHash();
+  };
+  const fromMarkdown = (markdown) => {
+    const made = docFromMarkdown(markdown);
+    load(made.text);
+    setExampleId('');
+    setLink('');
+    setPasting(false);
+    setStatus(`Made a doc of ${made.blocks} ${made.blocks === 1 ? 'block' : 'blocks'} from the Markdown.`);
     dropHash();
   };
   const format = () => {
@@ -183,9 +196,11 @@ function App({ examples, initial }) {
         <button type="button" onClick={format}>Format JSON</button>
         <button type="button" onClick={share}>Share link</button>
         <button type="button" onClick={copyHtml}>Copy HTML</button>
+        <button type="button" aria-expanded={pasting} onClick={() => setPasting(!pasting)}>Paste Markdown</button>
         <span className="pg-status" role="status">{status}</span>
       </div>
       {link ? <input className="pg-link" readOnly value={link} aria-label="Share link" onFocus={(event) => event.target.select()} /> : null}
+      {pasting ? <MarkdownBox onDoc={fromMarkdown} onClose={() => setPasting(false)} /> : null}
       <div className="pg-grid">
         <div className="pg-column">
           <section className="pg-pane" aria-labelledby="pg-json">
@@ -211,12 +226,7 @@ function App({ examples, initial }) {
             <Checks view={view} />
           </section>
         </div>
-        <section className="pg-pane" aria-labelledby="pg-render">
-          <h2 id="pg-render">Render {view.stale ? <span className="pg-stale">last good render</span> : null}</h2>
-          <div className="pg-render" onClick={openLinksElsewhere}>
-            <div className="bp-paper-surface bp-paper-article" dangerouslySetInnerHTML={{ __html: view.html }} />
-          </div>
-        </section>
+        <Outputs view={view} onRenderClick={openLinksElsewhere} />
       </div>
     </>
   );

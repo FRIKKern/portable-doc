@@ -5,11 +5,13 @@
 // failure gives the whole text back as one code block.
 
 import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
+import { everyBlockAllowed } from './fence-blocks.js';
 import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { isMap, safeUrl, str } from './util.js';
 
 const MAX_FENCE_BLOCKS = 50;
-// Display blocks a ```portabledoc fence may hold; never fields, forms or bound blocks.
+// Display blocks a ```portabledoc fence may hold, at the top and nested anywhere the
+// schema puts blocks; never fields, forms or bound blocks.
 const FENCE_TYPES = new Set([
   'heading', 'paragraph', 'list', 'code', 'table', 'callout', 'divider', 'diagram',
   'chart', 'stat', 'stats', 'heatmap', 'pullquote', 'eyebrow',
@@ -123,7 +125,7 @@ function scan(value) {
 }
 
 // A ```portabledoc fence holds a JSON array of blocks, spliced in when it is
-// 1 to 50 blocks of the allowed types, nested no deeper than MAX_VALUE_DEPTH, that
+// 1 to 50 blocks, every block in it of the allowed types, nested no deeper than MAX_VALUE_DEPTH, that
 // validate, link only to safe URLs and reuse no id from an earlier fence.
 // Anything else is a plain code block.
 function fence(source, state) {
@@ -137,8 +139,9 @@ function fence(source, state) {
     Array.isArray(blocks) &&
     blocks.length > 0 &&
     blocks.length <= MAX_FENCE_BLOCKS &&
-    blocks.every((b) => isMap(b) && FENCE_TYPES.has(b.type));
-  const ids = shaped && !tooDeep(blocks) ? scan(blocks) : null;
+    !tooDeep(blocks) &&
+    everyBlockAllowed(blocks, FENCE_TYPES);
+  const ids = shaped ? scan(blocks) : null;
   if (ids === null || !validate(blocks).ok || ids.some((id) => state.ids.has(id))) return [codeBlock(source)];
   for (const id of ids) state.ids.add(id);
   return blocks;

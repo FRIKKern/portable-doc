@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The `portable-doc` command: validate, explain, render and import PortableDoc files.
+// The `portable-doc` command: validate, explain, render, diff, preview and import PortableDoc files.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,6 +19,7 @@ Commands:
   explain [file...]    the same, with each error explained in full
   render [file]        print a doc as html, markdown or text
   diff <a> <b>         compare two docs block by block
+  preview <file>       serve a doc on 127.0.0.1 and reload it as the file changes
   import [file]        turn a Markdown file into a doc
 
 A file of "-", or no file, reads stdin. A doc is a blocks array or { "blocks": [...] }.
@@ -40,6 +41,13 @@ Exit: 0 every doc is valid, 1 some doc is invalid, 2 usage error, unreadable fil
   --force               render a doc that fails validation
 Exit: 0 rendered, 1 the doc is invalid (without --force), 2 usage error, unreadable file, bad JSON,
 or html asked for before @portable-doc/react is built.`,
+  preview: `Usage: portable-doc preview <file> [--port N] [--open]
+
+Serves the doc, rendered as render --format html does, on 127.0.0.1 and reloads the page when
+the file changes. A broken doc shows explain's words above the last version that rendered.
+  --port <n>   the port (default 4317, or any free one when that is taken; 0 picks one)
+  --open       open the page in the system browser
+Runs until Ctrl-C. Exit: 0 stopped, 2 usage error, unreadable file, port in use, or @portable-doc/react not built.`,
   import: `Usage: portable-doc import [file] [-o out] [--json]
 
 Reads GFM Markdown and prints it as a doc, { "blocks": [...] }, that passes validate.
@@ -52,6 +60,7 @@ const FLAGS = {
   validate: { '--json': 'json' },
   explain: { '--json': 'json' },
   render: { '--format': 'format=', '--output': 'output=', '-o': 'output=', '--force': 'force' },
+  preview: { '--port': 'port=', '--open': 'open' },
   import: { '--output': 'output=', '-o': 'output=', '--json': 'json' },
 };
 const FORMATS = ['html', 'markdown', 'text'];
@@ -267,6 +276,7 @@ export async function main(argv, io) {
   if (args.includes('--help') || args.includes('-h')) return io.stdout(`${USAGE[command]}\n`), 0;
   try {
     const { files, opts } = parseArgs(command, args);
+    if (command === 'preview') return await (await import('./preview.js')).preview(files, opts, io, { load, renderHtml, UsageError });
     if (command === 'render') return await render(files, opts, io);
     if (command === 'import') return await importMarkdown(files, opts, io);
     return await check(command, files, opts, io);
