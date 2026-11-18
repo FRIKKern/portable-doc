@@ -102,6 +102,28 @@ test('every schema block type gets a page: its fields, its golden and every rend
   for (const name of ['paper-surface.css', 'code-tokens.css']) assert.deepEqual(fs.readFileSync(path.join(out, 'css', name)), fs.readFileSync(path.join(root, 'goldens', 'css', name)));
 });
 
+test('the site ships a self-contained playground, linked and listed in the build manifest', () => {
+  const out = path.join(tmp, 'playground');
+  generateDocsSite(out);
+  const html = fs.readFileSync(path.join(out, 'playground.html'), 'utf8');
+  const targets = [...html.matchAll(/(?:href|src)="([^"]*)"/g)].map((match) => match[1]);
+  assert.ok(targets.includes('playground/playground.js') && targets.includes('playground/paper-surface.css'), targets.join(' '));
+  for (const target of targets) {
+    assert.doesNotMatch(target, /^(?:[a-z]+:|\/)/i, `playground.html: ${target} is not a local relative file`);
+    assert.ok(fs.existsSync(path.resolve(out, target.split('#')[0])), `playground.html: missing ${target}`);
+  }
+  assert.match(fs.readFileSync(path.join(out, 'index.html'), 'utf8'), /<nav>[^]*href="playground.html"[^]*<\/nav>[^]*<main>[^]*href="playground.html"/);
+  const build = JSON.parse(fs.readFileSync(path.join(out, 'build-manifest.json')));
+  const sha = (file) => createHash('sha256').update(fs.readFileSync(path.join(out, file))).digest('hex');
+  assert.equal(build.playground.page.file, 'playground.html');
+  assert.equal(build.playground.page.sha256, sha('playground.html'));
+  assert.equal(build.playground.bundle.file, 'playground/playground.js');
+  assert.equal(build.playground.bundle.sha256, sha('playground/playground.js'));
+  const marker = JSON.parse(fs.readFileSync(path.join(out, '.portable-doc-docs-site.json'))).files;
+  for (const file of ['playground.html', 'playground/playground.js', 'playground/paper-surface.css']) assert.equal(marker[file], sha(file), file);
+  assert.deepEqual(fs.readFileSync(path.join(out, 'playground', 'paper-surface.css')), fs.readFileSync(path.join(root, 'packages', 'react', 'paper-surface.css')));
+});
+
 test('describeType says what a schema node takes', () => {
   for (const [node, words] of [
     [{ type: 'string' }, 'string'],
