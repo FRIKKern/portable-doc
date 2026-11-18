@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 10 changes
-  - Markdown import: fromMarkdown and portable-doc import ([#68](https://github.com/FRIKKern/portable-doc/pull/68))
+- **Today** · 11 changes
+  - Editor sync: one file-list rule for the check and the copy; packages/editor out of tests and check-docs ([#69](https://github.com/FRIKKern/portable-doc/pull/69))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed

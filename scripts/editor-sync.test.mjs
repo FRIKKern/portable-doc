@@ -15,19 +15,20 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'editor sync test-'));
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 let n = 0;
 
-function node(file, args) {
+function node(file, args, env = process.env) {
   assert.ok(file.startsWith(tmp + path.sep), `refusing to run ${file}: outside the test dir`);
-  const r = spawnSync(process.execPath, [file, ...args], { cwd: tmp, encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [file, ...args], { cwd: tmp, encoding: 'utf8', env });
   return { code: r.status, out: r.stdout + r.stderr };
 }
 
 const check = (root, ...args) => node(path.join(root, 'scripts', 'check-pack.mjs'), args);
 
-// This repo's own pack, editor copy and SOURCE.json, in a temp dir.
-function realCopy() {
+// This repo's own pack, editor copy and SOURCE.json, in a temp dir; with { git }, a git work tree with the root .gitignore.
+function realCopy({ git = false } = {}) {
   const root = path.join(tmp, `real-${n++}`);
   fs.cpSync(scripts, path.join(root, 'scripts'), { recursive: true, filter: (f) => !f.endsWith('.test.mjs') });
-  for (const p of ['spec', 'goldens', 'conformance', 'packages/editor', 'SOURCE.json']) fs.cpSync(path.join(repoRoot, p), path.join(root, p), { recursive: true });
+  for (const p of ['spec', 'goldens', 'conformance', 'packages/editor', 'SOURCE.json', ...(git ? ['.gitignore'] : [])]) fs.cpSync(path.join(repoRoot, p), path.join(root, p), { recursive: true });
+  if (git) execFileSync('git', ['init', '-q', root]);
   return root;
 }
 
@@ -133,4 +134,78 @@ test('--against fails, naming the file, when Barkpark changed the editor', () =>
   const r = check(repo(), '--against', barkpark({ editorTag: 'b' }));
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /^packages\/editor\/src\/index.js: stale, changed in Barkpark$/m);
+});
+
+test('files git ignores under packages/editor, such as .DS_Store and node_modules, do not fail the check', () => {
+  const root = realCopy({ git: true });
+  write(path.join(root, EDITOR_DIR, '.DS_Store'), 'finder\n');
+  write(path.join(root, EDITOR_DIR, 'src/.DS_Store'), 'finder\n');
+  write(path.join(root, EDITOR_DIR, 'node_modules/dep/index.js'), 'dep\n');
+  const r = check(root);
+  assert.equal(r.code, 0, r.out);
+  write(path.join(root, EDITOR_DIR, 'src/extra.js'), 'not ignored\n');
+  assert.match(check(root).out, /^packages\/editor\/src\/extra.js: not written by the sync/m);
+});
+
+test('a symlink under packages/editor fails the check, naming it, in a git work tree or not', () => {
+  for (const root of [realCopy({ git: true }), realCopy()]) {
+    fs.symlinkSync('index.js', path.join(root, EDITOR_DIR, 'src/link.js'));
+    const r = check(root);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /^packages\/editor\/src\/link.js: a symlink; the sync writes regular files only$/m);
+  }
+});
+
+test('a symlinked directory under packages/editor is named once, and its contents are not listed', () => {
+  const root = realCopy();
+  fs.symlinkSync('src', path.join(root, EDITOR_DIR, 'linked-src'));
+  const r = check(root);
+  assert.equal(r.code, 1, r.out);
+  assert.deepEqual(r.out.trim().split('\n').filter((l) => l.includes('linked-src')), ['packages/editor/linked-src: a symlink; the sync writes regular files only']);
+});
+
+test('a committed file under packages/editor that a .gitignore matches still fails the check, naming it', () => {
+  const root = realCopy({ git: true });
+  write(path.join(root, EDITOR_DIR, 'dist/bp-paper-editor.bundle.js'), 'built\n');
+  assert.equal(check(root).code, 0, 'untracked build output is a local leftover');
+  execFileSync('git', ['-C', root, 'add', '-f', `${EDITOR_DIR}/dist/bp-paper-editor.bundle.js`]);
+  const r = check(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /^packages\/editor\/dist\/bp-paper-editor.bundle.js: not written by the sync \(absent from SOURCE.json\)$/m);
+});
+
+test('a global gitignore does not change what the sync copies: only the repo\'s own .gitignore files count', () => {
+  const excludes = path.join(tmp, `global-ignore-${n++}`);
+  const config = path.join(tmp, `global-config-${n++}`);
+  write(excludes, '*.js\npackage.json\n');
+  write(config, `[core]\n\texcludesFile = ${excludes}\n`);
+  const root = repo();
+  const r = node(path.join(root, 'scripts', 'sync-from-barkpark.mjs'), [barkpark({ editorTag: 'b' })], { ...process.env, GIT_CONFIG_GLOBAL: config });
+  assert.equal(r.code, 0, r.out);
+  assert.deepEqual(Object.keys(recorded(root).files), ['.gitignore', 'package.json', 'src/index.js']);
+});
+
+test('the root test run collects no test file from packages/editor', () => {
+  const root = path.join(tmp, `tests-${n++}`);
+  fs.cpSync(scripts, path.join(root, 'scripts'), { recursive: true });
+  for (const f of ['packages/text/a.test.mjs', 'packages/editor/b.test.mjs', 'packages/editor/src/c.test.mjs']) write(path.join(root, f), '\n');
+  const r = node(path.join(root, 'scripts', 'test-files.mjs'), []);
+  assert.equal(r.code, 0, r.out);
+  const files = r.out.trim().split('\n');
+  assert.ok(files.includes('packages/text/a.test.mjs') && files.includes('scripts/editor-sync.test.mjs'), r.out);
+  assert.deepEqual(files.filter((f) => f.startsWith('packages/editor/')), []);
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  for (const s of ['test', 'check']) assert.match(pkg.scripts[s], /node scripts\/test-files.mjs --run/, s);
+});
+
+test('an editor Markdown file whose link leaves the folder does not fail check-docs: it is Barkpark\'s text', () => {
+  const root = path.join(tmp, `docs-${n++}`);
+  write(path.join(root, 'scripts/check-docs.mjs'), fs.readFileSync(path.join(scripts, 'check-docs.mjs'), 'utf8'));
+  write(path.join(root, 'README.md'), '# synthetic\n');
+  write(path.join(root, EDITOR_DIR, 'README.md'), 'See [the app](../../../api/app.md).\n');
+  execFileSync('git', ['init', '-q', root]);
+  const r = node(path.join(root, 'scripts', 'check-docs.mjs'), []);
+  assert.equal(r.code, 0, r.out);
+  write(path.join(root, 'docs/x.md'), 'See [gone](gone.md).\n');
+  assert.match(node(path.join(root, 'scripts', 'check-docs.mjs'), []).out, /docs\/x.md: broken link gone.md/);
 });

@@ -1,45 +1,92 @@
 // packages/editor is a copy of Barkpark's paper editor, written only by the sync (decision 0012).
 // SOURCE.json records it in an `editor` section: Barkpark's path and a sha256 per file, under the
 // same commit as the pack, because one sync run copies both from one Barkpark checkout.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { diff, listFiles, readObject, sha256 } from './pack.mjs';
+import { diff, readObject, sha256 } from './pack.mjs';
 
 export const EDITOR_DIR = 'packages/editor';
 export const BARKPARK_EDITOR = 'api/assets/paper-editor';
 
 const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-function hashAll(dir, files) {
-  return Object.fromEntries(files.map((f) => [f, sha256(path.join(dir, f))]));
+// Ignore rules come from the repo's own .gitignore files only, never a global excludes file or
+// .git/info/exclude, so a local run lists what CI lists.
+// - Barkpark: the files it tracks under the editor path, minus any its .gitignore files match.
+// - Here: every tracked file, ignored or not, plus untracked files no .gitignore matches. So
+//   untracked build output, node_modules and .DS_Store never count, and a committed file always does.
+// Only regular files are copied or accepted; a symlink is named as an error.
+const OWN_IGNORES = '--exclude-per-directory=.gitignore';
+
+function gitList(repo, dir, ...args) {
+  return execFileSync('git', ['-C', repo, 'ls-files', '-z', '--full-name', ...args, '--', dir], { encoding: 'utf8' })
+    .split('\0').filter(Boolean).map((f) => f.slice(dir.length + 1));
 }
 
-// The files Barkpark tracks under its editor path, minus any it ignores, so build output,
-// node_modules and local leftovers never travel. Empty when the path is not there.
+function trackedNotIgnored(repo, dir) {
+  const ignored = new Set(gitList(repo, dir, '--cached', '--ignored', OWN_IGNORES));
+  return [...new Set(gitList(repo, dir, '--cached'))].filter((f) => !ignored.has(f)).sort();
+}
+
+const trackedOrUnignored = (repo, dir) => [...new Set([...gitList(repo, dir, '--cached'), ...gitList(repo, dir, '--others', OWN_IGNORES)])].sort();
+
+const isGitTop = (dir) => {
+  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: dir, encoding: 'utf8' }).stdout?.trim();
+  return Boolean(top) && top === fs.realpathSync(dir);
+};
+
+// Not at the top of a git work tree (a copy in a temp dir): every file and symlink on disk counts.
+// A symlinked directory is one entry; the walk never follows it.
+function walk(dir) {
+  const out = [];
+  const stack = [''];
+  while (stack.length) {
+    const rel = stack.pop();
+    for (const e of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
+      const name = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) stack.push(name);
+      else if (e.isFile() || e.isSymbolicLink()) out.push(name);
+    }
+  }
+  return out.sort();
+}
+
+/** { files: { path: sha256 }, symlinks: [path] } of listed files; a listed file gone from disk is left out. */
+function scan(dir, list) {
+  const files = {};
+  const symlinks = [];
+  for (const f of list) {
+    const stat = fs.lstatSync(path.join(dir, f), { throwIfNoEntry: false });
+    if (stat?.isSymbolicLink()) symlinks.push(f);
+    else if (stat?.isFile()) files[f] = sha256(path.join(dir, f));
+  }
+  return { files, symlinks };
+}
+
+/** The files Barkpark tracks under its editor path, minus what its .gitignore files match. Empty when the path is not there. */
 export function trackedEditorFiles(barkpark) {
-  if (!fs.existsSync(path.join(barkpark, BARKPARK_EDITOR))) return [];
-  const list = (...args) => execFileSync('git', ['-C', barkpark, 'ls-files', '-z', '--full-name', ...args, '--', BARKPARK_EDITOR], { encoding: 'utf8' })
-    .split('\0').filter(Boolean).map((f) => f.slice(BARKPARK_EDITOR.length + 1));
-  const ignored = new Set(list('--cached', '--ignored', '--exclude-standard'));
-  return list('--cached').filter((f) => !ignored.has(f)).sort();
+  return fs.existsSync(path.join(barkpark, BARKPARK_EDITOR)) ? trackedNotIgnored(barkpark, BARKPARK_EDITOR) : [];
 }
 
-export function barkparkEditorHashes(barkpark) {
-  return hashAll(path.join(barkpark, BARKPARK_EDITOR), trackedEditorFiles(barkpark));
-}
+const barkparkEditor = (barkpark) => scan(path.join(barkpark, BARKPARK_EDITOR), trackedEditorFiles(barkpark));
+export const barkparkEditorHashes = (barkpark) => barkparkEditor(barkpark).files;
 
-export function editorHashes(root) {
+/** The editor copy here: every tracked file, and untracked files no .gitignore matches. */
+function localEditor(root) {
   const dir = path.join(root, EDITOR_DIR);
-  return hashAll(dir, listFiles(dir));
+  if (!fs.existsSync(dir)) return { files: {}, symlinks: [] };
+  return scan(dir, isGitTop(root) ? trackedOrUnignored(root, EDITOR_DIR) : walk(dir));
 }
+
+export const editorHashes = (root) => localEditor(root).files;
 
 // Why Barkpark's editor cannot be copied; empty when it can.
 export function editorErrors(barkpark) {
   const files = trackedEditorFiles(barkpark);
   if (!files.length) return [`${BARKPARK_EDITOR}: no tracked files`];
   if (!files.includes('package.json')) return [`${BARKPARK_EDITOR}/package.json: missing`];
-  return [];
+  return barkparkEditor(barkpark).symlinks.map((f) => `${BARKPARK_EDITOR}/${f}: a symlink; the sync copies regular files only`);
 }
 
 export function copyEditor(barkpark, root) {
@@ -61,7 +108,9 @@ export function checkEditor(root) {
   const errors = [];
   if (editor.path !== BARKPARK_EDITOR) errors.push(`SOURCE.json: editor.path is ${JSON.stringify(editor.path)}, not "${BARKPARK_EDITOR}"`);
   if (!Object.keys(editor.files).length) errors.push(`SOURCE.json: editor.files is empty; the sync copies ${EDITOR_DIR} from Barkpark`);
-  const d = diff(editor.files, editorHashes(root));
+  const local = localEditor(root);
+  for (const f of local.symlinks) errors.push(`${EDITOR_DIR}/${f}: a symlink; the sync writes regular files only`);
+  const d = diff(editor.files, local.files);
   for (const f of d.added) errors.push(`${EDITOR_DIR}/${f}: not written by the sync (absent from SOURCE.json)`);
   for (const f of d.changed) errors.push(`${EDITOR_DIR}/${f}: edited by hand (sha256 differs from SOURCE.json)`);
   for (const f of d.removed) errors.push(`${EDITOR_DIR}/${f}: in SOURCE.json, missing on disk`);
