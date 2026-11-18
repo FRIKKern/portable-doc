@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 12 changes
-  - Test: the root test run fails on an empty test list, in list mode and with --run ([#74](https://github.com/FRIKKern/portable-doc/pull/74))
+- **Today** · 13 changes
+  - validate: any value nested past MAX_VALUE_DEPTH (1000 JSON levels) is too_deep ([#73](https://github.com/FRIKKern/portable-doc/pull/73))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
