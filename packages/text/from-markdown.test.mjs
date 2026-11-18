@@ -275,3 +275,14 @@ test('a Markdown image or link with an unsafe address keeps its text and loses t
   assert.deepEqual(fromMarkdown('[e](javascript:alert(1))'), para([{ type: 'text', value: 'e' }]));
   assert.deepEqual(fromMarkdown('![d](https://example.com/a.png)'), para([{ type: 'link', href: 'https://example.com/a.png', children: [{ type: 'text', value: 'd' }] }]));
 });
+
+test('a Markdown image with an unsafe address and no alt text leaves no text: the address never shows', () => {
+  for (const md of ['![](javascript:alert(1))', 'a ![](javascript:alert(1)) b', '![](data:text/html,x)']) {
+    const blocks = fromMarkdown(md);
+    valid(blocks);
+    assert.doesNotMatch(JSON.stringify(blocks), /javascript:|data:/, md);
+  }
+  assert.deepEqual(fromMarkdown('![](javascript:alert(1))'), []);
+  assert.deepEqual(fromMarkdown('a ![](javascript:alert(1)) b'), [{ type: 'paragraph', content: [{ type: 'text', value: 'a  b' }] }]);
+  assert.deepEqual(fromMarkdown('![](https://example.com/a.png)'), [{ type: 'paragraph', content: [{ type: 'link', href: 'https://example.com/a.png', children: [{ type: 'text', value: 'https://example.com/a.png' }] }] }]);
+});
