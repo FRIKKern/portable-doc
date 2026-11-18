@@ -2,7 +2,7 @@
 // Prose blocks: headings, paragraphs, lists, quotes, callouts, code, media,
 // buttons. Each handler takes (block, ctx) and returns a string ('' = nothing).
 
-import { asList, capitalize, fence, isMap, listOut, nonblank, paras, quote, safeUrl, str } from './util.js';
+import { asList, capitalize, fence, isMap, nonblank, paras, quote, safeUrl, str } from './util.js';
 
 /** A block's inline body: a non-empty `content` array, else its `text`. */
 export function body(b) {
@@ -36,7 +36,7 @@ function blockquote(b, ctx) {
 }
 
 const byline = (b, ctx) =>
-  ctx.text(Array.isArray(b.items) ? b.items.map(str).filter(Boolean).join(' · ') : str(b.text), { oneLine: true });
+  ctx.line(Array.isArray(b.items) ? b.items.map(str).filter(Boolean).join(' · ') : str(b.text));
 
 /* ── lists ── */
 
@@ -68,7 +68,7 @@ function list(b, ctx) {
     checked: isMap(item) && item.checked === true,
     body: ctx.blocks(listChildren(item)),
   }));
-  return listOut(items, { ordered, start, task });
+  return ctx.list(items, { ordered, start, task });
 }
 
 const orderedList = (b, ctx) => list({ ...b, ordered: true }, ctx);
@@ -117,7 +117,7 @@ function image(b, ctx) {
   if (src === '') return '';
   const url = safeUrl(src);
   const alt = ctx.text(str(b.alt), { oneLine: true });
-  if (ctx.md) return url === null ? alt : `![${alt}](${ctx.url(url)})`;
+  if (ctx.md) return url === null ? ctx.start(alt) : `![${alt}](${ctx.url(url)})`;
   return [alt ? `Image: ${alt}` : 'Image', url && `(${url})`].filter(Boolean).join(' ');
 }
 
@@ -145,7 +145,7 @@ function video(b, ctx) {
   return linked(ctx, 'Video', str(b.src).trim());
 }
 
-const action = (b, ctx) => linked(ctx, ctx.text(str(b.label), { oneLine: true }), str(b.href));
+const action = (b, ctx) => ctx.start(linked(ctx, ctx.text(str(b.label), { oneLine: true }), str(b.href)));
 
 /** A one-line paragraph of an unknown block's text, or nothing. */
 export function unknown(b, ctx) {
@@ -153,7 +153,7 @@ export function unknown(b, ctx) {
   return ctx.text(typeof b.text === 'string' ? b.text : '');
 }
 
-const preGateBadge = (b, ctx) => ctx.text(str(b.label), { oneLine: true });
+const preGateBadge = (b, ctx) => ctx.line(str(b.label));
 
 const eyebrow = paragraph;
 

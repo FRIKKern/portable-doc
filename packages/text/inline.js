@@ -148,16 +148,18 @@ function emit(leaves, md) {
 
 /**
  * Inline content as Markdown or plain text. In Markdown a line break becomes a
- * hard break and a blank line a new paragraph; with `oneLine` (headings, table
- * cells) every break becomes a space.
+ * hard break and a blank line a new paragraph, each line escaped against
+ * starting a block. With `oneLine` (text placed inside a line: headings, table
+ * cells, "Label: value") every break becomes a space and only `lineStart`
+ * asks for the line-start escape.
  */
-export function renderInline(nodes, md, { oneLine = false } = {}) {
+export function renderInline(nodes, md, { oneLine = false, lineStart = false } = {}) {
   const leaves = [];
   flatten(nodes, [], leaves, 0);
-  const s = emit(leaves, md);
+  const s = emit(leaves, md).replace(/\r\n?/g, '\n');
   if (oneLine) {
     const flat = s.replace(/\s*\n\s*/g, ' ').trim();
-    return md ? escLineStart(flat) : flat;
+    return md && lineStart ? escLineStart(flat) : flat;
   }
   if (!md) return s.trim();
   return s

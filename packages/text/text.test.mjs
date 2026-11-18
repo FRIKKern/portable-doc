@@ -124,6 +124,12 @@ test('a link with a disallowed scheme renders as its text only', () => {
   assert.equal(toMarkdown([{ type: 'image', src: 'javascript:x', alt: 'Cover' }]), 'Cover\n');
 });
 
+test('an embed shows the document it names when one is given, else its target', () => {
+  const doc = [{ type: 'embed', target: 'Field notes' }];
+  assert.equal(toMarkdown(doc), '↪ Field notes\n');
+  assert.equal(toMarkdown(doc, { embeds: { 'Field notes': [{ type: 'heading', level: 3, text: 'Notes' }] } }), '### Notes\n');
+});
+
 test('unknown block types never throw and show only their text', () => {
   const doc = [{ type: 'mystery', text: 'Kept text' }, { type: 'mystery', data: { a: 1 } }, null, 42];
   assert.equal(toMarkdown(doc), 'Kept text\n');

@@ -2,7 +2,8 @@
 // The line diff a chat-tool-diff block shows: an LCS diff of an edit's old and
 // new text (a write is all additions; a multi-edit is its hunks, separated by a
 // gap). Oversized inputs fall back to all-removed-then-all-added, as the
-// renderer does (packages/react/src/blocks/chat.ts).
+// renderer does (packages/react/src/blocks/chat.ts). Where a change could be
+// shown either way, the removed line comes first, as in a unified diff.
 
 import { asList, isMap } from './util.js';
 
@@ -29,8 +30,8 @@ function diffWithin(a, b, left) {
   let j = n;
   while (i > 0 && j > 0) {
     if (a[i - 1] === b[j - 1]) out.push({ op: '=', text: a[--i] }), j--;
-    else if (dp[i - 1][j] >= dp[i][j - 1]) out.push({ op: '-', text: a[--i] });
-    else out.push({ op: '+', text: b[--j] });
+    else if (dp[i][j - 1] >= dp[i - 1][j]) out.push({ op: '+', text: b[--j] });
+    else out.push({ op: '-', text: a[--i] });
   }
   while (i > 0) out.push({ op: '-', text: a[--i] });
   while (j > 0) out.push({ op: '+', text: b[--j] });

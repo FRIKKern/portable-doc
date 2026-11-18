@@ -2,7 +2,7 @@
 // Containers and composed blocks: sections, columns, tabs, steps, cards,
 // notes, pipelines, tables of contents, file trees, diffs, embeds.
 
-import { asList, codeSpan, fence, isMap, listOut, nonblank, paras, str, tableOut } from './util.js';
+import { asList, codeSpan, fence, isMap, nonblank, paras, str, tableOut } from './util.js';
 import { body, linked } from './blocks-prose.js';
 
 /** A bold title line (plain: the title alone). */
@@ -57,7 +57,7 @@ function footnote(b, ctx) {
   const items = asList(b.notes)
     .filter((n) => isMap(n) && str(n.text) !== '')
     .map((n) => ({ head: ctx.text(str(n.text)) }));
-  return listOut(items, { ordered: true });
+  return ctx.list(items, { ordered: true });
 }
 
 function steps(b, ctx) {
@@ -66,7 +66,7 @@ function steps(b, ctx) {
     .map((s) => ({ title: str(s.title), blocks: asList(s.blocks ?? s.children) }))
     .filter((s) => s.title !== '' || s.blocks.length)
     .map((s) => ({ head: titled(ctx, s.title), body: ctx.blocks(s.blocks), loose: s.title !== '' }));
-  return listOut(items, { ordered: true });
+  return ctx.list(items, { ordered: true });
 }
 
 /** A static outline: `depth` relative levels from the shallowest, optional 1 / 1.1 numbering. */
@@ -89,7 +89,7 @@ function toc(b, ctx) {
     const text = item.anchor !== '' && ctx.md ? linked(ctx, ctx.text(label, { oneLine: true }), `#${item.anchor}`) : ctx.text(label, { oneLine: true });
     const nest = Math.min(rel - 1, prev);
     prev = nest + 1;
-    lines.push(`${'  '.repeat(nest)}- ${text}`);
+    lines.push(`${'  '.repeat(nest)}- ${ctx.start(text)}`);
   }
   return lines.join('\n');
 }
@@ -105,7 +105,7 @@ function noteLine(m, ctx) {
 }
 
 const note = (b, ctx) => noteLine(b, ctx);
-const notes = (b, ctx) => listOut(asList(b.items).map((it) => ({ head: noteLine(isMap(it) ? it : {}, ctx) })));
+const notes = (b, ctx) => ctx.list(asList(b.items).map((it) => ({ head: noteLine(isMap(it) ? it : {}, ctx) })));
 
 function cards(b, ctx) {
   const items = asList(b.items).map((it) => {
@@ -114,7 +114,7 @@ function cards(b, ctx) {
     const text = ctx.text(str(m.text));
     return { head: [title, text].filter(Boolean).join(' — ') };
   });
-  return listOut(items);
+  return ctx.list(items);
 }
 
 function card(b, ctx) {
@@ -135,7 +135,7 @@ function nodeLine(n, ctx) {
   return [head, rest.join(' · ')].filter(Boolean).join(' — ');
 }
 
-const pipeline = (b, ctx) => listOut(asList(b.nodes).map((n) => ({ head: nodeLine(isMap(n) ? n : {}, ctx) })), { ordered: true });
+const pipeline = (b, ctx) => ctx.list(asList(b.nodes).map((n) => ({ head: nodeLine(isMap(n) ? n : {}, ctx) })), { ordered: true });
 
 function stage(b, ctx) {
   const field = (name) => {
@@ -165,7 +165,7 @@ function paperLinks(b, ctx) {
       return { head: [head, [description, why].filter(Boolean).map((s) => ctx.text(s, { oneLine: true })).join(' ')].filter(Boolean).join(' — ') };
     });
   if (!items.length) return '';
-  return paras(titled(ctx, nonblank(b.title) || 'Explore the work'), ctx.text(nonblank(b.description)), listOut(items));
+  return paras(titled(ctx, nonblank(b.title) || 'Explore the work'), ctx.text(nonblank(b.description)), ctx.list(items));
 }
 
 /* ── verbatim: file trees and diffs ── */
@@ -186,13 +186,13 @@ function embed(b, ctx) {
   const embeds = isMap(ctx.options.embeds) ? ctx.options.embeds : {};
   const doc = Object.hasOwn(embeds, target) ? embeds[target] : undefined;
   const blocks = Array.isArray(doc) ? doc : isMap(doc) && Array.isArray(doc.blocks) ? doc.blocks : null;
-  return blocks ? ctx.blocks(blocks) : ctx.text(`↪ ${target}`, { oneLine: true });
+  return blocks ? ctx.blocks(blocks) : ctx.line(`↪ ${target}`);
 }
 
 function masterRef(b, ctx) {
   const master = str(b.master);
   const version = str(b.version);
-  return ctx.text(`↪ ${master || 'master'}${version ? ` (version ${version})` : ''}`, { oneLine: true });
+  return ctx.line(`↪ ${master || 'master'}${version ? ` (version ${version})` : ''}`);
 }
 
 export const layoutHandlers = {

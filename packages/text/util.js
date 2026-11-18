@@ -20,7 +20,7 @@ export const nonblank = (v) => str(v).trim();
 /** Digits for a number: whole numbers in full, others to six significant digits. */
 export function fmtNum(v) {
   if (!Number.isFinite(v)) return '';
-  if (Number.isInteger(v)) return Math.abs(v) < 1e21 ? String(v) : BigInt(v).toString();
+  if (Number.isInteger(v)) return String(v);
   return String(Number(v.toPrecision(6)));
 }
 

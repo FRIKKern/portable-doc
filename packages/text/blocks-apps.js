@@ -2,7 +2,7 @@
 // App blocks: chat transcript rows, forms, schema fields, math, and the task
 // family (board, list, detail, roadmap, status legend).
 
-import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, listOut, nonblank, paras, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
+import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, nonblank, paras, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
 import { titled } from './blocks-layout.js';
 import { diffLines } from './diff.js';
 
@@ -37,7 +37,7 @@ function chatTodo(b, ctx) {
     const status = str(m.status) || 'pending';
     return { head: one(ctx, str(m.content) + (status === 'in_progress' ? ' (in progress)' : '')), checked: status === 'completed' };
   });
-  return paras(head, listOut(items, { task: true }));
+  return paras(head, ctx.list(items, { task: true }));
 }
 
 function chatThinking(b, ctx) {
@@ -57,7 +57,7 @@ function chatQuestion(b, ctx) {
     const options = asList(m.options).map(str).filter(Boolean);
     return { head: one(ctx, str(m.question) + (options.length ? ` (${options.join(' / ')})` : '')) };
   });
-  return paras(chatHead(ctx, 'Question', present(b, 'approval_status', 'pending')), questions.length ? listOut(questions) : 'no question');
+  return paras(chatHead(ctx, 'Question', present(b, 'approval_status', 'pending')), questions.length ? ctx.list(questions) : 'no question');
 }
 
 const chatPlan = (b, ctx) =>
@@ -72,7 +72,7 @@ function bound(v, dflt) {
 }
 
 function choices(q, ctx) {
-  const opts = (box, labels) => listOut(labels.map((l) => ({ head: `${box} ${one(ctx, l)}` })));
+  const opts = (box, labels) => ctx.list(labels.map((l) => ({ head: `${box} ${one(ctx, l)}` })));
   switch (str(q.type) || 'text') {
     case 'yesno': return opts('( )', ['Yes', 'No']);
     case 'single': return opts('( )', asList(q.options).map(str));
@@ -95,7 +95,7 @@ function form(b, ctx) {
       body: paras(ctx.text(str(q.rationale)), str(q.recommendation) && `Recommendation: ${ctx.text(str(q.recommendation))}`, choices(q, ctx)),
       loose: str(q.rationale) !== '' || str(q.recommendation) !== '',
     }));
-  return listOut(items, { ordered: true });
+  return ctx.list(items, { ordered: true });
 }
 
 /* ── schema fields: "Label: value" ── */
@@ -105,7 +105,7 @@ const dash = (s) => (s.trim() === '' ? '—' : s);
 
 function row(b, ctx, value) {
   const label = one(ctx, stringish(b.label));
-  return label === '' ? value : `${ctx.md ? `**${label}:**` : `${label}:`} ${value}`;
+  return label === '' ? ctx.start(value) : `${ctx.md ? `**${label}:**` : `${label}:`} ${value}`;
 }
 
 const plain = (b, ctx) => row(b, ctx, one(ctx, dash(stringish(b.value))));
@@ -121,7 +121,7 @@ function scalar(v) {
 }
 
 const subRows = (b, ctx, pairs) =>
-  paras(row(b, ctx, '').trimEnd(), listOut(pairs.map(([label, key]) => ({ head: one(ctx, `${stringish(label)}: ${scalar(isMap(b.value) ? b.value[stringish(key)] : undefined)}`) }))));
+  paras(row(b, ctx, '').trimEnd(), ctx.list(pairs.map(([label, key]) => ({ head: one(ctx, `${stringish(label)}: ${scalar(isMap(b.value) ? b.value[stringish(key)] : undefined)}`) }))));
 
 function media(v) {
   const t = typeof v === 'string' ? v.trim() : stringish(v);
@@ -158,7 +158,7 @@ function fieldSelect(b, ctx) {
 function arrayOf(b, ctx) {
   const els = b.value == null ? [] : Array.isArray(b.value) ? b.value : [b.value];
   if (!els.length) return row(b, ctx, '—');
-  return paras(row(b, ctx, '').trimEnd(), listOut(els.map((e) => ({ head: one(ctx, scalar(e)) })), { ordered: true }));
+  return paras(row(b, ctx, '').trimEnd(), ctx.list(els.map((e) => ({ head: one(ctx, scalar(e)) })), { ordered: true }));
 }
 
 const fieldHandlers = {
@@ -218,7 +218,7 @@ function taskBoard(b, ctx) {
   }
   return paras(
     ...BOARD_ROLES.filter((role) => by.has(role)).map((role) =>
-      paras(`${ctx.bold(capitalize(roleLabel(role)))} (${by.get(role).length})`, listOut(by.get(role).map((r) => ({ head: taskLine(r, ctx, { status: false }) })))),
+      paras(`${ctx.bold(capitalize(roleLabel(role)))} (${by.get(role).length})`, ctx.list(by.get(role).map((r) => ({ head: taskLine(r, ctx, { status: false }) })))),
     ),
   );
 }
@@ -234,7 +234,7 @@ function tasks(b, ctx) {
     phases.set(key, [...(phases.get(key) ?? []), r]);
   }
   const groups = [...phases].map(([name, rs]) =>
-    paras(name && `${ctx.bold(one(ctx, name))} · ${count(rs, 'done')}/${rs.length}`, listOut(rs.map((r) => ({ head: taskLine(r, ctx) })))),
+    paras(name && `${ctx.bold(one(ctx, name))} · ${count(rs, 'done')}/${rs.length}`, ctx.list(rs.map((r) => ({ head: taskLine(r, ctx) })))),
   );
   return paras(titled(ctx, nonblank(b.title)), momentum, ...groups);
 }
@@ -244,32 +244,32 @@ function taskDetail(b, ctx) {
   const title = nonblank(t.title);
   if (title === '') return 'No matching tasks.';
   const truthy = (v) => v === true || v === 'true' || v === 1;
-  const meta = [str(t.status), priority(t.priority), str(t.kind), str(t.worker)].filter(Boolean).join(' · ');
+  const meta = [str(t.status) && statusText(t.status), priority(t.priority), str(t.kind), str(t.worker)].filter(Boolean).join(' · ');
   const stamp = [nonblank(t.created) && `created ${nonblank(t.created)}`, nonblank(t.updated) && `updated ${nonblank(t.updated)}`].filter(Boolean).join(' · ');
   const timeline = asList(t.timeline).map((s) => (isMap(s) ? `${str(s.label)} (${statusText(s.status)})` : '')).filter(Boolean).join(' → ');
   const crit = asList(t.criteria).map((c) => (isMap(c) ? c : {}));
   const critList = crit.length
-    ? paras(`Criteria · ${crit.filter((c) => truthy(c.met)).length}/${crit.length}`, listOut(crit.map((c) => ({ head: one(ctx, str(c.text) || str(c.criterion)), checked: truthy(c.met), body: nonblank(c.evidence) && `↳ ${one(ctx, nonblank(c.evidence))}` })), { task: true }))
+    ? paras(`Criteria · ${crit.filter((c) => truthy(c.met)).length}/${crit.length}`, ctx.list(crit.map((c) => ({ head: one(ctx, str(c.text) || str(c.criterion)), checked: truthy(c.met), body: nonblank(c.evidence) && `↳ ${one(ctx, nonblank(c.evidence))}` })), { task: true }))
     : '';
   const nBlocks = typeof t.blocks === 'number' ? t.blocks : 0;
   const nBlocked = typeof t.blocked_by === 'number' ? t.blocked_by : 0;
   const deps = [nBlocks > 0 && `blocks ${nBlocks} ${nBlocks === 1 ? 'task' : 'tasks'}`, nBlocked > 0 && `blocked by ${nBlocked}`].filter(Boolean).join(' · ');
   const children = asList(t.children).map((r) => (isMap(r) ? r : {}));
   const childList = children.length
-    ? paras(`Children · ${children.filter((r) => roleOf(r.status) === 'done').length}/${children.length} done`, listOut(children.map((r) => ({ head: taskLine(r, ctx) }))))
+    ? paras(`Children · ${children.filter((r) => roleOf(r.status) === 'done').length}/${children.length} done`, ctx.list(children.map((r) => ({ head: taskLine(r, ctx) }))))
     : '';
   const papers = asList(t.papers).map(str).filter(Boolean);
   const labels = asList(t.labels).map(str).filter(Boolean);
   return paras(
     ctx.bold(one(ctx, title)),
-    one(ctx, meta),
-    one(ctx, stamp),
-    one(ctx, timeline),
+    ctx.line(meta),
+    ctx.line(stamp),
+    ctx.line(timeline),
     ctx.text(nonblank(t.description)),
     critList,
     deps && `Dependencies: ${deps}`,
     childList,
-    papers.length ? paras('Papers', listOut(papers.map((p) => ({ head: one(ctx, p) })))) : '',
+    papers.length ? paras('Papers', ctx.list(papers.map((p) => ({ head: one(ctx, p) })))) : '',
     labels.length ? `Labels: ${one(ctx, labels.join(' · '))}` : '',
   );
 }
@@ -296,10 +296,10 @@ function roadmap(b, ctx) {
     const title = one(ctx, draft(r) + str(r.title));
     return { head: [r.phase_row === true || r.phase_row === 'true' ? ctx.bold(title) : title, statusText(r.status), when].filter(Boolean).join(' — ') };
   });
-  return paras(scale.length ? one(ctx, scale.join(' · ')) : '', listOut(items));
+  return paras(scale.length ? ctx.line(scale.join(' · ')) : '', ctx.list(items));
 }
 
-const statusLegend = () => listOut(STATUS_ROLES.map(([, label, meaning]) => ({ head: `${label}: ${meaning}` })));
+const statusLegend = (_b, ctx) => ctx.list(STATUS_ROLES.map(([, label, meaning]) => ({ head: `${label}: ${meaning}` })));
 
 export const appHandlers = {
   'chat-tool-diff': chatToolDiff,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // @portable-doc/text: a PortableDoc document as Markdown or as plain text.
 
-import { MAX_DEPTH, TOO_DEEP, codeSpan, isMap, mdUrl, str } from './util.js';
+import { MAX_DEPTH, TOO_DEEP, codeSpan, escLineStart, isMap, listOut, mdUrl, str } from './util.js';
 import { renderInline } from './inline.js';
 import { proseHandlers, unknown } from './blocks-prose.js';
 import { layoutHandlers } from './blocks-layout.js';
@@ -20,6 +20,11 @@ function makeCtx(md, options, depth) {
     depth,
     inline: (nodes, o) => renderInline(nodes, md, o),
     text: (s, o) => renderInline(str(s), md, o),
+    // A string as one line that starts a line: escaped so it cannot open a block.
+    line: (s) => renderInline(str(s), md, { oneLine: true, lineStart: true }),
+    // An already-rendered string placed at a line start.
+    start: (s) => (md ? s.replace(/^[^\n]*/, escLineStart) : s),
+    list: (items, o) => listOut(md ? items.map((i) => ({ ...i, head: ctx.start(i.head ?? '') })) : items, o),
     blocks: (list) => renderBlocks(list, makeCtx(md, options, depth + 1)),
     bold: (t) => (md && t !== '' ? `**${t}**` : t),
     code: (s) => (md ? codeSpan(s) : s),

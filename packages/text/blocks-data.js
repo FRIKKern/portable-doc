@@ -2,7 +2,7 @@
 // Data blocks: stats, charts, heatmaps, comparisons, gauges, routes, tables
 // and sheets. A picture turns into its numbers: a small table or list.
 
-import { asList, fmtNum, isMap, listOut, paras, str, tableOut } from './util.js';
+import { asList, fmtNum, isMap, paras, str, tableOut } from './util.js';
 import { titled } from './blocks-layout.js';
 
 const get = (m, k) => (isMap(m) ? m[k] : undefined);
@@ -84,7 +84,7 @@ function stats(b, ctx) {
     const body = shown(get(it, 'body'));
     return { head: [statHead(it, ctx) || noData('stat'), body && one(ctx, body)].filter(Boolean).join(': ') };
   });
-  return paras(listOut(rows), sources(ctx, items, shown(get(b, 'sourceDefault')), (it) => shown(get(it, 'value')) !== ''));
+  return paras(ctx.list(rows), sources(ctx, items, shown(get(b, 'sourceDefault')), (it) => shown(get(it, 'value')) !== ''));
 }
 
 /* ── duel, lineage ── */
@@ -116,7 +116,7 @@ function lineage(b, ctx) {
     const value = [shown(get(n, 'value')), shown(get(n, 'unit'))].filter(Boolean).join(' ');
     return { head: [head, one(ctx, value), one(ctx, shown(get(n, 'body')))].filter(Boolean).join(' — ') };
   });
-  return paras(listOut(items, { ordered: true }), sources(ctx, nodes, shown(get(b, 'sourceDefault')), (n) => shown(get(n, 'value')) !== ''));
+  return paras(ctx.list(items, { ordered: true }), sources(ctx, nodes, shown(get(b, 'sourceDefault')), (n) => shown(get(n, 'value')) !== ''));
 }
 
 /* ── heatmap ── */
@@ -198,13 +198,13 @@ function gaugeList(b, ctx) {
   if (rows === 'epic') return paras(title, 'groupBy "epic" is unbacked here — needs the epic resolver');
   if (!rows.length) return noData('gauge-list');
   const items = rows.map(([label, digit, note]) => ({ head: one(ctx, `${label}: ${digit}${note ? ` — ${note}` : ''}`) }));
-  return paras(title, listOut(items));
+  return paras(title, ctx.list(items));
 }
 
 function barChart(b, ctx) {
   const bars = asList(get(b, 'bars')).filter(isMap);
   if (!bars.length) return noData('bar-chart');
-  return listOut(bars.map((bar) => ({ head: one(ctx, `${shown(get(bar, 'label'))}: ${fmtNum(numeric(get(bar, 'value')) ?? 0)}`) })));
+  return ctx.list(bars.map((bar) => ({ head: one(ctx, `${shown(get(bar, 'label'))}: ${fmtNum(numeric(get(bar, 'value')) ?? 0)}`) })));
 }
 
 function criteriaProgress(b, ctx) {
@@ -214,14 +214,14 @@ function criteriaProgress(b, ctx) {
   if (get(b, 'detail') === 'total') {
     rows = [{ label: 'Total', met: rows.reduce((a, r) => a + count(r, 'met'), 0), total: rows.reduce((a, r) => a + count(r, 'total'), 0) }];
   }
-  return listOut(rows.map((r) => ({ head: one(ctx, `${shown(get(r, 'label'))}: ${fmtNum(count(r, 'met'))}/${fmtNum(count(r, 'total'))}`) })));
+  return ctx.list(rows.map((r) => ({ head: one(ctx, `${shown(get(r, 'label'))}: ${fmtNum(count(r, 'met'))}/${fmtNum(count(r, 'total'))}`) })));
 }
 
 function route(b, ctx) {
   const meta = ['sport', 'distance', 'elevation', 'duration'].map((k) => shown(get(b, k))).filter(Boolean).join(' · ');
   const caption = shown(get(b, 'caption'));
   if (!meta && !caption) return noData('route');
-  return [caption && ctx.bold(one(ctx, caption)), one(ctx, meta)].filter(Boolean).join(' — ');
+  return ctx.start([caption && ctx.bold(one(ctx, caption)), one(ctx, meta)].filter(Boolean).join(' — '));
 }
 
 /* ── tables ── */
