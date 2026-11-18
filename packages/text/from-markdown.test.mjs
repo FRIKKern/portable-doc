@@ -126,6 +126,12 @@ test('a nested list reads back as a list in its item, not as text: fromMarkdown(
   valid(back);
 });
 
+test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {
+  assert.deepEqual(fromMarkdown('<b>hi</b> <script>bad()</script>there <style>p{}</style>end'), [{ type: 'paragraph', content: [t('hi there end')] }]);
+  assert.deepEqual(fromMarkdown('# Title <script>bad()</script>'), [{ type: 'heading', level: 1, text: 'Title' }]);
+  assert.deepEqual(fromMarkdown('a <script/> b'), [{ type: 'paragraph', content: [t('a  b')] }]);
+});
+
 test('round trip: every core golden survives toMarkdown then fromMarkdown, and fence types survive the portabledoc fence', () => {
   for (const type of ROUND_TRIP) {
     const doc = [golden(type)];

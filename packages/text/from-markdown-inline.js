@@ -94,6 +94,20 @@ export function merge(nodes) {
 const BLOCK = new Set(['paragraph', 'heading', 'list_item', 'blockquote', 'th', 'td', 'fence', 'code_block', 'html_block']);
 const SEP = Symbol('separator');
 
+/**
+ * The raw-text tag an inline HTML token opens or closes: given the tag being
+ * skipped (or null), the one skipped after this token. Text inside an inline
+ * <script> or <style> is not visible, so it is skipped like the tags.
+ */
+function rawTag(node, skipping) {
+  if (node.type !== 'html_inline') return skipping;
+  const m = /^<(\/?)(script|style)\b[^>]*?(\/?)>$/i.exec(str(node.tok.content).trim());
+  if (!m) return skipping;
+  const name = m[2].toLowerCase();
+  if (m[1]) return skipping === name ? null : skipping;
+  return skipping ?? (m[3] ? null : name);
+}
+
 function leafText(node) {
   switch (node.type) {
     case 'softbreak': return ' ';
@@ -107,17 +121,20 @@ function leafText(node) {
 /** The plain text of some nodes, block siblings joined by a space. Iterative, so depth costs no stack. */
 export function flattenText(nodes) {
   let out = '';
+  let skipping = null;
   const stack = [...asList(nodes)].reverse();
   while (stack.length) {
     const node = stack.pop();
     if (node === SEP) {
+      skipping = null;
       if (out !== '' && !/\s$/.test(out)) out += ' ';
       continue;
     }
     if (!isMap(node)) continue;
     if (BLOCK.has(node.type)) stack.push(SEP);
     if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
-    else out += leafText(node);
+    else if (node.type === 'html_inline') skipping = rawTag(node, skipping);
+    else if (!skipping) out += leafText(node);
   }
   return out;
 }
@@ -158,5 +175,15 @@ function inlineNode(node, depth) {
 
 /** Inline nodes (the children of markdown-it `inline` nodes) as PortableDoc inline content. */
 export function inline(nodes, depth = 0) {
-  return merge(asList(nodes).flatMap((n) => (n.type === 'inline' ? inline(n.children, depth) : inlineNode(n, depth))));
+  const out = [];
+  let skipping = null;
+  for (const n of asList(nodes)) {
+    if (n.type === 'html_inline') {
+      skipping = rawTag(n, skipping);
+      continue;
+    }
+    if (skipping) continue;
+    out.push(...(n.type === 'inline' ? inline(n.children, depth) : inlineNode(n, depth)));
+  }
+  return merge(out);
 }

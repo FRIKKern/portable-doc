@@ -165,7 +165,7 @@ function table(node) {
 
 function block(node, state) {
   switch (node.type) {
-    case 'heading': return [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), text: flattenText(node.children) }];
+    case 'heading': return [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), text: flattenText(node.children).trim() }];
     case 'paragraph': return paragraph(inline(node.children));
     case 'bullet_list': case 'ordered_list': return [list(node)];
     case 'fence': case 'code_block': return code(node, state);
