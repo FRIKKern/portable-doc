@@ -22,6 +22,10 @@ export function refusedWhen(code) {
   return refused.get(code) ?? '';
 }
 
+/** Text from a doc, a file name or an argument, safe to print: control
+ * characters (C0, DEL, C1) shown as \\u escapes, so they never reach a terminal. */
+export const shown = (s) => String(s).replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
 const isMap = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const clip = (s) => (s.length > 60 ? `${s.slice(0, 60)}…` : s);
 
@@ -41,7 +45,7 @@ export function blockAt(path, doc) {
     if (isMap(node) && typeof node.type === 'string' && node.type !== '') found = { type: node.type, at, inline };
     parent = key;
   }
-  return found ? `the ${clip(found.type)} ${found.inline ? 'node' : 'block'} at ${found.at}` : '';
+  return found ? `the ${shown(clip(found.type))} ${found.inline ? 'node' : 'block'} at ${shown(found.at)}` : '';
 }
 
 /** The full explanation of one error, as lines. */
@@ -49,8 +53,8 @@ export function explainError(error, doc) {
   const why = refusedWhen(error.code);
   const block = blockAt(error.path, doc);
   return [
-    `${error.code} at ${error.path || '(root)'}${block ? `, in ${block}` : ''}`,
-    error.message ? `${error.message.charAt(0).toUpperCase()}${error.message.slice(1)}.` : '',
+    `${error.code} at ${shown(error.path) || '(root)'}${block ? `, in ${block}` : ''}`,
+    error.message ? shown(`${error.message.charAt(0).toUpperCase()}${error.message.slice(1)}.`) : '',
     why ? `Refused when ${why}.` : '',
   ].filter(Boolean);
 }

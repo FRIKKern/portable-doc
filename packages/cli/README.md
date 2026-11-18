@@ -59,22 +59,26 @@ $ cat notes.json | npx portable-doc render --format text
 - `--format html` prints the React renderer's markup inside
   `<div class="bp-paper-surface">`, with field and embed blocks on. Style it
   with `@portable-doc/react/paper-surface.css`. It loads the built package, so
-  run `npm run react:build` once first; without it the command exits 2 and says so.
+  run `npm run react:build` once first; without it, or without `react`
+  installed, the command exits 2 and says what to run.
+- `-o -` writes to stdout. `-o` never replaces the input file.
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.
   `--force` renders it anyway, after printing the errors.
 
 ## In a pre-commit hook or CI
 
 ```sh
-# .git/hooks/pre-commit: refuse a commit with an invalid doc in it
-files=$(git diff --cached --name-only --diff-filter=ACM -- 'docs/*.json')
-[ -z "$files" ] || npx portable-doc validate $files
+#!/bin/sh
+# .git/hooks/pre-commit: refuse a commit with an invalid doc in it.
+# -z and xargs -0 keep any file name whole; -r skips the run when no doc is staged.
+git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
+  xargs -0 -r npx portable-doc validate --
 ```
 
 ```yaml
 # a CI step
 - run: npm ci
-- run: npx portable-doc validate --json content/*.json > validate.json
+- run: npx portable-doc validate --json -- content/*.json > validate.json
 ```
 
 `node --test packages/cli/cli.test.mjs` runs the bin against the fixtures.

@@ -13,6 +13,12 @@ const root = path.join(here, '..', '..');
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
 // The bin itself, in a child process.
 const run = (args, input) => spawnSync(process.execPath, [bin, ...args], { cwd: root, input: input ?? '', encoding: 'utf8' });
+// The bin with module resolution refused for `blocked` specifiers, as when a package is not installed or not built.
+function runWithout(blocked, args, input) {
+  const hooks = `export async function resolve(s, c, next) { if (${JSON.stringify(blocked)}.includes(s)) { const e = new Error('not found: ' + s); e.code = 'ERR_MODULE_NOT_FOUND'; throw e; } return next(s, c); }`;
+  const register = `import { register } from 'node:module'; register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(hooks)}`)});`;
+  return spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(register)}`, bin, ...args], { cwd: root, input, encoding: 'utf8' });
+}
 // The same entry point in-process, for the cases that need no real process.
 async function call(args, input = '') {
   const r = { stdout: '', stderr: '' };
@@ -79,6 +85,41 @@ test('render html uses the built React renderer, or says to build it', () => {
   const r = run(['render', '--format', 'html'], '[{"type":"heading","level":2,"text":"Hello"}]');
   if (r.status === 0) assert.match(r.stdout, /^<div class="bp-paper-surface">.*Hello.*<\/div>\n$/s);
   else assert.deepEqual([r.status, /npm run react:build/.test(r.stderr)], [2, true]);
+});
+
+test('html says what to install or build when the React renderer cannot load', () => {
+  const doc = '[{"type":"heading","level":2,"text":"Hello"}]';
+  const noReact = runWithout(['react/jsx-runtime'], ['render', '--format', 'html'], doc);
+  assert.deepEqual([noReact.status, /run "npm ci"/.test(noReact.stderr)], [2, true], noReact.stderr);
+  const unbuilt = runWithout(['@portable-doc/react'], ['render', '--format', 'html'], doc);
+  assert.deepEqual([unbuilt.status, /run "npm run react:build"/.test(unbuilt.stderr)], [2, true], unbuilt.stderr);
+});
+
+test('explain and validate print doc text, file names and arguments with control characters escaped', async () => {
+  const controls = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
+  const file = write('esc\u001b]0;t\u0007.json', [{ type: '\u001b[31mred\u009b' }, { type: 'heading', level: 9, text: 'x' }]);
+  const outs = [
+    await call(['explain', file]),
+    await call(['validate', file]),
+    await call(['explain', '--json', file]),
+    await call(['validate', path.join(tmp, 'gone\u001b[2J.json')]),
+    await call(['render', '--format', '\u001b[2J'], '[]'),
+  ];
+  for (const r of outs) assert.doesNotMatch(r.stdout + r.stderr, controls);
+  assert.match(outs[0].stdout, /in the \\u001b\[31mred\\u009b block at \/0/);
+  assert.equal(JSON.parse(outs[2].stdout).files[0].errors[0].code, 'unknown_block_type');
+});
+
+test('render -o - writes to stdout, and -o never takes a flag or the input file', async () => {
+  const file = write('self.json', [{ type: 'paragraph', text: 'Keep me' }]);
+  const before = fs.readFileSync(file, 'utf8');
+  assert.equal((await call(['render', file, '-o', '-'])).stdout, 'Keep me\n');
+  for (const args of [['render', file, '-o', file], ['render', file, '-o', path.join(tmp, '.', 'self.json')], ['render', file, '-o', '--force']]) {
+    const r = await call(args);
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /Usage: portable-doc render/);
+  }
+  assert.equal(fs.readFileSync(file, 'utf8'), before);
 });
 
 test('--json results parse, and explain adds the rule each error breaks', async () => {
