@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
+import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
 import { applyOps } from './ops/apply.js';
 import { project } from './ops/table.js';
 import { callTool } from './tools.js';
 
-const nest = (levels) => Array.from({ length: levels - 1 }).reduce((v) => [v], 0);
+const nest = (levels) => Array.from({ length: levels }).reduce((v) => [v], 0);
 
 // CPU time, not wall time: on a loaded machine wall time measures the queue. 3656 ms of wall was 656 of CPU.
 function underBudget(limitMs, work) {
@@ -26,7 +27,7 @@ test('the budget fails on work that burns CPU and ignores time spent waiting', (
 test(`measure: ${MAX_NODES} JSON values and ${MAX_DEPTH} levels are in, one more is over`, () => {
   assert.equal(measure(Array(MAX_NODES - 1).fill(0)).over, null);
   assert.equal(measure(Array(MAX_NODES).fill(0)).over, 'nodes');
-  assert.deepEqual(measure(nest(MAX_DEPTH)), { nodes: MAX_DEPTH, depth: MAX_DEPTH, over: null });
+  assert.deepEqual(measure(nest(MAX_DEPTH)), { nodes: MAX_DEPTH + 1, depth: MAX_DEPTH, over: null });
   assert.equal(measure(nest(MAX_DEPTH + 1)).over, 'depth');
 });
 
@@ -64,22 +65,43 @@ for (const [name, [doc, ops]] of Object.entries(WORST)) {
   });
 }
 
+test('a doc nested exactly MAX_VALUE_DEPTH levels fits the argument limit of render and apply_ops; one level more does not', async () => {
+  // The deepest container sits at level n of the doc; it holds a scalar, or a {k: "v"}, or nothing.
+  const leaves = { empty: [], number: [1], string: ['s'], object: [{ k: 'v' }] };
+  const deep = (n, leaf) => Array.from({ length: n - 6 }).reduce((v) => [v], leaf);
+  const doc = (n, leaf) => ({ blocks: [{ type: 'chart', series: [{ x: deep(n, leaf) }] }] });
+  for (const [name, leaf] of Object.entries(leaves)) {
+    const at = name === 'object' ? MAX_VALUE_DEPTH - 1 : MAX_VALUE_DEPTH;
+    assert.equal(validate(doc(at, leaf)).ok, true, name);
+    assert.equal(measure(doc(at, leaf)).depth, MAX_VALUE_DEPTH, name);
+    const text = await callTool({}, 'render', { doc: doc(at, leaf), format: 'text' });
+    assert.equal(text.isError, undefined, name);
+    const ops = await callTool({}, 'apply_ops', { doc: doc(at, leaf), ops: [] });
+    assert.equal(ops.isError, undefined, name);
+    assert.equal(validate(doc(at + 1, leaf)).ok, false, name);
+    await assert.rejects(callTool({}, 'render', { doc: doc(at + 1, leaf), format: 'text' }), /nest deeper/, name);
+    await assert.rejects(callTool({}, 'apply_ops', { doc: doc(at + 1, leaf), ops: [] }), /nest deeper/, name);
+  }
+});
+
 test('a table edit counts the JSON inside strings, which the normalizer decodes, against the limits; other ops do not', async () => {
   const json = (n) => `[${repeat(n, () => '{"type":"text","value":"v"}').join(',')}]`;
   const call = (string, op) => callTool({}, 'apply_ops', { doc: { blocks: [TABLE, { id: 'l', type: 'bulletList', content: [string] }] }, ops: [op] });
   const edit = { op: 'patch-table-structure', id: 't', shape: SHAPE, action: 'add-row' };
   const patch = { op: 'patch-block', id: 'l', patch: { tone: 'x' } };
   await assert.rejects(call(json(70_000), edit), /reads the JSON inside strings, and with it the arguments hold more than 200000 JSON values/);
-  await assert.rejects(call(`${'['.repeat(MAX_DEPTH)}${']'.repeat(MAX_DEPTH)}`, edit), /reads the JSON inside strings, and with it the arguments nest deeper than 1000 JSON levels/);
+  await assert.rejects(call(`${'['.repeat(MAX_DEPTH)}${']'.repeat(MAX_DEPTH)}`, edit), new RegExp(`reads the JSON inside strings, and with it the arguments nest deeper than ${MAX_DEPTH} JSON levels`));
   await assert.rejects(call(` \n${'['.repeat(MAX_DEPTH)}${']'.repeat(MAX_DEPTH)}`, edit), /nest deeper/);
-  assert.equal((await call(`${'['.repeat(994)}${']'.repeat(994)}`, edit)).isError, undefined);
-  await assert.rejects(call(`${'['.repeat(995)}${']'.repeat(995)}`, edit), /nest deeper than 1000/);
+  assert.equal((await call(`${'['.repeat(995)}${']'.repeat(995)}`, edit)).isError, undefined);
+  await assert.rejects(call(`${'['.repeat(996)}${']'.repeat(996)}`, edit), new RegExp(`nest deeper than ${MAX_DEPTH}`));
   assert.equal((await call(JSON.stringify(`${'['.repeat(MAX_DEPTH)}${']'.repeat(MAX_DEPTH)}`), edit)).isError, undefined, 'a JSON string literal stays a string');
   assert.equal((await call(json(60_000), edit)).isError, undefined);
   assert.equal((await call(json(70_000), patch)).isError, undefined);
   assert.equal((await call(`x${'['.repeat(MAX_DEPTH)}`, edit)).isError, undefined);
   assert.equal(measure({ s: json(3) }, { strings: true }).nodes, measure({ s: JSON.parse(json(3)) }).nodes + 1);
   assert.equal(measure({ s: json(3) }).nodes, 2);
+  assert.equal(measure({ s: '[[1]]' }, { strings: true }).depth, 4, 'the decoded value starts one level below the string');
+  assert.equal(measure({ s: '[[1]]' }).depth, 1);
 });
 
 const nearJson = (count, length) => Array.from({ length: count }, (_, i) => `[${'1,'.repeat((length - 12) / 2)}x${String(i).padStart(10, '0')}`);
