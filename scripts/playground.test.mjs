@@ -10,8 +10,8 @@ import { buildSync } from 'esbuild';
 import { validate } from '@portable-doc/validate';
 import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
-import { parseJson, prettyLength, tidyJson } from './playground/parse.js';
-import { decodeShare, encodeShare, MAX_DOC_BYTES } from './playground/share.js';
+import { parseJson, prettyBytes, tidyJson } from './playground/parse.js';
+import { decodeShare, encodeShare, MAX_DOC_BYTES, utf8Length } from './playground/share.js';
 import { docFromMarkdown, outputsOf } from './playground/outputs.js';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 
@@ -73,7 +73,7 @@ test('a share link refuses a doc too big to open, packed or plain, and a damaged
 });
 
 test('a doc from a link is pretty-printed only while the laid-out text stays under the cap', () => {
-  for (const { doc } of playgroundExamples()) assert.equal(prettyLength(doc), JSON.stringify(doc, null, 2).length);
+  for (const { doc } of playgroundExamples()) assert.equal(prettyBytes(doc), Buffer.byteLength(JSON.stringify(doc, null, 2)));
   const nest = (depth) => '['.repeat(depth) + ']'.repeat(depth);
   assert.equal(tidyJson(nest(1000), MAX_DOC_BYTES).length, 2_000_000, 'depth 1000 lays out to exactly the cap');
   assert.equal(tidyJson(nest(1001), MAX_DOC_BYTES), nest(1001));
@@ -82,6 +82,23 @@ test('a doc from a link is pretty-printed only while the laid-out text stays und
   assert.ok(performance.now() - started < 500, 'the size check is cheap');
   assert.equal(tidyJson('{"blocks":[]}', MAX_DOC_BYTES), '{\n  "blocks": []\n}');
   assert.equal(tidyJson('{"blocks":', MAX_DOC_BYTES), '{"blocks":');
+});
+
+test('the layout cap counts UTF-8 bytes, not characters, for pasted Markdown and links alike', () => {
+  for (const odd of ['', 'a', 'é', '漢', '😀', '\0', '\u2028', '\ud800', 'x\udc00y', 'ø漢😀é\ud83d']) {
+    assert.equal(utf8Length(odd), Buffer.byteLength(odd), JSON.stringify(odd));
+  }
+  const doc = { blocks: [{ type: 'paragraph', content: [{ type: 'text', text: 'ø漢😀 '.repeat(40) }] }] };
+  assert.equal(prettyBytes(doc), Buffer.byteLength(JSON.stringify(doc, null, 2)));
+  const md = 'ø漢😀 '.repeat(40) + '\n\n' + '- 漢字 😀\n'.repeat(20);
+  const compact = JSON.stringify({ blocks: JSON.parse(docFromMarkdown(md).text).blocks });
+  const laid = JSON.stringify(JSON.parse(compact), null, 2);
+  assert.ok(laid.length < Buffer.byteLength(laid));
+  const limit = laid.length + Math.floor((Buffer.byteLength(laid) - laid.length) / 2);
+  assert.ok(Buffer.byteLength(compact) <= limit && laid.length <= limit && Buffer.byteLength(laid) > limit);
+  assert.equal(docFromMarkdown(md, limit).text, compact, 'laid out only while its UTF-8 bytes fit');
+  assert.equal(tidyJson(compact, limit), compact);
+  assert.equal(tidyJson(compact, Buffer.byteLength(laid)), laid);
 });
 
 test('the bundle carries the HTML, Markdown and text views, and pasted Markdown becomes a valid doc', () => {

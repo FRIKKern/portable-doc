@@ -6,6 +6,22 @@
 
 const PREFIX = '#doc=';
 export const MAX_DOC_BYTES = 2_000_000;
+
+// The UTF-8 size of a string, as TextEncoder would make it (a lone surrogate is 3
+// bytes, as U+FFFD), without building the bytes. Every cap check counts with this.
+export function utf8Length(text) {
+  let n = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c < 0xdc00 && i + 1 < text.length && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      n += 4;
+      i++;
+    } else n += 3;
+  }
+  return n;
+}
 const SLICE = 1024; // compressed bytes fed per step; one step unpacks to about 1 MB at most
 
 function toBase64url(bytes) {

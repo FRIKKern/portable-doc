@@ -2,7 +2,7 @@
 // functions, so the tests run them without a browser.
 import { fromMarkdown, toMarkdown, toPlainText } from '@portable-doc/text';
 import { tidyJson } from './parse.js';
-import { MAX_DOC_BYTES } from './share.js';
+import { MAX_DOC_BYTES, utf8Length } from './share.js';
 
 /** The doc as Markdown and as plain text, as @portable-doc/text writes them. */
 export const outputsOf = (doc) => ({ markdown: toMarkdown(doc), text: toPlainText(doc) });
@@ -15,6 +15,6 @@ export const outputsOf = (doc) => ({ markdown: toMarkdown(doc), text: toPlainTex
 export function docFromMarkdown(markdown, limit = MAX_DOC_BYTES) {
   const blocks = fromMarkdown(markdown);
   const compact = JSON.stringify({ blocks });
-  if (new TextEncoder().encode(compact).length > limit) return { error: `The Markdown makes a doc too big for the editor (over ${limit / 1_000_000} MB)`, blocks: blocks.length };
+  if (utf8Length(compact) > limit) return { error: `The Markdown makes a doc too big for the editor (over ${limit / 1_000_000} MB)`, blocks: blocks.length };
   return { text: tidyJson(compact, limit), blocks: blocks.length };
 }
