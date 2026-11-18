@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { validate } from '@portable-doc/validate';
+import { blockSchema, validate } from '@portable-doc/validate';
 import { fromMarkdown, toMarkdown } from './index.js';
 import { safeUrl } from './util.js';
 
@@ -219,4 +219,17 @@ test('every allowed block type still splices in when nested in a list item or a 
   ];
   valid(blocks);
   assert.deepEqual(fromMarkdown(fenceOf(blocks)), blocks);
+});
+
+test('the exported schema is frozen: a mutation throws and leaves validate and the fence guard as they were', () => {
+  assert.ok(Object.isFrozen(blockSchema) && Object.isFrozen(blockSchema.allOf) && Object.isFrozen(blockSchema.definitions.blocks.heading.properties.level));
+  const attempts = [
+    () => { blockSchema.definitions.blocks.heading.properties.level = { type: 'integer' }; },
+    () => { blockSchema.allOf.length = 0; },
+    () => { blockSchema.allOf[0].then.$ref = '#'; },
+  ];
+  for (const attempt of attempts) assert.throws(attempt, TypeError);
+  assert.equal(validate([{ type: 'heading', level: 9, text: 'x' }]).ok, false);
+  const list = [{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }];
+  assert.deepEqual(fromMarkdown(fenceOf(list)), [{ type: 'code', value: JSON.stringify(list) }]);
 });
