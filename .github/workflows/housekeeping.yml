@@ -33,7 +33,7 @@ jobs:
             node scripts/readme-timeline.mjs
             node scripts/generate-roadmap.mjs
             node scripts/generate-heatmap.mjs
-            node scripts/check-docs.mjs
+            node scripts/check-docs.mjs --timeline-from-job
             git add README.md docs/images/roadmap.svg docs/images/conformance.svg
             git diff --cached --quiet && { echo "no change"; exit 0; }
             git commit -q -m 'chore: refresh README timeline, roadmap and heatmap [skip ci]'

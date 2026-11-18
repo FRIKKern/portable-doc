@@ -71,7 +71,8 @@ const TOO_DEEP_VALUE = `values nest deeper than ${MAX_VALUE_DEPTH} levels`;
  * not entered. With `onTooDeep`, each such container, the first on its branch,
  * is passed to it by JSON pointer and the walk goes on; without it the walk
  * stops there, and no path is built. `skip` holds containers not to walk.
- * `expand(scalar)` gives values to walk one level below the scalar's own place.
+ * `expand(scalar)` gives values to walk in the scalar's own place, as a decoder
+ * that swaps a string for the JSON in it would; a scalar it gives adds nothing.
  */
 export function walkDepth(root, { limit = MAX_VALUE_DEPTH, skip, expand, onTooDeep } = {}) {
   const paths = typeof onTooDeep === 'function';
@@ -81,7 +82,7 @@ export function walkDepth(root, { limit = MAX_VALUE_DEPTH, skip, expand, onTooDe
   while (stack.length) {
     const [value, level, path] = stack.pop();
     if (typeof value !== 'object' || value === null) {
-      if (expand) for (const inner of [...expand(value)].reverse()) stack.push([inner, level + 1, path]);
+      if (expand) for (const inner of [...expand(value)].reverse()) if (typeof inner === 'object' && inner !== null) stack.push([inner, level, path]);
       continue;
     }
     if (skip?.has(value)) continue;

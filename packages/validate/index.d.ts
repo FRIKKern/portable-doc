@@ -36,7 +36,7 @@ export interface WalkDepthOptions {
   limit?: number;
   /** Containers not to walk. */
   skip?: { has(value: unknown): boolean };
-  /** Values to walk one level below a scalar's own place. */
+  /** Values to walk in a scalar's own place, as a decoder that swaps it for them would. */
   expand?: (scalar: unknown) => Iterable<unknown>;
   /** Called with the JSON pointer of each container past the limit, the first on its branch; without it the walk stops at the first. */
   onTooDeep?: (path: string) => void;
