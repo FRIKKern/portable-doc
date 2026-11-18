@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
-import { fromMarkdown } from './index.js';
+import { fromMarkdown, toMarkdown } from './index.js';
+import { safeUrl } from './util.js';
+
+const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
 
 const t = (value) => ({ type: 'text', value });
 const valid = (blocks) => {
@@ -38,4 +42,119 @@ test('fromMarkdown reads headings, inline marks, links, task lists, tables and m
     { type: 'diagram', source: 'graph TD\n  A-->B' },
   ]);
   valid(blocks);
+});
+
+test('fromMarkdown follows Barkpark FromMarkdown on its own examples', () => {
+  const list = (items, extra) => ({ type: 'list', ordered: true, items: items.map((v) => [t(v)]), ...extra });
+  const cases = [
+    ['#### Four\n\n##### Five\n\n###### Six', [4, 5, 6].map((level, i) => ({ type: 'heading', level, text: ['Four', 'Five', 'Six'][i] }))],
+    ['1. first\n2. second\n   - nested\n', [list(['first', 'second — nested'])]],
+    ['5. five\n6. six\n', [list(['five', 'six'], { start: 5 })]],
+    ['0. zero\n1. one\n', [list(['zero', 'one'], { start: 0 })]],
+    ['```python\nprint(1)\n```', [{ type: 'code', value: 'print(1)', lang: 'python' }]],
+    ['~~~js\nlet a = 1\n~~~', [{ type: 'code', value: 'let a = 1', lang: 'js' }]],
+    ['```\nplain\n```', [{ type: 'code', value: 'plain' }]],
+    ['    plain\n', [{ type: 'code', value: 'plain' }]],
+    ['> heads up', [{ type: 'blockquote', content: [t('heads up')] }]],
+    ['> [!warn] mind the gap', [{ type: 'callout', tone: 'warning', content: [t('mind the gap')] }]],
+    ['> [!note] a note', [{ type: 'callout', tone: 'info', content: [t('a note')] }]],
+    ['> [!success]- folded', [{ type: 'callout', tone: 'success', content: [t('folded')] }]],
+    ['---', [{ type: 'divider' }]],
+    ['```portabledoc\n[{"type":"callout","tone":"success","content":[{"type":"text","value":"ok"}]},{"type":"divider"}]\n```', [{ type: 'callout', tone: 'success', content: [t('ok')] }, { type: 'divider' }]],
+    ['```portabledoc\n[{oops\n```', [{ type: 'code', value: '[{oops' }]],
+    ['```portabledoc\n[{"type":"field-string","label":"x","value":"y"}]\n```', [{ type: 'code', value: '[{"type":"field-string","label":"x","value":"y"}]' }]],
+    ['```portabledoc\n{"type":"divider"}\n```', [{ type: 'code', value: '{"type":"divider"}' }]],
+  ];
+  for (const [md, expected] of cases) {
+    const blocks = fromMarkdown(md);
+    assert.deepEqual(blocks, expected, md);
+    valid(blocks);
+  }
+});
+
+// Equivalent: the same blocks once ids are dropped and inline content is
+// compared as its text runs, each with its set of marks. A mark is a mark
+// whether written as a node (`{ type: 'strong', children }`, a link node) or
+// on a text leaf (`marks: [{ type: 'bold' }]`, a link mark), and neighbouring
+// runs with the same marks are one run.
+const MARK = { strong: 'strong', bold: 'strong', em: 'em', italic: 'em', strikethrough: 'strike', strike: 'strike', s: 'strike' };
+const INLINE = new Set(['text', 'link', 'code', ...Object.keys(MARK)]);
+function runs(nodes, marks = [], out = []) {
+  for (const n of nodes) {
+    const own = (n.marks ?? []).map((m) => (m.type === 'link' ? `link:${m.href}` : MARK[m.type] ?? m.type));
+    if (n.type === 'text') out.push({ text: n.value ?? n.text, marks: [...marks, ...own] });
+    else if (n.type === 'code') out.push({ text: n.value, marks: [...marks, 'code'] });
+    else runs(n.children, [...marks, n.type === 'link' ? `link:${n.href}` : MARK[n.type]], out);
+  }
+  return out.reduce((acc, r) => {
+    const key = [...new Set(r.marks)].sort().join(' ');
+    if (acc.at(-1)?.marks === key) acc.at(-1).text += r.text;
+    else acc.push({ text: r.text, marks: key });
+    return acc;
+  }, []);
+}
+const isInline = (v) => Array.isArray(v) && v.length > 0 && v.every((n) => n && INLINE.has(n.type));
+function canon(v) {
+  if (isInline(v)) return runs(v);
+  if (Array.isArray(v)) return v.map(canon);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'id').map(([k, x]) => [k, canon(x)]));
+  return v;
+}
+
+// Each core type has a Markdown form that toMarkdown writes and fromMarkdown reads back.
+const ROUND_TRIP = ['heading', 'paragraph', 'list', 'code', 'table', 'blockquote', 'divider', 'diagram'];
+// These have no Markdown form of their own; they travel in a portabledoc fence.
+const FENCE_ONLY = ['callout', 'chart', 'stat', 'stats', 'heatmap', 'pullquote', 'eyebrow'];
+
+test('round trip: every core golden survives toMarkdown then fromMarkdown, and fence types survive the portabledoc fence', () => {
+  for (const type of ROUND_TRIP) {
+    const doc = [golden(type)];
+    const back = fromMarkdown(toMarkdown(doc));
+    assert.deepEqual(back.map(canon), doc.map(canon), type);
+    valid(back);
+  }
+  for (const type of FENCE_ONLY) {
+    const doc = [golden(type)];
+    assert.deepEqual(fromMarkdown(`\`\`\`portabledoc\n${JSON.stringify(doc)}\n\`\`\``), doc, type);
+  }
+  // Anything else in a fence is kept as the fence's text.
+  const image = JSON.stringify([golden('image')]);
+  assert.deepEqual(fromMarkdown(`\`\`\`portabledoc\n${image}\n\`\`\``), [{ type: 'code', value: image }]);
+});
+
+/** Every link and href in a doc, anywhere. */
+function hrefs(v, out = []) {
+  if (Array.isArray(v)) for (const x of v) hrefs(x, out);
+  else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) k === 'href' ? out.push(x) : hrefs(x, out);
+  return out;
+}
+
+test('hostile Markdown never throws, and what it gives validates and links only to safe URLs', () => {
+  const fenced = (json) => `\`\`\`portabledoc\n${json}\n\`\`\``;
+  const inputs = [
+    '>'.repeat(5000) + ' deep',
+    Array.from({ length: 300 }, (_, i) => `${' '.repeat(i * 2)}- level ${i}`).join('\n'),
+    '*a **b *c **d '.repeat(5000),
+    '['.repeat(20000) + 'x' + ']'.repeat(20000) + '(https://a.example)',
+    '<div>'.repeat(10000) + '<script>alert(1)</script><img src=x onerror=alert(1)>',
+    '`'.repeat(50000),
+    ('## Head\n\nSome **bold**, *em*, [a link](https://example.com) and `code`.\n\n- one\n- two\n\n> quote\n\n').repeat(3000),
+    '[a](javascript:alert(1)) [b](JaVaScRiPt:alert(1)) [c]( \tjavascript:x) ![d](javascript:x) <javascript:alert(1)> [e](//evil.example) [f](data:text/html,x)',
+    fenced('[{oops'),
+    fenced('[]'),
+    fenced(JSON.stringify(Array.from({ length: 51 }, () => ({ type: 'divider' })))),
+    fenced('[{"type":"heading","level":9,"text":"x"}]'),
+    fenced('[{"type":"paragraph","content":[{"type":"link","href":"javascript:alert(1)","children":[]}]}]'),
+    `${fenced('[{"type":"divider","id":"a"}]')}\n\n${fenced('[{"type":"divider","id":"a"}]')}`,
+    '\u0000\u001b[31m\ud800 \r\n\r\n|a|\n|-|\n|b|',
+  ];
+  for (const md of inputs) {
+    const blocks = fromMarkdown(md);
+    valid(blocks);
+    for (const href of hrefs(blocks)) assert.equal(safeUrl(href), href, `unsafe href ${href}`);
+    assert.ok(!JSON.stringify(blocks).includes('<script'), md.slice(0, 40));
+  }
+  // The second fence reuses an id, so it stays as text.
+  assert.deepEqual(fromMarkdown(inputs.at(-2)).map((b) => b.type), ['divider', 'code']);
+  for (const odd of [undefined, null, 42, {}, []]) assert.deepEqual(fromMarkdown(odd), []);
 });
