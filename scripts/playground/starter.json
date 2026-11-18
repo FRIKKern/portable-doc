@@ -7,7 +7,7 @@
         { "type": "text", "value": "Edit the JSON on the left. The page renders with " },
         { "type": "text", "value": "@portable-doc/react", "marks": [{ "type": "code" }] },
         { "type": "text", "value": " as you type, and checks the doc against the " },
-        { "type": "text", "value": "spec", "marks": [{ "type": "link", "href": "spec.html" }] },
+        { "type": "text", "value": "spec", "marks": [{ "type": "link", "href": "https://github.com/FRIKKern/portable-doc/blob/main/SPEC.md" }] },
         { "type": "text", "value": ". Text can be " },
         { "type": "text", "value": "bold", "marks": [{ "type": "bold" }] },
         { "type": "text", "value": ", " },

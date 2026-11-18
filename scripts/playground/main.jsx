@@ -185,7 +185,10 @@ function App({ examples, initial }) {
               autoComplete="off"
               aria-label="PortableDoc JSON"
               aria-describedby="pg-keys"
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value);
+                setExampleId('');
+              }}
               onKeyDown={onKeyDown}
             />
             <p id="pg-keys" className="pg-hint">Tab indents, Shift+Tab outdents. Press Escape, then Tab, to leave the editor.</p>

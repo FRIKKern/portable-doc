@@ -11,7 +11,7 @@ const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const style = `<style>
   :root { --pg-line: #bcd0cb; --pg-field: #fff; --pg-ink: #18302a; --pg-muted: #536b65; --pg-ok: #0f6b4f; --pg-ok-bg: #e3f5ee; --pg-bad: #a3261b; --pg-bad-bg: #fdecea; --pg-chip: #eef4f2; }
   @media (prefers-color-scheme: dark) { :root { --pg-line: #38534c; --pg-field: #17211f; --pg-ink: #e7f2ef; --pg-muted: #a8bdb7; --pg-ok: #7fe0bd; --pg-ok-bg: #11302a; --pg-bad: #ffb4a8; --pg-bad-bg: #3a1714; --pg-chip: #1f2c29; } }
-  body > header, body > main { width: min(1440px, calc(100% - 32px)); }
+  html > body > header, html > body > main { width: min(1440px, calc(100% - 32px)); }
   main > h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 8px 0 4px; } main > .lede { margin: 0 0 8px; font-size: 1rem; }
   .pg-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
   .pg-bar select, .pg-bar button, .pg-link { font: inherit; font-size: .92rem; padding: 7px 12px; border: 1px solid var(--pg-line); border-radius: 8px; background: var(--pg-field); color: var(--pg-ink); }
@@ -22,9 +22,9 @@ const style = `<style>
   .pg-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   @media (max-width: 880px) { .pg-grid { grid-template-columns: minmax(0, 1fr); } }
   .pg-column { display: grid; gap: 16px; min-width: 0; } .pg-pane { min-width: 0; }
-  .pg-pane h2 { margin: 0 0 8px; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--pg-muted); display: flex; gap: 8px; align-items: center; }
+  .pg-pane > h2 { margin: 0 0 8px; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--pg-muted); display: flex; gap: 8px; align-items: center; }
   .pg-stale { text-transform: none; letter-spacing: 0; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--pg-bad-bg); color: var(--pg-bad); }
-  .pg-editor { display: block; width: 100%; height: 62vh; min-height: 320px; resize: vertical; padding: 12px 14px; border: 1px solid var(--pg-line); border-radius: 12px; background: var(--pg-field); color: var(--pg-ink); font: .84rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; white-space: pre; overflow: auto; }
+  .pg-editor { display: block; width: 100%; height: 50vh; min-height: 300px; resize: vertical; padding: 12px 14px; border: 1px solid var(--pg-line); border-radius: 12px; background: var(--pg-field); color: var(--pg-ink); font: .84rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; white-space: pre; overflow: auto; }
   .pg-hint { margin: 6px 0 0; font-size: .8rem; color: var(--pg-muted); }
   .pg-banner { padding: 10px 14px; border-radius: 10px; line-height: 1.45; overflow-wrap: anywhere; }
   .pg-ok { background: var(--pg-ok-bg); color: var(--pg-ok); } .pg-bad { background: var(--pg-bad-bg); color: var(--pg-bad); }
