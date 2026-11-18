@@ -262,6 +262,8 @@ test('every test runs its scripts from a path with a space, and check-docs finds
   write(path.join(root, 'README.md'), '# synthetic\n');
   execFileSync('git', ['init', '-q', root]);
   fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts/check-docs.mjs'));
+  fs.mkdirSync(path.join(root, 'scripts/lib'), { recursive: true });
+  fs.copyFileSync(path.join(scripts, 'lib/timeline.mjs'), path.join(root, 'scripts/lib/timeline.mjs'));
   const r = run(root, 'check-docs.mjs');
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /docs ok: 1 files, README 1 lines/);
