@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 13 changes
-  - validate: any value nested past MAX_VALUE_DEPTH (1000 JSON levels) is too_deep ([#73](https://github.com/FRIKKern/portable-doc/pull/73))
+- **Today** · 14 changes
+  - Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
