@@ -132,6 +132,16 @@ test('inline <script> and <style> keep no text, in a paragraph or a heading', ()
   assert.deepEqual(fromMarkdown('a <script/> b'), [{ type: 'paragraph', content: [t('a  b')] }]);
 });
 
+test('a portabledoc fence nested deeper than 100 levels stays a code block, so the doc can be written as JSON', () => {
+  const deep = (n) => '['.repeat(n) + ']'.repeat(n);
+  const md = (n) => '```portabledoc\n[{"type":"chart","series":[{"x":' + deep(n) + '}]}]\n```';
+  const out = fromMarkdown(md(8000));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].type, 'code');
+  assert.doesNotThrow(() => JSON.stringify(out));
+  assert.equal(fromMarkdown(md(20))[0].type, 'chart');
+});
+
 test('round trip: every core golden survives toMarkdown then fromMarkdown, and fence types survive the portabledoc fence', () => {
   for (const type of ROUND_TRIP) {
     const doc = [golden(type)];
