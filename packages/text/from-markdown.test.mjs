@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { validate } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
 import { fromMarkdown, toMarkdown } from './index.js';
 import { safeUrl } from './util.js';
 
@@ -132,14 +132,21 @@ test('inline <script> and <style> keep no text, in a paragraph or a heading', ()
   assert.deepEqual(fromMarkdown('a <script/> b'), [{ type: 'paragraph', content: [t('a  b')] }]);
 });
 
-test('a portabledoc fence nested deeper than 100 levels stays a code block, so the doc can be written as JSON', () => {
-  const deep = (n) => '['.repeat(n) + ']'.repeat(n);
-  const md = (n) => '```portabledoc\n[{"type":"chart","series":[{"x":' + deep(n) + '}]}]\n```';
-  const out = fromMarkdown(md(8000));
-  assert.equal(out.length, 1);
-  assert.equal(out[0].type, 'code');
-  assert.doesNotThrow(() => JSON.stringify(out));
-  assert.equal(fromMarkdown(md(20))[0].type, 'chart');
+test('a portabledoc fence whose deepest container sits at doc level MAX_VALUE_DEPTH is spliced in, whatever it holds; one level more, or 8,000, stays a code block', () => {
+  // In { blocks: [chart] }: the doc 1, blocks 2, chart 3, series 4, item 5, x 6.
+  // The deepest container, at level n, holds a number or a string, or is an object.
+  const inner = { number: '[1]', string: '["s"]', object: '{"k":"v"}' };
+  const md = (n, holds) => '```portabledoc\n[{"type":"chart","series":[{"x":' + '['.repeat(n - 6) + inner[holds] + ']'.repeat(n - 6) + '}]}]\n```';
+  for (const holds of Object.keys(inner)) {
+    const atLimit = fromMarkdown(md(MAX_VALUE_DEPTH, holds));
+    assert.equal(atLimit[0].type, 'chart', holds);
+    assert.deepEqual(validate({ blocks: atLimit }), { ok: true }, holds);
+    for (const n of [MAX_VALUE_DEPTH + 1, 8000]) {
+      const out = fromMarkdown(md(n, holds));
+      assert.deepEqual(out.map((b) => b.type), ['code'], `${holds} ${n}`);
+      assert.doesNotThrow(() => JSON.stringify(out));
+    }
+  }
 });
 
 test('round trip: every core golden survives toMarkdown then fromMarkdown, and fence types survive the portabledoc fence', () => {
@@ -193,4 +200,43 @@ test('hostile Markdown never throws, and what it gives validates and links only 
   // The second fence reuses an id, so it stays as text.
   assert.deepEqual(fromMarkdown(inputs.at(-2)).map((b) => b.type), ['divider', 'code']);
   for (const odd of [undefined, null, 42, {}, []]) assert.deepEqual(fromMarkdown(odd), []);
+});
+
+const fenceOf = (blocks) => `\`\`\`portabledoc\n${JSON.stringify(blocks)}\n\`\`\``;
+const field = { type: 'field-string', label: 'x', value: 'y' };
+const FENCE_TYPES = [...ROUND_TRIP.filter((type) => type !== 'blockquote'), ...FENCE_ONLY];
+
+test('a field-string in a list item\'s children keeps the fence as code', () => {
+  const md = fenceOf([{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }]);
+  assert.equal(validate([{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }]).ok, true);
+  assert.deepEqual(fromMarkdown(md), [{ type: 'code', value: md.split('\n')[1] }]);
+});
+
+test('a field-string in a callout\'s slots.body keeps the fence as code', () => {
+  const blocks = [{ type: 'callout', tone: 'info', content: [t('a')], slots: { body: [{ type: 'paragraph', text: 'ok' }, field] } }];
+  assert.equal(validate(blocks).ok, true);
+  assert.deepEqual(fromMarkdown(fenceOf(blocks)), [{ type: 'code', value: JSON.stringify(blocks) }]);
+});
+
+test('every allowed block type still splices in when nested in a list item or a callout body', () => {
+  const all = FENCE_TYPES.map(golden);
+  const blocks = [
+    { type: 'callout', tone: 'info', content: [t('a')], slots: { body: all } },
+    { type: 'list', ordered: false, items: [{ content: [t('b')], children: all }] },
+  ];
+  valid(blocks);
+  assert.deepEqual(fromMarkdown(fenceOf(blocks)), blocks);
+});
+
+test('the exported schema is frozen: a mutation throws and leaves validate and the fence guard as they were', () => {
+  assert.ok(Object.isFrozen(blockSchema) && Object.isFrozen(blockSchema.allOf) && Object.isFrozen(blockSchema.definitions.blocks.heading.properties.level));
+  const attempts = [
+    () => { blockSchema.definitions.blocks.heading.properties.level = { type: 'integer' }; },
+    () => { blockSchema.allOf.length = 0; },
+    () => { blockSchema.allOf[0].then.$ref = '#'; },
+  ];
+  for (const attempt of attempts) assert.throws(attempt, TypeError);
+  assert.equal(validate([{ type: 'heading', level: 9, text: 'x' }]).ok, false);
+  const list = [{ type: 'list', ordered: false, items: [{ content: [t('a')], children: [field] }] }];
+  assert.deepEqual(fromMarkdown(fenceOf(list)), [{ type: 'code', value: JSON.stringify(list) }]);
 });

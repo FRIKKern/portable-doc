@@ -83,9 +83,10 @@ is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:
 
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
-  every one is a heading, paragraph, list, code, table, callout, divider,
-  diagram, chart, stat, stats, heatmap, pullquote or eyebrow. Otherwise the
-  fence stays a code block.
+  every block in it is a heading, paragraph, list, code, table, callout,
+  divider, diagram, chart, stat, stats, heatmap, pullquote or eyebrow: at the
+  top, and nested wherever the schema puts blocks (a list item's `children`,
+  a callout's `slots.body`, …). Otherwise the fence stays a code block.
 
 It never throws. The result always passes `@portable-doc/validate`; if the
 parser or the walk ever fails, the whole input comes back as one code block.
@@ -94,8 +95,9 @@ Where it differs from Barkpark, on purpose:
 
 - Only URLs the renderer allows become links; any other link or image keeps
   its text. A portabledoc fence must also validate, link only to allowed URLs
-  and reuse no `id` from an earlier fence, and may nest no deeper than 100
-  levels, or it stays a code block.
+  and reuse no `id` from an earlier fence, and may nest no deeper than
+  `MAX_VALUE_DEPTH` from `@portable-doc/validate` (1000 JSON levels, counted
+  in the doc), or it stays a code block.
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
