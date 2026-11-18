@@ -28,3 +28,11 @@ export function toMarkdown(doc: Doc | unknown, options?: TextOptions): string;
  * toMarkdown. Never throws.
  */
 export function toPlainText(doc: Doc | unknown, options?: TextOptions): string;
+
+/**
+ * GFM Markdown as PortableDoc blocks: headings, paragraphs with marks and
+ * links, lists (task lists as checklists), code, tables, quotes, callouts
+ * (`> [!tone]`), dividers, ```mermaid diagrams and ```portabledoc fences.
+ * The result passes @portable-doc/validate. Never throws.
+ */
+export function fromMarkdown(markdown: string): Block[];

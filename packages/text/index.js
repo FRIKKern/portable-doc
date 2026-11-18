@@ -96,6 +96,8 @@ function render(doc, md, options) {
   return out === '' ? '' : `${out}\n`;
 }
 
+export { fromMarkdown } from './from-markdown.js';
+
 /** The document as CommonMark with GFM tables, task lists and strikethrough. */
 export const toMarkdown = (doc, options) => render(doc, true, options);
 
