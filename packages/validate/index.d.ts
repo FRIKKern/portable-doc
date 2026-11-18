@@ -21,6 +21,12 @@ export const CODES: readonly Code[];
 
 export const MAX_DEPTH: number;
 
+/**
+ * The deepest any value may nest, in JSON levels counted from the doc root (the
+ * doc itself is level 1): 1000. Past it, the first array or object is too_deep.
+ */
+export const MAX_VALUE_DEPTH: number;
+
 export function validate(doc: unknown): Result;
 
 export function compile(schema: object): (doc: unknown) => Result;

@@ -4,7 +4,7 @@
 // this one differs. Fail-soft: odd Markdown never throws, and a parser
 // failure gives the whole text back as one code block.
 
-import { validate } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
 import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { isMap, safeUrl, str } from './util.js';
 
@@ -102,9 +102,9 @@ function quote(node) {
 
 // ── code fences ─────────────────────────────────────────────────────────
 
-// A fence value nested deeper than this stays a code block: past it, the doc
-// could not be written back out as JSON.
-const MAX_FENCE_DEPTH = 100;
+// A fence's array becomes the doc's blocks array, two levels below the doc root
+// ({ blocks: [...] }), so its values may nest MAX_VALUE_DEPTH less those two.
+const FENCE_ROOT_DEPTH = 2;
 
 /** Every non-blank block id in a parsed fence, or null when an `href` in it is unsafe or it nests too deep. Iterative. */
 function scan(value) {
@@ -113,7 +113,7 @@ function scan(value) {
   while (stack.length) {
     const [v, depth] = stack.pop();
     if (!isMap(v) && !Array.isArray(v)) continue;
-    if (depth > MAX_FENCE_DEPTH) return null;
+    if (depth + FENCE_ROOT_DEPTH > MAX_VALUE_DEPTH) return null;
     if (isMap(v)) {
       if (typeof v.id === 'string' && v.id.trim() !== '' && typeof v.type === 'string') ids.push(v.id);
       if ('href' in v && safeUrl(v.href) !== v.href) return null;
@@ -124,7 +124,7 @@ function scan(value) {
 }
 
 // A ```portabledoc fence holds a JSON array of blocks, spliced in when it is
-// 1 to 50 blocks of the allowed types, nested no deeper than 100 levels, that
+// 1 to 50 blocks of the allowed types, nested no deeper than MAX_VALUE_DEPTH, that
 // validate, link only to safe URLs and reuse no id from an earlier fence.
 // Anything else is a plain code block.
 function fence(source, state) {

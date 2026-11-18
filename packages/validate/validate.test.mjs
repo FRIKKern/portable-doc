@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { MIN_BLOCK_GOLDENS } from '../../scripts/lib/pack.mjs';
-import { CODES, MAX_DEPTH, compile, validate } from './index.js';
+import { CODES, MAX_DEPTH, MAX_VALUE_DEPTH, compile, validate } from './index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -394,4 +394,40 @@ test('compile refuses a schema it cannot follow', () => {
   assert.throws(() => compile(block({ properties: { text: true } })), /schema at #\/definitions\/blocks\/note\/properties\/text is not an object/);
   assert.throws(() => compile({ ...tiny, allOf: [{ $ref: '#/definitions/blocks/missing' }] }), /\$ref #\/definitions\/blocks\/missing does not resolve/);
   assert.doesNotThrow(() => compile(schema));
+});
+
+// A chart whose series item carries an open field nested so that the whole doc
+// is `total` JSON levels deep: the doc 1, blocks 2, chart 3, series 4, item 5.
+const chartAt = (total) => {
+  let x = [];
+  for (let i = 6; i < total; i++) x = [x];
+  return { blocks: [{ type: 'chart', kind: 'line', series: [{ label: 's', points: [1], x }] }] };
+};
+const firstPast = '/blocks/0/series/0/x' + '/0'.repeat(MAX_VALUE_DEPTH + 1 - 6);
+
+test(`a value ${MAX_VALUE_DEPTH} JSON levels deep passes, and one level more is too_deep at the first level past it`, () => {
+  assert.equal(MAX_VALUE_DEPTH, 1000);
+  assert.deepEqual(validate(chartAt(MAX_VALUE_DEPTH)), { ok: true });
+  assert.deepEqual(validate(chartAt(MAX_VALUE_DEPTH + 1)), {
+    ok: false,
+    errors: [{ code: 'too_deep', path: firstPast, message: `values nest deeper than ${MAX_VALUE_DEPTH} levels` }],
+  });
+});
+
+test('a value 8,000 levels deep is too_deep, without a throw, and the doc it names can still be written as JSON', () => {
+  const result = validate(chartAt(8000));
+  assert.deepEqual(result.errors.map((e) => `${e.code} ${e.path}`), [`too_deep ${firstPast}`]);
+  assert.doesNotThrow(() => JSON.stringify(result));
+  const em = (n) => {
+    let node = { type: 'text', value: 'x' };
+    for (let i = 0; i < n; i++) node = { type: 'em', children: [node] };
+    return { blocks: [{ type: 'paragraph', content: [node] }] };
+  };
+  assert.deepEqual(validate(em(8000)).errors.map((e) => e.code), ['too_deep']);
+  const bare = (n) => [{ type: 'chart', series: [{ x: JSON.parse('['.repeat(n) + ']'.repeat(n)) }] }];
+  assert.deepEqual(validate(bare(MAX_VALUE_DEPTH - 4)), { ok: true });
+  assert.deepEqual(validate(bare(MAX_VALUE_DEPTH - 3)).errors.map((e) => e.code), ['too_deep']);
+  const loop = { label: 's' };
+  loop.self = loop;
+  assert.deepEqual(validate({ blocks: [{ type: 'chart', series: [loop] }] }).errors.map((e) => e.code), ['too_deep']);
 });

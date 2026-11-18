@@ -13,6 +13,9 @@ export const CODES = Object.freeze([
 ]);
 
 export const MAX_DEPTH = 100;
+// Any value, block or not, nests at most this many JSON levels, counted from the
+// doc root (the doc itself is level 1), so every valid doc can be written as JSON.
+export const MAX_VALUE_DEPTH = 1000;
 
 const KEYWORDS = new Set([
   '$schema', '$comment', 'title', 'description', 'definitions',
@@ -37,6 +40,36 @@ const pointer = (path, key) => `${path}/${String(key).replaceAll('~', '~0').repl
 const unescape = (key) => key.replaceAll('~1', '/').replaceAll('~0', '~');
 const error = (code, path, message) => ({ code, path, message });
 const show = (v) => (isObject(v) ? 'an object' : Array.isArray(v) ? 'an array' : typeof v === 'bigint' ? `${v}n` : typeof v === 'number' && !Number.isFinite(v) ? String(v) : JSON.stringify(v));
+
+const TOO_DEEP_VALUE = `values nest deeper than ${MAX_VALUE_DEPTH} levels`;
+
+// Every array and object is one level. Iterative, and each container is walked
+// once per depth it is reached at, so neither depth nor a cycle can overflow the
+// stack: past the limit the walk stops with too_deep. `skip` holds the blocks
+// already refused as too deep; nothing under them is counted again.
+function tooDeepValues(doc, skip, errors) {
+  const seen = new Map();
+  const stack = [[doc, '', 1]];
+  while (stack.length) {
+    const [value, path, depth] = stack.pop();
+    if (skip.has(value)) continue;
+    if (depth > MAX_VALUE_DEPTH) {
+      errors.push(error('too_deep', path, TOO_DEEP_VALUE));
+      continue;
+    }
+    const at = seen.get(value);
+    if (at === depth || (at instanceof Set && at.has(depth))) continue;
+    if (at === undefined) seen.set(value, depth);
+    else if (at instanceof Set) at.add(depth);
+    else seen.set(value, new Set([at, depth]));
+    const keys = Array.isArray(value) ? null : Object.keys(value);
+    for (let i = (keys ? keys.length : value.length) - 1; i >= 0; i--) {
+      const key = keys ? keys[i] : i;
+      const child = value[key];
+      if (typeof child === 'object' && child !== null) stack.push([child, pointer(path, key), depth + 1]);
+    }
+  }
+}
 
 const isPortableText = (block) =>
   block._type === 'block' && ['children', 'markDefs', 'listItem'].some((key) => Object.hasOwn(block, key));
@@ -123,7 +156,7 @@ export function compile(root) {
   };
 
   const trial = (value, node, path, depth) => {
-    const out = { errors: [], ids: [] };
+    const out = { errors: [], ids: [], stopped: [] };
     check(value, node, path, out, depth);
     return out;
   };
@@ -131,6 +164,7 @@ export function compile(root) {
   const merge = (out, from) => {
     out.errors.push(...from.errors);
     out.ids.push(...from.ids);
+    out.stopped.push(...from.stopped);
   };
 
   function check(value, node, path, out, depth) {
@@ -141,7 +175,10 @@ export function compile(root) {
   }
 
   function checkBlock(value, path, out, depth) {
-    if (depth === MAX_DEPTH) return out.errors.push(error('too_deep', path, `blocks nest deeper than ${MAX_DEPTH}`));
+    if (depth === MAX_DEPTH) {
+      out.stopped.push(value);
+      return out.errors.push(error('too_deep', path, `blocks nest deeper than ${MAX_DEPTH}`));
+    }
     if (!isObject(value)) return out.errors.push(error('block_not_object', path, `a block must be an object, got ${show(value)}`));
     if (typeof value.id === 'string' && value.id !== '') out.ids.push({ id: value.id, path: pointer(path, 'id') });
     checkNode(value, root, path, out, depth + 1);
@@ -193,8 +230,9 @@ export function compile(root) {
     if (!Array.isArray(doc) && !isObject(doc)) return { ok: false, errors: [error('not_a_doc', '', 'a doc is an object with a blocks array, or a blocks array')] };
     if (isObject(doc) && !Array.isArray(doc.blocks)) return { ok: false, errors: [error('not_a_doc', '/blocks', 'blocks must be an array')] };
     const base = Array.isArray(doc) ? '' : '/blocks';
-    const out = { errors: [], ids: [] };
+    const out = { errors: [], ids: [], stopped: [] };
     (Array.isArray(doc) ? doc : doc.blocks).forEach((block, i) => check(block, root, pointer(base, i), out, 0));
+    tooDeepValues(doc, new Set(out.stopped), out.errors);
     const first = new Map();
     for (const { id, path } of out.ids) {
       if (first.has(id)) out.errors.push(error('duplicate_block_id', path, `id ${show(id)} is already used at ${first.get(id)}`));

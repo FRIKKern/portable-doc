@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { validate } from '@portable-doc/validate';
+import { MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
 import { fromMarkdown, toMarkdown } from './index.js';
 import { safeUrl } from './util.js';
 
@@ -132,14 +132,18 @@ test('inline <script> and <style> keep no text, in a paragraph or a heading', ()
   assert.deepEqual(fromMarkdown('a <script/> b'), [{ type: 'paragraph', content: [t('a  b')] }]);
 });
 
-test('a portabledoc fence nested deeper than 100 levels stays a code block, so the doc can be written as JSON', () => {
+test('a portabledoc fence nested past MAX_VALUE_DEPTH stays a code block, so the doc can be written as JSON', () => {
   const deep = (n) => '['.repeat(n) + ']'.repeat(n);
-  const md = (n) => '```portabledoc\n[{"type":"chart","series":[{"x":' + deep(n) + '}]}]\n```';
-  const out = fromMarkdown(md(8000));
-  assert.equal(out.length, 1);
-  assert.equal(out[0].type, 'code');
-  assert.doesNotThrow(() => JSON.stringify(out));
-  assert.equal(fromMarkdown(md(20))[0].type, 'chart');
+  // In { blocks: [chart] }: the doc 1, blocks 2, chart 3, series 4, item 5, then x's n arrays.
+  const md = (total) => '```portabledoc\n[{"type":"chart","series":[{"x":' + deep(total - 5) + '}]}]\n```';
+  for (const total of [MAX_VALUE_DEPTH + 1, 8000]) {
+    const out = fromMarkdown(md(total));
+    assert.deepEqual(out.map((b) => b.type), ['code'], String(total));
+    assert.doesNotThrow(() => JSON.stringify(out));
+  }
+  const atLimit = fromMarkdown(md(MAX_VALUE_DEPTH));
+  assert.equal(atLimit[0].type, 'chart');
+  assert.deepEqual(validate({ blocks: atLimit }), { ok: true });
 });
 
 test('round trip: every core golden survives toMarkdown then fromMarkdown, and fence types survive the portabledoc fence', () => {
