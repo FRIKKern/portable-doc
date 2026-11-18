@@ -42,9 +42,21 @@ export function safeUrl(href) {
   return ALLOWED_SCHEME.test(t) || IN_DOC.test(t) ? t : null;
 }
 
-/** A URL as a Markdown link destination: spaces, brackets and controls encoded. */
+/** A URL as a Markdown link destination: spaces, brackets and controls
+ * encoded; `&` and `\` backslash-escaped, so a parser decodes no entity
+ * (`/&#47;host` must stay a path, not become `//host`). */
 export const mdUrl = (url) =>
-  url.replace(/[\s()<>\x00-\x1f\x7f]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+  url
+    .replace(/[\s()<>\x00-\x1f\x7f]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))
+    .replace(/[&\\]/g, '\\$&');
+
+/** The largest of a list of numbers, or `floor`. A loop, so a long list
+ * cannot overflow the call stack the way Math.max(...list) does. */
+export function maxOf(list, floor = -Infinity) {
+  let m = floor;
+  for (const v of list) if (v > m) m = v;
+  return m;
+}
 
 /* ── Markdown escaping ── */
 
@@ -65,6 +77,7 @@ export function escInline(s) {
 export function escLineStart(line) {
   const l = line.replace(/^\s+/, '');
   if (/^[=-]+\s*$/.test(l)) return '\\' + l;
+  if (/\|/.test(l) && /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(l)) return '\\' + l; // a GFM table delimiter row
   if (/^[#>]/.test(l)) return '\\' + l;
   if (/^[-+](\s|$)/.test(l)) return '\\' + l;
   return l.replace(/^(\d{1,9})([.)])(?=\s|$)/, '$1\\$2');
@@ -72,15 +85,16 @@ export function escLineStart(line) {
 
 /** A fenced code block whose fence is longer than any backtick run inside. */
 export function fence(source, lang = '') {
-  const longest = Math.max(0, ...(source.match(/`+/g) ?? []).map((r) => r.length));
+  const longest = maxOf((source.match(/`+/g) ?? []).map((r) => r.length), 0);
   const f = '`'.repeat(Math.max(3, longest + 1));
-  return `${f}${lang.replace(/[`\s]/g, '')}\n${source.replace(/\n+$/, '')}\n${f}`;
+  const info = str(lang).trim().split(/\s/)[0].replace(/[^\w+#.-]/g, '');
+  return `${f}${info}\n${source.replace(/\n+$/, '')}\n${f}`;
 }
 
 /** An inline code span that survives backticks in its content. */
 export function codeSpan(source) {
   const s = source.replace(/\n/g, ' ');
-  const longest = Math.max(0, ...(s.match(/`+/g) ?? []).map((r) => r.length));
+  const longest = maxOf((s.match(/`+/g) ?? []).map((r) => r.length), 0);
   const f = '`'.repeat(longest + 1);
   const pad = s.startsWith('`') || s.endsWith('`') ? ' ' : '';
   return `${f}${pad}${s}${pad}${f}`;
@@ -124,7 +138,7 @@ const width = (s) => [...s].length;
  * the header. Cells are single-line strings already rendered for the mode.
  */
 export function tableOut(head, rows, md) {
-  const n = Math.max(head?.length ?? 0, ...rows.map((r) => r.length));
+  const n = maxOf(rows.map((r) => r.length), head?.length ?? 0);
   if (n === 0) return '';
   const fill = (r) => Array.from({ length: n }, (_, i) => (r[i] ?? '').replace(/\s*\n\s*/g, ' '));
   const h = head && head.length ? fill(head) : null;
@@ -134,7 +148,7 @@ export function tableOut(head, rows, md) {
     return [row(h ?? fill([])), `| ${Array(n).fill('---').join(' | ')} |`, ...body.map(row)].join('\n');
   }
   const all = h ? [h, ...body] : body;
-  const widths = Array.from({ length: n }, (_, i) => Math.max(...all.map((r) => width(r[i]))));
+  const widths = Array.from({ length: n }, (_, i) => maxOf(all.map((r) => width(r[i]))));
   const line = (r) => r.map((c, i) => c + ' '.repeat(widths[i] - width(c))).join('  ').trimEnd();
   const lines = body.map(line);
   if (h) lines.unshift(line(h), widths.map((w) => '-'.repeat(Math.max(w, 1))).join('  '));

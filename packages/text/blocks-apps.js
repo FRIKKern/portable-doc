@@ -188,7 +188,8 @@ function equation(b, ctx) {
   const tex = str(b.tex).trim();
   if (tex === '') return 'equation — no tex source';
   if (!ctx.md) return tex;
-  return b.display === true ? `$$\n${tex}\n$$` : `$${tex}$`;
+  // A ```math fence or a $`…`$ span: the TeX can never become HTML or markup.
+  return b.display === true ? fence(tex, 'math') : `$${ctx.code(tex)}$`;
 }
 
 /* ── tasks ── */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // @portable-doc/text: a PortableDoc document as Markdown or as plain text.
 
-import { MAX_DEPTH, TOO_DEEP, codeSpan, escLineStart, isMap, listOut, mdUrl, str } from './util.js';
+import { MAX_DEPTH, TOO_DEEP, codeSpan, escInline, escLineStart, isMap, listOut, mdUrl, str } from './util.js';
 import { renderInline } from './inline.js';
 import { proseHandlers, unknown } from './blocks-prose.js';
 import { layoutHandlers } from './blocks-layout.js';
@@ -13,11 +13,15 @@ const HANDLERS = { ...proseHandlers, ...layoutHandlers, ...dataHandlers, ...appH
 /** Every block type (aliases included) with its own text handler. */
 export const BLOCK_TYPES = Object.freeze(Object.keys(HANDLERS).sort());
 
-function makeCtx(md, options, depth) {
+// `state` is shared by the whole render: the embeds being expanded and how many
+// have been, so a document that embeds itself, or doubles its embeds level by
+// level, stays small.
+function makeCtx(md, options, depth, state) {
   const ctx = {
     md,
     options,
     depth,
+    state,
     inline: (nodes, o) => renderInline(nodes, md, o),
     text: (s, o) => renderInline(str(s), md, o),
     // A string as one line that starts a line: escaped so it cannot open a block.
@@ -25,13 +29,13 @@ function makeCtx(md, options, depth) {
     // An already-rendered string placed at a line start.
     start: (s) => (md ? s.replace(/^[^\n]*/, escLineStart) : s),
     list: (items, o) => listOut(md ? items.map((i) => ({ ...i, head: ctx.start(i.head ?? '') })) : items, o),
-    blocks: (list) => renderBlocks(list, makeCtx(md, options, depth + 1)),
+    blocks: (list) => renderBlocks(list, makeCtx(md, options, depth + 1, state)),
     bold: (t) => (md && t !== '' ? `**${t}**` : t),
     code: (s) => (md ? codeSpan(s) : s),
     url: mdUrl,
     // `label` is already rendered for the mode; `url` already passed safeUrl.
     link: (label, url) => {
-      if (md) return `[${label || url}](${mdUrl(url)})`;
+      if (md) return `[${label || escInline(url)}](${mdUrl(url)})`;
       return label === '' || label === url ? url : url.startsWith('#') ? label : `${label} (${url})`;
     },
   };
@@ -88,7 +92,7 @@ function renderBlocks(list, ctx) {
 
 function render(doc, md, options) {
   const blocks = Array.isArray(doc) ? doc : isMap(doc) && Array.isArray(doc.blocks) ? doc.blocks : [];
-  const out = renderBlocks(blocks, makeCtx(md, isMap(options) ? options : {}, 0));
+  const out = renderBlocks(blocks, makeCtx(md, isMap(options) ? options : {}, 0, { open: [], expanded: 0 }));
   return out === '' ? '' : `${out}\n`;
 }
 

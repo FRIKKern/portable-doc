@@ -2,7 +2,7 @@
 // Data blocks: stats, charts, heatmaps, comparisons, gauges, routes, tables
 // and sheets. A picture turns into its numbers: a small table or list.
 
-import { asList, fmtNum, isMap, paras, str, tableOut } from './util.js';
+import { asList, fmtNum, isMap, maxOf, paras, str, tableOut } from './util.js';
 import { titled } from './blocks-layout.js';
 
 const get = (m, k) => (isMap(m) ? m[k] : undefined);
@@ -129,7 +129,7 @@ function heatmap(b, ctx) {
   const rowLabels = asList(get(b, 'rowLabels')).map(shown);
   const colLabels = asList(get(b, 'colLabels')).map(shown);
   const marginals = get(b, 'marginals') === true;
-  const cols = Math.max(...grid.map((r) => r.length));
+  const cols = maxOf(grid.map((r) => r.length));
   const gutter = rowLabels.length > 0 || marginals;
   const head = [...(gutter ? [''] : []), ...Array.from({ length: cols }, (_, j) => colLabels[j] ?? String(j + 1)), ...(marginals ? ['Σ'] : [])];
   const sum = (xs) => xs.reduce((a, v) => a + v, 0);
@@ -155,7 +155,7 @@ function chart(b, ctx) {
   const kind = shown(get(b, 'kind')) === 'bars' ? 'bar chart' : 'line chart';
   const caption = shown(get(b, 'caption'));
   const xLabels = asList(get(get(b, 'axes'), 'xLabels')).map(shown);
-  const n = Math.max(...series.map((s) => s.points.length));
+  const n = maxOf(series.map((s) => s.points.length));
   const head = ['', ...series.map((s) => s.label)].map((s) => one(ctx, s));
   const rows = Array.from({ length: n }, (_, i) => [one(ctx, xLabels[i] || String(i + 1)), ...series.map((s) => (i < s.points.length ? fmtNum(s.points[i]) : ''))]);
   const title = caption ? `${ctx.bold(one(ctx, caption))} (${kind})` : capitalizeFirst(kind);

@@ -24,24 +24,28 @@ toPlainText(doc); // 'Release notes\n\nRead the docs (https://example.com)\n'
 
 Both take the blocks array itself or `{ blocks: [...] }`. The one option,
 `embeds`, maps an `embed` block's `target` to the document shown in its place.
+An embed inside its own document, or past the first 100 in one render, shows
+its target instead.
 
 ## The rules
 
 - **Output.** Blocks are separated by one blank line. The result ends with
   exactly one newline, or is `''` when nothing shows. Same input, same output.
 - **Markdown** is CommonMark with GFM tables, task lists (`- [x]`) and
-  strikethrough. Headings keep their level (1 to 6), code is fenced with its
-  language, quotes and callouts are `>` blocks, math is its TeX in `$…$` or
-  `$$…$$`, images are Markdown images with their alt text, dividers `---`.
+  strikethrough. Headings keep their level (1 to 6), code is fenced with the
+  first word of its language, quotes and callouts are `>` blocks, math is its
+  TeX in a ` ```math ` fence or a `` $`…`$ `` span, images are Markdown images
+  with their alt text, dividers `---`.
 - **Plain text** has no markup. Links read "text (url)", once; a link whose
   text is its URL, or that points inside the page (`#…`), shows the text only.
   Lists use `- ` and `1. `, tables are space-aligned columns under a dashed
   rule, quotes sit in “…” with "— cite" below, a divider is `§`.
 - **Escaping.** In Markdown, prose is escaped so it cannot turn into markup:
   backslash, backtick, `*`, `[`, `]`, `~` and `_` (outside a word) anywhere,
-  `<` before a tag, `&` before an entity, and `#`, `>`, `-`, `+`, `1.` or
-  `===` at the start of a line. A table cell's `|` is escaped. Plain text is
-  never escaped.
+  `<` before a tag, `&` before an entity, and `#`, `>`, `-`, `+`, `1.`, `===`
+  or a table delimiter row at the start of a line. A table cell's `|` is
+  escaped, and so are `&` and backslash in a link URL. Plain text is never
+  escaped.
 - **Links.** Only the schemes the renderer allows become links: `http`,
   `https`, `mailto`, `tel`, a root-relative `/path` (not `//host`), and `#`,
   `?`, `./`, `../`. Any other link (`javascript:`, `data:`, …) shows its text only.

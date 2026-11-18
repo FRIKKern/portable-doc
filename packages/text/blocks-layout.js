@@ -2,7 +2,7 @@
 // Containers and composed blocks: sections, columns, tabs, steps, cards,
 // notes, pipelines, tables of contents, file trees, diffs, embeds.
 
-import { asList, codeSpan, fence, isMap, nonblank, paras, str, tableOut } from './util.js';
+import { asList, codeSpan, fence, isMap, maxOf, nonblank, paras, str, tableOut } from './util.js';
 import { body, linked } from './blocks-prose.js';
 
 /** A bold title line (plain: the title alone). */
@@ -76,7 +76,7 @@ function toc(b, ctx) {
     .map((it) => ({ text: str(it.text), level: Math.max(1, Number(it.level) || 1), anchor: str(it.anchor) }));
   if (!items.length) return '';
   const depth = Number.isInteger(b.depth) && b.depth > 0 ? Math.min(b.depth, 6) : 2;
-  const min = Math.min(...items.map((i) => i.level));
+  const min = -maxOf(items.map((i) => -i.level));
   const counters = new Array(depth + 1).fill(0);
   const lines = [];
   let prev = 0;
@@ -181,12 +181,23 @@ function diff(b, ctx) {
 
 /* ── references to other documents ── */
 
+/** At most this many embeds expand in one render; the rest show their target. */
+const MAX_EMBEDS = 100;
+
 function embed(b, ctx) {
   const target = str(b.target);
   const embeds = isMap(ctx.options.embeds) ? ctx.options.embeds : {};
   const doc = Object.hasOwn(embeds, target) ? embeds[target] : undefined;
   const blocks = Array.isArray(doc) ? doc : isMap(doc) && Array.isArray(doc.blocks) ? doc.blocks : null;
-  return blocks ? ctx.blocks(blocks) : ctx.line(`↪ ${target}`);
+  const { state } = ctx;
+  if (!blocks || state.open.includes(target) || state.expanded >= MAX_EMBEDS) return ctx.line(`↪ ${target}`);
+  state.expanded++;
+  state.open.push(target);
+  try {
+    return ctx.blocks(blocks);
+  } finally {
+    state.open.pop();
+  }
 }
 
 function masterRef(b, ctx) {

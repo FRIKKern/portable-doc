@@ -124,6 +124,39 @@ test('a link with a disallowed scheme renders as its text only', () => {
   assert.equal(toMarkdown([{ type: 'image', src: 'javascript:x', alt: 'Cover' }]), 'Cover\n');
 });
 
+test('an entity in a link or image URL stays literal, so /&#47;host never becomes //host', () => {
+  const doc = [{ type: 'paragraph', content: [text('x', [{ type: 'link', href: '/&#47;evil.example/p?a=1&b=2' }])] }];
+  assert.equal(toMarkdown(doc), '[x](/\\&#47;evil.example/p?a=1\\&b=2)\n');
+  assert.equal(toMarkdown([{ type: 'image', src: '/&sol;evil.example/a.png', alt: 'a' }]), '![a](/\\&sol;evil.example/a.png)\n');
+});
+
+test('a link with no label shows its URL escaped like any text', () => {
+  const doc = [{ type: 'action', label: '', href: 'https://a.example/[x](javascript:alert(1))<img>' }];
+  assert.equal(toMarkdown(doc), '[https://a.example/\\[x\\](javascript:alert(1))\\<img>](https://a.example/[x]%28javascript:alert%281%29%29%3Cimg%3E)\n');
+});
+
+test('equation TeX sits in a math fence or code span, never as raw HTML or markup', () => {
+  assert.equal(toMarkdown([{ type: 'equation', tex: '<script>x</script>\n\n# H', display: true }]), '```math\n<script>x</script>\n\n# H\n```\n');
+  assert.equal(toMarkdown([{ type: 'equation', tex: 'a<img src=x>' }]), '$`a<img src=x>`$\n');
+  assert.equal(toPlainText([{ type: 'equation', tex: 'E = mc^2' }]), 'E = mc^2\n');
+});
+
+test('a heading that is only # keeps its text, and prose cannot become a table', () => {
+  assert.equal(toMarkdown([{ type: 'heading', level: 2, text: '#' }]), '## \\#\n');
+  assert.equal(toMarkdown([{ type: 'paragraph', text: 'a | b\n--- | ---' }]), 'a | b\\\n\\--- | ---\n');
+  assert.equal(toMarkdown([{ type: 'paragraph', text: 'a | b\n|:--|' }]), 'a | b\\\n\\|:--|\n');
+});
+
+test('embeds that cycle or double stay small; huge inputs still render; a code language is one token', () => {
+  const self = { me: [{ type: 'paragraph', text: 'x' }, { type: 'embed', target: 'me' }] };
+  assert.equal(toMarkdown([{ type: 'embed', target: 'me' }], { embeds: self }), 'x\n\n↪ me\n');
+  const embeds = { t30: [{ type: 'paragraph', text: 'leaf' }] };
+  for (let k = 0; k < 30; k++) embeds[`t${k}`] = [{ type: 'embed', target: `t${k + 1}` }, { type: 'embed', target: `t${k + 1}` }];
+  assert.ok(toMarkdown([{ type: 'embed', target: 't0' }], { embeds }).length < 5000);
+  assert.notEqual(toMarkdown([{ type: 'code', value: '`a '.repeat(200000) }]), '');
+  assert.equal(toMarkdown([{ type: 'code', lang: 'js onerror=x', value: 'x' }]), '```js\nx\n```\n');
+});
+
 test('an embed shows the document it names when one is given, else its target', () => {
   const doc = [{ type: 'embed', target: 'Field notes' }];
   assert.equal(toMarkdown(doc), '↪ Field notes\n');

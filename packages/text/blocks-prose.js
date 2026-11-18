@@ -14,7 +14,7 @@ function heading(b, ctx) {
   if (t === '' || !ctx.md) return t;
   const n = Number(b.level);
   const level = Number.isInteger(n) && n >= 1 && n <= 6 ? n : 2;
-  return `${'#'.repeat(level)} ${t.replace(/(\s)(#+)$/, '$1\\$2')}`;
+  return `${'#'.repeat(level)} ${t.replace(/(^|\s)(#+)$/, '$1\\$2')}`;
 }
 
 const headingAt = (level) => (b, ctx) => heading({ ...b, level }, ctx);
