@@ -12,7 +12,7 @@ import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 const MAX_FENCE_BLOCKS = 50;
 // Display blocks a ```portabledoc fence may hold, at the top and nested anywhere the
 // schema puts blocks; never fields, forms or bound blocks.
-const FENCE_TYPES = new Set([
+export const FENCE_TYPES = new Set([
   'heading', 'paragraph', 'list', 'code', 'table', 'callout', 'divider', 'diagram',
   'chart', 'stat', 'stats', 'heatmap', 'pullquote', 'eyebrow',
 ]);

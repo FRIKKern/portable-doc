@@ -43,10 +43,19 @@ export function safeUrl(href) {
 }
 
 /** Fields that hold an address, wherever they sit: a link's or action's `href`, a media
- * `src` (image, video, captions, card media), a video `poster`, and `url`. The schema has no
- * address marker (validate refuses a `format` keyword), so a test checks that every
- * address-like property the schema names is here. */
+ * `src` (image, video, captions, card media), a video `poster`, and `url`. A fence with an
+ * unsafe value in one stays code. address-fields.test.mjs renders every string field of
+ * the fence types with a URL in it, and each field that comes out as an address must be
+ * here or on LINKED_BY_RULE. */
 export const ADDRESS_KEYS = Object.freeze(['href', 'src', 'poster', 'url']);
+
+/** Fields a renderer links under its own rule, which only ever links a safe address, so a
+ * fence needs no check on them. Each names its rule. `source` is a ref, not an address:
+ * on ADDRESS_KEYS its commit:, paper: and task: refs would turn the fence into code. */
+export const LINKED_BY_RULE = Object.freeze({
+  source: 'linked only when it starts with https://',
+  sourceDefault: 'the source for items without one: linked only when it starts with https://',
+});
 
 /** A URL as a Markdown link destination: spaces, brackets and controls
  * encoded; `&` and `\` backslash-escaped, so a parser decodes no entity
