@@ -23,3 +23,25 @@ test('the timeline always writes exactly TIMELINE_LINES lines, one per period: t
   assert.deepEqual(lines(render([], NOW)), ['Today', 'Yesterday', 'This week', 'Last week', 'This month', 'Last month', 'Earlier'].map((name) => `- **${name}** · no changes`));
   assert.equal(lines(render(items.slice(0, 1), NOW)).length, TIMELINE_LINES);
 });
+
+test('replaceBlock refuses a file without exactly one start marker and one end marker, start first, so a decoy block is never the one written', async () => {
+  const { replaceBlock } = await import('./lib/board.mjs');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'replace block test-'));
+  try {
+    const file = path.join(dir, 'README.md');
+    const block = '<!-- timeline:start -->\nold\n<!-- timeline:end -->\n';
+    for (const text of ['# x\n', `# x\n\`\`\`\n${block}\`\`\`\n${block}`, `# x\n${block}<!-- timeline:end -->\n`, '# x\n<!-- timeline:end -->\n<!-- timeline:start -->\n']) {
+      fs.writeFileSync(file, text);
+      assert.throws(() => replaceBlock(file, 'timeline', 'new\n'), /README\.md: needs exactly one <!-- timeline:start --> and one <!-- timeline:end -->, start first/, text);
+      assert.equal(fs.readFileSync(file, 'utf8'), text, 'left as it was');
+    }
+    fs.writeFileSync(file, `# x\n${block}tail\n`);
+    assert.equal(replaceBlock(file, 'timeline', 'new\n'), true);
+    assert.equal(fs.readFileSync(file, 'utf8'), '# x\n<!-- timeline:start -->\nnew\n<!-- timeline:end -->\ntail\n');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

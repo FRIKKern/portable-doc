@@ -264,13 +264,13 @@ function asMain(root) {
 test('every test runs its scripts from a path with a space, and check-docs finds its repo root there too', () => {
   assert.match(tmp, / /);
   const root = repo();
-  write(path.join(root, 'README.md'), '# synthetic\n');
+  write(path.join(root, 'README.md'), '# synthetic\n<!-- timeline:start -->\n<!-- timeline:end -->\n');
   execFileSync('git', ['init', '-q', root]);
   fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts/check-docs.mjs'));
   asMain(root);
   const r = run(root, 'check-docs.mjs');
   assert.equal(r.code, 0, r.out);
-  assert.match(r.out, /docs ok: 1 files, README 1 lines/);
+  assert.match(r.out, /docs ok: 1 files, README 3 lines/);
 });
 
 function ghStub() {
