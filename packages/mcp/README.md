@@ -25,7 +25,7 @@ Bad arguments are `InvalidParams` (-32602), and so are an unknown `format` or bl
 
 Every answer is JSON in `content[0].text`, because many clients read only `content`. `structuredContent` repeats it when both copies fit in one reply. A reply stays under 10 MiB − 256 KiB on the wire, inside the 10 MiB an MCP stdio client reads per message. An answer too big to send twice comes as compact JSON text alone, with no `structuredContent`. One too big to send once is a tool error that gives its size.
 
-Other limits: 16 MiB per message in, 200,000 JSON values per call, 1,000 JSON levels for `apply_ops` and `render` (`validate` takes any depth and answers `too_deep`). A call with a table edit also counts the JSON inside strings that start with `[` or `{`, because Barkpark's normalizer decodes it. An `explain` location is at most 1,000 characters: a deep path keeps its innermost steps, and long keys, types and ids are cut at 100.
+Other limits: 16 MiB per message in, 200,000 JSON values per call, a doc no deeper than `MAX_VALUE_DEPTH` (1,000 JSON levels) for `apply_ops` and `render`, so the arguments that wrap it may nest 1,001 (`validate` takes any depth and answers `too_deep`). A call with a table edit also counts the JSON inside strings that start with `[` or `{`, because Barkpark's normalizer decodes it. An `explain` location is at most 1,000 characters: a deep path keeps its innermost steps, and long keys, types and ids are cut at 100.
 
 ## Run
 

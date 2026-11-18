@@ -1,5 +1,9 @@
+import { MAX_VALUE_DEPTH } from '@portable-doc/validate';
+
 export const MAX_NODES = 200_000;
-export const MAX_DEPTH = 1_000;
+// The arguments object holds the doc one level down, so a doc at the format's
+// own limit (MAX_VALUE_DEPTH, counted from the doc) always fits.
+export const MAX_DEPTH = MAX_VALUE_DEPTH + 1;
 
 const JSON_TEXT = /^[ \t\n\r]*[[{]/;
 
