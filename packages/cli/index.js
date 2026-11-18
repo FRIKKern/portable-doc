@@ -113,7 +113,7 @@ async function check(command, files, opts, io) {
   if (opts.json) {
     const files = results.map(({ file, ok, failure, errors, doc }) => {
       if (failure) return { file, ok, error: failure };
-      const list = command === 'explain' ? errors.map((e) => ({ ...e, explanation: explainError(e, doc).join(' '), refusedWhen: refusedWhen(e.code) })) : errors;
+      const list = command === 'explain' ? errors.map((e) => ({ ...e, explanation: explainError(e, doc, String).join(' '), refusedWhen: refusedWhen(e.code) })) : errors;
       return { file, ok, errors: list };
     });
     // JSON.stringify escapes C0 controls; DEL and C1 are escaped here, inside strings, the only place they occur.

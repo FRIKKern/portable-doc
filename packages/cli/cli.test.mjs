@@ -112,6 +112,17 @@ test('explain and validate print doc text, file names and arguments with control
   assert.equal(JSON.parse(outs[2].stdout).files[0].errors[0].code, 'unknown_block_type');
 });
 
+test('explain --json carries the doc text once escaped: parsed, it is what explain prints before display escaping', async () => {
+  const type = 'q"b\\s\u001bc\u007fd\u009be';
+  const file = write('quoted.json', [{ type }]);
+  const plain = (await call(['explain', file])).stdout.split('\n').filter((l) => /^(\d+\.| ) /.test(l)).map((l) => l.replace(/^(\d+\.| ) +/, ''));
+  const [error] = JSON.parse((await call(['explain', '--json', file])).stdout).files[0].errors;
+  const shown = (s) => s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  assert.equal(shown(error.explanation), plain.join(' '));
+  assert.ok(error.explanation.includes(`in the ${type} block at /0 `), error.explanation);
+  assert.ok(error.explanation.includes(`${error.message}.`), error.explanation);
+});
+
 test('render -o - writes to stdout, and -o never takes a flag or the input file', async () => {
   const file = write('self.json', [{ type: 'paragraph', text: 'Keep me' }]);
   const before = fs.readFileSync(file, 'utf8');

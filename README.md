@@ -33,8 +33,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## What happened
 
 <!-- timeline:start -->
-- **Today** · 6 changes
-  - MCP: replies carry up to 10 MiB minus a margin; content always holds the full JSON ([#62](https://github.com/FRIKKern/portable-doc/pull/62))
+- **Today** · 7 changes
+  - cli: explain --json escapes the doc's text once ([#64](https://github.com/FRIKKern/portable-doc/pull/64))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed

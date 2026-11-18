@@ -46,7 +46,8 @@ broken.json: 2 errors
 
 Each error gets the block it sits in, the validator's message and the rule it
 breaks, from the "Refused when" column of `CODES.md`. `--json` adds
-`explanation` and `refusedWhen` to each error.
+`explanation` and `refusedWhen` to each error; the doc's text in them is
+escaped once, by JSON itself.
 
 ## Render
 
