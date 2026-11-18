@@ -21,10 +21,12 @@ The paper editor's home is Barkpark (`api/assets/paper-editor/`). Barkpark build
 ## Decision
 
 - The sync job copies `packages/editor/` from Barkpark the way it copies the pack. It removes the folder and copies the files Barkpark's git tracks under `api/assets/paper-editor/`, minus any that Barkpark's `.gitignore` files match. Build output, `node_modules` and local leftovers never travel.
+- One file-list rule on both sides: the files git would track there, judged by the repo's own `.gitignore` files only. A global excludes file and `.git/info/exclude` are never read, so a local sync copies what CI copies. Here, the check skips what git ignores (a `.DS_Store`, an `npm ci` in the folder) and counts untracked files. Only regular files are allowed: the check names a symlink as an error, and the sync refuses one in Barkpark.
 - The record is an `editor` section in `SOURCE.json`: `{ "path": "api/assets/paper-editor", "files": { "<path>": "<sha256>" } }`, with paths relative to `packages/editor/`. One run copies the pack and the editor from one Barkpark checkout, so the top-level `commit` holds for both. A second `SOURCE.json` inside `packages/editor/` would repeat that commit and would itself be a file Barkpark does not have.
 - `npm run check` fails, naming the file, when a file under `packages/editor/` differs from its recorded sha256, when a recorded file is missing, or when a file is there that the sync did not write. It also fails when the section is missing, names another path, or is empty.
 - `check-pack --against` also compares the editor with Barkpark, so a change to the editor alone opens the sync PR.
 - The sync refuses, and copies nothing, when Barkpark tracks no files under the editor path or has no `package.json` there.
+- The root test run (`scripts/test-files.mjs`) and `check-docs` leave `packages/editor/` out. Its tests need its own install, and its Markdown links are Barkpark's text, so neither can stop the sync here.
 
 Fix the editor in Barkpark, never here: the next sync would undo a local edit, and the check fails until it does.
 
