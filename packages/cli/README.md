@@ -1,7 +1,8 @@
 # @portable-doc/cli
 
 The `portable-doc` command: check PortableDoc files against the schema, explain
-what is wrong, and render them as HTML, Markdown or plain text. Plain
+what is wrong, render them as HTML, Markdown or plain text, and preview one in
+the browser as you edit it. Plain
 JavaScript; it uses [`@portable-doc/validate`](../validate/CODES.md),
 [`@portable-doc/text`](../text/README.md) and, for HTML,
 [`@portable-doc/react`](../react/README.md).
@@ -67,6 +68,28 @@ $ cat notes.json | npx portable-doc render --format text
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.
   `--force` renders it anyway, after printing the errors.
 
+## Preview
+
+```console
+$ npx portable-doc preview notes.json --open
+Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
+```
+
+- The page is the doc as `render --format html` makes it, styled with
+  `@portable-doc/react/paper-surface.css`. That stylesheet is read from the
+  built package, so run `npm run react:build` once first, as for html. Light
+  and dark follow the system.
+- Save the file and the page reloads by itself, also when the editor saves by
+  renaming a new file over the old one.
+- A doc with bad JSON or validation errors shows its problems, in the words
+  `explain` uses, above the last version that rendered.
+- The server listens on 127.0.0.1 only, on port 4317, or on any free port
+  when that one is taken. `--port 0` always picks a free one. It answers
+  `GET /`, `/paper-surface.css` and `/events` (the reload stream), with
+  `127.0.0.1` or `localhost` as the host. Anything else is a 404.
+- `--open` opens the page with `open` (macOS) or `xdg-open`. Ctrl-C closes the
+  watcher and every connection, and exits 0.
+
 ## In a pre-commit hook or CI
 
 ```sh
@@ -83,4 +106,4 @@ git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
 - run: npx portable-doc validate --json -- content/*.json > validate.json
 ```
 
-`node --test packages/cli/cli.test.mjs` runs the bin against the fixtures.
+`node --test packages/cli/cli.test.mjs packages/cli/preview.test.mjs` runs the bin against the fixtures and a live preview.

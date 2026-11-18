@@ -160,6 +160,7 @@ export async function startPreview({ file, port, load, renderHtml, io }) {
       });
       server.listen(p, HOST, () => {
         server.removeAllListeners('error');
+        server.on('error', (error) => io.stderr(`portable-doc preview: ${shown(error.message)}\n`));
         resolve();
       });
     };
