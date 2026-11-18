@@ -5,6 +5,8 @@ import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
 import { applyOps } from './ops/apply.js';
 import { TABLE_OPS } from './ops/intents.js';
 import { render } from './render.js';
+import { blockDetail, hasType, listBlocks, loadCatalog } from './catalog.js';
+import { FORMATS, renderLocal } from './local.js';
 
 export const MAX_OPS = 100;
 const MAX_ERRORS = 1_000;
@@ -51,10 +53,27 @@ export const TOOLS = [
   },
   {
     name: 'render',
-    description: "Render a PortableDoc to HTML through Barkpark's reader (BARKPARK_URL, BARKPARK_TOKEN).",
-    inputSchema: { type: 'object', properties: { doc: DOC }, required: ['doc'], additionalProperties: false },
+    description: "Render a PortableDoc. format html (the default) gives { html }: from Barkpark's reader when BARKPARK_URL is set, else locally with @portable-doc/react. markdown gives { markdown } and text gives { text }, always locally with @portable-doc/text. A local render validates first: a broken doc is a tool error with the validator's errors.",
+    inputSchema: {
+      type: 'object',
+      properties: { doc: DOC, format: { type: 'string', enum: FORMATS, default: 'html', description: 'html, markdown or text' } },
+      required: ['doc'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'blocks',
+    description: "The block types a PortableDoc can hold, read from the synced spec. No argument: every type with its tier and its own fields, plus the aliases. { type }: that type's fields (type, required, enum and limits where the spec has them) and the golden example block.",
+    inputSchema: {
+      type: 'object',
+      properties: { type: { type: 'string', description: 'A block type or alias, such as callout or h2' } },
+      required: [],
+      additionalProperties: false,
+    },
   },
 ];
+
+const catalog = loadCatalog();
 
 const bad = (message) => new McpError(ErrorCode.InvalidParams, message);
 const isMap = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -118,8 +137,21 @@ export function handlers(config) {
     },
     async render(args, size) {
       checkDoc(args.doc, size, { walked: true });
-      const rendered = await render(args.doc, config);
-      return rendered.ok ? result({ html: rendered.html }) : result({ error: rendered.error }, true);
+      const format = Object.hasOwn(args, 'format') ? args.format : 'html';
+      if (!FORMATS.includes(format)) throw bad(`format must be one of ${FORMATS.join(', ')}`);
+      if (format === 'html' && config.base) {
+        const rendered = await render(args.doc, config);
+        return rendered.ok ? result({ html: rendered.html }) : result({ error: rendered.error }, true);
+      }
+      const local = await renderLocal(args.doc, format);
+      return result(local.value, !local.ok);
+    },
+    blocks(args) {
+      if (Object.hasOwn(args, 'type') && typeof args.type !== 'string') throw bad('type must be a string');
+      if (catalog.error) return result({ error: catalog.error }, true);
+      if (!Object.hasOwn(args, 'type')) return result(listBlocks(catalog));
+      if (!hasType(catalog, args.type)) throw bad(`no block type ${JSON.stringify(args.type.slice(0, 100))}; call blocks with no argument for the list`);
+      return result(blockDetail(catalog, args.type));
     },
   };
 }
