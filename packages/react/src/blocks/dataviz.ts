@@ -661,6 +661,13 @@ function xLabelsSvg(labels: string[]): string {
   return out
 }
 
+// The chart's text alternative: the svg draws only the first and last x label, so its title, which
+// is its accessible name and a hover tooltip, carries every label in order. No labels, no title.
+function labelsTitle(labels: string[]): string {
+  const named = labels.filter((l) => l !== '')
+  return named.length === 0 ? '' : `<title>${escapeHtml(named.join(', '))}</title>`
+}
+
 function legendHtml(series: Series[], ctx: RenderCtx): string {
   return (
     '<div class="bp-chart__legend">' +
@@ -699,6 +706,7 @@ const chart: Emit = (block, ctx) => {
     `<div class="bp-chart">${capHtml}` +
     `<div class="bp-chart__scroll">` +
     `<svg viewBox="0 0 ${VW} ${VH}" preserveAspectRatio="none" role="img">` +
+    labelsTitle(xLabels) +
     gridSvg(minV, maxV) +
     plot +
     xLabelsSvg(xLabels) +
