@@ -13,6 +13,9 @@ import { validate } from '@portable-doc/validate';
 import { explainError, shown } from './words.js';
 
 const HOST = '127.0.0.1';
+// How long stopping waits for open /events streams to take their end. Only a client that
+// never reads uses it up; it is a deadline on that wait, not a measure of work.
+export const CLOSE_GRACE_MS = 1000;
 const DEFAULT_PORT = 4317;
 const DEBOUNCE_MS = 120;
 
@@ -182,14 +185,25 @@ export async function startPreview({ file, port, load, renderHtml, io, watch = f
     throw error;
   });
 
+  // Stop listening, end every open stream and wait until each end is sent, so a tab sees the
+  // stream finish, not a cut. A client that never reads is cut after CLOSE_GRACE_MS.
   const close = () =>
     new Promise((resolve) => {
       clearTimeout(timer);
       watcher.close();
-      for (const res of clients) res.end();
-      clients.clear();
       server.close(() => resolve());
-      server.closeAllConnections();
+      const ended = [...clients].map((res) => new Promise((done) => {
+        res.once('finish', done);
+        res.once('close', done);
+        res.end();
+      }));
+      clients.clear();
+      const deadline = setTimeout(() => server.closeAllConnections(), CLOSE_GRACE_MS);
+      // Every end is sent: any socket still open (a browser keeps one idle) can go now.
+      Promise.all(ended).then(() => {
+        clearTimeout(deadline);
+        server.closeAllConnections();
+      });
     });
   return { url: `http://${HOST}:${server.address().port}/`, close };
 }
