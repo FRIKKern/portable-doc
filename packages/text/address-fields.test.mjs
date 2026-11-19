@@ -197,16 +197,16 @@ function problems({ linked, leaks }, rules = LINKED_BY_RULE) {
   const out = [...leaks];
   for (const [field, { key, where, probe }] of linked) {
     if (ADDRESS_KEYS.includes(key)) continue;
-    if (!Object.hasOwn(rules, key)) {
+    if (!Object.hasOwn(rules, field)) {
       out.push(`live but on neither list: ${field} (${where.join(', ')})`);
       continue;
     }
     for (const value of [MARK, ...URL_CASES]) {
       const at = probe(value);
-      if (at.length && !allowed(value, rules[key])) out.push(`live against its rule: ${field} = ${JSON.stringify(value)} (${at.join(', ')})`);
+      if (at.length && !allowed(value, rules[field])) out.push(`live against its rule: ${field} = ${JSON.stringify(value)} (${at.join(', ')})`);
     }
   }
-  for (const key of Object.keys(rules)) if (![...linked.values()].some((l) => l.key === key)) out.push(`on LINKED_BY_RULE but linked nowhere: ${key}`);
+  for (const field of Object.keys(rules)) if (!linked.has(field)) out.push(`on LINKED_BY_RULE but linked nowhere: ${field}`);
   return out;
 }
 
@@ -256,6 +256,7 @@ const html = (add) => plant('html', (b) => (b.type === 'stat' && https(b.unit) ?
 
 test('plants: a renderer that puts a field in any live place is caught, a form no one named included', () => {
   const cases = [
+    ['diagram.source linked by a renderer: a field named like a ruled one is not under its rule', 'diagram', plant('markdown', (b) => (https(b.source) ? `\n\n[source](${b.source})\n` : '')), 'diagram.source (markdown)'],
     ['code.lang as a Markdown link', 'code', plant('markdown', (b) => (https(b.lang) ? `\n\n[lang](${b.lang})\n` : '')), 'code.lang (markdown)'],
     ['stat.label as a Markdown reference link', 'stat', plant('markdown', (b) => (https(b.label) ? `\n\n[site][1]\n\n[1]: ${b.label}\n` : '')), 'stat.label (markdown)'],
     ['a CSS url() quoted with &quot;', 'stat', html((u) => `<i style="background:url(&quot;${u}&quot;)"></i>`), 'stat.unit (html)'],
@@ -278,11 +279,11 @@ test('plants: a field written where text is inert (alt, title, aria-label, text,
     plant('html', (b) => (b.type === 'stat' ? `<img alt="${attr(b.unit)}" title="${attr(b.label)}"><b aria-label="${attr(b.body)}">${attr(b.unit)}</b>` : '')),
     plant('markdown', (b) => (b.type === 'stat' ? `\n\n\`${b.unit}\` and [x](/a "${String(b.label).replaceAll('"', '')}") and ![${b.body}](/a.png)\n` : '')),
   ];
-  for (const render of inert) assert.deepEqual(problems(survey(only('stat'), render)).filter((p) => !p.startsWith('on LINKED_BY_RULE but linked nowhere: sourceDefault')), []);
+  for (const render of inert) assert.deepEqual(problems(survey(only('stat'), render)).filter((p) => !p.startsWith('on LINKED_BY_RULE but linked nowhere: stats.')), []);
 });
 
 test('plants: a LINKED_BY_RULE entry whose renderer lets through more than its prefix is caught, through new URL() too', () => {
-  const rules = { ...LINKED_BY_RULE, label: { prefix: 'https://', trimmed: true } };
+  const rules = { ...LINKED_BY_RULE, 'stat.label': { prefix: 'https://', trimmed: true } };
   const label = (b) => (b.type === 'stat' && typeof b.label === 'string' ? b.label : '');
   // Links https:// and data: only.
   const data = plant('markdown', (b) => (/^\s*(?:https:\/\/|data:)/.test(label(b)) ? `\n\n[site](${label(b).trim()})\n` : ''));
