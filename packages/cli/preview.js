@@ -186,8 +186,8 @@ export async function startPreview({ file, port, load, renderHtml, io, watch = f
   });
 
   // Stop listening, end every open stream and wait until each end is sent, so a tab sees the
-  // stream finish, not a cut. A client that never reads is cut after CLOSE_GRACE_MS.
-  const close = () =>
+  // stream finish, not a cut. A client that never reads is cut after `graceMs`.
+  const close = ({ graceMs = CLOSE_GRACE_MS } = {}) =>
     new Promise((resolve) => {
       clearTimeout(timer);
       watcher.close();
@@ -198,7 +198,7 @@ export async function startPreview({ file, port, load, renderHtml, io, watch = f
         res.end();
       }));
       clients.clear();
-      const deadline = setTimeout(() => server.closeAllConnections(), CLOSE_GRACE_MS);
+      const deadline = setTimeout(() => server.closeAllConnections(), graceMs);
       // Every end is sent: any socket still open (a browser keeps one idle) can go now.
       Promise.all(ended).then(() => {
         clearTimeout(deadline);
