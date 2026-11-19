@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
 import { numberText } from '../packages/text/number-text.js';
 import { SCALE_MAX_OPTIONS, scaleOptions } from '../packages/text/form-scale.js';
+import { underBudget } from './lib/cpu-budget.mjs';
 import { toMarkdown, toPlainText } from '../packages/text/index.js';
 
 // A form's rating scale offers whole numbers from its min up by one. A document is untrusted: any
@@ -28,15 +29,15 @@ const SCALES = {
 };
 
 test('a scale with any finite bound renders at once, with at most SCALE_MAX_OPTIONS options, the same in HTML, Markdown and plain text', () => {
-  const started = performance.now();
   for (const [name, scale] of Object.entries(SCALES)) {
-    const shown = optionsIn(renderPortableDocument(form(scale)));
+    // Under a second of CPU through all three writers; on main React spins on the first and throws.
+    const [html, markdown, text] = underBudget(1000, () => [renderPortableDocument(form(scale)), toMarkdown(form(scale)), toPlainText(form(scale))]);
+    const shown = optionsIn(html);
     assert.ok(shown.length >= 1 && shown.length <= SCALE_MAX_OPTIONS, `${name}: ${shown.length} options`);
     assert.equal(new Set(shown).size, shown.length, `${name}: an option shown twice`);
     assert.deepEqual(shown, scaleOptions(scale).map((v) => numberText(v)), `${name}: React shows other options than scaleOptions`);
-    for (const write of [toMarkdown, toPlainText]) assert.deepEqual(scaleLine(write(form(scale))), [shown[0], shown.at(-1)], `${name}: ${write.name} shows another scale`);
+    for (const [writer, out] of [['Markdown', markdown], ['plain text', text]]) assert.deepEqual(scaleLine(out), [shown[0], shown.at(-1)], `${name}: the ${writer} shows another scale`);
   }
-  assert.ok(performance.now() - started < 1000, 'the scales took a second or more to render');
 });
 
 test('the scale offers min through min + 100, and nothing when max is below min', () => {
