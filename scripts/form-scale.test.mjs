@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
 import { numberText } from '../packages/text/number-text.js';
@@ -47,6 +48,18 @@ test('a scale with any finite bound renders at once, with at most SCALE_MAX_OPTI
 test('min -1e16 renders a counted scale: the options past 2^53 that repeat are shown once', () => {
   const html = renderPortableDocument(form({ min: -1e16 }));
   assert.deepEqual({ options: optionsIn(html).length, html: html.length, markdown: toMarkdown(form({ min: -1e16 })).length }, { options: 51, html: 6338, markdown: 58 });
+});
+
+// How a bound reads, row by row: the one source, which Barkpark copies.
+const BOUNDS = JSON.parse(fs.readFileSync(new URL('../fixtures/form-scale/bounds.json', import.meta.url), 'utf8'));
+
+test('every row of fixtures/form-scale/bounds.json shows its options in React, the Markdown and the plain text', () => {
+  assert.ok(BOUNDS.length >= 12, `${BOUNDS.length} rows`);
+  for (const { case: name, options, first, last, ...scale } of BOUNDS) {
+    const shown = optionsIn(renderPortableDocument(form(scale)));
+    assert.deepEqual([shown.length, shown[0], shown.at(-1)], [options, first, last], name);
+    for (const write of [toMarkdown, toPlainText]) assert.deepEqual(scaleLine(write(form(scale))), options ? [first, last] : null, `${name}: ${write.name}`);
+  }
 });
 
 test('the scale offers min through min + 100, and nothing when max is below min', () => {
