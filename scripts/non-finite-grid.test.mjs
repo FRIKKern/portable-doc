@@ -76,3 +76,8 @@ test('a digit string too large for a number is no number: a grid span or order i
   const html = writers.find((w) => w.name === 'HTML').write(grid({ span: '3', order: '2' }, { tracks: '4' })).output;
   for (const shown of ['grid-column:span 3', 'order:2', '--bp-tracks:4']) assert.ok(html.includes(shown), `a digit string that fits is read: ${shown}`);
 });
+
+test('a form scale bound given as a digit string too large for a number shows no Infinity in text', { todo: 'the text writers parse it to -Infinity and write it; the forms-scale fix makes this a real test' }, () => {
+  const block = { type: 'form', questions: [{ prompt: 'How sure?', type: 'scale', scale: { min: `-${'9'.repeat(400)}` } }] };
+  for (const writer of writers.filter((w) => w.package === '@portable-doc/text')) assert.doesNotMatch(writer.write([block]).output, WORD, writer.name);
+});

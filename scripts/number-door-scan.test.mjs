@@ -13,8 +13,12 @@
 //   function, and any call of those five methods.
 //
 // What it cannot see:
-// - In packages/text there are no types, so a template span or + of a number goes unseen there.
-//   The grid test (non-finite-grid.test.mjs) catches the output instead.
+// - In packages/text there are no types, so a template span or + of a number, and a join of an
+//   array of numbers, go unseen there.
+//   The grid test (non-finite-grid.test.mjs) checks the output only for the values it sets, and
+//   it sets numbers, never digit strings. A number a writer makes itself, for example by parsing a
+//   digit string, is not covered: a form scale bound given as a digit string too large for a
+//   number writes "-Infinity" in text (the todo test in non-finite-grid.test.mjs).
 // - A number the code has already cast to string (`n as unknown as string`), or one reached through
 //   a method held in a variable or called with call or apply.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
