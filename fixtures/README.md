@@ -14,6 +14,7 @@ commit it copied; a hand-edited copy is not a copy.
 | `aliases/` | `{ block, reads }`: each field name read on `block` gives its value, `null` for none |
 | `text-work/` | inputs and rules only; see its README |
 | `round-trip/` | nothing kept; see its README |
+| `writers/` | `{ blocks, markdown, text, html }`: each writer's output, pinned byte for byte; see its README |
 
 The case files in `nesting/`, `headings/`, `text-work/` and `round-trip/` are generated:
 `node scripts/write-shared-cases.mjs` rewrites them from their inputs with this

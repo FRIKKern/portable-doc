@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkFence } from './from-markdown.js';
-import { fromMarkdown, toMarkdown } from './index.js';
+import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 
 // A callout is Markdown's quote: `> [!tone]` and its first paragraph are the callout, every block
 // after that is its `slots.body`. Round-trip mode writes it so, each block of the body decided as
@@ -110,8 +110,16 @@ test('callouts in callouts are kept in their own Markdown to 50 deep; deeper one
   assert.deepEqual(toMarkdown([deeper], ROUND_TRIP).lost, [{ path: '/blocks/0', id: null, type: 'callout', reason: checkFence([deeper], new Set()).reason }]);
 });
 
-test('readable mode writes a callout as before: its label and its text', () => {
-  const doc = [callout([p('Body.')], 'warning', [t('Mind it')])];
-  assert.equal(toMarkdown(doc), '> **Warning:** Mind it\n');
-  assert.equal(toMarkdown(doc, { mode: 'readable' }), toMarkdown(doc));
+test('readable mode writes a callout\'s content, then its body: a two-paragraph callout imported from Markdown keeps every word', () => {
+  const md = '> [!warning] Mind the gap\n>\n> Second paragraph, with more words.';
+  const blocks = fromMarkdown(md);
+  assert.deepEqual(blocks, [callout([p('Second paragraph, with more words.')], 'warning', [t('Mind the gap')])]);
+  const words = md.match(/\w+/g).filter((w) => w !== 'warning'); // the tone is written as its label, Warning
+  for (const out of [toMarkdown(blocks), toPlainText(blocks)]) assert.deepEqual(words.filter((w) => !out.includes(w)), [], out);
+  assert.equal(toMarkdown(blocks), '> **Warning:** Mind the gap\n>\n> Second paragraph, with more words.\n');
+  assert.equal(toMarkdown(blocks, { mode: 'readable' }), toMarkdown(blocks));
+  assert.equal(toPlainText(blocks), 'Warning: Mind the gap\n\nSecond paragraph, with more words.\n');
+  // A callout with only content, or only a body, is written as before.
+  assert.equal(toMarkdown([{ type: 'callout', tone: 'warning', content: [t('Mind it')] }]), '> **Warning:** Mind it\n');
+  assert.equal(toMarkdown([callout([p('Body.')], 'warning', [])]), '> **Warning:** Body.\n');
 });
