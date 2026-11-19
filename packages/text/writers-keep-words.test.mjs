@@ -7,18 +7,14 @@
 // scripts/lib/editor-losses.mjs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import path from 'node:path';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
-import { validate } from '@portable-doc/validate';
 import { EDITOR_LOSSES, lossKind } from '../../scripts/lib/editor-losses.mjs';
+import { fixtureCases, json } from '../../scripts/lib/fixture-cases.mjs';
 import { WRITERS } from '../../scripts/lib/writers.mjs';
-import { KEEP_BYTES, sharedCases } from '../../scripts/write-shared-cases.mjs';
-import { fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
+import { KEEP_BYTES } from '../../scripts/write-shared-cases.mjs';
+import { toMarkdown, toPlainText } from './index.js';
 
-const FIXTURES = new URL('../../fixtures/', import.meta.url);
-const json = (dir) =>
-  fs.readdirSync(new URL(`${dir}/`, FIXTURES)).filter((f) => f.endsWith('.json')).sort().map((f) => [`fixtures/${dir}/${f}`, JSON.parse(fs.readFileSync(new URL(`${dir}/${f}`, FIXTURES), 'utf8'))]);
 const writerCases = json('writers');
 
 const wordsIn = (s) => s.match(/\p{L}[\p{L}\p{N}]*/gu) ?? [];
@@ -121,49 +117,13 @@ function writtenWords(writer, blocks) {
 const big = (blocks) => JSON.stringify(blocks).length > KEEP_BYTES;
 const SLOW = ['round-trip Markdown'];
 
-// Each folder under fixtures/ and how its cases are read, as [name, blocks, words it must keep?].
-// broken/ holds docs that fail validation: writers owe a valid doc's words. A folder with no
-// reader here, or one that gives no case, fails the test.
-const NOT_READ = { broken: 'docs that fail validation; writers owe only a valid doc its words' };
-const markdownCases = async (folder) => Object.entries((await import(new URL(`${folder}/cases.mjs`, FIXTURES).href)).CASES).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]);
-const READERS = {
-  nesting: () => markdownCases('nesting'),
-  headings: () => markdownCases('headings'),
-  'list-split': () => markdownCases('list-split'),
-  'text-work': async () => {
-    const { CUT, CUT_GENERATED, SPLIT_ITEMS, WORK, WORK_GENERATED, splitItems } = await import(new URL('text-work/cases.mjs', FIXTURES).href);
-    // The 120,000-item case is read here at 1,000 items, its shape word-checked through every
-    // writer; the import tests read it at 20,000 on a small stack.
-    const generated = { ...WORK_GENERATED, [SPLIT_ITEMS]: splitItems(1_000) };
-    const cut = [...Object.entries(CUT), [CUT_GENERATED.name, [CUT_GENERATED.markdown, CUT_GENERATED.limits]]];
-    return [
-      ...Object.entries({ ...WORK, ...generated }).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]),
-      ...cut.map(([name, [markdown, limits]]) => [name, readMarkdown(markdown, limits).blocks]),
-    ];
-  },
-  'round-trip': () => Object.entries(JSON.parse(sharedCases()[path.posix.join('round-trip', 'round-trip-cases.json')])).map(([name, { markdown }]) => [name, fromMarkdown(markdown)]),
-  valid: () => json('valid').map(([name, doc]) => [name, Array.isArray(doc) ? doc : doc.blocks]),
-  writers: () => writerCases.map(([name, { blocks }]) => [name, blocks]),
-  // An alias case's block holds a field under two names; a writer reads the one `reads` names.
-  // A block that does not validate pins only the alias reader: writers owe a valid doc's words.
-  aliases: () =>
-    json('aliases')
-      .filter(([, c]) => validate({ blocks: [c.block] }).ok)
-      .map(([name, { block, reads }]) => [name, [block], Object.entries(reads).flatMap(([key, v]) => (typeof v === 'string' ? wordsIn(v).map((w) => [w, key, `/blocks/0/${key}`]) : []))]),
-};
-
-/** Every shared case as [name, blocks, words it must keep?], read from each folder under fixtures/. */
+/** Every shared case as [name, blocks, words it must keep?]: an alias case owes only the words its `reads` names. */
 async function cases() {
-  const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  const unread = folders.filter((f) => !(f in READERS) && !(f in NOT_READ));
-  assert.deepEqual(unread, [], 'a folder under fixtures/ that the word test has no reader for');
-  const all = [];
-  for (const folder of folders.filter((f) => f in READERS)) {
-    const got = await READERS[folder]();
-    assert.ok(got.length > 0, `fixtures/${folder}: no case read`);
-    all.push(...got);
-  }
-  return all;
+  return (await fixtureCases()).map(({ name, blocks, reads }) => [
+    name,
+    blocks,
+    reads && Object.entries(reads).flatMap(([key, v]) => (typeof v === 'string' ? wordsIn(v).map((w) => [w, key, `/blocks/0/${key}`]) : [])),
+  ]);
 }
 
 test('every writer keeps every word of every shared case, or lists where it lost it', async () => {

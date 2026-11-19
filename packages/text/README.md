@@ -221,6 +221,9 @@ back and compares, never by a list of types.
   inside, decided the same way, so one that cannot be kept is listed under its
   own path (`/blocks/0/slots/body/1`); a callout that line cannot hold (a
   title, a tone import does not know) is fenced whole.
+- A list is written as indented items with their blocks inside exactly when
+  that reads back as the list; import keeps only nested lists as an item's
+  blocks, so a list whose item holds any other block is fenced whole.
 
 <!-- round-trip-types:start -->
 <!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/scripts/write-readme.mjs`; `npm run check` fails when this part is stale. -->
@@ -249,7 +252,7 @@ Each form is tried bare, as a list item's child and inside a callout. A form of
 a type a fence may not hold must be reported lost, unless its own Markdown
 reads back as it, so a type is kept only once import accepts it.
 
-`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs packages/text/round-trip-nesting.test.mjs packages/text/import-work.test.mjs packages/text/import-work-search.test.mjs packages/text/ordinary-work.test.mjs`
+`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs packages/text/round-trip-nesting.test.mjs packages/text/round-trip-list-items.test.mjs packages/text/import-work.test.mjs packages/text/import-work-search.test.mjs packages/text/ordinary-work.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
 text, and the import rules, round trip and hostile input. The import-work
 test sweeps 300 seeded documents; `IMPORT_WORK_SWEEP=20000` runs a longer
