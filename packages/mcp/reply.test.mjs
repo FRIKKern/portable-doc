@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { FAKE_TOKEN, startFakeReader } from './test/fake-reader.mjs';
-import { READER_WAIT, REQUEST } from './test/hang.mjs';
+import { READER_WAIT, REQUEST } from './test/request.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const MiB = 1024 * 1024;

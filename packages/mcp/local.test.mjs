@@ -9,7 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs';
-import { READER_WAIT, REQUEST } from './test/hang.mjs';
+import { READER_WAIT, REQUEST } from './test/request.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const spec = JSON.parse(fs.readFileSync(new URL('../../spec/blocks.schema.json', import.meta.url), 'utf8')).definitions;

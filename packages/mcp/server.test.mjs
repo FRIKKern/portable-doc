@@ -12,7 +12,8 @@ import { MAX_MESSAGE_BYTES } from './stdio.js';
 import { MAX_OPS } from './tools.js';
 import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs';
 import { withinBudget } from '../../scripts/lib/cpu-budget.mjs';
-import { HANG_MS, READER_WAIT, REQUEST } from './test/hang.mjs';
+import { HANG_MS } from '../../scripts/lib/hang.mjs';
+import { READER_WAIT, REQUEST } from './test/request.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const CPU_REPORT = fileURLToPath(new URL('test/cpu-report.mjs', import.meta.url));
