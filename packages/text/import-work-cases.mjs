@@ -17,9 +17,9 @@ export const calloutsOverQuotes = (C, P, W) =>
 // be more, never less, for the whole text and for every run of first lines (what the import
 // reads before a cut).
 export const CASES = {
-  'lazy lines under a deep quote': `${X(300, '> ')}l0${'\nl1'.repeat(150)}`,
-  'quoted lines under a deep quote': `${X(300, '> ')}l0${'\n> l1'.repeat(150)}`,
-  'lazy lines under quote markers with no spaces': `${X(300, '>')}l0${'\nlxxxxxxxxxxxxxxx'.repeat(150)}`,
+  'the same lazy line 150 times under a deep quote': `${X(300, '> ')}l0${'\nl1'.repeat(150)}`,
+  'the same quoted line 150 times under a deep quote': `${X(300, '> ')}l0${'\n> l1'.repeat(150)}`,
+  'the same lazy line 150 times under quote markers with no spaces': `${X(300, '>')}l0${'\nlxxxxxxxxxxxxxxx'.repeat(150)}`,
   'a lazy line that looks like a list marker': `${X(120, '> ')}a\n- b\n${X(120, '> ')}c\n1. d\n* e`,
   'a lazy line that looks like a fence': `${X(120, '> ')}a\n\`\`\`\ncode\n\`\`\`\n${X(60, '- ')}b\n~~~\nx`,
   'a blank line inside a fenced block under quotes': `${X(80, '> ')}\`\`\`\n${X(80, '> ')}a\n\n${X(80, '> ')}b\n${X(80, '> ')}\`\`\`\n`,

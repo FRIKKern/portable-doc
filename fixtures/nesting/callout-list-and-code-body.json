@@ -1,0 +1,42 @@
+{
+  "markdown": "> [!warning] Mind the gap\n>\n> - one\n> - two\n>\n> ```js\n> x()\n> ```",
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "warning",
+      "content": [
+        {
+          "type": "text",
+          "value": "Mind the gap"
+        }
+      ],
+      "slots": {
+        "body": [
+          {
+            "type": "list",
+            "ordered": false,
+            "items": [
+              [
+                {
+                  "type": "text",
+                  "value": "one"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "value": "two"
+                }
+              ]
+            ]
+          },
+          {
+            "type": "code",
+            "value": "x()",
+            "lang": "js"
+          }
+        ]
+      }
+    }
+  ]
+}
