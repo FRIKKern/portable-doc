@@ -1,8 +1,7 @@
 // Writes packages/text/alias-types.js: for every name of every field in the alias table
 // (packages/text/alias-table.js), the JSON types spec/blocks.schema.json gives it on its block
 // type or item. A name the schema does not declare takes the types of its field's other names;
-// a field none of whose names the schema types reads text, or an array on a convert's inline side. The
-// readers import the small module instead of the schema, so React does not bundle the schema.
+// a field none of whose names the schema types takes the types in UNTYPED. The readers import the small module instead of the schema, so React does not bundle the schema.
 // `npm run alias-types` writes it; read-aliases.test.mjs regenerates it and compares.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -51,7 +50,7 @@ const objectOf = (node) => {
  * a list of items in it ("steps.steps[]", "task-detail.task.criteria[]"), or an inline node
  * ("inline:text"). An owner the schema gives no properties has none ({}).
  */
-function ownerProperties(owner) {
+export function ownerProperties(owner) {
   if (owner.startsWith('inline:')) return {};
   const [type, ...path] = owner.split('.');
   let node = objectOf(schema.definitions?.blocks?.[type]);
@@ -63,12 +62,36 @@ function ownerProperties(owner) {
   return node?.properties ?? {};
 }
 
+/**
+ * The types of the names of each field the schema gives no types at all (an item or an inline
+ * node it leaves open): what main's reader accepted, so no value main shows is lost. A name
+ * enters this map only in the change that makes it an alias while the schema gives it no types;
+ * its type is what main's reader accepted. It leaves when the schema types it; the map only
+ * shrinks. "owner.name" → { types (null: any), why }.
+ */
+export const UNTYPED = Object.freeze({
+  'code-tabs.tabs[].code': { types: null, why: 'main read a tab\'s value ?? code: any value a tab held' },
+  'code-tabs.tabs[].value': { types: null, why: 'main read a tab\'s value ?? code: any value a tab held' },
+  'inline:code.children': { types: null, why: 'main read an inline code node\'s children as flat text, whatever they held' },
+  'inline:code.value': { types: ['string'], why: 'main read str(value) || the children: text, else the children' },
+  'inline:text.text': { types: ['string'], why: 'main read str(value) || str(text): text' },
+  'inline:text.value': { types: ['string'], why: 'main read str(value) || str(text): text' },
+  'notes.items[].content': { types: ['array'], why: 'main read a note\'s non-empty content array, else its text' },
+  'notes.items[].text': { types: ['string'], why: 'main read a note\'s non-empty content array, else str(text)' },
+  'table.columns[].label': { types: null, why: 'main read a column\'s text ?? label: any value, an inline array as its words' },
+  'table.columns[].text': { types: null, why: 'main read a column\'s text ?? label: any value, an inline array as its words' },
+  'task-detail.criteria[].criterion': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+  'task-detail.criteria[].text': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+  'task-detail.task.criteria[].criterion': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+  'task-detail.task.criteria[].text': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+});
+
 /** "owner.name" → the types that name may hold (null: any), for every name in the alias table. */
 export function aliasTypes() {
-  const fields = new Map(); // "owner.field" → [[field, undefined], [old, its convert], ...]
-  for (const [from, { to, convert }] of Object.entries(TABLE.aliases)) {
-    if (!fields.has(to)) fields.set(to, [[to.slice(to.lastIndexOf('.') + 1), undefined]]);
-    fields.get(to).push([from.slice(from.lastIndexOf('.') + 1), convert]);
+  const fields = new Map(); // "owner.field" → [[field], [old], ...]
+  for (const [from, { to }] of Object.entries(TABLE.aliases)) {
+    if (!fields.has(to)) fields.set(to, [[to.slice(to.lastIndexOf('.') + 1)]]);
+    fields.get(to).push([from.slice(from.lastIndexOf('.') + 1)]);
   }
   const out = {};
   for (const [to, names] of fields) {
@@ -77,14 +100,11 @@ export function aliasTypes() {
     const declared = names.map(([name]) => (Object.hasOwn(properties, name) ? schemaTypes(properties[name]) : undefined));
     const known = declared.filter((types) => types !== undefined);
     if (known.length === 0) {
-      // The schema types none of the field's names (an item or an inline node it leaves open):
-      // each name reads text (a string or a finite number), but where a row converts, the
-      // inline side reads an array: inline-from-string's current name, text-from-inline's old name.
-      const converts = names.slice(1).map(([, convert]) => convert);
-      names.forEach(([name, convert], i) => {
-        const inline = i === 0 ? converts.includes('inline-from-string') : convert === 'text-from-inline';
-        out[`${type}.${name}`] = inline ? ['array'] : ['string'];
-      });
+      for (const [name] of names) {
+        const key = `${type}.${name}`;
+        if (!Object.hasOwn(UNTYPED, key)) throw new Error(`${key}: the schema gives none of its field's names a type; add it to UNTYPED with what main's reader accepted`);
+        out[key] = UNTYPED[key].types;
+      }
       continue;
     }
     const fallback = known.includes(null) ? null : [...new Set(known.flat())];

@@ -11,9 +11,9 @@
 //   whitespace, or an empty array; or when its value is not of a type spec/blocks.schema.json
 //   gives that name on that block type or item (alias-types.js, made from the schema). A name
 //   the schema does not declare takes the types the schema gives the other names of its field;
-//   where it types none of them (an item or an inline node it leaves open), each reads text, but
-//   the inline side of a convert reads an array (inline-from-string's current name,
-//   text-from-inline's old name). A name typed as text reads a string or a finite number.
+//   where it types none of them (an item or an inline node it leaves open), each takes the types
+//   main's reader accepted (UNTYPED in scripts/generate-alias-types.mjs; null: any). A name
+//   typed as text reads a string or a finite number.
 // - The first name that is not absent wins: the field's own (current) name first, then its
 //   old names in TABLE's order.
 // - When every name is absent, the current name's stored value is read as it is: nothing is

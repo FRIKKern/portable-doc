@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
-import { OUT, aliasTypesSource } from '../../scripts/generate-alias-types.mjs';
+import { OUT, UNTYPED, aliasTypesSource, ownerProperties } from '../../scripts/generate-alias-types.mjs';
 import { canon } from './golden-reads.mjs';
 import { toMarkdown, toPlainText } from './index.js';
 import { aliasTable, absent, namesOf, readField, typesOf } from './read-aliases.js';
@@ -19,15 +19,18 @@ const text = (block) => toPlainText([block]);
 const t = (value) => [{ type: 'text', value }];
 const kid = [{ type: 'paragraph', content: t('kid') }];
 
-test('one table in the pack file\'s shape: 15 rows, sorted, each old name and its current name on one block type', () => {
+test('one table in the pack file\'s shape: 27 rows, sorted, each old name and its current name on one owner', () => {
   assert.deepEqual(Object.keys(TABLE), ['_comment', 'aliases']);
   const rows = Object.entries(TABLE.aliases);
-  assert.equal(rows.length, 15);
+  assert.equal(rows.length, 27);
   assert.deepEqual(rows.map(([from]) => from), rows.map(([from]) => from).sort());
+  const owner = (key) => key.slice(0, key.lastIndexOf('.'));
   for (const [from, row] of rows) {
-    assert.equal(row.to.split('.')[0], from.split('.')[0], from);
+    assert.equal(owner(row.to), owner(from), from);
+    // An owner is a block type, a block type and a path to its items, or an inline node type.
+    assert.match(owner(from), /^(?:[a-z][\w-]*(?:\.[a-z]\w*(?:\[\])?)*|inline:[a-z]\w*)$/i, from);
     assert.deepEqual(Object.keys(row).filter((k) => !['to', 'reason', 'convert'].includes(k)), [], from);
-    assert.ok([undefined, 'inline-from-string', 'columns-from-cols', 'head-from-header'].includes(row.convert), from);
+    assert.ok([undefined, 'inline-from-string', 'columns-from-cols', 'head-from-header', 'text-from-inline'].includes(row.convert), from);
   }
   assert.ok(Object.isFrozen(TABLE.aliases['code.code']));
 });
@@ -41,7 +44,7 @@ test('the rule: absent is undefined, null, a blank string or an empty array; the
   assert.deepEqual(readField({ type: 'code', code: '  ' }, 'value'), { name: 'value', value: undefined });
   // A field with no old names, and a block type with none, read the field alone.
   assert.deepEqual(readField({ type: 'code', footer: ' ' }, 'footer'), { name: 'footer', value: ' ' });
-  assert.deepEqual(readField({ type: 'note', text: 't' }, 'content'), { name: 'content', value: undefined });
+  assert.deepEqual(readField({ type: 'divider', text: 't' }, 'content'), { name: 'content', value: undefined });
   // A value of a type the schema does not give the name is absent too.
   assert.deepEqual(readField({ type: 'heading', content: 'Hi', text: 'Yo' }, 'content'), { name: 'text', value: 'Yo' });
   assert.deepEqual(readField({ type: 'heading', content: 'Hi' }, 'content'), { name: 'content', value: 'Hi' });
@@ -60,8 +63,8 @@ test('alias-types.js is what scripts/generate-alias-types.mjs makes from the sch
 
 test('each name\'s types are read from spec/blocks.schema.json: every name of every aliased field has some, and a name the schema leaves out takes those of its field\'s other names', () => {
   for (const { to } of Object.values(TABLE.aliases)) {
-    const [type, field] = to.split('.');
-    for (const name of namesOf(type, field)) assert.ok(typesOf(type, name)?.length, `${type}.${name}`);
+    const [owner, field] = [to.slice(0, to.lastIndexOf('.')), to.slice(to.lastIndexOf('.') + 1)];
+    for (const name of namesOf(owner, field)) assert.ok(typesOf(owner, name)?.length || UNTYPED[`${owner}.${name}`]?.types === null, `${owner}.${name}`);
   }
   assert.deepEqual(typesOf('heading', 'content'), ['array']);
   assert.deepEqual(typesOf('heading', 'text'), ['string']);
@@ -69,6 +72,23 @@ test('each name\'s types are read from spec/blocks.schema.json: every name of ev
   // Not declared in the schema: posterAt (new) and language (never in the spec).
   assert.deepEqual(typesOf('asciicast', 'posterAt'), typesOf('asciicast', 'poster'));
   assert.deepEqual(typesOf('code', 'language'), typesOf('code', 'lang'));
+});
+
+test('UNTYPED holds only names of aliased fields the schema types none of the names of, each with why: a name leaves it when the schema types it, and it only shrinks', () => {
+  // A name enters this map only in the change that makes it an alias while the schema gives it no
+  // types; its type is what main's reader accepted. It leaves when the schema types it.
+  const names = new Set();
+  for (const [from, { to }] of Object.entries(TABLE.aliases)) names.add(from).add(to);
+  assert.equal(Object.keys(UNTYPED).length, 14, 'UNTYPED\'s length is pinned: it only shrinks');
+  for (const [key, { types, why }] of Object.entries(UNTYPED)) {
+    assert.ok(names.has(key), `${key}: not a name in the alias table`);
+    assert.ok(typeof why === 'string' && why.trim() !== '', `${key}: says why`);
+    assert.ok(types === null || (Array.isArray(types) && types.length), key);
+    const [owner, name] = [key.slice(0, key.lastIndexOf('.')), key.slice(key.lastIndexOf('.') + 1)];
+    assert.ok(!Object.hasOwn(ownerProperties(owner), name), `${key}: the schema types it, so it leaves UNTYPED`);
+    // Used as it is: an entry whose field the schema types through another name would be ignored.
+    assert.deepEqual(typesOf(owner, name), types, `${key}: alias-types.js does not take its types from UNTYPED`);
+  }
 });
 
 test('a block with two old names for one field reads and compares as the first old name in table order: code { code: a, text: b } is a', () => {
