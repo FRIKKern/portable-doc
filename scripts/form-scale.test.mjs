@@ -43,9 +43,10 @@ test('a scale with any finite bound renders at once, with at most SCALE_MAX_OPTI
   }
 });
 
+// -1e16 plus 0 to 100: past 2^53 numbers are two apart, so 101 sums give 51 distinct options.
 test('min -1e16 renders a counted scale: the options past 2^53 that repeat are shown once', () => {
   const html = renderPortableDocument(form({ min: -1e16 }));
-  assert.deepEqual({ options: optionsIn(html).length, html: html.length, markdown: toMarkdown(form({ min: -1e16 })).length }, PINNED);
+  assert.deepEqual({ options: optionsIn(html).length, html: html.length, markdown: toMarkdown(form({ min: -1e16 })).length }, { options: 51, html: 6338, markdown: 58 });
 });
 
 test('the scale offers min through min + 100, and nothing when max is below min', () => {
