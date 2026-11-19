@@ -13,7 +13,8 @@ Serves the doc, rendered as render --format html does, on 127.0.0.1 and reloads 
 the file changes. A broken doc shows explain's words above the last version that rendered.
   --port <n>   the port (default 4317, or any free one when that is taken; 0 picks one)
   --open       open the page in the system browser
-Runs until Ctrl-C. Exit: 0 stopped, 2 usage error, unreadable file, port in use, or @portable-doc/react not built.`;
+Runs until Ctrl-C, which waits up to PORTABLE_DOC_CLOSE_GRACE_MS (default 1000) for each tab to take its end.
+Exit: 0 stopped, 2 usage error, bad PORTABLE_DOC_CLOSE_GRACE_MS, unreadable file, port in use, or @portable-doc/react not built.`;
 
 const flags = { '--port': 'port=', '--open': 'open' };
 
@@ -47,7 +48,8 @@ Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
   render, and the server keeps running.
 - \`--open\` opens the page with \`open\` (macOS) or \`xdg-open\`. Ctrl-C closes the
   watcher, ends each open tab's event stream cleanly (a tab that never reads is
-  cut after \`CLOSE_GRACE_MS\`, one second, or after
-  \`PORTABLE_DOC_CLOSE_GRACE_MS\` milliseconds when that is set), and exits 0.
+  cut after a grace), and exits 0. The grace is \`PORTABLE_DOC_CLOSE_GRACE_MS\`
+  milliseconds, 1000 when it is unset or empty; any value but a whole number of
+  0 or more is refused with a message, and the exit is 2.
 - A second Ctrl-C while it stops ends the server at once: open streams are cut,
   not ended, and the process dies of the signal (exit 130 in a shell).`;

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
-import { CLOSE_GRACE_MS, preview, startPreview } from './preview.js';
+import { CLOSE_GRACE_MS, closeGraceMs, preview, startPreview } from './preview.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
@@ -315,4 +315,23 @@ test('a client that never reads cannot hold the stop: close() cuts it once the g
 
 test(`by default, close() cuts a client that never reads once CLOSE_GRACE_MS (${CLOSE_GRACE_MS} ms) is up`, async (t) => {
   assert.equal(await stopStuck(t, 'Stuck by default', (session) => session.close(), CLOSE_GRACE_MS), 'aborted');
+});
+
+test('the command takes its grace from PORTABLE_DOC_CLOSE_GRACE_MS: unset or empty is the default, a whole number of 0 or more is used, anything else is refused', () => {
+  const grace = (value) => closeGraceMs(value === undefined ? {} : { PORTABLE_DOC_CLOSE_GRACE_MS: value });
+  for (const [value, ms] of [[undefined, CLOSE_GRACE_MS], ['', CLOSE_GRACE_MS], ['0', 0], ['20', 20], ['30000', 30_000]]) assert.equal(grace(value), ms, String(value));
+  for (const value of [' 20', '20 ', 'abc', '-5', '1.5', '1e3', '0x10', '99999999999999999999']) {
+    assert.throws(() => grace(value), { message: `PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds, 0 or more, not "${value}"` }, value);
+  }
+});
+
+test('preview refuses a bad PORTABLE_DOC_CLOSE_GRACE_MS before it serves anything, and says why', async () => {
+  const child = spawn(process.execPath, [bin, 'preview', docFile(heading('Bad grace')), '--port', '0'], { env: { ...process.env, PORTABLE_DOC_CLOSE_GRACE_MS: '-5' } });
+  let out = '';
+  let err = '';
+  // A preview that serves instead prints its URL: stop it there, so the test fails, not hangs.
+  child.stdout.on('data', (d) => ((out += d), child.kill('SIGKILL')));
+  child.stderr.on('data', (d) => (err += d));
+  const code = await new Promise((resolve) => child.on('exit', resolve));
+  assert.deepEqual({ code, out, err }, { code: 2, out: '', err: 'portable-doc preview: PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds, 0 or more, not "-5"\n' });
 });

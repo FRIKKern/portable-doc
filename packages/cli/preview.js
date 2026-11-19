@@ -15,9 +15,18 @@ import { explainError, shown } from './words.js';
 const HOST = '127.0.0.1';
 // How long stopping waits for open /events streams to take their end. Only a client that
 // never reads uses it up; it is a deadline on that wait, not a measure of work.
-// PORTABLE_DOC_CLOSE_GRACE_MS, a whole number of milliseconds, sets another for the command.
 export const CLOSE_GRACE_MS = 1000;
-const graceFromEnv = (value) => (/^\d+$/.test(value ?? '') ? Number(value) : CLOSE_GRACE_MS);
+
+/**
+ * The command's grace, from PORTABLE_DOC_CLOSE_GRACE_MS: CLOSE_GRACE_MS when it is unset or
+ * empty, else a whole number of milliseconds, 0 or more. Anything else throws, naming it.
+ */
+export function closeGraceMs(env = process.env) {
+  const value = env.PORTABLE_DOC_CLOSE_GRACE_MS ?? '';
+  if (value === '') return CLOSE_GRACE_MS;
+  if (/^\d+$/.test(value) && Number.isSafeInteger(Number(value))) return Number(value);
+  throw new Error(`PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds, 0 or more, not "${shown(value)}"`);
+}
 const DEFAULT_PORT = 4317;
 const DEBOUNCE_MS = 120;
 
@@ -229,6 +238,12 @@ export async function preview(files, opts, io, { load, renderHtml, UsageError, s
     if (!/^\d+$/.test(opts.port) || port > 65535) throw new UsageError(`--port must be 0 to 65535, not "${shown(opts.port)}"`);
   }
   const [file] = files;
+  let graceMs;
+  try {
+    graceMs = closeGraceMs();
+  } catch (error) {
+    return io.stderr(`portable-doc preview: ${error.message}\n`), 2;
+  }
   const probe = await renderHtml([]);
   if (probe.missing || stylesheet() === null) return io.stderr(`portable-doc: ${probe.missing ?? 'html needs @portable-doc/react built; run "npm run react:build" in the repo'}\n`), 2;
   const first = await load(file, io);
@@ -252,6 +267,6 @@ export async function preview(files, opts, io, { load, renderHtml, UsageError, s
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
   });
-  await session.close({ graceMs: graceFromEnv(process.env.PORTABLE_DOC_CLOSE_GRACE_MS) });
+  await session.close({ graceMs });
   return 0;
 }
