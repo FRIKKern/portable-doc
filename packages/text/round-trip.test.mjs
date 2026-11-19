@@ -36,18 +36,31 @@ test('the forms cover every schema type, vary values past the golden, write no a
   assert.deepEqual(Object.keys(contexts), ['in a list item', 'in a quote']);
 });
 
+// The quote context: a callout, written as `> [!tone]`, whose body holds the form.
+const QUOTED = Object.keys(contexts).find((where) => /quote|callout/.test(where));
+const fenceReason = (block) => checkFence([block], new Set()).reason;
+
 test('round-trip mode: each form import accepts comes back exactly; any other is written readably and reported with its reason', () => {
   for (const [name, block] of FORMS) {
     assert.deepEqual(validate({ blocks: [block] }), { ok: true }, `${name}: the form is not a valid block`);
     const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
+    // In a callout, the form is decided on its own inside the callout's quote: kept, or listed under its own path.
+    if (name.endsWith(` ${QUOTED}`)) {
+      const inner = block.slots.body[0];
+      if (keepable(inner)) assert.deepEqual([lost, fromMarkdown(markdown)], [[], [block]], `${name}: import accepts it, so it comes back exactly`);
+      else {
+        assert.deepEqual(lost, [{ path: '/blocks/0/slots/body/0', id: inner.id ?? null, type: inner.type, reason: fenceReason(inner) }], `${name}: listed under its own path, with the fence's reason`);
+        assert.match(markdown, /^> \[!info\] Note\n/, `${name}: the callout is still written in its own Markdown`);
+      }
+      continue;
+    }
     // The allowlist rule, asserted on its own: a type a fence may not hold is kept only by its own Markdown.
     if (!FENCE_TYPES.has(block.type) && !native(block)) assert.equal(lost[0]?.reason, 'type', `${name}: a type outside the allowlist must not pass as kept`);
     if (keepable(block)) {
       assert.deepEqual(lost, [], `${name}: import accepts it, yet it is reported lost`);
       assert.deepEqual(fromMarkdown(markdown), [block], `${name}: not the same block after a round trip`);
     } else {
-      const reason = checkFence([block], new Set()).reason;
-      assert.deepEqual(lost, [{ path: '/blocks/0', id: block.id ?? null, type: block.type, reason }], `${name}: import cannot bring it back, so it is reported with the fence's reason`);
+      assert.deepEqual(lost, [{ path: '/blocks/0', id: block.id ?? null, type: block.type, reason: fenceReason(block) }], `${name}: import cannot bring it back, so it is reported with the fence's reason`);
       assert.equal(markdown, toMarkdown([block]), `${name}: a block round-trip mode cannot keep is written readably`);
     }
   }

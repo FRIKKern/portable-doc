@@ -88,12 +88,23 @@ const orderedList = (b, ctx) => list({ ...b, ordered: true }, ctx);
 const CALLOUT_TONES = ['success', 'warning', 'danger', 'neutral', 'loss', 'peace'];
 
 function callout(b, ctx) {
+  if (ctx.md && ctx.options.mode === 'round-trip') return marked(b, ctx);
   const tone = CALLOUT_TONES.includes(str(b.tone)) ? str(b.tone) : 'info';
   const label = ctx.text(nonblank(b.title) || capitalize(tone), { oneLine: true });
   const inner = ctx.inline(body(b)) || ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : []);
   const head = ctx.md ? `**${label}:**` : `${label}:`;
   const out = inner === '' ? head.replace(/:(\**)$/, '$1') : /\n/.test(inner) ? `${head}\n\n${inner}` : `${head} ${inner}`;
   return ctx.md ? quote(out) : out;
+}
+
+/**
+ * A callout in round-trip mode, in the form import reads: `> [!tone] content`, then each block
+ * of its body inside the quote. round-trip.js keeps it only where it reads back as the block.
+ */
+function marked(b, ctx) {
+  const tone = /^\w+$/.test(str(b.tone)) ? str(b.tone) : 'info';
+  const head = ctx.inline(body(b));
+  return quote(paras(head === '' ? `[!${tone}]` : `[!${tone}] ${head}`, ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : [])));
 }
 
 /** A code block's source: its `value`, read through read-aliases.js; an inline array as its text. */
