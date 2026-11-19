@@ -110,26 +110,17 @@ export function textLeafValue(n: Record<string, unknown>): string {
  * answer to ONE fixture: `api/test/support/fixtures/code-source-aliases.json`
  * (read here by `tests/code-source-aliases.parity.test.ts`).
  *
- * PRECEDENCE is FIRST NON-BLANK, not first-present: a leading key holding "" or
- * whitespace falls through, so the Studio's seeded `value: ""` on every new code
- * block cannot mask a real `code`. `value` leads because it is the canonical
- * field and because bpml/printer.ex has printed exactly this order since it was
- * written. `content` is an array of inline nodes and flattens to its text.
- * Anything non-stringish coerces to '' through `str` and falls through.
+ * WHICH KEY: `value` is the current name and `code`, `content`, `text` its old names, in that
+ * order, all read through the one alias table (`packages/text/read-aliases.js`, the shape of
+ * the pack's `spec/read-aliases.json`): the first name not absent wins (absent = undefined,
+ * null, a blank string, an empty array), else `value` as stored. `content` is an array of
+ * inline nodes and flattens to its text. Anything non-stringish coerces to '' through `str`.
  *
- * The winning key is returned VERBATIM (untrimmed): trimming is the SELECTION
- * rule, never a transform on the source — a `<pre>` shows leading indentation
- * and trailing newlines exactly as authored, so every `value`-shaped block
- * renders byte-identically to before. */
-export const CODE_SOURCE_KEYS = ['value', 'code', 'content', 'text'] as const
-
+ * The winning key is returned VERBATIM (untrimmed): a `<pre>` shows leading indentation and
+ * trailing newlines exactly as authored. */
 export function codeSource(b: Record<string, unknown> | null | undefined): string {
   if (!isMap(b)) return ''
-  for (const key of CODE_SOURCE_KEYS) {
-    const source = codeSourceText(b[key])
-    if (source.trim() !== '') return source
-  }
-  return ''
+  return codeSourceText(fieldOf(b, 'value'))
 }
 
 /** ONE source key read as text: a stringish leaf through `str`, or an
@@ -185,6 +176,7 @@ export function isMap(v: unknown): v is Record<string, unknown> {
 
 export type { StatusRole } from './status-vocab.gen'
 import type { StatusRole } from './status-vocab.gen'
+import { fieldOf } from '../../text/read-aliases.js'
 import {
   MANIFEST_DEFAULT_ROLE,
   MANIFEST_STATUS_ROLES,
@@ -454,7 +446,7 @@ export function inlineText(nodes: unknown): string {
  *
  * FIRST NON-EMPTY, not first-non-blank — a `value` of `' '` WINS and keeps its
  * space. That is deliberately the OPPOSITE of the BLOCK-level `code` contract
- * (`codeSource` above, which trims to select among value|code|content|text): a
+ * (`codeSource` above, which reads `value` and its old names through the alias table): a
  * block's source key is a choice among aliases, an inline chip's `value` is the
  * authored body verbatim.
  *
