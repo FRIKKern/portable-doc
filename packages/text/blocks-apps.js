@@ -2,6 +2,7 @@
 // App blocks: chat transcript rows, forms, schema fields, math, and the task
 // family (board, list, detail, roadmap, status legend).
 
+import { scaleOptions } from './form-scale.js';
 import { numberText } from './number-text.js';
 import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, nonblank, paras, parasOf, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
 import { titled } from './blocks-layout.js';
@@ -67,12 +68,6 @@ const chatPlan = (b, ctx) =>
 
 /* ── forms: one numbered question each, its choices as boxes ── */
 
-function bound(v, dflt) {
-  if (Number.isInteger(v)) return v;
-  const n = typeof v === 'string' ? Number.parseInt(v, 10) : NaN;
-  return Number.isNaN(n) ? dflt : n;
-}
-
 function choices(q, ctx) {
   const opts = (box, labels) => ctx.list(labels.map((l) => ({ head: `${box} ${one(ctx, l)}` })));
   switch (str(q.type) || 'text') {
@@ -80,10 +75,9 @@ function choices(q, ctx) {
     case 'single': return opts('( )', asList(q.options).map(str));
     case 'multi': return opts('[ ]', asList(q.options).map(str));
     case 'scale': {
-      const scale = isMap(q.scale) ? q.scale : {};
-      const min = bound(scale.min, 1);
-      const max = Math.min(bound(scale.max, 5), min + 100);
-      return max >= min ? `Scale: ${min} to ${max}` : '';
+      // The first and last of the options React shows (form-scale.js).
+      const options = scaleOptions(q.scale);
+      return options.length ? `Scale: ${numberText(options[0])} to ${numberText(options[options.length - 1])}` : '';
     }
     default: return '(free text)';
   }
