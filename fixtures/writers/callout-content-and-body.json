@@ -1,0 +1,48 @@
+{
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "warning",
+      "content": [
+        {
+          "type": "text",
+          "value": "Mind the gap"
+        }
+      ],
+      "slots": {
+        "body": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "value": "The second paragraph is the body."
+              }
+            ]
+          },
+          {
+            "type": "list",
+            "ordered": false,
+            "items": [
+              [
+                {
+                  "type": "text",
+                  "value": "one"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "value": "two"
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "markdown": "> **Warning:** Mind the gap\n>\n> The second paragraph is the body.\n>\n> - one\n> - two\n",
+  "text": "Warning: Mind the gap\n\nThe second paragraph is the body.\n\n- one\n- two\n",
+  "html": "<div class=\"bp-callout bp-callout--warning\"><span>Mind the gap</span><div class=\"bp-callout__body\"><p>The second paragraph is the body.</p><ul><li><span>one</span></li><li><span>two</span></li></ul></div></div>"
+}
