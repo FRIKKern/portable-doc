@@ -18,8 +18,9 @@ import { ADDRESS_KEYS, LINKED_BY_RULE } from './util.js';
 const goldens = new URL('../../goldens/blocks/', import.meta.url);
 const MARK = 'https://marker.example/p';
 const SCRIPT = 'javascript:alert(1)';
-// The rows safe_url/1 is held to (the editor's safe-url test lists them, row for row), plus
-// data: and http:// forms. Under a LINKED_BY_RULE entry only a value its rule allows may link.
+// The first 13 rows are copied from packages/editor/src/canvas/__safe_url_paint.test.mjs, which
+// matches safe_url/1 row for row; the rest are data: and http:// forms. Under a LINKED_BY_RULE
+// entry only a value its rule allows may link.
 const URL_CASES = [
   'https://example.com/a', 'mailto:a@b.c', '/media/files/x.png', '#anchor', './rel', 'javascript:alert(1)', ' JaVaScRiPt:alert(1)',
   'java\tscript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)', '//evil.example/x', '/\\evil.example/x',
