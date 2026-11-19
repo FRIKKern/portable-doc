@@ -68,45 +68,40 @@ export function liveInHtml(html, token) {
   return false;
 }
 
-// Markdown, parsed with the repo's markdown-it with every destination kept as written (no scheme
-// check, no normalising, no linkify: a bare URL is text the renderer wrote).
-const markdown = new MarkdownIt('default', { html: true, linkify: false });
+// Markdown has no inert list of its own: it is rendered with the most permissive reader this
+// test can build (raw HTML on, bare URLs linked, every destination kept as written, no scheme
+// check) and that HTML is judged by the HTML rule. Code becomes text in `code`, a link title
+// becomes `title`, an image's alt becomes `alt`.
+const markdown = new MarkdownIt('default', { html: true, linkify: true });
 markdown.validateLink = () => true;
 markdown.normalizeLink = (url) => url;
-// Tokens whose content is shown as text: text, code spans and code blocks, and an image's alt.
-const INERT_CONTENT = new Set(['text', 'text_special', 'code_inline', 'code_block', 'fence', 'image']);
 
-/** Is `token` anywhere live in this Markdown: a destination, raw HTML by the HTML rule, or any other place but text, code, a link title, an image's alt and a fence's info word? */
-export function liveInMarkdown(src, token) {
-  if (!src.includes(token) && !src.includes('&')) return false;
-  const env = {};
-  const stack = [...markdown.parse(src, env)];
-  for (const ref of Object.values(env.references ?? {})) if (ref.href.includes(token)) return true;
-  while (stack.length) {
-    const t = stack.pop();
-    if (t.type === 'html_inline' || t.type === 'html_block') {
-      if (liveInHtml(t.content, token)) return true;
-      continue;
-    }
-    for (const [name, value] of t.attrs ?? []) if (value.includes(token) && name !== 'title' && !(t.type === 'image' && name === 'alt')) return true;
-    // A fence's info word is a language name: a viewer turns it into a class, never a link.
-    if (t.type !== 'inline' && !INERT_CONTENT.has(t.type) && t.content.includes(token)) return true;
-    if (t.children) stack.push(...t.children);
-  }
-  return false;
-}
+/** Is `token` live in this Markdown, read by the permissive reader? */
+export const liveInMarkdown = (src, token) => (src.includes(token) || src.includes('&')) && liveInHtml(markdown.render(src), token);
 
-/** Is `token` live in this output? Plain text writes a link as "label (url)". */
+/** Is `token` live in this output? Plain text has no inert place: the token anywhere counts. */
 const LIVE = {
   html: liveInHtml,
   markdown: liveInMarkdown,
-  text: (out, token) => new RegExp(`\\([^()\\s]*${token}`).test(out),
+  text: (out, token) => out.includes(token),
 };
 let probes = 0;
-/** A probe value: `base`, then a token found nowhere else. */
+/** A probe value: `base` with a token found nowhere else at the end of its path, and in its host when it has one
+ * (so a renderer that keeps only the hostname is seen too). */
 const tokened = (base) => {
   const token = `pdprobe${(++probes).toString(36).padStart(6, '0')}`;
-  return { value: `${base}//${token}`, token };
+  let host = '';
+  try {
+    host = new URL(base).hostname;
+  } catch {
+    try {
+      const url = new URL(base, 'https://base.invalid');
+      if (url.hostname !== 'base.invalid') host = url.hostname;
+    } catch {}
+  }
+  const at = host ? base.toLowerCase().indexOf(host) : -1;
+  const value = at < 0 ? base : `${base.slice(0, at)}${token}.${base.slice(at)}`;
+  return { value: `${value}//${token}`, token };
 };
 
 // ── probing ─────────────────────────────────────────────────────────────
@@ -230,9 +225,11 @@ test('the search: a probe is live everywhere but text, alt, title, aria-label, c
   ]) assert.ok(liveInHtml(html, T), html);
   for (const html of [`<p>${U}</p>`, `<img alt="${U}">`, `<p title="${U}">`, `<b aria-label="${U}">`, `<p class="k-${T}">`, `<h2 id="${T}">`, `<pre><code>${U}</code></pre>`])
     assert.ok(!liveInHtml(html, T), html);
-  for (const md of [`[a](${U})`, `![a](${U})`, `<${U}>`, `[a][1]\n\n[1]: ${U}`, `[1]: <${U}>`, `<a href="${U}">a</a>`, `<i style="background:url(${U})">x</i>`])
+  // Markdown is read as HTML by a reader that links bare URLs too.
+  for (const md of [`[a](${U})`, `![a](${U})`, `<${U}>`, `[a][1]\n\n[1]: ${U}`, `<a href="${U}">a</a>`, `<i style="background:url(${U})">x</i>`, U, `\\[a\\](${U})`,
+    `x <style>@import url(${U});</style>`, `x <script>location='${U}'</script>`])
     assert.ok(liveInMarkdown(md, T), md);
-  for (const md of [U, `\`${U}\``, `    ${U}`, `\`\`\`\n${U}\n\`\`\``, `\`\`\`${T}\nx\n\`\`\``, `[a](/b "${U}")`, `![${U}](/a.png)`, `\\[a\\](${U})`])
+  for (const md of [`\`${U}\``, `    ${U}`, `\`\`\`\n${U}\n\`\`\``, `\`\`\`${T}\nx\n\`\`\``, `[a](/b "${U}")`, `![${U}](/a.png)`, `x ${T} y`])
     assert.ok(!liveInMarkdown(md, T), md);
   assert.ok(LIVE.text(`site (${U})`, T));
   assert.ok(!LIVE.text(`Source: ${U}`, T));
@@ -269,6 +266,9 @@ test('plants: a renderer that puts a field in any live place is caught, a form n
     ['an iframe srcdoc', 'stat', html((u) => `<iframe srcdoc="&lt;a href=&quot;${u}&quot;&gt;x&lt;/a&gt;"></iframe>`), 'stat.unit (html)'],
     ['an SVG <set> of href', 'stat', html((u) => `<svg><a><set attributeName="href" to="${u}"/></a></svg>`), 'stat.unit (html)'],
     ['a made-up element and attribute', 'stat', html((u) => `<pd-portal destination="${u}"></pd-portal>`), 'stat.unit (html)'],
+    ['only the hostname, as an icon query', 'stat', plant('html', (b) => (b.type === 'stat' && https(b.unit) ? `<img alt="" src="https://icons.example/?d=${new URL(b.unit.trim()).hostname}">` : '')), 'stat.unit (html)'],
+    ['an inline <style> mid-paragraph in Markdown', 'stat', plant('markdown', (b) => (https(b.unit) ? `\n\nx <style>@import url(${b.unit});</style>\n` : '')), 'stat.unit (markdown)'],
+    ['an inline <script> mid-paragraph in Markdown', 'stat', plant('markdown', (b) => (https(b.unit) ? `\n\nx <script>location='${b.unit}'</script>\n` : '')), 'stat.unit (markdown)'],
   ];
   for (const [what, type, render, field] of cases) assert.ok(problems(survey(only(type), render)).includes(`live but on neither list: ${field}`), what);
 });
