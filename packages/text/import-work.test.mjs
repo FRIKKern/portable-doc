@@ -12,17 +12,22 @@ const NO_LIMIT = { budget: Infinity, lineBytes: null, notice: IMPORT_WORK.notice
 const LINE = { budget: IMPORT_WORK.budget, lineBytes: 40, notice: IMPORT_WORK.notice };
 const lineNotice = (path, line, lines = 1) => ({ code: 'import_work_spent', rule: 'line', path, line, lines });
 
-test('the work is counted from the text: each line (depth + 1) × (2 + its bytes), the depth from its markers and indentation, carried over lazy lines', () => {
-  assert.deepEqual(prefix('> - 1. x'), { m: 3, w: 3, at: 7, containers: [{ quote: true }, { col: 4 }, { col: 7 }] });
-  assert.deepEqual(prefix('\t-\tx'), { m: 1, w: 7, at: 3, containers: [{ col: 6 }] }, 'a tab runs to the next tab stop');
+test('the work is counted from the text: each line (depth + 1) × (2 + its bytes), the depth from its markers and the list items open from earlier lines, carried over lazy lines', () => {
+  // Items count their columns from after their quote markers, as markdown-it does.
+  assert.deepEqual(prefix('> - 1. x'), { m: 3, w: 3, at: 7, col: 7, quotes: 1, base: 2, containers: [{ quote: true }, { col: 4, q: 1, lo: 2, hi: 2 }, { col: 7, q: 1, lo: 5, hi: 5 }] });
+  assert.deepEqual(prefix('\t-\tx').containers, [{ col: 6, q: 0, lo: 6, hi: 8 }], 'a tab runs to the next tab stop: the content starts at column 8');
+  assert.deepEqual(prefix('-      x').containers, [{ col: 2, q: 0, lo: 2, hi: 2 }], 'five or more columns after a marker: the content column is the one after it');
   assert.equal(prefix('-x').m, 0, 'a marker needs a space, a tab or the line end after it');
   assert.equal(prefix('1234567890. x').m, 0, 'at most 9 digits');
   const work = (md) => planText(md, NO_LIMIT).work;
   assert.equal(work('a'), 3);
   assert.equal(work('> a'), 2 * 5, 'one marker, one space: depth 1 + 0');
-  assert.equal(work('> > a\nlazy'), 4 * 7 + 4 * 6, 'two markers, two spaces: depth 3; a lazy line keeps it');
-  assert.equal(work('> > a\n\nb'), 4 * 7 + 4 * 2 + 1 * 3, 'a blank line keeps it; the line after a blank line starts again');
-  assert.equal(work('- a\n\n    b'), 2 * 5 + 2 * 2 + 3 * 7, 'indentation counts a level per 2 columns');
+  assert.equal(work('> > a\nlazy'), 3 * 7 + 3 * 6, 'two markers: depth 2; a lazy line keeps it');
+  assert.equal(work('> > a\n\nb'), 3 * 7 + 3 * 2 + 1 * 3, 'a blank line keeps it; the line after a blank line starts again');
+  assert.equal(work('- a\n\n    b'), 2 * 5 + 2 * 2 + 2 * 7, 'indentation takes the item open above it');
+  assert.equal(work('a\n\n        b'), 3 + 2 + 11, 'indentation alone opens nothing');
+  assert.equal(work('- a\n- b'), 2 * 5 + 2 * 5, 'a marker at column 0 closes the item before it');
+  assert.equal(work('```\n\t\t\tx\n- y\n```'), 5 + 6 + 5 + 5, 'inside a fence a line is code, at the fence\'s depth');
   assert.equal(work('é'), 4, 'bytes, not characters');
   // Lines and bytes as markdown-it sees them: its core rule 'normalize' first.
   assert.equal(work('a\rb\r\nc\nd'), 4 * 3, '"\\n", "\\r\\n" and a lone "\\r" each end a line');
@@ -56,6 +61,27 @@ const CASES = {
   'lone carriage returns under deep list items': `x\r${X(200, `${X(200, '- ')}y\r`)}`,
   'a carriage return inside each list prefix': X(100, `${X(10, '- \r- ')}y\n`),
   'tabs after markers at every column': Array.from({ length: 120 }, (_, i) => `${X(i % 7, ' ')}${X(i, i % 2 ? '>\t' : '-\t')}t${i}`).join('\n'),
+  // Lines a fence tracker could wrongly take for code, each followed by deep lines.
+  ...Object.fromEntries(Object.entries({
+    'a fence in a list item inside a quote, then the item ends': `> - a\n>\n>   \`\`\`\n> x`,
+    'a quote marker indented differently from the item line': ` > - a\n>   \`\`\`\n> x`,
+    'a closing fence shorter than its opener': '````\ncode\n```\nx',
+    'an info string with a backtick': '``` a`b\nx',
+    'a tilde fence closed by backticks': '~~~\nx\n```\ny',
+    'a fence left open': '```\ncode',
+    'a fence its list item ends': '- ```\n  code\nx',
+    'a fence its quote ends': '> ```\n> code\n\nx',
+    'a fence-like line in indented code': '    ```\nx',
+    'a fence after an HTML block': '<div>\n```\nx\n```\ny',
+    'a fence after an HTML comment across a blank line': '<!--\n\n```\n-->\nx\n```\ny',
+    'a fence in a link reference definition': '[a]:\n```\nx\n```\ny',
+    'a fence indented 3 to 5 columns into its item': '- a\n\n      ```\n  x\n```\ny',
+    'a fence between an item\'s least and true content column': '-   a\n\n  ```\nx\n```\ny',
+    'a closing fence indented 4 columns': '```\n    ```\ncode\n```\ny',
+    'a closing fence indented 4 columns in a quote': '> ```\n>     ```\n> code\n> ```\n> y',
+    'tabs before a fence in a quote': '>\t```\n>\tx\n> ```\ny',
+    'indentation before a marker after a fence': '- a\n  ```\n  b\n  ```\n    - c',
+  }).map(([name, md]) => [name, md.replace(/\bx\b/g, `${X(40, '> ')}x\n${X(40, '- ')}x\n${X(20, '  - ')}x`).replace(/\by\b/g, `${X(40, '> ')}y`)])),
   'NULs under a deep quote': `${X(150, '> ')}${X(300, '\0')}\n${X(150, '> ')}a`,
 };
 
@@ -70,21 +96,26 @@ function seeded(seed) {
   };
 }
 
-// The sweep's size: IMPORT_WORK_SWEEP=20000 runs a longer one (a few minutes) by hand.
+// Each sweep's size: IMPORT_WORK_SWEEP=20000 runs longer ones (several minutes) by hand.
 const SWEEP = Number(process.env.IMPORT_WORK_SWEEP) || 300;
 const netNotices = (r) => r.notices.filter((n) => n.rule === 'net');
 
-test('the text\'s count is never below what markdown-it does, for each case and a seeded sweep, whole and for every run of first lines; so the net never fires', () => {
+test('the text\'s count is never below what markdown-it does, for each case and two seeded sweeps, whole and for every run of first lines; so the net never fires', (t) => {
   const below = [];
   const nets = [];
+  const least = { cases: { ratio: Infinity }, sweeps: { ratio: Infinity } };
+  const measure = (name, md) => {
+    const work = planText(md, NO_LIMIT).work;
+    const real = parsedWork(md);
+    if (work < real) below.push(name);
+    const kind = /^(random|fences) /.test(name) ? 'sweeps' : 'cases';
+    if (real > 0 && work / real < least[kind].ratio) least[kind] = { ratio: work / real, name, md };
+    return work;
+  };
   const check = (name, md) => {
     const lines = normalize(md).split('\n');
-    for (let n = 1; n <= lines.length; n += Math.max(1, Math.floor(lines.length / 6))) {
-      const head = lines.slice(0, n).join('\n');
-      if (planText(head, NO_LIMIT).work < parsedWork(head)) below.push(`${name}, first ${n} lines`);
-    }
-    const work = planText(md, NO_LIMIT).work;
-    if (work < parsedWork(md)) below.push(name);
+    for (let n = 1; n <= lines.length; n += Math.max(1, Math.floor(lines.length / 6))) measure(`${name}, first ${n} lines`, lines.slice(0, n).join('\n'));
+    const work = measure(name, md);
     // markdown-it's own count behind the text's, at budgets that cut the text and at the bound.
     for (const budget of [Math.floor(work / 3), Math.floor(work / 2), work]) {
       for (const lineBytes of [null, 40]) {
@@ -107,6 +138,29 @@ test('the text\'s count is never below what markdown-it does, for each case and 
     });
     check(`random ${d}`, lines.join(rnd(8) === 0 ? ['\r\n', '\r'][rnd(2)] : '\n'));
   }
+  // Weighted toward where a fence tracker may go wrong: fences in quotes and list items, fences
+  // left open or ended by their container, fence-like lines in indented code, HTML and link
+  // definitions, backticks against tildes, short closing fences, info strings with backticks,
+  // tabs with markers, indentation before a marker; and deep lines to show any line wrongly
+  // charged as code.
+  const OPEN = ['', '', '> ', '> > ', '- ', '1. ', '* ', '  ', '   ', '    ', '     ', '\t', '>\t', '-\t', '\t- ', ' - ', '  - ', '-   ', '-     ', '> - ', '- > ', '>     '];
+  const BODY = ['```', '```', '````', '~~~', '~~~~', '```js', '``` a`b', '~~~ a`b', '``', '```   ', '    ```', '\t```', 'code', 'text', '', '', '- x', '> q', '<div>', '<!--', '-->', '<script>', '</script>', '[x]:', '"t', '\t\tx', '\t- t', '  - i', '1. o', '2. o', '-'];
+  const DEEP = ['> ', '- ', '>', '  ', '\t', '1. ', '  - '];
+  for (let d = 0; d < SWEEP; d++) {
+    const lines = [];
+    for (let k = 1 + rnd(40); k > 0; k--) {
+      const r = rnd(12);
+      if (r === 0) lines.push(DEEP[rnd(DEEP.length)].repeat(10 + rnd(60)) + BODY[rnd(BODY.length)]);
+      else if (r === 1) for (let i = 0, n = rnd(20); i < n; i++) lines.push(`${'  '.repeat(i)}- s${i}`);
+      else {
+        let s = '';
+        for (let i = rnd(3); i > 0; i--) s += OPEN[rnd(OPEN.length)];
+        lines.push(s + BODY[rnd(BODY.length)]);
+      }
+    }
+    check(`fences ${d}`, lines.join('\n'));
+  }
+  for (const [kind, l] of Object.entries(least)) t.diagnostic(`least count / markdown-it in the ${kind}: ${l.ratio.toFixed(3)}, ${l.name}: ${JSON.stringify(l.md).slice(0, 400)}`);
   assert.deepEqual(below, []);
   assert.deepEqual(nets, []);
 });
@@ -173,6 +227,6 @@ test('past the budget, open containers close at the cut line, and the rest of th
   const deepItems = Array.from({ length: 120 }, (_, i) => `${X(300, '- ')}a${i}`).join('\n');
   const mid = readMarkdown(`${deepItems}\n\nb0\n\n${X(300, '> ')}c0`);
   assert.deepEqual(mid.blocks.map((b) => b.type), ['list', 'paragraph']);
-  assert.deepEqual(mid.notices, [{ code: 'import_work_spent', rule: 'budget', path: '/blocks/1', line: 59, lines: 66 }]);
-  assert.match(mid.blocks[1].content[0].value, /^- - .* a58 .* a119 b0 > > .* c0$/);
+  assert.deepEqual(mid.notices, [{ code: 'import_work_spent', rule: 'budget', path: '/blocks/1', line: 88, lines: 37 }]);
+  assert.match(mid.blocks[1].content[0].value, /^- - .* a87 .* a119 b0 > > .* c0$/);
 });

@@ -122,13 +122,15 @@ Where it differs from Barkpark, on purpose:
   markdown-it reads: `\n`, `\r\n` and a lone `\r` each end a line, and a NUL
   counts as U+FFFD (its core rule `normalize`). Each line costs
   (depth + 1) × (2 + its UTF-8 bytes). Its depth is its quote and list markers
-  plus one per 2 columns of indentation among them, a tab running to the next
-  stop of 4; a blank line keeps the
-  depth before it, and a line right after a non-blank line keeps at least that
-  line's depth, as it may be lazy. The count is never below what markdown-it
+  plus the list items open from earlier lines that it is indented into:
+  indentation alone opens nothing. A blank line keeps the depth before it, and
+  a line right after a non-blank line keeps at least that line's depth, as it
+  may be lazy. Inside a code fence a line is code, at the fence's depth, but
+  only where the count is sure of the fence; in any doubt the line is counted
+  as any other (`import-depth.js` says when). The count is never below what markdown-it
   does to read the same lines. The budget is 16,000,000 (`IMPORT_WORK`); an
-  ordinary 500 kB document uses at most a quarter of it
-  (`ordinary-work.test.mjs`, seven shapes).
+  ordinary 500 kB document uses at most a sixth of it
+  (`ordinary-work.test.mjs`, nine shapes).
 - Two rules keep text as plain text, every word, with Markdown syntax and tags
   in it shown as literal text, and `readMarkdown` returns one notice per
   rule, `{ code: 'import_work_spent', rule, path, line, lines }`: the path

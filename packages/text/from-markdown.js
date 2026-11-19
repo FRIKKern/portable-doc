@@ -252,7 +252,7 @@ export function readMarkdown(markdown, limits = IMPORT_WORK) {
   try {
     plan = planText(md, limits);
     const read = readPlan(plan, limits);
-    if (read) return { ...read, work: plan.work };
+    if (read) return { blocks: read.blocks, notices: read.notices, work: plan.work };
   } catch {
     // fall through: the text as one code block
   }
@@ -262,7 +262,8 @@ export function readMarkdown(markdown, limits = IMPORT_WORK) {
 /**
  * A plan from planText as { blocks, notices }, or null when the blocks do not validate. Each
  * part read is a fresh document for markdown-it; the net's count runs across them all. The
- * import-work test also reads a plan made with a wrong count here, to see the net catch it.
+ * import-work test also reads a plan made with a wrong count here, to see the net catch it;
+ * `parsed` is markdown-it's own count, for the tests.
  */
 export function readPlan(plan, limits) {
   const state = { ids: new Set() };
@@ -279,7 +280,7 @@ export function readPlan(plan, limits) {
   if (!validate({ blocks }).ok) return null;
   const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
-  return { blocks, notices };
+  return { blocks, notices, parsed: net.work };
 }
 
 /** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */

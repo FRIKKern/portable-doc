@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import { closes, depthReader, isBlank, opener, prefix, within } from './import-depth.js';
+
 // The import's work, counted from the Markdown text alone, before any parse, so every
 // importer that reads the same text cuts it at the same line.
 //
@@ -10,12 +12,13 @@
 //
 // Per line:
 //   blank   = empty, or only spaces and tabs;
-//   prefix  = its leading container markers (`>`, `-` `+` `*` or 1 to 9 digits and `.` or `)`,
-//             a list marker followed by a space, a tab or the line end) and the spaces and
-//             tabs among them; m = the markers, w = the spaces and tabs in columns, a tab
-//             to the next tab stop of 4, as markdown-it counts them;
-//   depth D = m + floor(w / 2). A blank line takes the depth before it, and a line right
-//             after a non-blank line takes at least that line's depth (it may be lazy);
+//   markers = its leading container markers (`>`, `-` `+` `*` or 1 to 9 digits and `.` or
+//             `)`, a list marker followed by a space, a tab or the line end);
+//   depth D = how many containers it may sit in (import-depth.js): its markers, plus the list
+//             items open from earlier marker lines that its text sits inside; inside a code
+//             fence the tracker is sure of, the fence's opening line's depth. A blank line
+//             takes the depth before it, and a line right after a non-blank line takes at
+//             least that line's depth (it may be lazy);
 //   cost    = (D + 1) × (2 + its UTF-8 bytes): one scan of the line and its line end for
 //             each container it may sit in, and one at the top.
 // The work is the sum. It is never below what markdown-it does to parse the same lines
@@ -33,105 +36,17 @@
 
 /**
  * The import's limits and the notice it gives past them. lineBytes is the pack's value; null
- * until it lands. An ordinary 500 kB document uses at most a quarter of the budget
+ * until it lands. An ordinary 500 kB document uses at most a sixth of the budget
  * (ordinary-work.test.mjs).
  */
 export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, lineBytes: null, notice: 'import_work_spent' });
 
-const SP = (ch) => ch === 32 || ch === 9;
-const isBlank = (line) => {
-  for (let i = 0; i < line.length; i++) if (!SP(line.charCodeAt(i))) return false;
-  return true;
-};
+export { prefix };
+
 const bytes = (line) => Buffer.byteLength(line);
 
 /** The text as markdown-it's core rule 'normalize' leaves it. */
 export const normalize = (markdown) => markdown.replace(/\r\n?/g, '\n').replace(/\0/g, '\uFFFD');
-
-/** A list marker's end in `line` at `i` (the index after it), or -1. */
-function listMarker(line, i) {
-  const end = (j) => j >= line.length || SP(line.charCodeAt(j));
-  const ch = line.charCodeAt(i);
-  if ((ch === 45 || ch === 43 || ch === 42) && end(i + 1)) return i + 1;
-  let j = i;
-  while (j < line.length && j - i < 9 && line.charCodeAt(j) >= 48 && line.charCodeAt(j) <= 57) j++;
-  if (j > i && (line.charCodeAt(j) === 46 || line.charCodeAt(j) === 41) && end(j + 1)) return j + 1;
-  return -1;
-}
-
-/**
- * The prefix of `line`: m markers, w whitespace columns (a tab to the next stop of 4), `at` where the text after
- * it starts, and its containers in order as `{ quote: true }` or `{ col }`, a list item's
- * least content column (its marker's end plus one), columns counted with tab stops of 4.
- */
-export function prefix(line) {
-  let i = 0;
-  let m = 0;
-  let w = 0;
-  let col = 0;
-  const containers = [];
-  for (;;) {
-    while (i < line.length && SP(line.charCodeAt(i))) {
-      const width = line.charCodeAt(i++) === 9 ? 4 - (col % 4) : 1;
-      w += width;
-      col += width;
-    }
-    if (line.charCodeAt(i) === 62) {
-      m++;
-      i++;
-      col++;
-      containers.push({ quote: true });
-      continue;
-    }
-    const end = listMarker(line, i);
-    if (end === -1) return { m, w, at: i, containers };
-    m++;
-    col += end - i;
-    i = end;
-    containers.push({ col: col + 1 });
-  }
-}
-
-/** Where `line` goes on inside `containers` (the index after their prefix), or -1 when one of them ends. */
-function within(line, containers) {
-  let i = 0;
-  let col = 0;
-  const space = () => {
-    const tab = line.charCodeAt(i++) === 9;
-    col = tab ? col + 4 - (col % 4) : col + 1;
-  };
-  for (const c of containers) {
-    if (c.quote) {
-      while (i < line.length && SP(line.charCodeAt(i))) space();
-      if (line.charCodeAt(i) !== 62) return -1;
-      i++;
-      col++;
-    } else {
-      while (i < line.length && col < c.col && SP(line.charCodeAt(i))) space();
-      if (col < c.col && i < line.length) return -1;
-    }
-  }
-  return i;
-}
-
-/** A fence opener at `at`: { char, len }, or null. */
-function opener(line, at) {
-  const ch = line[at];
-  if (ch !== '`' && ch !== '~') return null;
-  let len = 0;
-  while (line[at + len] === ch) len++;
-  if (len < 3 || (ch === '`' && line.indexOf('`', at + len) !== -1)) return null;
-  return { char: ch, len };
-}
-
-/** Whether `line` from `at` closes `fence`: its marker, at least as long, then only spaces and tabs. */
-function closes(line, at, fence) {
-  let i = at;
-  while (i < line.length && SP(line.charCodeAt(i))) i++;
-  let len = 0;
-  while (line[i + len] === fence.char) len++;
-  return len >= fence.len && isBlank(line.slice(i + len));
-}
 
 /**
  * The text's plan: { work, parts, notices }. `parts` are, in order, { read: text, line } to parse
@@ -157,29 +72,24 @@ export function planText(markdown, limits = IMPORT_WORK) {
   };
   let work = 0;
   let spent = false;
-  let before = 0;
-  let afterBlank = true;
+  const depth = depthReader();
   let fence = null; // { containers, char, len, line }
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
     const blank = isBlank(line);
     const long = limits.lineBytes !== null && !blank && bytes(line) > limits.lineBytes;
-    const at = fence ? within(line, fence.containers) : -1;
-    if (fence && at === -1) fence = null; // its container ended, and the fence with it
+    const inside = fence ? within(line, fence.containers) : null;
+    if (fence && inside === null) fence = null; // its container ended, and the fence with it
     let cost;
     if (long) {
       cost = bytes(line);
-      before = 0;
-      afterBlank = true;
+      depth.reset();
     } else {
-      const p = prefix(line);
-      const D = blank ? before : afterBlank ? p.m + Math.floor(p.w / 2) : Math.max(p.m + Math.floor(p.w / 2), before);
-      cost = (D + 1) * (2 + bytes(line));
-      before = D;
-      afterBlank = blank;
+      cost = (depth.next(line) + 1) * (2 + bytes(line));
       if (fence) {
-        if (closes(line, at, fence)) fence = null;
+        if (closes(line, inside.at, fence)) fence = null;
       } else {
+        const p = prefix(line);
         const f = opener(line, p.at);
         if (f) fence = { ...f, containers: p.containers, line };
       }
@@ -203,8 +113,7 @@ export function planText(markdown, limits = IMPORT_WORK) {
         // the long line's place, so the lines after it keep their numbers.
         start = n;
         read.push(fence.line);
-        const p = prefix(fence.line);
-        work += (p.m + Math.floor(p.w / 2) + 1) * (2 + bytes(fence.line));
+        work += (depth.next(fence.line) + 1) * (2 + bytes(fence.line));
       }
     } else {
       if (!read.length) start = n;
