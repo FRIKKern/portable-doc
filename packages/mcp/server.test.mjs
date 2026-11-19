@@ -17,6 +17,7 @@ import { READER_WAIT, REQUEST } from './test/request.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const CPU_REPORT = fileURLToPath(new URL('test/cpu-report.mjs', import.meta.url));
+const STALL_FETCH = fileURLToPath(new URL('test/stall-fetch.mjs', import.meta.url));
 const brokenDir = new URL('../../fixtures/broken/', import.meta.url);
 const broken = fs.readdirSync(brokenDir).filter((file) => file.endsWith('.json')).sort()
   .map((file) => ({ file, ...JSON.parse(fs.readFileSync(new URL(file, brokenDir), 'utf8')) }));
@@ -31,9 +32,10 @@ function deepDoc(levels) {
   return { blocks: [block] };
 }
 
-async function connect(env = {}) {
+async function connect(env = {}, preload = []) {
   const client = new Client({ name: 'test', version: '0.0.0' });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...READER_WAIT, ...env }, stderr: 'pipe' }), REQUEST);
+  const args = [...preload.flatMap((file) => ['--import', file]), BIN];
+  await client.connect(new StdioClientTransport({ command: process.execPath, args, env: { ...READER_WAIT, ...env }, stderr: 'pipe' }), REQUEST);
   return client;
 }
 
@@ -236,8 +238,8 @@ describe('over stdio with the SDK client', () => {
 });
 
 describe('render failures are tool errors, never a hang', () => {
-  const renderWith = async (env, doc = SAMPLE) => {
-    const client = await connect({ BARKPARK_TOKEN: FAKE_TOKEN, ...env });
+  const renderWith = async (env, doc = SAMPLE, preload = []) => {
+    const client = await connect({ BARKPARK_TOKEN: FAKE_TOKEN, ...env }, preload);
     try {
       return await call(client, 'render', { doc });
     } finally {
@@ -311,11 +313,15 @@ describe('render failures are tool errors, never a hang', () => {
     toolError(await renderWith({ BARKPARK_URL: gone.base }), /failed: connect ECONNREFUSED/);
     // A reader that never answers while the test runs: only BARKPARK_TIMEOUT_MS can end the
     // call, and the error names it. No clock is read; if the timeout did not fire, the call
-    // would hang until the SDK request's hang deadline (HANG_MS) and fail.
+    // would hang until the SDK request's hang deadline (HANG_MS) and fail. The verdict is which
+    // deadline fires first. Whether the request reaches the reader inside the 300 ms is the
+    // machine's speed, so the test does not ask: a server held busy past them before its fetch
+    // starts (test/stall-fetch.mjs) sends nothing and gets the same verdict.
     const slow = await startFakeReader({ delayMs: 600_000 });
     try {
-      toolError(await renderWith({ BARKPARK_URL: slow.base, BARKPARK_TIMEOUT_MS: '300' }), /no answer within 300 ms/);
-      assert.equal(slow.requests.length, 1, 'the reader got the request and never answered it');
+      for (const preload of [[], [STALL_FETCH]]) {
+        toolError(await renderWith({ BARKPARK_URL: slow.base, BARKPARK_TIMEOUT_MS: '300' }, SAMPLE, preload), /no answer within 300 ms/);
+      }
     } finally {
       await slow.close();
     }
