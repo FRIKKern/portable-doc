@@ -29,7 +29,12 @@ const codeBlock = (value, lang) => (lang ? { type: 'code', value, lang } : { typ
 // heading, paragraph, list item or quote is dropped, never kept empty.
 const blank = (content) => renderInline(content, true) === '';
 const paragraph = (content) => (blank(content) ? [] : [{ type: 'paragraph', content }]);
-const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ? inline(node.children) : [text(flattenText([node]).trim())]);
+// `count`, when given, gets the nodes read on `visits` (a paragraph or heading is one).
+function textOf(node, count = undefined) {
+  if (node.type !== 'paragraph' && node.type !== 'heading') return [text(flattenText([node], count).trim())];
+  if (count) count.visits++;
+  return inline(node.children);
+}
 
 // ── lists ───────────────────────────────────────────────────────────────
 
@@ -121,7 +126,7 @@ function calloutMarker(content) {
  */
 function quote(node, state) {
   const children = node.children;
-  const first = children.length ? textOf(children[0]) : [];
+  const first = children.length ? textOf(children[0], state.count) : [];
   const marker = calloutMarker(first);
   if (marker && state.depth < MAX_NEST) {
     state.depth++;
@@ -130,7 +135,7 @@ function quote(node, state) {
     const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
     return [body.length ? { ...callout, slots: { body } } : callout];
   }
-  const parts = [first, ...children.slice(1).map(textOf)];
+  const parts = [first, ...children.slice(1).map((child) => textOf(child, state.count))];
   const content = joined(parts);
   if (marker) return [{ type: 'callout', tone: marker.tone, content: calloutMarker(content).rest }];
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
@@ -250,14 +255,18 @@ function caption(node) {
   return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-/** A read's state: the ids fences used, and how many callouts deep the read is (quote()). */
-const readState = () => ({ ids: new Set(), depth: 0 });
+/**
+ * A read's state: the ids fences used, how many callouts deep the read is (quote()), and its
+ * count: the tokens markdown-it made and the nodes read, so a test sees no part read twice.
+ */
+const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 } });
 
 // Each block of `nodes` onto `out`, sharing `state`: the ids fences used, and how many callouts
 // deep they are. Where the net first fires, its path is the block's place.
 function convert(nodes, state, out = [], net = undefined) {
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
+    state.count.visits++;
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
     if (net?.fired && net.path === undefined) net.path = `/blocks/${out.length}`;
@@ -295,7 +304,7 @@ export function readMarkdown(markdown, limits = IMPORT_WORK) {
  * A plan from planText as { blocks, notices }, or null when the blocks do not validate. Each
  * part read is a fresh document for markdown-it; the net's count runs across them all. The
  * import-work test also reads a plan made with a wrong count here, to see the net catch it;
- * `parsed` is markdown-it's own count, for the tests.
+ * `parsed` is markdown-it's own count and `count` the read's (readState), for the tests.
  */
 export function readPlan(plan, limits) {
   const state = readState();
@@ -303,7 +312,7 @@ export function readPlan(plan, limits) {
   const blocks = [];
   const paths = {};
   for (const part of plan.parts) {
-    if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line })), state, blocks, net);
+    if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line }), state.count), state, blocks, net);
     else {
       paths[part.rule] ??= `/blocks/${blocks.length}`;
       blocks.push({ type: 'paragraph', content: [text(part.plain)] });
@@ -312,7 +321,7 @@ export function readPlan(plan, limits) {
   if (!validate({ blocks }).ok) return null;
   const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
-  return { blocks, notices, parsed: net.work };
+  return { blocks, notices, parsed: net.work, count: state.count };
 }
 
 /** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */

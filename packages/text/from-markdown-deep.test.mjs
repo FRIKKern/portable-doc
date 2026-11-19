@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
 import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
-import { parsedWork } from './from-markdown.js';
+import { parsedWork, readPlan } from './from-markdown.js';
 import { CASES, callouts, calloutsOverQuotes } from './import-work-cases.mjs';
 import { planText } from './import-work.js';
 import { IMPORT_WORK, fromMarkdown, readMarkdown } from './index.js';
@@ -164,6 +164,15 @@ test('callouts 1000 deep cost what plain quotes as deep cost, in the text\'s cou
     assert.deepEqual(notices.map((n) => [n.code, n.rule, n.path]), [[IMPORT_WORK.notice, 'budget', '/blocks/1']]);
   }
   assert.equal(calloutChain(readMarkdown(marked).blocks[0]).depth, 51);
+});
+
+test('a callout\'s parts are each read once: the nodes the read visits stay within the tokens markdown-it made, for callouts 1000 and 150 deep and over plain quotes', () => {
+  const NO_LIMIT = { ...IMPORT_WORK, budget: Infinity, lineBytes: null };
+  for (const name of ['callouts 1000 deep', 'callouts 150 deep, a paragraph in each', ...Object.keys(CASES).filter((n) => / callouts over \d+ plain quotes/.test(n))]) {
+    const { count } = readPlan(planText(CASES[name], NO_LIMIT), NO_LIMIT);
+    // Each node read once is at most one visit a token; reading a callout's text again at each level of 50 is ten times that and more.
+    assert.ok(count.tokens > 0 && count.visits <= count.tokens, `${name}: ${count.visits} visits, ${count.tokens} tokens`);
+  }
 });
 
 test('callouts over plain quotes, and callouts 150 deep, keep their structure with no notice', () => {
