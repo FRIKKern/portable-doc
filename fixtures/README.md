@@ -1,9 +1,9 @@
 # Fixtures
 
-Cases that this repository and Barkpark are both tested against. Barkpark
-is to copy this folder by script and record the portable-doc commit it copied;
-until that script lands, its copy is made by hand. Both sides then test against
-the same cases at a known version.
+Cases that this repository and Barkpark are both tested against. This
+folder is the one home of these cases. A project that uses them copies them by
+script and records the portable-doc commit it copied; a hand-edited copy is not
+a copy.
 
 | Folder | A case file | Read here by | Read in Barkpark by |
 |---|---|---|---|
