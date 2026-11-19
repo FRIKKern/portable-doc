@@ -114,10 +114,8 @@ export function textLeafValue(n: Record<string, unknown>): string {
  *
  * WHICH KEY: `value` is the current name and `code`, `content`, `text` its old names, in that
  * order, all read through the one alias table (`packages/text/alias-table.js`, the shape of
- * the pack's `spec/read-aliases.json`) by `packages/text/read-aliases.js`: the first name not
- * absent wins (absent = undefined, null, a blank string, an empty array, or a value of a type
- * the schema does not give the name), else `value` as stored. `content` is an array of
- * inline nodes and flattens to its text. Anything non-stringish coerces to '' through `str`.
+ * the pack's `spec/read-aliases.json`) by `packages/text/read-aliases.js`, by the rule stated
+ * in the table's `_comment`. `content` is an array of inline nodes and flattens to its text. Anything non-stringish coerces to '' through `str`.
  *
  * The winning key is returned VERBATIM (untrimmed): a `<pre>` shows leading indentation and
  * trailing newlines exactly as authored. */

@@ -1,0 +1,16 @@
+{
+  "block": {
+    "type": "task-detail",
+    "task": {
+      "title": "T",
+      "criteria": [
+        {
+          "criterion": "c"
+        }
+      ]
+    }
+  },
+  "reads": {
+    "task.criteria[0].text": "c"
+  }
+}

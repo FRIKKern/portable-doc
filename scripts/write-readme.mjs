@@ -1,13 +1,15 @@
-// Writes the alias rule into packages/text/README.md from its one source, the _comment of
-// packages/text/alias-table.js, byte for byte between the README's two alias-rule markers.
-// `node scripts/write-readme.mjs` writes it; write-readme.test.mjs checks the README is what it
-// writes, and that every other copy of the sentence in the repo is byte-equal to the table's.
+// Writes the alias rule into each README that states it (the text package's and the shared
+// alias cases'), from its one source, the _comment of packages/text/alias-table.js, byte for byte
+// between the README's two alias-rule markers. `node scripts/write-readme.mjs` writes them;
+// write-readme.test.mjs checks each README is what it writes, and that every other copy of the
+// sentence in the repo is byte-equal to the table's.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { TABLE } from '../packages/text/alias-table.js';
 
-export const README = fileURLToPath(new URL('../packages/text/README.md', import.meta.url));
+export const READMES = ['packages/text/README.md', 'fixtures/aliases/README.md'];
+const root = fileURLToPath(new URL('..', import.meta.url));
 export const START = '<!-- alias-rule:start -->';
 export const END = '<!-- alias-rule:end -->';
 
@@ -35,6 +37,6 @@ export function withRule(text, sentence = ruleSentence()) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  fs.writeFileSync(README, withRule(fs.readFileSync(README, 'utf8')));
-  console.log(`wrote the alias rule into ${path.relative(process.cwd(), README)}`);
+  for (const readme of READMES) fs.writeFileSync(path.join(root, readme), withRule(fs.readFileSync(path.join(root, readme), 'utf8')));
+  console.log(`wrote the alias rule into ${READMES.join(' and ')}`);
 }

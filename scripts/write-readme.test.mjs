@@ -3,13 +3,15 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { README, ruleSentence, withRule } from './write-readme.mjs';
+import { READMES, ruleSentence, withRule } from './write-readme.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-test('the text README carries the alias rule as scripts/write-readme.mjs writes it from the table', () => {
-  const text = fs.readFileSync(README, 'utf8');
-  assert.equal(text, withRule(text), 'packages/text/README.md: run node scripts/write-readme.mjs');
+test('each README that states the alias rule carries it as scripts/write-readme.mjs writes it from the table', () => {
+  for (const readme of READMES) {
+    const text = fs.readFileSync(`${root}/${readme}`, 'utf8');
+    assert.equal(text, withRule(text), `${readme}: run node scripts/write-readme.mjs`);
+  }
 });
 
 test('every copy of the alias rule in the repo is byte-equal to the sentence in alias-table.js', () => {
@@ -27,7 +29,7 @@ test('every copy of the alias rule in the repo is byte-equal to the sentence in 
       assert.equal(text.slice(index, index + sentence.length), sentence, `${file}: a copy of the alias rule that differs from alias-table.js's`);
     }
   }
-  assert.deepEqual(copies.sort(), ['packages/text/README.md', 'packages/text/read-aliases-rule.test.mjs']);
+  assert.deepEqual(copies.sort(), ['fixtures/aliases/README.md', 'packages/text/README.md', 'packages/text/read-aliases-rule.test.mjs']);
 });
 
 test('the rule is cut from the _comment only where it runs once from its first words to its last clause', () => {

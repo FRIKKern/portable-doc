@@ -1,0 +1,14 @@
+{
+  "block": {
+    "type": "notes",
+    "items": [
+      {
+        "label": "L",
+        "text": "n"
+      }
+    ]
+  },
+  "reads": {
+    "items[0].content": "n"
+  }
+}

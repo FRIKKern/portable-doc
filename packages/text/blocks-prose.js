@@ -55,7 +55,8 @@ const byline = (b, ctx) =>
 
 /* ── lists ── */
 
-const LIST_TYPES = ['list', 'bulletList', 'bullet_list', 'bulleted-list', 'bulleted_list', 'ordered-list', 'numbered_list'];
+// Every spelling of a list block; an item of any of them reads its fields as list.items[].
+export const LIST_TYPES = ['list', 'bulletList', 'bullet_list', 'bulleted-list', 'bulleted_list', 'ordered-list', 'numbered_list'];
 
 /** Nested lists under an item: only list blocks occupy that slot. */
 const listChildren = (item) =>

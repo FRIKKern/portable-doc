@@ -1,0 +1,23 @@
+{
+  "block": {
+    "type": "paragraph",
+    "content": [
+      {
+        "type": "text",
+        "value": "Hello"
+      },
+      {
+        "type": "text",
+        "value": " ",
+        "text": "X"
+      },
+      {
+        "type": "text",
+        "value": "world"
+      }
+    ]
+  },
+  "reads": {
+    "content[1].value": " "
+  }
+}

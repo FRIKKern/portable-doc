@@ -11,7 +11,7 @@ commit it copied; a hand-edited copy is not a copy.
 | `valid/` | one doc that must pass validation |
 | `nesting/` | `{ markdown, blocks }`: `fromMarkdown(markdown)` gives `blocks` |
 | `headings/` | `{ markdown, blocks }`: `fromMarkdown(markdown)` gives `blocks` |
-| `aliases/` | `{ block, reads }`: each field name read on `block` gives its value, `null` for none |
+| `aliases/` | `{ block, reads }`: each field, item field or inline node field read on `block` gives its value, `null` for none |
 | `text-work/` | inputs and rules only; see its README |
 | `round-trip/` | nothing kept; see its README |
 
