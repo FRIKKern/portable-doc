@@ -2,7 +2,7 @@
 // App blocks: chat transcript rows, forms, schema fields, math, and the task
 // family (board, list, detail, roadmap, status legend).
 
-import { numberText, stringOf } from './number-text.js';
+import { numberText } from './number-text.js';
 import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, nonblank, paras, parasOf, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
 import { titled } from './blocks-layout.js';
 import { diffLines } from './diff.js';
@@ -102,7 +102,7 @@ function form(b, ctx) {
 
 /* ── schema fields: "Label: value" ── */
 
-const stringish = (v) => (typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : typeof v === 'boolean' ? stringOf(v) : '');
+const stringish = (v) => (typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : typeof v === 'boolean' ? (v ? 'true' : 'false') : '');
 const dash = (s) => (s.trim() === '' ? '—' : s);
 
 function row(b, ctx, value) {
