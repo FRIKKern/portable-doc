@@ -11,10 +11,12 @@ describe('a number that is not finite renders nothing', () => {
   it('as a column label, an inline code child, an inline node, a table cell and a paragraph', () => {
     for (const bad of [NaN, Infinity, -Infinity]) {
       const label = String(bad)
+      // A column label is read through the alias table, where such a number is not text: the
+      // column is headed by its key, as a column with no label is.
       expect(html({ type: 'table', columns: [{ key: 'kk', label: bad }], rows: [{ kk: 'c' }] } as Block), label).toBe(
-        '<table><thead><tr><th></th></tr></thead><tbody><tr><td><span>c</span></td></tr></tbody></table>',
+        '<table><thead><tr><th><span>kk</span></th></tr></thead><tbody><tr><td><span>c</span></td></tr></tbody></table>',
       )
-      expect(html({ type: 'table', columns: [{ key: 'kk', text: bad }], rows: [{ kk: 'c' }] } as Block), label).toContain('<th></th>')
+      expect(html({ type: 'table', columns: [{ key: 'kk', text: bad }], rows: [{ kk: 'c' }] } as Block), label).toContain('<th><span>kk</span></th>')
       expect(html({ type: 'paragraph', content: [t('Left'), { type: 'code', children: bad }, t('Right')] } as Block), label).toBe('<p>Left<code></code>Right</p>')
       expect(html({ type: 'paragraph', content: [{ type: 'code', children: [bad] }] } as Block), label).toBe('<p><code></code></p>')
       expect(html({ type: 'paragraph', content: [t('a'), bad, t('b')] } as Block), label).toBe('<p>ab</p>')

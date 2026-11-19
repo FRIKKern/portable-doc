@@ -85,7 +85,7 @@ const ITEM = 'in a list item';
 
 test('round-trip mode keeps a block in a list item by a fence of the whole list, and a block in a callout inside the callout\'s own > [!tone] quote', () => {
   const contextual = FORMS.filter(([name]) => Object.keys(contexts).some((where) => name.endsWith(` ${where}`)));
-  assert.equal(contextual.length, 602, 'every base form in each context');
+  assert.equal(contextual.length, 604, 'every base form in each context');
   const native = [];
   let fenced = 0;
   let quoted = 0;

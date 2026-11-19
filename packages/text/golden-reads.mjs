@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import { blockSchema, validate } from '@portable-doc/validate';
-import { aliasTable, convertOf, currentName, namesOf, readField } from './read-aliases.js';
+import { aliasTable, convertOf, currentName, itemOf, namesOf, readItem } from './read-aliases.js';
 
 const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
 
@@ -281,8 +281,9 @@ const INLINE = new Set(['text', 'link', 'code', ...Object.keys(MARK)]);
 function runs(nodes, marks = [], out = []) {
   for (const n of nodes) {
     const own = (n.marks ?? []).map((m) => (m.type === 'link' ? `link:${m.href}` : MARK[m.type] ?? m.type));
-    if (n.type === 'text') out.push({ text: n.value ?? n.text, marks: [...marks, ...own] });
-    else if (n.type === 'code') out.push({ text: n.value, marks: [...marks, 'code'] });
+    // A text leaf's and an inline code node's text, read as the renderers read them.
+    if (n.type === 'text') out.push({ text: itemOf(n, 'inline:text', 'value'), marks: [...marks, ...own] });
+    else if (n.type === 'code') out.push({ text: codeText(n), marks: [...marks, 'code'] });
     else runs(n.children, [...marks, n.type === 'link' ? `link:${n.href}` : MARK[n.type]], out);
   }
   return out.reduce((acc, r) => {
@@ -292,34 +293,58 @@ function runs(nodes, marks = [], out = []) {
     return acc;
   }, []);
 }
-const isInline = (v) => Array.isArray(v) && v.length > 0 && v.every((n) => n && INLINE.has(n.type));
-// The fields of each block type that have old names, from the alias table.
-const ALIASED = new Map();
-for (const { to } of Object.values(aliasTable().aliases)) {
-  const [type, field] = [to.slice(0, to.indexOf('.')), to.slice(to.indexOf('.') + 1)];
-  if (!ALIASED.has(type)) ALIASED.set(type, new Set());
-  ALIASED.get(type).add(field);
+function codeText(n) {
+  const { name, value } = readItem(n, 'inline:code', 'value');
+  return name === 'value' ? value : runs(Array.isArray(value) ? value : []).map((r) => r.text).join('');
 }
+const isInline = (v) => Array.isArray(v) && v.length > 0 && v.every((n) => n && INLINE.has(n.type));
+// The fields of each owner (a block type, or a block type and the path to its items) that have
+// old names, from the alias table; and every owner with the paths that lead to one.
+const ALIASED = new Map();
+const OWNERS = new Set();
+for (const { to } of Object.values(aliasTable().aliases)) {
+  const [owner, field] = [to.slice(0, to.lastIndexOf('.')), to.slice(to.lastIndexOf('.') + 1)];
+  if (!ALIASED.has(owner)) ALIASED.set(owner, new Set());
+  ALIASED.get(owner).add(field);
+  for (let i = owner.indexOf('.'); i !== -1; i = owner.indexOf('.', i + 1)) OWNERS.add(owner.slice(0, i));
+  OWNERS.add(owner);
+}
+// A list item is keyed on list.items[] whatever the list type is spelled.
+const SPELLED = blockSchema.definitions.aliases ?? {};
+const ownType = (type) => (SPELLED[type]?.['x-alias-of'] === 'list' ? 'list' : type);
 
-export function canon(v) {
+/** `v` as compared. */
+export const canon = (v) => canonAt(v, undefined);
+
+/** `v` as compared, `owner` being the item path an object in it sits at, if any ("steps.steps[]"). */
+function canonAt(v, owner) {
   if (isInline(v)) return runs(v);
-  if (Array.isArray(v)) return v.map(canon);
+  if (Array.isArray(v)) return v.map((x) => canonAt(x, owner));
   if (!v || typeof v !== 'object') return v;
   const type = typeof v.type === 'string' ? v.type : '';
+  const own = owner ?? type;
+  const path = owner ?? ownType(type);
+  const inner = (k, x) => (OWNERS.has(`${path}.${k}${Array.isArray(x) ? '[]' : ''}`) ? `${path}.${k}${Array.isArray(x) ? '[]' : ''}` : undefined);
   const out = {};
   for (const [k, x] of Object.entries(v)) {
     // An aliased field and its old names are read below, the way the renderers read them.
-    if (k !== 'id' && !ALIASED.get(type)?.has(k) && !folded(type, k)) out[k] = canon(x);
+    if (k !== 'id' && !ALIASED.get(own)?.has(k) && !folded(own, k)) out[k] = canonAt(x, inner(k, x));
   }
-  for (const field of ALIASED.get(type) ?? []) {
-    if (!namesOf(type, field).some((name) => Object.hasOwn(v, name))) continue;
-    const { name, value } = readField(v, field);
-    if (value === undefined || !(name === field || folded(type, name))) continue;
-    out[field] = name !== field && convertOf(type, name) === 'inline-from-string' && typeof value === 'string' ? runs([{ type: 'text', value }]) : canon(value);
+  for (const field of ALIASED.get(own) ?? []) {
+    if (!namesOf(own, field).some((name) => Object.hasOwn(v, name))) continue;
+    const { name, value } = readItem(v, own, field);
+    // No name remains (each is null or of the wrong type): the renderers show nothing, and canon
+    // keeps a stored current name as it is, so two different stored values never compare equal.
+    if (value === undefined) {
+      if (v[field] !== undefined) out[field] = canonAt(v[field], inner(field, v[field]));
+      continue;
+    }
+    if (!(name === field || folded(own, name))) continue;
+    out[field] = name !== field && convertOf(own, name) === 'inline-from-string' && typeof value === 'string' ? runs([{ type: 'text', value }]) : canonAt(value, inner(field, value));
   }
   return out;
 }
 
 // An old name canon folds into its field. A table's `cols` is kept as it is: the renderers read
 // it for each column's type even beside a real `columns`, and never build a head from it.
-const folded = (type, key) => currentName(type, key) !== undefined && convertOf(type, key) !== 'columns-from-cols';
+const folded = (owner, key) => currentName(owner, key) !== undefined && convertOf(owner, key) !== 'columns-from-cols';

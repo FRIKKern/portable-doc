@@ -1,0 +1,11 @@
+{
+  "block": {
+    "type": "code",
+    "value": "x",
+    "lang": "  ",
+    "language": "py"
+  },
+  "reads": {
+    "lang": "py"
+  }
+}

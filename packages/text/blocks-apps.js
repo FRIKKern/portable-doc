@@ -5,6 +5,7 @@
 import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, nonblank, paras, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
 import { titled } from './blocks-layout.js';
 import { diffLines } from './diff.js';
+import { itemOf } from './read-aliases.js';
 
 const one = (ctx, s) => ctx.text(s, { oneLine: true });
 const STATUS_WORD = { allowed: '✓ allowed', denied: '⊘ denied', canceled: '— canceled' };
@@ -249,8 +250,9 @@ function taskDetail(b, ctx) {
   const stamp = [nonblank(t.created) && `created ${nonblank(t.created)}`, nonblank(t.updated) && `updated ${nonblank(t.updated)}`].filter(Boolean).join(' · ');
   const timeline = asList(t.timeline).map((s) => (isMap(s) ? `${str(s.label)} (${statusText(s.status)})` : '')).filter(Boolean).join(' → ');
   const crit = asList(t.criteria).map((c) => (isMap(c) ? c : {}));
+  const critOwner = t === b ? 'task-detail.criteria[]' : 'task-detail.task.criteria[]';
   const critList = crit.length
-    ? paras(`Criteria · ${crit.filter((c) => truthy(c.met)).length}/${crit.length}`, ctx.list(crit.map((c) => ({ head: one(ctx, str(c.text) || str(c.criterion)), checked: truthy(c.met), body: nonblank(c.evidence) && `↳ ${one(ctx, nonblank(c.evidence))}` })), { task: true }))
+    ? paras(`Criteria · ${crit.filter((c) => truthy(c.met)).length}/${crit.length}`, ctx.list(crit.map((c) => ({ head: one(ctx, str(itemOf(c, critOwner, 'text'))), checked: truthy(c.met), body: nonblank(c.evidence) && `↳ ${one(ctx, nonblank(c.evidence))}` })), { task: true }))
     : '';
   const nBlocks = typeof t.blocks === 'number' ? t.blocks : 0;
   const nBlocked = typeof t.blocked_by === 'number' ? t.blocked_by : 0;
