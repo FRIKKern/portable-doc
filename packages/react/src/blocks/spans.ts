@@ -1,3 +1,4 @@
+import { numberText } from '../../../text/number-text.js'
 export type Span = [number, number, number, number]
 
 export interface SpanLookup {
@@ -15,8 +16,8 @@ export function coverSpans(spans: Span[], lens: number[], keepFirst: boolean): S
     if (cost > left) break
     for (let r = r0; r < Math.min(r0 + rs, lens.length); r++)
       for (let c = c0; c < Math.min(c0 + cs, lens[r]!); c++)
-        if (r !== r0 || c !== c0) covered.add(`${r},${c}`)
-    const origin = `${r0},${c0}`
+        if (r !== r0 || c !== c0) covered.add(`${numberText(r)},${numberText(c)}`)
+    const origin = `${numberText(r0)},${numberText(c0)}`
     if (!(keepFirst && anchors.has(origin))) anchors.set(origin, [rs, cs])
     left -= cost
   }
@@ -31,8 +32,8 @@ function spanCost(lens: number[], r0: number, c0: number, rs: number, cs: number
 }
 
 export function spanAttr(anchors: Map<string, [number, number]>, r: number, c: number): string {
-  const hit = anchors.get(`${r},${c}`)
+  const hit = anchors.get(`${numberText(r)},${numberText(c)}`)
   if (!hit) return ''
   const [rs, cs] = hit
-  return (cs > 1 ? ` colspan="${cs}"` : '') + (rs > 1 ? ` rowspan="${rs}"` : '')
+  return (cs > 1 ? ` colspan="${numberText(cs)}"` : '') + (rs > 1 ? ` rowspan="${numberText(rs)}"` : '')
 }

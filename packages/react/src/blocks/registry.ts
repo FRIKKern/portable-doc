@@ -10,6 +10,7 @@
 
 import type { RenderCtx } from './chrome'
 import { type Block, escapeAttr, escapeHtml, str, isMap } from '../inline'
+import { numberText } from '../../../text/number-text.js'
 import { coreEmitters } from './core'
 import { datavizEmitters } from './dataviz'
 import { formsEmitters } from './forms'
@@ -52,7 +53,7 @@ function withBlockAttributes(html: string, block: Block, ctx: RenderCtx): string
         value != null &&
         !rootHasAttribute(html, name),
     )
-    .map(([name, value]) => (value === true ? ` ${name}` : ` ${name}="${escapeAttr(value)}"`))
+    .map(([name, value]) => (value === true ? ` ${name}` : ` ${name}="${typeof value === 'number' ? numberText(value) : escapeAttr(value)}"`))
     .join('')
   if (suffix === '') return html
   return html.replace(

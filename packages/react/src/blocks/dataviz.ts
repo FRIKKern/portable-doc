@@ -8,7 +8,7 @@
 // `bp-dataviz bp-dataviz--empty` box (the browser twin of pdrender's placeholder).
 
 import { type Block, escapeHtml, escapeAttr, isMap, safeUrl } from '../inline'
-import { numberText } from '../../../text/number-text.js'
+import { numberText, styleAttr, styleOf } from '../../../text/number-text.js'
 import { maxOf, minOf } from '../min-max'
 import type { RenderCtx } from './chrome'
 
@@ -105,7 +105,7 @@ export function sparkSvg(values: number[], cls = 'bp-stat__spark'): string {
       return `${fmt(x)},${fmt(y)}`
     })
     .join(' ')
-  return `<svg class="${cls}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`
+  return `<svg class="${cls}" viewBox="0 0 ${numberText(w)} ${numberText(h)}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`
 }
 
 const VERDICTS = ['loss', 'peace']
@@ -132,7 +132,7 @@ function statHtml(block: unknown, ctx: RenderCtx): string {
   if (max !== null && max > 0) {
     const nv = numeric(value)
     const pct = nv === null ? 0.0 : clamp(nv / max, 0.0, 1.0)
-    bar = `<div class="bp-stat__bar"><i style="width:${fmt(pct * 100)}%"></i></div>`
+    bar = `<div class="bp-stat__bar"><i${styleAttr([styleOf('width', pct * 100, (x) => `${fmt(x)}%`)])}></i></div>`
   }
   const labelHtml = label === '' ? '' : `<div class="bp-stat__l">${escapeHtml(label)}</div>`
   // THE KILDE LAW: a stat is a datum, and a datum carries its provenance.
@@ -365,12 +365,12 @@ const lineage: Emit = (block, ctx) => {
 
 function binClass(bin: number): string {
   if (bin === -1) return 'bp-heat__c--z'
-  return `bp-heat__c--b${Math.min(Math.max(bin, 0), 3)}`
+  return `bp-heat__c--b${numberText(Math.min(Math.max(bin, 0), 3))}`
 }
 
 function dualLegend(ctx: RenderCtx): string {
   let s = `<div class="bp-heat__legend">${ctx.t('less')} `
-  for (let k = 0; k <= 3; k++) s += `<i class="bp-heat__c bp-heat__c--b${k}"></i>`
+  for (let k = 0; k <= 3; k++) s += `<i class="bp-heat__c bp-heat__c--b${numberText(k)}"></i>`
   return s + ` ${ctx.t('more')}</div>`
 }
 
@@ -415,7 +415,7 @@ function heatWidths(grid: number[][], cols: number): Array<[number, number]> {
   })
 }
 
-const heatGap = (pad: number) => (pad > 0 ? `<i style="grid-column:span ${pad}"></i>` : '')
+const heatGap = (pad: number) => (pad > 0 ? `<i${styleAttr([styleOf('grid-column', pad, (x) => `span ${numberText(x)}`)])}></i>` : '')
 
 function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string {
   const maxNum = numeric(get(block, 'max'))
@@ -450,7 +450,7 @@ function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string 
     for (let j = 0; j < width; j++) {
       const v = row[j] ?? 0.0
       const iNorm = clamp(v / maxVal, 0.0, 1.0)
-      cells += `<i class="bp-heat__c" style="--i:${fmt3(iNorm)}" title="${fmt(v)}"></i>`
+      cells += `<i class="bp-heat__c"${styleAttr([styleOf('--i', iNorm, fmt3)])} title="${fmt(v)}"></i>`
     }
     body += label + cells + heatGap(gap)
   })
@@ -458,9 +458,9 @@ function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string 
   const track = rowLabels.length === 0 ? '' : 'auto '
   let legend = `<div class="bp-heat__legend">${ctx.t('less')} `
   for (const i of [0.15, 0.35, 0.55, 0.75, 1.0])
-    legend += `<i class="bp-heat__c" style="--i:${fmt3(i)}"></i>`
+    legend += `<i class="bp-heat__c"${styleAttr([styleOf('--i', i, fmt3)])}></i>`
   legend += ` ${ctx.t('more')}</div>`
-  return `<div class="bp-heat"><div class="bp-heat__grid" style="grid-template-columns:${track}repeat(${cols},minmax(10px,44px))">${head}${body}</div>${legend}</div>`
+  return `<div class="bp-heat"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, (c) => `${track}repeat(${numberText(c)},minmax(10px,44px))`)])}>${head}${body}</div>${legend}</div>`
 }
 
 function heatCalendarHtml(grid: number[][], block: unknown, ctx: RenderCtx): string {
@@ -497,7 +497,7 @@ function heatCalendarHtml(grid: number[][], block: unknown, ctx: RenderCtx): str
   })
 
   const track = rowLabels.length === 0 ? '' : 'auto '
-  return `<div class="bp-heat bp-heat--cal"><div class="bp-heat__scroll"><div class="bp-heat__grid" style="grid-template-columns:${track}repeat(${weeks},12px)">${head}${body}</div></div>${dualLegend(ctx)}</div>`
+  return `<div class="bp-heat bp-heat--cal"><div class="bp-heat__scroll"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', weeks, (w) => `${track}repeat(${numberText(w)},12px)`)])}>${head}${body}</div></div>${dualLegend(ctx)}</div>`
 }
 
 function matrixCell(bin: number, v: number, showVals: boolean): string {
@@ -557,7 +557,7 @@ function heatMatrixExtrasHtml(grid: number[][], block: unknown, ctx: RenderCtx):
   const track = gutter ? 'auto ' : ''
   const cellTrack = showVals ? 'minmax(28px,auto)' : 'minmax(10px,44px)'
   const sumTrack = showMarg ? ' auto' : ''
-  return `<div class="bp-heat bp-heat--mtx"><div class="bp-heat__grid" style="grid-template-columns:${track}repeat(${cols},${cellTrack})${sumTrack}">${head}${body}${foot}</div>${dualLegend(ctx)}</div>`
+  return `<div class="bp-heat bp-heat--mtx"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, (c) => `${track}repeat(${numberText(c)},${cellTrack})${sumTrack}`)])}>${head}${body}${foot}</div>${dualLegend(ctx)}</div>`
 }
 
 const heatmap: Emit = (block, ctx) => {
@@ -616,12 +616,12 @@ function gridSvg(minV: number, maxV: number): string {
   for (let k = 0; k <= 3; k++) {
     const v = minV + ((maxV - minV) * (3 - k)) / 3
     const y = yAt(v, minV, maxV)
-    out += `<line class="bp-chart__grid" x1="${PAD_L}" y1="${fmt(y)}" x2="${VW - PAD_R}" y2="${fmt(y)}"/>`
-    out += `<text class="bp-chart__tick" x="${PAD_L - 6}" y="${fmt(y + 4)}" text-anchor="end">${tickCompact(v)}</text>`
+    out += `<line class="bp-chart__grid" x1="${numberText(PAD_L)}" y1="${fmt(y)}" x2="${numberText(VW - PAD_R)}" y2="${fmt(y)}"/>`
+    out += `<text class="bp-chart__tick" x="${numberText(PAD_L - 6)}" y="${fmt(y + 4)}" text-anchor="end">${tickCompact(v)}</text>`
   }
   return (
     out +
-    `<line class="bp-chart__axis" x1="${PAD_L}" y1="${VH - PAD_B}" x2="${VW - PAD_R}" y2="${VH - PAD_B}"/>`
+    `<line class="bp-chart__axis" x1="${numberText(PAD_L)}" y1="${numberText(VH - PAD_B)}" x2="${numberText(VW - PAD_R)}" y2="${numberText(VH - PAD_B)}"/>`
   )
 }
 
@@ -629,7 +629,7 @@ function plotLine(series: Series[], minV: number, maxV: number, n: number): stri
   return series
     .map((s, si) => {
       const pts = s.points.map((v, i) => `${fmt(xAt(i, n))},${fmt(yAt(v, minV, maxV))}`).join(' ')
-      return `<polyline class="bp-chart__s bp-chart__s${si % 4}" points="${pts}"/>`
+      return `<polyline class="bp-chart__s bp-chart__s${numberText(si % 4)}" points="${pts}"/>`
     })
     .join('')
 }
@@ -645,7 +645,7 @@ function plotBars(series: Series[], minV: number, maxV: number, n: number): stri
         .map((v, i) => {
           const x = PAD_L + slot * i + slot * 0.15 + barW * si
           const y = yAt(v, minV, maxV)
-          return `<rect class="bp-chart__b bp-chart__s${si % 4}" x="${fmt(x)}" y="${fmt(y)}" width="${fmt(barW)}" height="${fmt(Math.max(floorY - y, 0.0))}"/>`
+          return `<rect class="bp-chart__b bp-chart__s${numberText(si % 4)}" x="${fmt(x)}" y="${fmt(y)}" width="${fmt(barW)}" height="${fmt(Math.max(floorY - y, 0.0))}"/>`
         })
         .join(''),
     )
@@ -657,9 +657,9 @@ function xLabelsSvg(labels: string[]): string {
   const first = labels[0] ?? ''
   const last = labels[labels.length - 1] ?? ''
   const y = VH - PAD_B + 16
-  let out = `<text class="bp-chart__tick" x="${PAD_L}" y="${y}" text-anchor="start">${escapeHtml(first)}</text>`
+  let out = `<text class="bp-chart__tick" x="${numberText(PAD_L)}" y="${numberText(y)}" text-anchor="start">${escapeHtml(first)}</text>`
   if (last !== '' && labels.length > 1)
-    out += `<text class="bp-chart__tick" x="${VW - PAD_R}" y="${y}" text-anchor="end">${escapeHtml(last)}</text>`
+    out += `<text class="bp-chart__tick" x="${numberText(VW - PAD_R)}" y="${numberText(y)}" text-anchor="end">${escapeHtml(last)}</text>`
   return out
 }
 
@@ -669,7 +669,7 @@ function legendHtml(series: Series[], ctx: RenderCtx): string {
     series
       .map((s, si) => {
         const label = s.label === '' ? ctx.t('series %{n}', { n: si + 1 }) : s.label
-        return `<span class="bp-chart__key"><i class="bp-chart__swatch bp-chart__s${si % 4}"></i>${escapeHtml(label)}</span>`
+        return `<span class="bp-chart__key"><i class="bp-chart__swatch bp-chart__s${numberText(si % 4)}"></i>${escapeHtml(label)}</span>`
       })
       .join('') +
     '</div>'
@@ -700,7 +700,7 @@ const chart: Emit = (block, ctx) => {
   return (
     `<div class="bp-chart">${capHtml}` +
     `<div class="bp-chart__scroll">` +
-    `<svg viewBox="0 0 ${VW} ${VH}" preserveAspectRatio="none" role="img">` +
+    `<svg viewBox="0 0 ${numberText(VW)} ${numberText(VH)}" preserveAspectRatio="none" role="img">` +
     gridSvg(minV, maxV) +
     plot +
     xLabelsSvg(xLabels) +
@@ -740,7 +740,7 @@ function shareGauges(block: unknown): Gauge[] {
     return {
       label: displayString(get(it, 'label')),
       prop,
-      digit: `${Math.round(prop * 100)}%`,
+      digit: `${numberText(Math.round(prop * 100))}%`,
       note: displayString(get(it, 'note')),
     }
   })
@@ -777,7 +777,7 @@ function countGauges(block: unknown, ctx: RenderCtx): 'epic' | Gauge[] {
   return entries.map(([label, count]) => ({
     label,
     prop: count / maxCount,
-    digit: String(count),
+    digit: numberText(count),
     note: '',
   }))
 }
@@ -805,7 +805,7 @@ function barRow(
   return (
     `<div class="${prefix}__row">` +
     `<span class="${prefix}__l">${escapeHtml(label)}</span>` +
-    `<span class="${prefix}__bar"><i style="width:${fmt(prop * 100)}%"></i></span>` +
+    `<span class="${prefix}__bar"><i${styleAttr([styleOf('width', prop * 100, (x) => `${fmt(x)}%`)])}></i></span>` +
     (digit === null ? '' : `<span class="${prefix}__d">${digit}</span>`) +
     extra +
     `</div>`
@@ -985,7 +985,7 @@ const route: Emit = (block, ctx) => {
   const [fx, fy] = last
 
   const svg =
-    `<svg class="bp-route__map" viewBox="0 0 ${ROUTE_W} ${h}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}" style="display:block;width:100%;max-width:${ROUTE_W}px;height:auto;">` +
+    `<svg class="bp-route__map" viewBox="0 0 ${numberText(ROUTE_W)} ${numberText(h)}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}"${styleAttr(['display:block', 'width:100%', styleOf('max-width', ROUTE_W, (w) => `${numberText(w)}px`), 'height:auto;'])}>` +
     `<path d="${d}" fill="none" stroke="${ROUTE_TRACK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>` +
     `<circle cx="${sx}" cy="${sy}" r="5.5" fill="none" stroke="${ROUTE_START}" stroke-width="3"/>` +
     `<circle cx="${fx}" cy="${fy}" r="5.5" fill="${ROUTE_FINISH}"/>` +

@@ -22,7 +22,7 @@ type Emit = (block: Block, ctx: RenderCtx) => string
 
 // Compose.stringish/1: a string, a finite number or a boolean as text; else "".
 const s = (v: unknown): string =>
-  typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : typeof v === 'boolean' ? String(v) : ''
+  typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : typeof v === 'boolean' ? (v ? 'true' : 'false') : ''
 
 // field_row_article/2 — `html` is pre-escaped by every caller.
 const row = (b: Block, html: string) =>

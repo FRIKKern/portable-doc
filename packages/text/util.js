@@ -2,6 +2,8 @@
 // Shared helpers: coercion, URL safety, Markdown escaping, and the list and
 // table layouts both output modes use.
 
+import { numberText } from './number-text.js';
+
 export const MAX_DEPTH = 100;
 export const TOO_DEEP = 'Nested too deep to show';
 
@@ -19,9 +21,7 @@ export const nonblank = (v) => str(v).trim();
 
 /** Digits for a number: whole numbers in full, others to six significant digits. */
 export function fmtNum(v) {
-  if (!Number.isFinite(v)) return '';
-  if (Number.isInteger(v)) return String(v);
-  return String(Number(v.toPrecision(6)));
+  return Number.isInteger(v) ? numberText(v) : numberText(v, { significant: 6 });
 }
 
 export const capitalize = (s) => (s === '' ? s : s.charAt(0).toUpperCase() + s.slice(1));
@@ -63,12 +63,23 @@ export const LINKED_BY_RULE = Object.freeze({
   'stats.sourceDefault': HTTPS_REF,
 });
 
+const HEX = '0123456789ABCDEF';
+/** A character code in upper-case hex, at least two digits: a loop over its nibbles, not a number written as text. */
+function hexOf(code) {
+  let out = '';
+  do {
+    out = HEX[code & 15] + out;
+    code >>= 4;
+  } while (code);
+  return out.padStart(2, '0');
+}
+
 /** A URL as a Markdown link destination: spaces, brackets and controls
  * encoded; `&` and `\` backslash-escaped, so a parser decodes no entity
  * (`/&#47;host` must stay a path, not become `//host`). */
 export const mdUrl = (url) =>
   url
-    .replace(/[\s()<>\x00-\x1f\x7f]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))
+    .replace(/[\s()<>\x00-\x1f\x7f]/g, (c) => '%' + hexOf(c.charCodeAt(0)))
     .replace(/[&\\]/g, '\\$&');
 
 /** The largest of a list of numbers, or `floor`. A loop, so a long list
