@@ -50,11 +50,14 @@ export function safeUrl(href) {
 export const ADDRESS_KEYS = Object.freeze(['href', 'src', 'poster', 'url']);
 
 /** Fields a renderer links under its own rule, which only ever links a safe address, so a
- * fence needs no check on them. Each names its rule. `source` is a ref, not an address:
- * on ADDRESS_KEYS its commit:, paper: and task: refs would turn the fence into code. */
+ * fence needs no check on them. Each rule is data: a value may be linked only when it
+ * starts with `prefix`, after trimming when `trimmed`. address-fields.test.mjs holds the
+ * renderers to it. `source` (and `sourceDefault`, the source of items without one) is a
+ * ref, not an address: on ADDRESS_KEYS its commit:, paper: and task: refs would turn the
+ * fence into code. */
 export const LINKED_BY_RULE = Object.freeze({
-  source: 'linked only when, trimmed, it starts with https://',
-  sourceDefault: 'the source for items without one: linked only when, trimmed, it starts with https://',
+  source: Object.freeze({ prefix: 'https://', trimmed: true }),
+  sourceDefault: Object.freeze({ prefix: 'https://', trimmed: true }),
 });
 
 /** A URL as a Markdown link destination: spaces, brackets and controls
