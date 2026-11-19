@@ -24,8 +24,9 @@ test('each generated case file is kept in fixtures/ exactly as scripts/write-sha
     if (kept(text)) assert.equal(fs.existsSync(at) && fs.readFileSync(at, 'utf8'), text, `stale: run node scripts/write-shared-cases.mjs (${file})`);
     else assert.ok(!fs.existsSync(at), `${file} is over the size kept in the repository; the script writes it on request`);
   }
-  for (const folder of ['nesting', 'headings', 'text-work', 'round-trip']) {
-    const stray = fs.readdirSync(path.join(FIXTURES, folder)).filter((f) => f.endsWith('.json') && !(`${folder}/${f}` in FILES));
+  for (const dir of [path.join(FIXTURES, 'nesting'), path.join(FIXTURES, 'headings'), path.join(FIXTURES, 'text-work'), path.join(FIXTURES, 'round-trip')]) {
+    const folder = path.basename(dir);
+    const stray = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && !(`${folder}/${f}` in FILES));
     assert.deepEqual(stray, [], `${folder}: a case file no input builds`);
   }
 });
@@ -98,7 +99,9 @@ test('the fixtures README names, for each folder under fixtures/, the tests that
       const at = path.join(FIXTURES, '..', file);
       assert.ok(fs.existsSync(at), `${file} does not exist`);
       const source = fs.readFileSync(at, 'utf8');
-      assert.ok(source.includes(`fixtures/${folder}`) || source.includes(`'${folder}'`), `${file} does not read fixtures/${folder}`);
+      // A path to the folder: `fixtures/<folder>` ending there or at a slash, or this file's `FIXTURES, '<folder>'`.
+      const reads = source.includes(`fixtures/${folder}/`) || source.includes(`fixtures/${folder}'`) || source.includes(`FIXTURES, '${folder}'`);
+      assert.ok(reads, `${file} does not read fixtures/${folder}`);
     }
   }
 });
