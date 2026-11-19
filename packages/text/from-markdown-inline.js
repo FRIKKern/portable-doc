@@ -21,26 +21,23 @@ export const MAX_NEST = 50;
 // taken off, which flattenText parses when it reaches it. So no words are lost, and
 // depth costs no stack: each parse goes PARSE_LEVELS deep at most.
 const PARSE_LEVELS = 2 * (MAX_NEST + 2);
-// Parsing deep source again costs markdown-it time per level, and on one long line
-// (`- - - - …`) its hr rule rescans the rest of the line at each one: characters, not
-// lines. So besides the work budget (IMPORT_WORK, below), one import parses deep source
-// of at most IMPORT_WORK.lengthFactor times its own length. Past either, the rest is kept
-// as its raw text, whitespace collapsed: every word, with any list or quote markers in it.
-// Only hostile input, thousands of levels deep or deep with many lines, gets there.
-
 /** GFM: tables, strikethrough, bare-URL links; raw HTML read so its text can be kept. */
 export const parser = new MarkdownIt('default', { html: true, linkify: true, typographer: false, maxNesting: PARSE_LEVELS });
 // Every link is parsed, and its URL kept as written; util.js safeUrl decides which become links.
 parser.validateLink = () => true;
 parser.normalizeLink = (url) => url;
 
-// The import's work: lines × nesting depth re-scanned. markdown-it tokenizes each
-// container's lines again one level down, so every tokenize call adds its line count,
-// and a line nested d deep is counted d + 1 times, in whichever parse reaches it.
-// Past IMPORT_WORK.budget, containers below the top level are not parsed any more:
-// their lines are kept as deep source, and their text as plain text (flattenText), with
-// the IMPORT_WORK.notice notice. An ordinary document uses at most an eighth of it.
-export const IMPORT_WORK = Object.freeze({ budget: 2_000_000, lengthFactor: 4, notice: 'import_work_spent' });
+// The import's work: what markdown-it re-scans. It tokenizes each container's lines
+// again one level down, so every tokenize call adds the lines it took and their
+// characters: a line nested d deep counts d + 1 times, in whichever parse reaches it.
+// Lines, because markdown-it checks every open container on each line (lazy lines under
+// a deep quote); characters, because on one long line (`- - - - …`) its thematic-break
+// rule rescans the rest of the line at each level. Past IMPORT_WORK.budget, containers
+// below the top level are not parsed any more: their text is kept as plain text, every
+// word (flattenText), with the IMPORT_WORK.notice notice. An ordinary document uses at
+// most an eighth of it. Only hostile input, deep with many lines or thousands of levels
+// on one line, gets past it.
+export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, notice: 'import_work_spent' });
 
 // markdown-it's own tokenize, except that where it would skip the lines too deep to
 // parse (from the first non-blank line in this container to its end) they are kept.
@@ -51,16 +48,17 @@ parser.block.tokenize = (state, startLine, endLine) => {
   env.work ??= 0;
   if ((env.work <= IMPORT_WORK.budget || state.level === 0) && state.level < state.md.options.maxNesting) {
     tokenize(state, startLine, endLine);
-    // The lines this container took: a list item or quote is given the outer end and stops early.
-    env.work += Math.max(0, state.line - startLine);
+    // The lines this container took, and their characters: a list item or quote is given
+    // the outer end and stops early.
+    const end = state.line < state.lineMax ? state.bMarks[state.line] : state.src.length;
+    env.work += Math.max(0, state.line - startLine) + Math.max(0, end - state.bMarks[startLine]);
     return;
   }
   const line = state.skipEmptyLines(startLine);
   if (line >= endLine || state.sCount[line] < state.blkIndent) return void (state.line = line);
   const tok = state.push('deep_source', '', 0);
   tok.content = state.getLines(line, endLine, state.blkIndent, false);
-  env.deepLeft ??= IMPORT_WORK.lengthFactor * state.src.length;
-  tok.meta = env; // the import's budgets, shared by every parse of its deep source
+  tok.meta = env; // the import's budget, shared by every parse of its deep source
   state.line = endLine;
 };
 
@@ -185,12 +183,11 @@ export function flattenText(nodes) {
     if (node.type === 'deep_source') {
       const { content, meta: env } = node.tok;
       stack.push(SEP);
-      if (env.deepLeft >= content.length && env.work <= IMPORT_WORK.budget) {
-        env.deepLeft -= content.length;
+      if (env.work <= IMPORT_WORK.budget) {
         const nodes = tree(parser.parse(content, env));
         for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
       } else {
-        // Past a budget: the rest as plain text, and the import says so.
+        // Past the budget: the rest as plain text, and the import says so.
         env.spent ??= { work: env.work };
         if (!skipping) out += `${out === '' || /\s$/.test(out) ? '' : ' '}${content.replace(/\s+/g, ' ').trim()}`;
       }

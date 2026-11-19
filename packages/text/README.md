@@ -117,15 +117,14 @@ Where it differs from Barkpark, on purpose:
   `MAX_NEST` (50) levels; a list nested deeper is kept as the text of the
   deepest item, its items and their blocks one space apart, as Barkpark does.
   A quote keeps all its text, as one run, at any depth.
-- The import counts its work as lines × nesting depth re-scanned, and has a
-  budget of 2,000,000 (`IMPORT_WORK`). An ordinary document uses a small part
-  of it: a 500 kB one of mixed blocks uses under an eighth. Hostile input
-  thousands of levels deep, or deep with many lines, runs out of it, or out of
-  `IMPORT_WORK.lengthFactor` times its length in re-parsed deep source. Past
-  the budget, the rest is kept as plain text, so Markdown syntax and tags in it
-  show as literal text. No word is lost, the import stays linear in time with
-  no deep stack, and `readMarkdown` returns an `import_work_spent` notice with
-  the path where the plain text starts.
+- The import counts its work as what it re-scans: lines × nesting depth, plus
+  characters. Its budget is 16,000,000 (`IMPORT_WORK`), and an ordinary document
+  uses a small part of it: a 500 kB one of mixed blocks uses about a sixteenth.
+  Hostile input runs out of it: deep with many lines, or thousands of levels on
+  one line. Past the budget, the rest is kept as plain text, so Markdown syntax
+  and tags in it show as literal text. No word is lost, the import stays linear
+  in time with no deep stack, and `readMarkdown` returns an `import_work_spent`
+  notice with the path where the plain text starts.
 
 **Round trip.** For heading, paragraph, list, code, table, blockquote, divider
 and diagram, `fromMarkdown(toMarkdown(doc))` gives back an equivalent doc:

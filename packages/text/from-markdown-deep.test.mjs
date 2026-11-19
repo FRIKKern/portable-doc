@@ -71,7 +71,7 @@ test('100,000 levels of nesting import in under 1.5 s of CPU, with every word ke
 });
 
 // The worst shape review found: lazy continuation lines under a deep quote. markdown-it checks
-// every quote level on each line, so the import's work is lines × depth.
+// every quote level on each line, so the import's work counts lines × depth as well as characters.
 const lazyUnderDeepQuote = () => {
   let md = `${'> '.repeat(300)}l0`;
   for (let i = 1; md.length < 500_000; i++) md += `\n> l${i}`;
@@ -82,14 +82,15 @@ test('the work budget stops lines nested deep at a stated count, keeps every wor
   const md = lazyUnderDeepQuote();
   // A hang guard only, far above the real cost; the budget itself is counted in work.
   const { blocks, notices, work } = underBudget(20_000, () => readMarkdown(md));
-  assert.deepEqual(notices, [{ code: 'import_work_spent', path: '/blocks/0', work: 5_899_296 }]);
+  assert.deepEqual(notices, [{ code: 'import_work_spent', path: '/blocks/0', work: 57_888_896 }]);
   assert.equal(IMPORT_WORK.notice, 'import_work_spent');
-  assert.equal(work, 5_899_296);
+  assert.equal(work, 57_888_896);
   assert.ok(work > IMPORT_WORK.budget);
   assert.deepEqual(blocks, keepsEveryWord(md, 'lazy lines under a deep quote'));
-  // One long line is limited by its length instead, with the same notice.
+  // One long line, thousands of levels deep, runs out of the same budget by its characters.
   const line = readMarkdown(`${'- '.repeat(100_000)}end0`);
   assert.deepEqual(line.notices.map((n) => n.code), ['import_work_spent']);
+  assert.ok(line.work > IMPORT_WORK.budget);
   // Within the budget there is no notice.
   assert.deepEqual(readMarkdown(words(60).map((w, i) => `${'  '.repeat(i)}- ${w}`).join('\n')).notices, []);
 });
