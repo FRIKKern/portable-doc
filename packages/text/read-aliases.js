@@ -6,15 +6,8 @@
 // An owner is what a key names before its field: a block type ("code"), a block type and the
 // path to a list of items in it ("steps.steps[]"), or an inline node type ("inline:text").
 //
-// The rule, word for word as in the table's _comment:
-//   For each field, read the names in order: the current name first, then the old names in
-//   table order. Skip a name that is missing, null, or holds the wrong type. Where the row's
-//   column 'a whitespace-only value under the current name wins' says yes, take the first
-//   remaining name whose value holds any character, whitespace included. Where it says no, take
-//   the first remaining name whose value holds a non-whitespace character, else the first that
-//   holds any character. If none does, take the first remaining name as stored. If no name
-//   remains, the field is empty. A string holds the characters it has; a non-empty array, a
-//   number or a non-empty object holds a non-whitespace character.
+// The rule is the sentence in alias-table.js's _comment, its one source (the text package's
+// README carries a copy written by scripts/write-readme.mjs). readItem below follows it.
 // "Missing" is no own property or undefined. A name's type is what spec/blocks.schema.json gives it
 // on its owner (alias-types.js, made from the schema); a name the schema does not declare takes the
 // types of its field's other names, or, where it types none of them, those main's reader accepted

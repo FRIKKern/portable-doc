@@ -62,21 +62,16 @@ its target instead.
   `text` for `content`, a code block's `code`, `content` or `text` for `value`,
   a table's `header` for `head`, and the other rows of the one alias table in
   `alias-table.js` (the pack's `spec/read-aliases.json`, until it is synced
-  here). Every renderer reads such a field through that table, by one rule:
-  For each field, read the names in order: the current name first, then the
-  old names in table order. Skip a name that is missing, null, or holds the
-  wrong type. Where the row's column 'a whitespace-only value under the
-  current name wins' says yes, take the first remaining name whose value
-  holds any character, whitespace included. Where it says no, take the first
-  remaining name whose value holds a non-whitespace character, else the
-  first that holds any character. If none does, take the first remaining
-  name as stored. If no name remains, the field is empty. A string holds the
-  characters it has; a non-empty array, a number or a non-empty object holds
-  a non-whitespace character. A name's type is the one the schema gives it;
-  a field the schema types as text reads a string or a finite number. The
-  column is yes for a text leaf, an inline code node, a code tab, a table
-  column's label and a task criterion. A table's `cols` gives only each
-  column's type, beside or in place of `columns`.
+  here). Every renderer reads such a field through that table, by one rule,
+  written here from `alias-table.js` by `scripts/write-readme.mjs`:
+  <!-- alias-rule:start -->
+  For each field, read the names in order: the current name first, then the old names in table order. Skip a name that is missing, null, or holds the wrong type. Where the row's column 'a whitespace-only value under the current name wins' says yes, take the first remaining name whose value holds any character, whitespace included. Where it says no, take the first remaining name whose value holds a non-whitespace character, else the first that holds any character. If none does, take the first remaining name as stored. If no name remains, the field is empty. A string holds the characters it has; a non-empty array, a number or a non-empty object holds a non-whitespace character.
+  <!-- alias-rule:end -->
+  A name's type is the one the schema gives it; a field the schema types as
+  text reads a string or a finite number. The column is yes for a text leaf,
+  an inline code node, a code tab, a table column's label and a task
+  criterion. A table's `cols` gives only each column's type, beside or in
+  place of `columns`.
 - **Links.** Only the schemes the renderer allows become links: `http`,
   `https`, `mailto`, `tel`, a root-relative `/path` (not `//host`), and `#`,
   `?`, `./`, `../`. Any other link (`javascript:`, `data:`, …) shows its text only.
