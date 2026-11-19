@@ -2,28 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
 import { FENCE_TYPES } from './from-markdown.js';
-import { behaviourReads, changesRender, filledNames, goldenBlocks, pathName, reads, readsMissing } from './golden-reads.mjs';
+import { READ_ALIASES, behaviourReads, changesRender, filledNames, goldenBlocks, pathName, reads, readsMissing } from './golden-reads.mjs';
 import { toMarkdown, toPlainText } from './index.js';
 
 const RENDERS = { html: (blocks) => renderPortableDocument(blocks, {}), markdown: toMarkdown, text: toPlainText };
 
-// A second name for a key, mapped to the key's own name. Goldens and writers use the
-// canonical name; readers accept the alias for old docs until the format drops it.
-const READ_ALIASES = {
-  'blockquote.attribution': 'blockquote.cite',
-  'callout.text': 'callout.content',
-  'code.code': 'code.value',
-  'code.content': 'code.value',
-  'code.language': 'code.lang',
-  'code.text': 'code.value',
-  'eyebrow.text': 'eyebrow.content',
-  'heading.text': 'heading.content',
-  'paragraph.text': 'paragraph.content',
-  'pullquote.text': 'pullquote.content',
-  'table.cols': 'table.columns',
-  'table.header': 'table.head',
-  'terminal.blocks': 'terminal.children',
-};
 // Aliases a golden still uses, until Barkpark's pack moves it to the canonical name. Only shrinks.
 // Both lists have pinned lengths too.
 const GOLDENS_STILL_USE_ALIAS = ['eyebrow.text', 'heading.text'];

@@ -147,6 +147,19 @@ Lossless mode reads the Markdown back once per block and once for the whole.
 On the block goldens that is about 0.3 ms of CPU a block, some 12 to 14 times
 readable mode.
 
+The round-trip test checks this on every block type the schema names, with
+forms read from the schema and the goldens, not a hand list:
+
+- each golden, with canonical key names and as the pack writes it;
+- each value of a boolean or enum and of a small range (every heading level),
+  and a sample for the other keys;
+- the type empty, and with each array key empty;
+- every string as whitespace.
+
+Each form is tried bare, as a list item's child and inside a callout. A form of
+a type a fence may not hold must be reported lost, unless its own Markdown
+reads back as it, so a type is kept only once import accepts it.
+
 `node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
 text, and the import rules, round trip and hostile input.

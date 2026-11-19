@@ -14,6 +14,25 @@ const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
 // promise and JSON checks, React's element checks, and the prototype's own.
 export const NOT_FIELDS = new Set(['then', 'toJSON', 'constructor', '$$typeof', 'length', '__proto__', 'valueOf', 'toString', 'nodeType', 'props', 'key', 'ref', '_owner', '_store']);
 
+// A second name for a key, mapped to the key's own name. Goldens and writers use the
+// canonical name; readers accept the alias for old docs until the format drops it. Shared by
+// the golden-reads test (which pins it) and the round-trip test (which never writes an alias).
+export const READ_ALIASES = Object.freeze({
+  'blockquote.attribution': 'blockquote.cite',
+  'callout.text': 'callout.content',
+  'code.code': 'code.value',
+  'code.content': 'code.value',
+  'code.language': 'code.lang',
+  'code.text': 'code.value',
+  'eyebrow.text': 'eyebrow.content',
+  'heading.text': 'heading.content',
+  'paragraph.text': 'paragraph.content',
+  'pullquote.text': 'pullquote.content',
+  'table.cols': 'table.columns',
+  'table.header': 'table.head',
+  'terminal.blocks': 'terminal.children',
+});
+
 /** Every golden block whose type is in `types`, as { file, block }, in file order. */
 export function goldenBlocks(types) {
   const out = [];

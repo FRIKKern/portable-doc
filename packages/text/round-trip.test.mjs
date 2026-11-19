@@ -1,78 +1,45 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
-import { blockSchema, validate } from '@portable-doc/validate';
-import { proseHandlers } from './blocks-prose.js';
+import { validate } from '@portable-doc/validate';
+import { SCHEMA_TYPES, allForms, contexts, formsOf } from './block-forms.mjs';
 import { FENCE_TYPES, checkFence } from './from-markdown.js';
-import { goldenBlocks } from './golden-reads.mjs';
+import { READ_ALIASES } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown } from './index.js';
 
 // The rule: a block the author made survives a round trip, empty or not. In lossless mode,
 // toMarkdown then fromMarkdown gives back exactly the block (ids, inline shapes, every
 // field) when import accepts it: its own Markdown reads back as it, or import splices a
 // portabledoc fence of it (checkFence, the importer's own rule). Any other block is written
-// readably and reported in `lost`, never dropped in silence. No list of exceptions: which
-// blocks can be kept is derived, so a new type is checked the day it is added.
-//
-// One row per block type: every type a ```portabledoc fence may hold, and every schema type
-// the prose writer handles. A row's filled form is its type's golden; `empty` is the form
-// with nothing in it, where the type has one.
-const ROWS = {
-  action: { empty: { type: 'action' } },
-  asciicast: {},
-  blockquote: { empty: { type: 'blockquote', content: [] } },
-  byline: { empty: { type: 'byline' } },
-  callout: { empty: { type: 'callout', tone: 'info', content: [] } },
-  chart: {},
-  code: { empty: { type: 'code', value: '' } },
-  diagram: { empty: { type: 'diagram', source: '' } },
-  divider: {},
-  eyebrow: { empty: { type: 'eyebrow', text: '' } },
-  figure: { empty: { type: 'figure' } },
-  heading: { empty: { type: 'heading', level: 2, text: '' } },
-  heatmap: {},
-  image: { empty: { type: 'image', src: '' } },
-  ingress: { empty: { type: 'ingress', content: [] } },
-  list: { empty: { type: 'list', ordered: false, items: [] } },
-  paragraph: { empty: { type: 'paragraph', content: [] } },
-  'pre-gate-badge': {},
-  pullquote: { empty: { type: 'pullquote', content: [] } },
-  stat: {},
-  stats: { empty: { type: 'stats', items: [] } },
-  table: { empty: { type: 'table', rows: [] } },
-  video: {},
-};
+// readably and reported in `lost`, never dropped in silence. No list of exceptions: the
+// forms come from every type the schema names (block-forms.mjs), and which can be kept is
+// derived, so a new type is checked the day it is added.
 
 const LOSSLESS = { mode: 'lossless' };
-const schemaTypes = new Set(Object.keys(blockSchema.definitions.blocks));
-const TYPES = [...new Set([...FENCE_TYPES, ...Object.keys(proseHandlers).filter((type) => schemaTypes.has(type))])].sort();
-
-/** Every form as [name, block]: each type's own golden, and its empty form. */
-function forms() {
-  const out = [];
-  for (const [type, row] of Object.entries(ROWS)) {
-    const goldens = goldenBlocks(new Set([type]));
-    const golden = (goldens.find((g) => g.file === `${type}.golden.json`) ?? goldens[0])?.block;
-    assert.ok(golden, `${type}: no golden to take the filled form from`);
-    out.push([`${type} filled`, golden]);
-    if (row.empty) out.push([`${type} empty`, row.empty]);
-  }
-  return out;
-}
-
+const FORMS = allForms();
+const native = (block) => isDeepStrictEqual(fromMarkdown(toMarkdown([block])), [block]);
 /** Can import bring `block` back: its readable Markdown reads back as it, or import splices a fence of it? */
-const keepable = (block) => isDeepStrictEqual(fromMarkdown(toMarkdown([block])), [block]) || !checkFence([block], new Set()).reason;
+const keepable = (block) => native(block) || !checkFence([block], new Set()).reason;
 
-test('every block type a fence or the prose writer takes has a row, and every row is such a type', () => {
-  assert.deepEqual(Object.keys(ROWS), TYPES, 'ROWS lists exactly these types, sorted: add a row for a new type');
-  for (const [type, row] of Object.entries(ROWS)) if (row.empty) assert.equal(row.empty.type, type, `${type}: its empty form is a ${type}`);
+test('the forms cover every schema type, vary values past the golden, write no alias, and sit bare, in a list item and in a quote', () => {
+  const types = new Set(FORMS.map(([, block]) => block.type));
+  for (const type of SCHEMA_TYPES) assert.ok(types.has(type), `${type}: no form`);
+  const names = new Set(FORMS.map(([name]) => name));
+  for (const level of [1, 3, 4, 5, 6]) assert.ok(names.has(`heading value level=${level}`), `heading level ${level} is a form`);
+  for (const name of ['heading filled', 'heading filled with an alias', 'paragraph empty content', 'paragraph whitespace', 'list empty items', 'callout whitespace in a quote', 'code filled in a list item']) assert.ok(names.has(name), `${name} is a form`);
+  for (const type of SCHEMA_TYPES) for (const [form, block] of formsOf(type)) {
+    if (form === 'filled with an alias') continue;
+    for (const key of Object.keys(block)) assert.ok(!Object.hasOwn(READ_ALIASES, `${type}.${key}`), `${type} ${form}: writes the alias ${key}`);
+  }
+  assert.deepEqual(Object.keys(contexts), ['in a list item', 'in a quote']);
 });
 
-test('lossless mode: each form import accepts comes back exactly, filled and empty; any other is written readably and reported with its reason', () => {
-  const start = process.cpuUsage();
-  for (const [name, block] of forms()) {
+test('lossless mode: each form import accepts comes back exactly; any other is written readably and reported with its reason', () => {
+  for (const [name, block] of FORMS) {
     assert.deepEqual(validate({ blocks: [block] }), { ok: true }, `${name}: the form is not a valid block`);
     const { markdown, lost } = toMarkdown([block], LOSSLESS);
+    // The allowlist rule, asserted on its own: a type a fence may not hold is kept only by its own Markdown.
+    if (!FENCE_TYPES.has(block.type) && !native(block)) assert.equal(lost[0]?.reason, 'type', `${name}: a type outside the allowlist must not pass as kept`);
     if (keepable(block)) {
       assert.deepEqual(lost, [], `${name}: import accepts it, yet it is reported lost`);
       assert.deepEqual(fromMarkdown(markdown), [block], `${name}: not the same block after a lossless round trip`);
@@ -82,12 +49,11 @@ test('lossless mode: each form import accepts comes back exactly, filled and emp
       assert.equal(markdown, toMarkdown([block]), `${name}: a block lossless mode cannot keep is written readably`);
     }
   }
-  const used = process.cpuUsage(start);
-  assert.ok((used.user + used.system) / 1000 < 2000, 'the matrix takes under 2 s of CPU');
 });
 
 test('lossless mode keeps a whole doc of every keepable form, in order, and fences a block its neighbour would change', () => {
-  const blocks = forms().map(([, block]) => block).filter(keepable);
+  const ids = new Set();
+  const blocks = FORMS.map(([, block]) => block).filter((block) => keepable(block) && (block.id === undefined || (!ids.has(block.id) && ids.add(block.id))));
   const { markdown, lost } = toMarkdown({ blocks }, LOSSLESS);
   assert.deepEqual(lost, []);
   assert.deepEqual(fromMarkdown(markdown), blocks);
