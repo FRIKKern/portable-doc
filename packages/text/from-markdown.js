@@ -7,6 +7,7 @@
 import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
 import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
+import { renderInline } from './inline.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 
 const MAX_FENCE_BLOCKS = 50;
@@ -21,7 +22,11 @@ const TONE_ALIASES = { note: 'info', warn: 'warning', error: 'danger' };
 const LISTS = new Set(['bullet_list', 'ordered_list']);
 
 const codeBlock = (value, lang) => (lang ? { type: 'code', value, lang } : { type: 'code', value });
-const paragraph = (content) => (content.length ? [{ type: 'paragraph', content }] : []);
+// Inline content with nothing in it, by toMarkdown's own measure: it writes no text for it.
+// Import can leave a block so (an unsafe image, a script, a blank code span), and such a
+// heading, paragraph, list item or quote is dropped, never kept empty.
+const blank = (content) => renderInline(content, true) === '';
+const paragraph = (content) => (blank(content) ? [] : [{ type: 'paragraph', content }]);
 const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ? inline(node.children) : [text(flattenText([node]).trim())]);
 
 // ── lists ───────────────────────────────────────────────────────────────
@@ -33,7 +38,7 @@ function listItem(item, depth) {
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
       if (depth >= MAX_NEST) out.push(...(out.length ? [text(' ')] : []), text(flattenText([child]).trim()));
-      else children.push(list(child, depth + 1));
+      else children.push(...list(child, depth + 1));
       continue;
     }
     if (out.length) out.push(text(' '));
@@ -54,18 +59,23 @@ function taskItem(content) {
 
 const withChildren = (item, children) => (children.length ? { ...item, children } : item);
 
+/** A list as [block], or [] when no item has text or a nested list left. */
 function list(node, depth = 0) {
   const ordered = node.type === 'ordered_list';
-  const items = node.children.filter((c) => c.type === 'list_item').map((li) => listItem(li, depth));
+  const items = node.children
+    .filter((c) => c.type === 'list_item')
+    .map((li) => listItem(li, depth))
+    .map((it) => ({ ...it, task: ordered ? null : taskItem(it.content) }))
+    .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
+  if (!items.length) return [];
   // GitHub task syntax (`- [ ] `, `- [x] `) makes the whole bullet list a checklist.
-  const tasks = ordered ? [] : items.map((it) => taskItem(it.content));
-  if (tasks.some(Boolean)) {
-    return {
+  if (items.some((it) => it.task)) {
+    return [{
       type: 'list',
       ordered: false,
       task: true,
-      items: items.map((it, i) => withChildren(tasks[i] ?? { content: it.content, checked: false }, it.children)),
-    };
+      items: items.map((it) => withChildren(it.task ?? { content: it.content, checked: false }, it.children)),
+    }];
   }
   const block = {
     type: 'list',
@@ -74,7 +84,7 @@ function list(node, depth = 0) {
   };
   const start = Number(attr(node, 'start') || 1);
   if (ordered && Number.isSafeInteger(start) && start !== 1) block.start = start;
-  return block;
+  return [block];
 }
 
 // ── quotes and callouts ─────────────────────────────────────────────────
@@ -99,7 +109,8 @@ function quote(node) {
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
   if (cite) return [{ type: 'blockquote', content: quoteContent(children.slice(0, -1)), cite: cite[1] }];
-  return [{ type: 'blockquote', content: quoteContent(children) }];
+  const content = quoteContent(children);
+  return blank(content) ? [] : [{ type: 'blockquote', content }];
 }
 
 // ── code fences ─────────────────────────────────────────────────────────
@@ -172,9 +183,12 @@ function table(node) {
 
 function block(node, state) {
   switch (node.type) {
-    case 'heading': return [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), text: flattenText(node.children).trim() }];
+    case 'heading': {
+      const t = flattenText(node.children).trim();
+      return t ? [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), text: t }] : [];
+    }
     case 'paragraph': return paragraph(inline(node.children));
-    case 'bullet_list': case 'ordered_list': return [list(node)];
+    case 'bullet_list': case 'ordered_list': return list(node);
     case 'fence': case 'code_block': return code(node, state);
     case 'blockquote': return quote(node);
     case 'table': return [table(node)];
