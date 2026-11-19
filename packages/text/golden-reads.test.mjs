@@ -9,7 +9,7 @@ const RENDERS = { html: (blocks) => renderPortableDocument(blocks, {}), markdown
 
 // Aliases a golden still uses, until Barkpark's pack moves it to the canonical name. Only shrinks.
 // Both lists have pinned lengths too.
-const GOLDENS_STILL_USE_ALIAS = ['eyebrow.text', 'heading.text'];
+const GOLDENS_STILL_USE_ALIAS = ['asciicast.poster', 'eyebrow.text', 'heading.text'];
 
 // Keys the HTML, Markdown or text renderer reads on a fence-type block that no golden
 // fills yet, as pathName writes them. A key is read when the Proxy sees a renderer read it,
@@ -99,8 +99,8 @@ test('every key a renderer reads on a fence-type golden is filled in some golden
 
 test('each READ_ALIASES alias is read in place of its canonical key, the canonical key is read, and no golden uses the alias but those listed', () => {
   assert.deepEqual(Object.keys(READ_ALIASES), Object.keys(READ_ALIASES).sort(), 'READ_ALIASES is sorted');
-  assert.equal(Object.keys(READ_ALIASES).length, 13, 'READ_ALIASES\'s length is pinned: change it in the same edit');
-  assert.equal(GOLDENS_STILL_USE_ALIAS.length, 2, 'GOLDENS_STILL_USE_ALIAS\'s length is pinned: change it in the same edit');
+  assert.equal(Object.keys(READ_ALIASES).length, 15, 'READ_ALIASES\'s length is pinned: change it in the same edit');
+  assert.equal(GOLDENS_STILL_USE_ALIAS.length, 3, 'GOLDENS_STILL_USE_ALIAS\'s length is pinned: change it in the same edit');
   const inGoldens = [];
   for (const [alias, canonical] of Object.entries(READ_ALIASES)) {
     const type = alias.split('.')[0];

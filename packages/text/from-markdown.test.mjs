@@ -321,7 +321,9 @@ test('an empty code block is a real block: toMarkdown writes its empty fence, wi
     assert.equal(blocks[0].type, 'diagram', md);
     assert.deepEqual(fromMarkdown(toMarkdown(blocks)), blocks, md);
   }
-  assert.equal(toMarkdown([{ type: 'code', code: '   ' }]), toMarkdown([{ type: 'code', value: '   ' }]), 'whitespace kept whichever field holds it');
+  assert.equal(toMarkdown([{ type: 'code', value: '   ' }]), '```\n   \n```\n', 'whitespace kept in the current name');
+  // Every name blank: the current name's stored value is read, so whitespace under an old name is not.
+  assert.equal(toMarkdown([{ type: 'code', code: '   ' }]), '```\n```\n');
   assert.equal(toMarkdown([{ type: 'code', value: '', lang: 'py' }]).trim(), '```py\n```');
   assert.equal(toPlainText([{ type: 'code', value: '' }]).trim(), '');
 });

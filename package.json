@@ -9,6 +9,7 @@
     "roadmap": "node scripts/generate-roadmap.mjs",
     "heatmap": "node scripts/generate-heatmap.mjs",
     "timeline": "node scripts/readme-timeline.mjs",
+    "alias-types": "node scripts/generate-alias-types.mjs",
     "docs:site": "node scripts/generate-docs-site.mjs",
     "sync": "node scripts/sync-from-barkpark.mjs",
     "test": "npm run react:build && node scripts/test-files.mjs --run",
