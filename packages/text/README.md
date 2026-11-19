@@ -169,7 +169,7 @@ back and compares, never by a list of types.
 - A fence reusing an earlier fence's id is lost, as import would keep it back.
 
 <!-- round-trip-types:start -->
-<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/readme.mjs`; `npm run check` fails when this part is stale. -->
+<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/scripts/write-readme.mjs`; `npm run check` fails when this part is stale. -->
 The round trip is lossless only for blocks of these types, and only where import accepts the block:
 
 - in their own Markdown or a portabledoc fence: `callout`, `chart`, `code`, `diagram`, `divider`, `eyebrow`, `heading`, `heatmap`, `list`, `paragraph`, `pullquote`, `stat`, `stats`, `table`;
