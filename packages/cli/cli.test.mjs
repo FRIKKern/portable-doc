@@ -7,7 +7,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 import { main } from './index.js';
-import { loadCommands } from './registry.js';
+import { BUILT_IN, COMMAND_FILE, loadCommands } from './registry.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -207,6 +207,36 @@ test('a file named like a command fails loudly and names itself when it has the 
   // A module may throw anything, not only an Error.
   await assert.rejects(loadCommands(folder('text.js', "throw 'no config';\n")), /^Error: commands\/text\.js does not load: no config$/);
   await assert.rejects(loadCommands(folder('nothing.js', 'throw null;\n')), /^Error: commands\/nothing\.js does not load: null$/);
+  // An order that is not a finite number would break the sort; typeof NaN is 'number'.
+  const shaped = (order) => `export const order = ${order};
+export const synopsis = '';
+export const summary = 's';
+export const usage = 'u';
+export const readme = '## T';
+export const run = () => 0;
+`;
+  await assert.rejects(loadCommands(folder('odd.js', shaped('NaN'))), /^Error: commands\/odd\.js exports order NaN, not a finite number$/);
+  await assert.rejects(loadCommands(folder('odd.js', shaped('Infinity'))), /^Error: commands\/odd\.js exports order Infinity, not a finite number$/);
+  assert.deepEqual([...(await loadCommands(folder('fine.js', shaped(-2.5)))).keys()], ['fine']);
+  // A word the bin answers before any lookup can never be a command: refused, or not a command file at all.
+  await assert.rejects(loadCommands(folder('help.js', shaped(1))), /^Error: commands\/help\.js: help is the built-in usage, not a command name$/);
+  for (const word of [...BUILT_IN.usage, ...BUILT_IN.version]) {
+    const loading = loadCommands(folder(`${word}.js`, shaped(1)));
+    const commands = await loading.catch((error) => assert.match(error.message, new RegExp(`^commands/${word}\\.js: ${word} is the built-in `)));
+    assert.ok(!commands?.has(word), `${word}.js never becomes a command`);
+  }
+});
+
+test('every tracked file in commands/ is named as a command, so none is skipped from the usage by its name', () => {
+  // The loader skips a file not named like a command, as it must for an editor's lock or backup
+  // file. So a command checked in as hello.mjs would be missing with no error; this catches it.
+  // Only tracked files: stray untracked ones in a working copy are the loader's to skip.
+  const listed = spawnSync('git', ['ls-files', '-z', '--', 'commands'], { cwd: here, encoding: 'utf8' });
+  assert.equal(listed.status, 0, listed.stderr);
+  // The path below commands/, so a file in a subfolder, which the loader never reads, fails too.
+  const files = listed.stdout.split('\0').filter(Boolean).map((file) => file.slice('commands/'.length));
+  assert.ok(files.length > 0, 'git lists the command files');
+  assert.deepEqual(files.filter((file) => !COMMAND_FILE.test(file)), [], 'tracked files in commands/ the loader would skip');
 });
 
 test('a command file dropped into commands/ is in the usage, the dispatch and the README, with no other file changed', async () => {
