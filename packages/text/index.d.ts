@@ -10,6 +10,27 @@ export interface TextOptions {
    * `target`. A target with no entry shows as `↪ target`.
    */
   embeds?: Record<string, Doc>;
+  /**
+   * toMarkdown only. 'round-trip' writes Markdown that fromMarkdown reads back as the same
+   * blocks, for each block import accepts, and returns { markdown, lost } instead of a string. The default is readable
+   * Markdown, one way.
+   */
+  mode?: 'readable' | 'round-trip';
+}
+
+/**
+ * A block round-trip mode could not keep, in the shape of the importer's kept-back fences: its
+ * path in the doc ("/blocks/3"), its id and type (null when it has none), and why. The
+ * reason is the fence's (`type`: a type a fence may not hold, here or nested; `address`: an
+ * address import does not allow; `invalid`; `depth`; `id`: an id an earlier fence used;
+ * `count`), or `changed` (the fence reads back different), `neighbours` (the blocks around
+ * it change how it reads) or `not-a-block`. It is written readably.
+ */
+export interface LostBlock {
+  path: string;
+  id: string | null;
+  type: string | null;
+  reason: 'type' | 'address' | 'invalid' | 'depth' | 'id' | 'count' | 'changed' | 'neighbours' | 'not-a-block';
 }
 
 /** Every block type, aliases included, that has its own text handler. */
@@ -20,6 +41,7 @@ export const BLOCK_TYPES: readonly string[];
  * Returns '' for a document with nothing to show, else text ending in exactly
  * one newline. Never throws.
  */
+export function toMarkdown(doc: Doc | unknown, options: TextOptions & { mode: 'round-trip' }): { markdown: string; lost: LostBlock[] };
 export function toMarkdown(doc: Doc | unknown, options?: TextOptions): string;
 
 /**

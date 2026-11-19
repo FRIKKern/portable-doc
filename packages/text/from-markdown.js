@@ -12,7 +12,8 @@ import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 
 const MAX_FENCE_BLOCKS = 50;
 // Display blocks a ```portabledoc fence may hold, at the top and nested anywhere the
-// schema puts blocks; never fields, forms or bound blocks.
+// schema puts blocks; never fields, forms or bound blocks. pre-gate-badge stays out for
+// good: it is a notice the renderer adds, and Markdown must not be able to forge it.
 export const FENCE_TYPES = new Set([
   'heading', 'paragraph', 'list', 'code', 'table', 'callout', 'divider', 'diagram',
   'chart', 'stat', 'stats', 'heatmap', 'pullquote', 'eyebrow',
@@ -149,6 +150,23 @@ function scan(value) {
 // 1 to 50 blocks, every block in it of the allowed types, nested no deeper than MAX_VALUE_DEPTH, that
 // validate, hold only safe addresses (href, src, poster, url) and reuse no id from an earlier fence.
 // Anything else is a plain code block.
+
+/**
+ * Whether a fence's parsed value is spliced, given the ids earlier fences used: { ids } (the
+ * block ids it adds) or { reason }, why it stays a code block. toMarkdown's round-trip mode asks
+ * the same question, so writer and reader share one rule.
+ */
+export function checkFence(blocks, usedIds) {
+  if (!Array.isArray(blocks) || blocks.length === 0 || blocks.length > MAX_FENCE_BLOCKS) return { reason: 'count' };
+  if (tooDeep(blocks)) return { reason: 'depth' };
+  if (!everyBlockAllowed(blocks, FENCE_TYPES)) return { reason: 'type' };
+  const ids = scan(blocks);
+  if (ids === null) return { reason: 'address' };
+  if (!validate(blocks).ok) return { reason: 'invalid' };
+  if (ids.some((id) => usedIds.has(id))) return { reason: 'id' };
+  return { ids };
+}
+
 function fence(source, state) {
   let blocks;
   try {
@@ -156,15 +174,9 @@ function fence(source, state) {
   } catch {
     return [codeBlock(source)];
   }
-  const shaped =
-    Array.isArray(blocks) &&
-    blocks.length > 0 &&
-    blocks.length <= MAX_FENCE_BLOCKS &&
-    !tooDeep(blocks) &&
-    everyBlockAllowed(blocks, FENCE_TYPES);
-  const ids = shaped ? scan(blocks) : null;
-  if (ids === null || !validate(blocks).ok || ids.some((id) => state.ids.has(id))) return [codeBlock(source)];
-  for (const id of ids) state.ids.add(id);
+  const check = checkFence(blocks, state.ids);
+  if (check.reason) return [codeBlock(source)];
+  for (const id of check.ids) state.ids.add(id);
   return blocks;
 }
 
