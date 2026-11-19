@@ -1,0 +1,56 @@
+{
+  "blocks": [
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "value": "Install"
+            }
+          ],
+          "children": [
+            {
+              "type": "heading",
+              "level": 3,
+              "content": [
+                {
+                  "type": "text",
+                  "value": "On macOS"
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                [
+                  {
+                    "type": "text",
+                    "value": "brew install it"
+                  }
+                ]
+              ]
+            },
+            {
+              "type": "code",
+              "lang": "sh",
+              "value": "it --version"
+            }
+          ]
+        },
+        [
+          {
+            "type": "text",
+            "value": "Run"
+          }
+        ]
+      ]
+    }
+  ],
+  "markdown": "1. Install\n   ### On macOS\n\n   - brew install it\n\n   ```sh\n   it --version\n   ```\n2. Run\n",
+  "text": "1. Install\n   On macOS\n\n   - brew install it\n\n   it --version\n2. Run\n",
+  "html": "<ol><li><span>Install</span><h3>On macOS</h3><ul><li><span>brew install it</span></li></ul><pre class=\"bp-codeblock\" style=\"border:0;border-radius:var(--bp-codeblock-radius, 0);padding:var(--bp-codeblock-pad, 0.9rem 1.1rem);margin:var(--bp-codeblock-margin, 1.2rem 0);font-family:var(--paper-font-mono, ui-monospace,Menlo,monospace);font-size:var(--bp-codeblock-size, 0.9rem);line-height:var(--bp-codeblock-lh, 1.5);overflow-x:auto;white-space:pre\">it --version</pre></li><li><span>Run</span></li></ol>"
+}
