@@ -226,7 +226,9 @@ git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
 
 Each command is one file in [`commands/`](commands/), named after it: its
 place in the list, its usage, its `--help` text, its section of this README
-and its code. `portable-doc --help`, the dispatch and the sections above are
+and its code. A command file is a plain `name.js`, the name in lowercase
+letters, digits and dashes; any other file there, such as an editor's lock or
+backup, is skipped. `portable-doc --help`, the dispatch and the sections above are
 built from that folder, so there is no other list to update. After adding or
 changing a command, run `node packages/cli/readme.mjs` to rewrite the
 sections; `npm run check` fails while they differ.
