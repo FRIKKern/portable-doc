@@ -71,6 +71,12 @@ export interface ImportLimits {
 }
 export const IMPORT_WORK: ImportLimits;
 
+/** The code of the notice for a list item split at text after its nested list. */
+export const LIST_ITEM_SPLIT: 'list_item_split';
+
+/** The code of the notice that the import fell back to keeping the whole text as one code block. */
+export const IMPORT_FELL_BACK: 'import_fell_back';
+
 /**
  * A note from the import: text it kept as plain text, by `rule` ('budget': every line from
  * `line` on; 'line': each line past lineBytes; 'net': markdown-it's own count passed the
@@ -78,7 +84,7 @@ export const IMPORT_WORK: ImportLimits;
  * a sign the text's count is wrong and a bug to report), the first such paragraph at `path`.
  * At most one per rule. `line` counts from 1; `lines` is how many lines were kept as text.
  */
-export interface ImportNotice {
+export interface ImportWorkNotice {
   code: 'import_work_spent';
   rule: 'budget' | 'line' | 'net';
   path: string;
@@ -87,8 +93,36 @@ export interface ImportNotice {
 }
 
 /**
+ * A note from the import: text after a list item's nested list became the new item at `path`,
+ * the next at the same level (in an ordered list, the next number). `line` is the first source
+ * line of that text, from 1, and `lines` how many lines it spans.
+ */
+export interface ListItemSplitNotice {
+  code: 'list_item_split';
+  path: string;
+  line: number;
+  lines: number;
+}
+
+/**
+ * A note from the import: reading the text failed, so the whole text was kept as one code
+ * block at `path` (`/blocks` when the text is blank and nothing was kept), every line of it:
+ * `line` is 1 and `lines` how many lines the text has. A bug to report.
+ */
+export interface ImportFallbackNotice {
+  code: 'import_fell_back';
+  path: string;
+  line: number;
+  lines: number;
+}
+
+export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice;
+
+/**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
- * from the text; `notices` is empty unless a limit cut some text. `limits` defaults to
- * IMPORT_WORK. Never throws.
+ * from the text. `notices` says what a limit cut and each list item split off, by kind: the
+ * `budget` and `line` notices, then the splits in source order, then a `net` one; it is empty
+ * when none happened. When the import falls back to one code block, its one notice is
+ * `import_fell_back`. `limits` defaults to IMPORT_WORK. Never throws.
  */
 export function readMarkdown(markdown: string, limits?: ImportLimits): { blocks: Block[]; notices: ImportNotice[]; work: number };

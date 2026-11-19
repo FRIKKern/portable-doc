@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
 import { FIXTURES, kept, sharedCases } from '../../scripts/write-shared-cases.mjs';
 import { CASES as HEADINGS } from '../../fixtures/headings/cases.mjs';
+import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
 import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
 import { CUT, CUT_GENERATED, FIRST, WORK, WORK_GENERATED } from '../../fixtures/text-work/cases.mjs';
 import { plan } from '../../fixtures/text-work/rule-reader.mjs';
@@ -26,7 +27,7 @@ test('each generated case file is kept in fixtures/ exactly as scripts/write-sha
     if (kept(text)) assert.equal(fs.existsSync(at) && fs.readFileSync(at, 'utf8'), text, `stale: run node scripts/write-shared-cases.mjs (${file})`);
     else assert.ok(!fs.existsSync(at), `${file} is over the size kept in the repository; the script writes it on request`);
   }
-  for (const dir of [path.join(FIXTURES, 'nesting'), path.join(FIXTURES, 'headings'), path.join(FIXTURES, 'text-work'), path.join(FIXTURES, 'round-trip')]) {
+  for (const dir of [path.join(FIXTURES, 'nesting'), path.join(FIXTURES, 'headings'), path.join(FIXTURES, 'text-work'), path.join(FIXTURES, 'round-trip'), path.join(FIXTURES, 'list-split')]) {
     const folder = path.basename(dir);
     const stray = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && !(`${folder}/${f}` in FILES));
     assert.deepEqual(stray, [], `${folder}: a case file no input builds`);
@@ -37,6 +38,7 @@ test('one name, one case: no two shared cases share a name, in any folder or acr
   const names = [
     ...Object.keys(NESTING),
     ...Object.keys(HEADINGS),
+    ...Object.keys(LIST_SPLIT),
     ...Object.keys(FIRST),
     ...Object.keys(HOSTILE),
     ...Object.keys(WORK_GENERATED),
@@ -119,7 +121,7 @@ const READ = {
 };
 
 test('every folder under fixtures/ is one a test in this repository reads', () => {
-  const known = ['aliases', 'headings', 'nesting', 'round-trip', 'text-work', ...Object.keys(READ)].sort();
+  const known = ['aliases', 'headings', 'list-split', 'nesting', 'round-trip', 'text-work', ...Object.keys(READ)].sort();
   const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
   assert.deepEqual(folders, known, 'a folder no test reads, or a known one gone');
   for (const [folder, read] of Object.entries(READ)) {
