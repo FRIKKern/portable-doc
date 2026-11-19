@@ -12,7 +12,7 @@ import { CASES as HOSTILE, seeded } from './import-work-cases.mjs';
 import { readMarkdown } from './index.js';
 import { readField } from './read-aliases.js';
 
-// The shared cases in fixtures/ are what Barkpark's importer and reader are tested against.
+// The shared cases in fixtures/ are for any reader or writer of Portable Doc to be tested against.
 // Each is checked here against this package, so a case and the code cannot drift apart.
 
 const FILES = sharedCases();
@@ -84,5 +84,21 @@ test('each alias case reads as its file says: readField of each name gives the v
   for (const file of files) {
     const { block, reads } = json(`aliases/${file}`);
     for (const [name, value] of Object.entries(reads)) assert.deepEqual(readField(block, name).value ?? null, value, `${file}: ${name}`);
+  }
+});
+
+test('the fixtures README names, for each folder under fixtures/, the tests that read it, and each one does', () => {
+  const rows = fs.readFileSync(path.join(FIXTURES, 'README.md'), 'utf8').match(/^\| `[^`]+\/` \|.*$/gm);
+  const table = Object.fromEntries(rows.map((row) => [row.match(/^\| `([^`]+)\/`/)[1], row.split('|').at(-2).match(/`[^`]+\.test\.mjs`/g)?.map((f) => f.slice(1, -1)) ?? []]));
+  const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  assert.deepEqual(Object.keys(table).sort(), folders, 'a row for each folder, and no other');
+  for (const [folder, tests] of Object.entries(table)) {
+    assert.ok(tests.length, `${folder}: no test named`);
+    for (const file of tests) {
+      const at = path.join(FIXTURES, '..', file);
+      assert.ok(fs.existsSync(at), `${file} does not exist`);
+      const source = fs.readFileSync(at, 'utf8');
+      assert.ok(source.includes(`fixtures/${folder}`) || source.includes(`'${folder}'`), `${file} does not read fixtures/${folder}`);
+    }
   }
 });
