@@ -23,18 +23,27 @@
 //     of the item's own marker. Between the marker and the least content column, or when the
 //     item is deeper in quotes than the line, the marker may continue the item's paragraph
 //     lazily (markdown-it does not let a marker 4 columns past the enclosing item's content
-//     end a paragraph), so the item stays open, and no fence is trusted from there on.
+//     end a paragraph), so the item stays open.
 //  7. Any other line not after a blank line closes nothing: it may be lazy. Costs more.
-//  8. A fence: inside it a line is charged at the fence's opening line's depth, whatever it
+//  8. An item closes with the item it was opened in (or after, on its own line): its quotes
+//     and its content are inside that one. Recorded only while the items are exact (9), so
+//     the one it closes with surely holds it. Sure.
+//  9. The items are exact (the very ones markdown-it has open) only from a line where none
+//     is open, until a line keeps one it may have closed: lazy (choices 6 and 7), deeper in
+//     quotes than the line, or short of its content column; or a line has a marker that may
+//     not be one: 4 or more columns past the content of the container before it (code, or a
+//     paragraph's lazy text), or an ordered marker other than 1 right after a non-blank line
+//     (a paragraph's text). Not exact costs more: no fence is trusted (10).
+// 10. A fence: inside it a line is charged at the fence's opening line's depth, whatever it
 //     holds, which can cost less, so a line counts as in a fence only where the tracker is
 //     sure; in doubt it is any line. A fence ends at its closing fence, or at the first line
 //     that leaves the opener's container (a quote line without its marker, a line indented
 //     less than the item's content), whichever comes first. The tracker is not sure of a
-//     fence-like line inside a possible HTML block or link reference definition, of one
-//     whose indentation against its container is 3 to 5 columns, of one between an item's
-//     least and its true content column, nor of any after a doubt (choice 6, or a fence-like
-//     line it was not sure of) until the text is read afresh. A sure fence line closes the
-//     items it is not in: a fence ends a paragraph that far left. Sure.
+//     fence-like line while the items are not exact, inside a possible HTML block or link
+//     reference definition, of one whose indentation against its container is 3 to 5
+//     columns, of one between an item's least and its true content column, nor of any after
+//     a fence-like line it was not sure of, until the text is read afresh. A sure fence line
+//     closes the items it is not in: a fence ends a paragraph that far left. Sure.
 
 const SP = (ch) => ch === 32 || ch === 9;
 export const isBlank = (line) => {
@@ -281,7 +290,7 @@ export function depthReader() {
     const own = p.containers.filter((c) => !c.quote);
     // A list marker after the leading quotes never continues a paragraph lazily.
     const listFirst = p.containers.length > L.n;
-    // Items this line surely closes (choices 4 to 7 above); every other stays open.
+    // Items this line surely closes (choices 4 to 8 above); every other stays open.
     const open = (it) => {
       if (afterBlank) return it.q === 0 && rel(0) >= it.lo;
       if (it.q < L.n) return rel(it.q) >= it.lo;
@@ -292,7 +301,7 @@ export function depthReader() {
     close(open);
     const contained = items.filter((it) => it.q <= L.n && rel(it.q) >= it.hi);
     const sure = markersSure(p, contained) && (afterBlank || !otherOrdered(line.slice(0, p.at)));
-    // Whether the items are exactly those markdown-it has open: not when one kept may be
+    // Whether the items are exactly those markdown-it has open (choice 9): not when one kept may be
     // closed (lazy, past a quote this line leaves, or short of its content column), nor when
     // this line's markers may not be markers.
     let exact = (!loose || items.length === 0) && sure && !items.some((it) => it.q > L.n || rel(it.q) < it.hi);
