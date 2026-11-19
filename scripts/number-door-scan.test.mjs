@@ -3,12 +3,17 @@
 // number that is not finite with nothing; any other route could write "NaN" or "Infinity".
 // The scan refuses every other route, with no allow-list:
 //
-// - packages/react/src, read with the TypeScript type checker. A route is String() of a value
-//   not typed string, or String passed as a function; toString, toFixed, toPrecision,
-//   toLocaleString or toExponential called on a number; escapeHtml or escapeAttr (under any import
-//   name) given a value that may be a number; a template span, or an operand of + or += beside a
-//   string, typed number; join on an array of numbers. "May be a number" counts number, bigint,
-//   any, unknown and every union holding one of them.
+// - packages/react/src, read with the TypeScript type checker. A route is any of:
+//   - String() of a value not typed string, or String passed as a function;
+//   - toString, toFixed, toPrecision, toLocaleString or toExponential called on a number;
+//   - escapeHtml, escapeAttr, encodeURIComponent or encodeURI (under any import name) given a value
+//     that may be a number;
+//   - a template span, or an operand of + or += beside a string, that may hold a number;
+//   - concat on a string given a value that may hold a number;
+//   - join on an array or tuple that may hold a number.
+//   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
+//   "May hold a number" adds a type parameter, `object`, `{}`, and an array or tuple (at any depth)
+//   of a value that may be a number.
 // - packages/text/*.js but the door, read by syntax only: any String() call or String passed as a
 //   function, and any call of those five methods.
 //
@@ -20,7 +25,9 @@
 //   digit string, is not covered: a form scale bound given as a digit string too large for a
 //   number writes "-Infinity" in text (the todo test in non-finite-grid.test.mjs).
 // - A number the code has already cast to string (`n as unknown as string`), or one reached through
-//   a method held in a variable or called with call or apply.
+//   a method held in a variable, called with call or apply, or called by element access
+//   (`n['toFixed'](1)`).
+// - A number used as a computed key (`{ [n]: 1 }`) whose keys are then shown.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
 // - packages/editor (written only by the sync from Barkpark's paper editor), React's dist (built
@@ -36,6 +43,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const react = path.join(root, 'packages/react');
 const ts = createRequire(path.join(react, 'package.json'))('typescript');
 const METHODS = new Set(['toString', 'toFixed', 'toPrecision', 'toLocaleString', 'toExponential']);
+const ESCAPES = new Set(['escapeHtml', 'escapeAttr', 'encodeURIComponent', 'encodeURI']);
 const DOOR = 'packages/text/number-text.js';
 
 /** Each route in React's source files (or the given ones), as "file:line: why: code". */
@@ -49,7 +57,10 @@ function reactRoutes(only) {
   const typeOf = (node) => checker.getTypeAtLocation(node);
   const mayNum = (t) => parts(t).some((u) => u.flags & (F.NumberLike | F.BigIntLike | F.Any | F.Unknown));
   const isString = (t) => parts(t).every((u) => u.flags & F.StringLike);
-  const numArray = (t) => checker.isArrayType(t) && mayNum(checker.getTypeArguments(t)[0]);
+  const F_OBJ = F.TypeParameter | F.NonPrimitive;
+  const emptyObject = (u) => !!(u.flags & F.Object) && !checker.isArrayType(u) && !checker.isTupleType(u) && checker.getPropertiesOfType(u).length === 0 && u.getCallSignatures().length === 0 && !checker.getIndexInfosOfType(u).length;
+  const numArray = (t) => parts(t).some((u) => (checker.isArrayType(u) || checker.isTupleType(u)) && checker.getTypeArguments(u).some((e) => mayNum(e) || numArray(e)));
+  const mayHold = (t) => mayNum(t) || numArray(t) || parts(t).some((u) => u.flags & F_OBJ || emptyObject(u));
   const calleeName = (callee) => {
     let sym = checker.getSymbolAtLocation(callee);
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
@@ -65,18 +76,19 @@ function reactRoutes(only) {
         const arg = node.arguments[0];
         if (ts.isIdentifier(callee) && callee.text === 'String' && !(arg && isString(typeOf(arg)))) at(node, 'String of a non-string');
         const name = calleeName(callee);
-        if ((name === 'escapeHtml' || name === 'escapeAttr') && arg && mayNum(typeOf(arg))) at(node, `${name} of a number`);
+        if (ESCAPES.has(name) && arg && mayNum(typeOf(arg))) at(node, `${name} of a number`);
         if (ts.isPropertyAccessExpression(callee)) {
           const recv = typeOf(callee.expression);
           if (METHODS.has(callee.name.text) && (mayNum(recv) || numArray(recv))) at(node, `${callee.name.text} on a number`);
           if (callee.name.text === 'join' && numArray(recv)) at(node, 'join of numbers');
+          if (callee.name.text === 'concat' && isString(recv) && node.arguments.some((a) => mayHold(typeOf(a)))) at(node, 'concat of a number');
         }
         for (const a of node.arguments) if (ts.isIdentifier(a) && a.text === 'String') at(a, 'String passed as a function');
-      } else if (ts.isTemplateSpan(node) && mayNum(typeOf(node.expression))) {
-        at(node.expression, 'a template span typed number');
+      } else if (ts.isTemplateSpan(node) && mayHold(typeOf(node.expression))) {
+        at(node.expression, 'a template span that may hold a number');
       } else if (ts.isBinaryExpression(node) && (node.operatorToken.kind === ts.SyntaxKind.PlusToken || node.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken)) {
         const [l, r] = [typeOf(node.left), typeOf(node.right)];
-        if ((isString(l) && mayNum(r)) || (mayNum(l) && isString(r))) at(node, 'a + operand typed number');
+        if ((isString(l) && mayHold(r)) || (mayHold(l) && isString(r))) at(node, 'a + operand that may hold a number');
       }
       ts.forEachChild(node, visit);
     };
@@ -109,28 +121,48 @@ test('the scan finds each route it names, in React by type and in text by syntax
   const dir = fs.mkdtempSync(path.join(react, 'src', '.scan-'));
   try {
     const plant = path.join(dir, 'plant.ts');
+    // One route per line; each line names the reason the scan must give for it.
+    const rows = [
+      ['`${b.count}`', 'a template span that may hold a number'],
+      ['String(n)', 'String of a non-string'],
+      ['n.toFixed(1)', 'toFixed on a number'],
+      ['eh(n)', 'escapeHtml of a number'],
+      ['encodeURIComponent(n)', 'encodeURIComponent of a number'],
+      ['encodeURI(n)', 'encodeURI of a number'],
+      ['xs.join()', 'join of numbers'],
+      ['tup.join()', 'join of numbers'],
+      ['[tup].join()', 'join of numbers'],
+      ['ro.join()', 'join of numbers'],
+      ['xs.map(String).join()', 'String passed as a function'],
+      ['s + n', 'a + operand that may hold a number'],
+      ['s + xs', 'a + operand that may hold a number'],
+      ['s + tup', 'a + operand that may hold a number'],
+      ['`${xs}`', 'a template span that may hold a number'],
+      ['`${tup}`', 'a template span that may hold a number'],
+      ['`${v}`', 'a template span that may hold a number'],
+      ['`${o}`', 'a template span that may hold a number'],
+      ['`${ob}`', 'a template span that may hold a number'],
+      ["'a'.concat(n)", 'concat of a number'],
+      ["'a'.concat(String(s))", null],
+      ['String(s)', null],
+      ['`${s}`', null],
+    ];
     fs.writeFileSync(
       plant,
       [
         "import { escapeHtml as eh } from '../inline'",
-        'export const f = (b: Record<string, unknown>, s: string, xs: number[]) => {',
-        "  if (typeof b.count !== 'number') return s",
+        'export const f = <T,>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object) => {',
+        "  if (typeof b.count !== 'number') return []",
         '  const n = b.count',
-        '  return `${b.count}` + String(n) + n.toFixed(1) + eh(n) + xs.join() + xs.map(String).join() + (s + n) + String(s)',
+        '  return [',
+        ...rows.map(([code]) => `    ${code},`),
+        '  ]',
         '}',
         '',
       ].join('\n'),
     );
-    const found = reactRoutes([plant]).map((r) => r.replace(/^[^:]*:\d+: /, '').replace(/: .*$/, ''));
-    assert.deepEqual(found.sort(), [
-      'String of a non-string',
-      'String passed as a function',
-      'a + operand typed number',
-      'a template span typed number',
-      'escapeHtml of a number',
-      'join of numbers',
-      'toFixed on a number',
-    ]);
+    const found = reactRoutes([plant]).map((r) => { const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/); return `${rows[line - 6][0]} -> ${why}`; });
+    assert.deepEqual(found.sort(), rows.filter(([, why]) => why).map(([code, why]) => `${code} -> ${why}`).sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
