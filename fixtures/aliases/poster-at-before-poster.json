@@ -1,0 +1,11 @@
+{
+  "block": {
+    "type": "asciicast",
+    "src": "https://e.example/c.cast",
+    "poster": "npt:0:01",
+    "posterAt": "npt:0:09"
+  },
+  "reads": {
+    "posterAt": "npt:0:09"
+  }
+}

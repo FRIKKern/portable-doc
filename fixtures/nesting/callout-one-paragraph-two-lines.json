@@ -1,0 +1,15 @@
+{
+  "markdown": "> [!note] Heads up\n> same paragraph",
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "info",
+      "content": [
+        {
+          "type": "text",
+          "value": "Heads up same paragraph"
+        }
+      ]
+    }
+  ]
+}

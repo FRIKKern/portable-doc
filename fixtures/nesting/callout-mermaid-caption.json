@@ -1,0 +1,24 @@
+{
+  "markdown": "> [!info] A\n>\n> ```mermaid\n> graph TD; A-->B\n> ```\n>\n> *The flow*",
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "info",
+      "content": [
+        {
+          "type": "text",
+          "value": "A"
+        }
+      ],
+      "slots": {
+        "body": [
+          {
+            "type": "diagram",
+            "source": "graph TD; A-->B",
+            "caption": "The flow"
+          }
+        ]
+      }
+    }
+  ]
+}

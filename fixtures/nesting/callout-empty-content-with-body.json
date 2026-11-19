@@ -1,0 +1,23 @@
+{
+  "markdown": "> [!tip]\n>\n> Only a body.",
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "info",
+      "content": [],
+      "slots": {
+        "body": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "value": "Only a body."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
