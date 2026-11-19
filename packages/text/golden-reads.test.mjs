@@ -21,7 +21,6 @@ const GOLDENS_STILL_USE_ALIAS = ['asciicast.poster', 'eyebrow.text', 'heading.te
 // A key counts as filled when a pinned-output case fills it: a golden of the synced pack, or a case in fixtures/writers/.
 const NOT_FILLED_YET = [
   'callout.collapsed',
-  'callout.collapsible',
   'callout.content[].content',
   'callout.content[].marks',
   'chart.axes.max',
@@ -92,7 +91,7 @@ test('every key a renderer reads on a fence-type golden is filled in some golden
   assert.ok(missing.size > 0, 'the Proxy saw no reads: the survey is broken');
   const unfilled = [...missing].filter((name) => !filled.has(name) && !Object.hasOwn(READ_ALIASES, name)).sort();
   const listed = new Set(NOT_FILLED_YET);
-  assert.equal(NOT_FILLED_YET.length, 38, 'NOT_FILLED_YET\'s length is pinned: change it in the same edit');
+  assert.equal(NOT_FILLED_YET.length, 37, 'NOT_FILLED_YET\'s length is pinned: change it in the same edit');
   assert.deepEqual(NOT_FILLED_YET, [...listed].sort(), 'NOT_FILLED_YET is sorted, each key once');
   assert.deepEqual(unfilled.filter((name) => !listed.has(name)), [], 'read by a renderer and filled by no golden: fill it in a golden (in Barkpark\'s pack)');
   assert.deepEqual(NOT_FILLED_YET.filter((name) => filled.has(name)), [], 'filled by a golden now: take it off NOT_FILLED_YET');

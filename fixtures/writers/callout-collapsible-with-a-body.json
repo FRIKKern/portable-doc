@@ -1,0 +1,50 @@
+{
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "success",
+      "title": "Release notes",
+      "collapsible": true,
+      "content": [
+        {
+          "type": "text",
+          "value": "Version two is out"
+        }
+      ],
+      "slots": {
+        "body": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "value": "Every fix is listed below."
+              }
+            ]
+          },
+          {
+            "type": "list",
+            "ordered": false,
+            "items": [
+              [
+                {
+                  "type": "text",
+                  "value": "faster import"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "value": "fewer notices"
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "markdown": "> **Release notes:** Version two is out\n>\n> Every fix is listed below.\n>\n> - faster import\n> - fewer notices\n",
+  "text": "Release notes: Version two is out\n\nEvery fix is listed below.\n\n- faster import\n- fewer notices\n",
+  "html": "<details open class=\"bp-callout bp-callout--success\"><summary class=\"bp-callout__summary\">Release notes</summary><div class=\"bp-callout__body\"><span>Version two is out</span><p>Every fix is listed below.</p><ul><li><span>faster import</span></li><li><span>fewer notices</span></li></ul></div></details>"
+}
