@@ -110,13 +110,22 @@ function calloutMarker(content) {
   return { tone, rest: merge([text(m[2]), ...content.slice(1)]) };
 }
 
-function quote(node) {
+/**
+ * A quote. With a `[!tone]` marker at the head of its first paragraph it is a callout: that
+ * paragraph is its content, and every block after it is read as blocks into `slots.body`,
+ * fences and all. A plain quote holds inline content only, so it stays one run of all its text.
+ */
+function quote(node, state) {
   const children = node.children;
   // Each child's text once: deep source in it is parsed again each time it is read.
   const parts = children.map(textOf);
+  const marker = calloutMarker(parts[0] ?? []);
+  if (marker) {
+    const body = blocksOf(children.slice(1), state);
+    const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
+    return [body.length ? { ...callout, slots: { body } } : callout];
+  }
   const content = joined(parts);
-  const marker = calloutMarker(content);
-  if (marker) return [{ type: 'callout', tone: marker.tone, content: marker.rest }];
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
@@ -213,7 +222,7 @@ function block(node, state) {
     case 'paragraph': return paragraph(inline(node.children));
     case 'bullet_list': case 'ordered_list': return list(node);
     case 'fence': case 'code_block': return code(node, state);
-    case 'blockquote': return quote(node);
+    case 'blockquote': return quote(node, state);
     case 'table': return [table(node)];
     case 'hr': return [{ type: 'divider' }];
     case 'html_block': {
@@ -234,20 +243,28 @@ function caption(node) {
   return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-// `env` is the parse's: when its work budget ran out while reading a top-level block,
-// that block's place is where the plain-text rest starts.
-function convert(nodes, env) {
-  const state = { ids: new Set() };
+/**
+ * Sibling nodes as blocks, in order, sharing `state` (the ids fences used). `each(n)` runs
+ * after a node is read, with the count of blocks before it.
+ */
+function blocksOf(nodes, state, each) {
   const out = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
-    if (env.spent && env.spent.path === undefined) env.spent.path = `/blocks/${out.length}`;
+    each?.(out.length);
     for (const b of blocks) out.push(b);
   }
   return out;
 }
+
+// `env` is the parse's: when its work budget ran out while reading a top-level block,
+// that block's place is where the plain-text rest starts.
+const convert = (nodes, env) =>
+  blocksOf(nodes, { ids: new Set() }, (at) => {
+    if (env.spent && env.spent.path === undefined) env.spent.path = `/blocks/${at}`;
+  });
 
 export { IMPORT_WORK };
 
