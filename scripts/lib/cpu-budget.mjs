@@ -9,7 +9,12 @@ export function underBudget(limitMs, work) {
   const started = process.cpuUsage();
   const result = work();
   const { user, system } = process.cpuUsage(started);
-  const used = Math.round((user + system) / 1000);
-  assert.ok(used < limitMs, `${used} ms of CPU, budget ${limitMs} ms`);
+  withinBudget(limitMs, user + system);
   return result;
+}
+
+/** Fail when `usedMicros` of CPU time (measured anywhere: this process, or a child that reports its own) is `limitMs` or more. */
+export function withinBudget(limitMs, usedMicros, what = '') {
+  const used = Math.round(usedMicros / 1000);
+  assert.ok(used < limitMs, `${what ? `${what}: ` : ''}${used} ms of CPU, budget ${limitMs} ms`);
 }
