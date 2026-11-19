@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
 import { MAX_NEST } from './from-markdown-inline.js';
+import { readPlan } from './from-markdown.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
+import { planText } from './import-work.js';
 import { IMPORT_WORK, LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 import { safeUrl } from './util.js';
 
+const here = fileURLToPath(new URL('.', import.meta.url));
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
 
 const t = (value) => ({ type: 'text', value });
@@ -198,6 +203,31 @@ test('a split\'s notice names its place in a callout\'s body, and its line in th
   const notices = (md) => readMarkdown(md, limits).notices.filter((n) => n.code === LIST_ITEM_SPLIT);
   assert.deepEqual(notices(`${long}\n\n- a\n  - b\n\n  c`), [split('/blocks/1/items/1', 6, 1)]);
   assert.deepEqual(notices(`- p\n\n${long}\n\n- a\n  - b\n\n  c\n\n  more`), [split('/blocks/2/items/1', 8, 3)]);
+});
+
+test('a split-off item never opens a task: its `[ ]` or `[x]` stays text, in a checklist or a plain list', () => {
+  const t1 = (value) => [{ type: 'text', value }];
+  const b = { type: 'list', ordered: false, items: [t1('b')] };
+  assert.deepEqual(fromMarkdown('- [ ] a\n  - b\n\n  [ ] c'), [{ type: 'list', ordered: false, task: true, items: [{ content: t1('a'), checked: false, children: [b] }, { content: t1('[ ] c'), checked: false }] }]);
+  assert.deepEqual(fromMarkdown('- a\n  - b\n\n  [x] c'), [{ type: 'list', ordered: false, items: [{ content: t1('a'), children: [b] }, t1('[x] c')] }]);
+});
+
+test('notices come by kind, not by line: the cut ones (`budget`, `line`), then the splits in source order, then `net`', () => {
+  // A split at line 4, a long line at 6, then deep quotes read with a plan whose count is planted short, so the net fires.
+  const md = `- a\n  - b\n\n  c\n\n${'x'.repeat(500)}\n\n${'> '.repeat(150)}w0 w1\n${'> '.repeat(150)}w2`;
+  const read = readPlan(planText(md, { ...IMPORT_WORK, budget: Infinity, lineBytes: 400 }), { ...IMPORT_WORK, budget: 20_000, lineBytes: 400 });
+  assert.deepEqual(read.notices.map((n) => [n.rule ?? n.code, n.line]), [['line', 6], [LIST_ITEM_SPLIT, 4], ['net', 8]]);
+});
+
+test('many split-off items, more than a spread of arguments holds on a small stack, still import as one list with a notice each', () => {
+  // On a 60 kB stack a spread of 20,000 notices overflows; the whole text then fell back to one code block.
+  const items = 20_000;
+  const script = `const { readMarkdown } = await import('./index.js');
+const md = Array.from({ length: ${items} }, (_, i) => \`- a\${i}\\n  - b\\n\\n  c\${i}\`).join('\\n');
+const { blocks, notices } = readMarkdown(md);
+console.log(JSON.stringify([blocks.map((b) => b.type), blocks[0].items.length, notices.length]));`;
+  const run = spawnSync(process.execPath, ['--stack-size=60', '--input-type=module', '-e', script], { cwd: here, encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(run.stdout), [['list'], 2 * items, items], run.stderr);
 });
 
 test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {

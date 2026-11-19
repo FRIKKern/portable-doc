@@ -368,7 +368,7 @@ export function readPlan(plan, limits) {
   }
   if (!validate({ blocks }).ok) return null;
   const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
-  notices.push(...state.splits);
+  for (const split of state.splits) notices.push(split); // a loop: a spread of this many arguments overflows the stack
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
   return { blocks, notices, parsed: net.work, count: state.count };
 }
