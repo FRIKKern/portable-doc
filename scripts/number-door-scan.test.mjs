@@ -6,14 +6,15 @@
 // - packages/react/src, read with the TypeScript type checker. A route is any of:
 //   - String() of a value not typed string, or String passed as a function;
 //   - toString, toFixed, toPrecision, toLocaleString or toExponential called on a number;
-//   - escapeHtml, escapeAttr, encodeURIComponent or encodeURI (under any import name) given a value
-//     that may be a number;
+//   - escapeHtml or escapeAttr (under any import name) given a value that may be a number;
+//   - encodeURIComponent or encodeURI given a value that may hold a number;
 //   - a template span, or an operand of + or += beside a string, that may hold a number;
 //   - concat on a string given a value that may hold a number;
 //   - join on an array or tuple that may hold a number.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
-//   "May hold a number" adds a type parameter, `object`, `{}`, and an array or tuple (at any depth)
-//   of a value that may be a number.
+//   "May hold a number" adds `object`, `{}`, an array or tuple (at any depth) of a value that may be
+//   a number, and a type parameter whose constraint may hold one or that has no real constraint
+//   (none, unknown or {}).
 // - packages/text/*.js but the door, read by syntax only: any String() call or String passed as a
 //   function, and any call of those five methods.
 //
@@ -43,7 +44,9 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const react = path.join(root, 'packages/react');
 const ts = createRequire(path.join(react, 'package.json'))('typescript');
 const METHODS = new Set(['toString', 'toFixed', 'toPrecision', 'toLocaleString', 'toExponential']);
-const ESCAPES = new Set(['escapeHtml', 'escapeAttr', 'encodeURIComponent', 'encodeURI']);
+const ESCAPES = new Set(['escapeHtml', 'escapeAttr']);
+// An encoder writes an array through String, so a number array's NaN reaches it as "NaN".
+const ENCODES = new Set(['encodeURIComponent', 'encodeURI']);
 const DOOR = 'packages/text/number-text.js';
 
 /** Each route in React's source files (or the given ones), as "file:line: why: code". */
@@ -57,10 +60,15 @@ function reactRoutes(only) {
   const typeOf = (node) => checker.getTypeAtLocation(node);
   const mayNum = (t) => parts(t).some((u) => u.flags & (F.NumberLike | F.BigIntLike | F.Any | F.Unknown));
   const isString = (t) => parts(t).every((u) => u.flags & F.StringLike);
-  const F_OBJ = F.TypeParameter | F.NonPrimitive;
   const emptyObject = (u) => !!(u.flags & F.Object) && !checker.isArrayType(u) && !checker.isTupleType(u) && checker.getPropertiesOfType(u).length === 0 && u.getCallSignatures().length === 0 && !checker.getIndexInfosOfType(u).length;
   const numArray = (t) => parts(t).some((u) => (checker.isArrayType(u) || checker.isTupleType(u)) && checker.getTypeArguments(u).some((e) => mayNum(e) || numArray(e)));
-  const mayHold = (t) => mayNum(t) || numArray(t) || parts(t).some((u) => u.flags & F_OBJ || emptyObject(u));
+  // A type parameter holds what its constraint holds; with no real constraint (none, unknown or {})
+  // it may hold anything, a number too.
+  const openParam = (u) => {
+    const c = checker.getBaseConstraintOfType(u);
+    return !c || !!(c.flags & F.Unknown) || emptyObject(c) || mayHold(c);
+  };
+  const mayHold = (t) => mayNum(t) || numArray(t) || parts(t).some((u) => (u.flags & F.TypeParameter ? openParam(u) : u.flags & F.NonPrimitive || emptyObject(u)));
   const calleeName = (callee) => {
     let sym = checker.getSymbolAtLocation(callee);
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
@@ -77,6 +85,7 @@ function reactRoutes(only) {
         if (ts.isIdentifier(callee) && callee.text === 'String' && !(arg && isString(typeOf(arg)))) at(node, 'String of a non-string');
         const name = calleeName(callee);
         if (ESCAPES.has(name) && arg && mayNum(typeOf(arg))) at(node, `${name} of a number`);
+        if (ENCODES.has(name) && arg && mayHold(typeOf(arg))) at(node, `${name} of a number`);
         if (ts.isPropertyAccessExpression(callee)) {
           const recv = typeOf(callee.expression);
           if (METHODS.has(callee.name.text) && (mayNum(recv) || numArray(recv))) at(node, `${callee.name.text} on a number`);
@@ -129,6 +138,9 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['eh(n)', 'escapeHtml of a number'],
       ['encodeURIComponent(n)', 'encodeURIComponent of a number'],
       ['encodeURI(n)', 'encodeURI of a number'],
+      ['encodeURIComponent(xs)', 'encodeURIComponent of a number'],
+      ['encodeURI(tup)', 'encodeURI of a number'],
+      ['eh(xs)', null],
       ['xs.join()', 'join of numbers'],
       ['tup.join()', 'join of numbers'],
       ['[tup].join()', 'join of numbers'],
@@ -140,6 +152,9 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`${xs}`', 'a template span that may hold a number'],
       ['`${tup}`', 'a template span that may hold a number'],
       ['`${v}`', 'a template span that may hold a number'],
+      ['`${nv}`', 'a template span that may hold a number'],
+      ['`${sv}`', null],
+      ["'x-' + kv", null],
       ['`${o}`', 'a template span that may hold a number'],
       ['`${ob}`', 'a template span that may hold a number'],
       ["'a'.concat(n)", 'concat of a number'],
@@ -151,7 +166,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
       plant,
       [
         "import { escapeHtml as eh } from '../inline'",
-        'export const f = <T,>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object) => {',
+        "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
         "  if (typeof b.count !== 'number') return []",
         '  const n = b.count',
         '  return [',
