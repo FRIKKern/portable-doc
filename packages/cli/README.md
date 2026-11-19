@@ -93,7 +93,8 @@ Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
 - If the file can no longer be watched, the page says so above the last
   render, and the server keeps running.
 - `--open` opens the page with `open` (macOS) or `xdg-open`. Ctrl-C closes the
-  watcher and every connection, and exits 0.
+  watcher, ends each open tab's event stream cleanly (a tab that never reads is
+  cut after `CLOSE_GRACE_MS`, one second), and exits 0.
 
 ## Import
 
