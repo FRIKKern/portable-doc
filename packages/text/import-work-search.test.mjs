@@ -69,3 +69,35 @@ test('a seeded neighbour search from the closest cases finds no text the count p
   t.diagnostic(`least count / markdown-it: ${least.r.toFixed(4)}, from ${least.from}: ${JSON.stringify(least.md).slice(0, 300)}`);
   assert.deepEqual(below.slice(0, 3), []);
 });
+
+// A hunt aimed at fence-like lines a count may take for code: behind container prefixes
+// shifted by tabs, 0 to 5 columns into their container, then lines that are deep unless
+// they are code. IMPORT_WORK_HUNT=20000 runs a longer one by hand.
+const HUNT = Number(process.env.IMPORT_WORK_HUNT) || 1500;
+
+test('a seeded hunt for fence-like lines behind tab-shifted prefixes finds no text the count puts below markdown-it', (t) => {
+  const rnd = seeded(7);
+  const pick = (a) => a[rnd(a.length)];
+  const PRE = ['>', '> ', '>\t', '> \t', '-\t', '- ', ' -\t', '1.\t', '1. ', '\t', ' ', '  ', '   ', '*\t', '>  ', '-  \t'];
+  const WS = ['', ' ', '  ', '   ', '    ', '     ', '\t', ' \t', '  \t', '   \t', '\t ', '\t  '];
+  const deep = (n) => `${'> '.repeat(n)}x`;
+  const below = [];
+  let least = { r: Infinity };
+  for (let d = 0; d < HUNT; d++) {
+    const L = [];
+    let p = '';
+    for (let i = 1 + rnd(3); i > 0; i--) p += pick(PRE);
+    if (rnd(2)) L.push(`${p}item`);
+    if (rnd(10) < 3) L.push('');
+    const cont = pick([p, p.replace(/[-*]|1\./g, ' '), p.replace(/[^>\t]/g, ' ')]);
+    L.push(cont + pick(WS) + pick(['```', '~~~', '````']));
+    for (let i = 3 + rnd(12); i > 0; i--) L.push(pick([cont, '', cont + pick(WS)]) + (rnd(4) ? deep(5 + rnd(25)) : `${'>'.repeat(10 + rnd(50))} x`));
+    if (rnd(2)) L.push(cont + pick(WS) + '```');
+    const md = L.join('\n');
+    const r = ratio(md);
+    if (r < 1) below.push(md);
+    if (r < least.r) least = { r, md };
+  }
+  t.diagnostic(`hunt: ${HUNT} documents, least count / markdown-it ${least.r.toFixed(4)}: ${JSON.stringify(least.md).slice(0, 200)}`);
+  assert.deepEqual(below.slice(0, 3), []);
+});

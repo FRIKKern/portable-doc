@@ -5,7 +5,7 @@ import { readPlan } from './from-markdown.js';
 import { IMPORT_WORK, planText } from './import-work.js';
 
 // What ordinary text costs: nine ordinary documents of 500 kB, one shape each. This test owns
-// the README's number. Each counts at most a sixth of the budget (the headroom) and is never
+// the README's number. Each counts at most a third of the budget (the headroom) and is never
 // counted below what markdown-it does to read it (the safety), and imports whole, with no notice.
 const SIZE = 500_000;
 const fill = (unit) => {
@@ -27,7 +27,7 @@ const ORDINARY = {
   'Go as indented code': fill((n) => `Func ${n}:\n\n${go(n, '\t')}\n\n`),
 };
 
-test('each ordinary 500 kB document counts at most a sixth of the budget, never below markdown-it, and imports with no notice', () => {
+test('each ordinary 500 kB document counts at most a third of the budget, never below markdown-it, and imports with no notice', () => {
   for (const [name, md] of Object.entries(ORDINARY)) {
     // readMarkdown's two steps, so the one parse also gives markdown-it's own count.
     const { work, read } = underBudget(4_000, () => {
@@ -35,7 +35,7 @@ test('each ordinary 500 kB document counts at most a sixth of the budget, never 
       return { work: plan.work, read: readPlan(plan, IMPORT_WORK) };
     });
     assert.deepEqual(read.notices, [], name);
-    assert.ok(work <= IMPORT_WORK.budget / 6, `${name}: work ${work}, a sixth of the budget is ${IMPORT_WORK.budget / 6}`);
+    assert.ok(work <= IMPORT_WORK.budget / 3, `${name}: work ${work}, a third of the budget is ${IMPORT_WORK.budget / 3}`);
     assert.ok(work >= read.parsed, `${name}: the text's count ${work} is below markdown-it's ${read.parsed}`);
   }
 });

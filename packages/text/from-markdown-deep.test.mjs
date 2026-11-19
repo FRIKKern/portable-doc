@@ -83,12 +83,12 @@ test('the work budget cuts lines nested deep at a stated line, keeps every word 
   const md = lazyUnderDeepQuote();
   // A hang guard only, far above the real cost; the budget itself is counted in work.
   const { blocks, notices, work } = underBudget(20_000, () => readMarkdown(md));
-  // Lines 1 to 5,963 are read; from line 5,964 on, the 50,761 lines left are one plain paragraph.
-  assert.deepEqual(notices, [{ code: 'import_work_spent', rule: 'budget', path: '/blocks/1', line: 5_964, lines: 50_761 }]);
+  // Lines 1 to 3,998 are read; from line 3,999 on, the 52,726 lines left are one plain paragraph.
+  assert.deepEqual(notices, [{ code: 'import_work_spent', rule: 'budget', path: '/blocks/1', line: 3_999, lines: 52_726 }]);
   assert.equal(IMPORT_WORK.notice, 'import_work_spent');
-  assert.equal(work, 167_575_128);
+  assert.equal(work, 251_084_328);
   assert.deepEqual(blocks.map((b) => b.type), ['blockquote', 'paragraph']);
-  assert.match(blocks[1].content[0].value, /^> l5963 > l5964 /);
+  assert.match(blocks[1].content[0].value, /^> l3998 > l3999 /);
   assert.deepEqual(blocks, keepsEveryWord(md, 'lazy lines under a deep quote'));
   // One long line, thousands of levels deep, runs out of the same budget by its characters.
   const line = readMarkdown(`${'- '.repeat(100_000)}end0`);
