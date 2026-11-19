@@ -49,7 +49,7 @@ export function diffLines(input) {
       left = rest;
       if (!hunk.length) continue;
       if (out.length) out.push({ op: 'gap', text: '' });
-      out.push(...hunk);
+      for (const line of hunk) out.push(line);
     }
     return out;
   }

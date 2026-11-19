@@ -11,7 +11,7 @@ export const VERSION = JSON.parse(fs.readFileSync(new URL('package.json', import
 /** The top-level usage, with one line per command. */
 export function mainUsage(commands) {
   const heads = [...commands.values()].map((c) => `${c.name} ${c.synopsis}`);
-  const width = Math.max(...heads.map((h) => h.length)) + 3;
+  const width = heads.reduce((m, h) => Math.max(m, h.length), -Infinity) + 3;
   const lines = [...commands.values()].map((c, i) => `  ${heads[i].padEnd(width)}${c.summary}`);
   return `Usage: portable-doc <command> [options]
 

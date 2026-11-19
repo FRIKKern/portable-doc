@@ -8,6 +8,7 @@
 // `bp-dataviz bp-dataviz--empty` box (the browser twin of pdrender's placeholder).
 
 import { type Block, escapeHtml, escapeAttr, isMap, safeUrl } from '../inline'
+import { maxOf, minOf } from '../min-max'
 import type { RenderCtx } from './chrome'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
@@ -91,8 +92,8 @@ function empty(kind: string, ctx: RenderCtx): string {
 export function sparkSvg(values: number[], cls = 'bp-stat__spark'): string {
   if (values.length === 0) return ''
   const n = values.length
-  const minV = Math.min(...values)
-  const maxV = Math.max(...values)
+  const minV = minOf(values)
+  const maxV = maxOf(values)
   const span = maxV - minV <= 0 ? 1.0 : maxV - minV
   const w = 120
   const h = 26
@@ -422,10 +423,10 @@ function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string 
   // with 1.0 only as the empty-grid default and 1e-9 as the divide-by-zero floor.
   const flat = grid.flat()
   const maxVal =
-    maxNum !== null && maxNum > 0 ? maxNum : Math.max(flat.length ? Math.max(...flat) : 1.0, 1e-9)
+    maxNum !== null && maxNum > 0 ? maxNum : Math.max(flat.length ? maxOf(flat) : 1.0, 1e-9)
   const rowLabels = stringList(get(block, 'rowLabels'))
   const colLabels = stringList(get(block, 'colLabels'))
-  const cols = Math.max(...grid.map((r) => r.length), 0)
+  const cols = Math.max(maxOf(grid.map((r) => r.length)), 0)
 
   let head = ''
   if (colLabels.length > 0) {
@@ -465,7 +466,7 @@ function heatCalendarHtml(grid: number[][], block: unknown, ctx: RenderCtx): str
   const bins = quantileBins(grid)
   const rowLabels = stringList(get(block, 'rowLabels'))
   const colLabels = stringList(get(block, 'colLabels'))
-  const weeks = Math.max(...grid.map((r) => r.length), 0)
+  const weeks = Math.max(maxOf(grid.map((r) => r.length)), 0)
 
   let head = ''
   if (colLabels.length > 0) {
@@ -510,7 +511,7 @@ function heatMatrixExtrasHtml(grid: number[][], block: unknown, ctx: RenderCtx):
   const showMarg = get(block, 'marginals') === true
   const rowLabels = stringList(get(block, 'rowLabels'))
   const colLabels = stringList(get(block, 'colLabels'))
-  const cols = Math.max(...grid.map((r) => r.length), 0)
+  const cols = Math.max(maxOf(grid.map((r) => r.length)), 0)
   const rowSums = grid.map((row) => row.reduce((a, b) => a + b, 0))
   const colSums: number[] = new Array(cols).fill(0)
   for (const row of grid) row.forEach((v, j) => (colSums[j] = colSums[j]! + v))
@@ -593,8 +594,8 @@ function yAt(v: number, minV: number, maxV: number): number {
 
 function span(series: Series[], axes: Record<string, unknown>): [number, number] {
   const data = series.flatMap((s) => s.points)
-  const dmin = Math.min(...data)
-  const dmax = Math.max(...data)
+  const dmin = minOf(data)
+  const dmax = maxOf(data)
   const pmin = numeric(get(axes, 'min'))
   const pmax = numeric(get(axes, 'max'))
   let minV: number
@@ -688,7 +689,7 @@ const chart: Emit = (block, ctx) => {
 
   const xLabels = stringList(get(axes, 'xLabels'))
   const caption = displayString(get(block, 'caption'))
-  const n = Math.max(...series.map((s) => s.points.length))
+  const n = maxOf(series.map((s) => s.points.length))
   const capHtml = caption === '' ? '' : `<div class="bp-chart__t">${escapeHtml(caption)}</div>`
   const plot = kind === 'bars' ? plotBars(series, minV, maxV, n) : plotLine(series, minV, maxV, n)
 
@@ -768,7 +769,7 @@ function countGauges(block: unknown, ctx: RenderCtx): 'epic' | Gauge[] {
     const k = gaugeBucketKey(r, groupBy, ctx)
     counts.set(k, (counts.get(k) ?? 0) + 1)
   }
-  const maxCount = Math.max(1, ...counts.values())
+  const maxCount = Math.max(1, maxOf(counts.values()))
   const entries = [...counts.entries()].sort((a, b) =>
     a[1] !== b[1] ? b[1] - a[1] : a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0,
   )
@@ -842,7 +843,7 @@ const barChart: Emit = (block, ctx) => {
   if (bars.length === 0) return empty('bar-chart', ctx)
   const values = bars.map((b) => numeric(get(b, 'value')) ?? 0.0)
   const explicitMax = numeric(get(block, 'max'))
-  let denom = explicitMax !== null && explicitMax > 0 ? explicitMax : Math.max(...values)
+  let denom = explicitMax !== null && explicitMax > 0 ? explicitMax : maxOf(values)
   if (denom <= 0) denom = 1.0
   const showValues = get(block, 'values') === true
 
@@ -960,10 +961,10 @@ const route: Emit = (block, ctx) => {
   const midLat = points.reduce((a, p) => a + p[0], 0) / points.length
   const k = Math.cos((midLat * Math.PI) / 180)
   const projected = points.map((p): [number, number] => [p[1] * k, -p[0]])
-  const minX = Math.min(...projected.map((q) => q[0]))
-  const minY = Math.min(...projected.map((q) => q[1]))
-  const spanX = Math.max(Math.max(...projected.map((q) => q[0])) - minX, 1e-9)
-  const spanY = Math.max(Math.max(...projected.map((q) => q[1])) - minY, 1e-9)
+  const minX = minOf(projected.map((q) => q[0]))
+  const minY = minOf(projected.map((q) => q[1]))
+  const spanX = Math.max(maxOf(projected.map((q) => q[0])) - minX, 1e-9)
+  const spanY = Math.max(maxOf(projected.map((q) => q[1])) - minY, 1e-9)
 
   const innerW = ROUTE_W - 2 * ROUTE_PAD
   const scale = Math.min(innerW / spanX, (ROUTE_MAX_H - 2 * ROUTE_PAD) / spanY)

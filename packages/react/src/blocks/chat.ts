@@ -108,7 +108,7 @@ function multiEditLines(edits: unknown): DiffLine[] {
   const out: DiffLine[] = []
   hunks.forEach((h, idx) => {
     if (idx > 0) out.push({ op: 'gap', text: '' })
-    out.push(...h)
+    for (const line of h) out.push(line)
   })
   return out
 }
