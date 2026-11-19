@@ -8,6 +8,7 @@ import { FENCE_TYPES, checkFence } from './from-markdown.js';
 import { READ_ALIASES } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown } from './index.js';
 import { keptTypes, readme } from './readme.mjs';
+import { quote } from './util.js';
 
 // The rule: a block the author made survives a round trip, empty or not. In round-trip mode,
 // toMarkdown then fromMarkdown gives back exactly the block (ids, inline shapes, every
@@ -77,30 +78,44 @@ test('round-trip mode: each form import accepts comes back exactly; any other is
   }
 });
 
-// The one context row whose container reads back in its own Markdown; every other kept one
-// comes back only by a fence of the whole container.
-const NATIVE_IN_CONTEXT = ['list filled in a list item'];
+// The one list-item row whose list reads back in its own Markdown; every other kept one comes
+// back only by a fence of the whole list.
+const NATIVE_IN_ITEM = ['list filled in a list item'];
+const ITEM = 'in a list item';
 
-test('round-trip mode keeps a block in a list item or a callout by a portabledoc fence of the whole container, never in the container\'s own Markdown', () => {
+test('round-trip mode keeps a block in a list item by a fence of the whole list, and a block in a callout inside the callout\'s own > [!tone] quote', () => {
   const contextual = FORMS.filter(([name]) => Object.keys(contexts).some((where) => name.endsWith(` ${where}`)));
   assert.equal(contextual.length, 602, 'every base form in each context');
   const native = [];
   let fenced = 0;
+  let quoted = 0;
   for (const [name, block] of contextual) {
+    if (name.endsWith(` ${QUOTED}`)) {
+      // The route: the callout's line, then the form as round-trip mode writes it alone, inside the quote.
+      const alone = toMarkdown([block.slots.body[0]], ROUND_TRIP);
+      if (alone.lost.length) continue;
+      const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
+      assert.deepEqual(lost, [], name);
+      assert.equal(markdown, `${quote(`[!info] Note\n\n${alone.markdown.trimEnd()}`)}\n`, `${name}: not the callout's own Markdown with the form inside`);
+      quoted++;
+      continue;
+    }
+    assert.ok(name.endsWith(` ${ITEM}`), name);
     if (!keepable(block)) continue;
     const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
     assert.deepEqual(lost, [], name);
-    if (NATIVE_IN_CONTEXT.includes(name)) {
+    if (NATIVE_IN_ITEM.includes(name)) {
       native.push(name);
       assert.equal(markdown, toMarkdown([block]), `${name}: written in its own Markdown`);
       continue;
     }
-    // The route: exactly one fence holding the whole container, as the readable writer writes it.
-    assert.equal(markdown, toMarkdown([{ type: 'code', lang: 'portabledoc', value: JSON.stringify([block]) }]), `${name}: not one fence of the whole container`);
+    // The route: exactly one fence holding the whole list, as the readable writer writes it.
+    assert.equal(markdown, toMarkdown([{ type: 'code', lang: 'portabledoc', value: JSON.stringify([block]) }]), `${name}: not one fence of the whole list`);
     fenced++;
   }
-  assert.deepEqual(native, NATIVE_IN_CONTEXT);
-  assert.equal(fenced, 117, 'context rows kept by a fence of the whole container');
+  assert.deepEqual(native, NATIVE_IN_ITEM);
+  assert.equal(fenced, 58, 'list-item rows kept by a fence of the whole list');
+  assert.equal(quoted, 60, 'callout rows kept in the callout\'s own Markdown');
 });
 
 test('round-trip mode keeps a whole doc of every keepable form, in order, and fences a block its neighbour would change', () => {

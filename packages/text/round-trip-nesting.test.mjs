@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isDeepStrictEqual } from 'node:util';
-import { allForms, contexts } from './block-forms.mjs';
 import { checkFence } from './from-markdown.js';
 import { fromMarkdown, toMarkdown } from './index.js';
-import { quote } from './util.js';
 
 // A callout is Markdown's quote: `> [!tone]` and its first paragraph are the callout, every block
 // after that is its `slots.body`. Round-trip mode writes it so, each block of the body decided as
@@ -41,24 +38,6 @@ const IMPORT = [
 
 test('import reads the blocks after a callout\'s first paragraph into slots.body, and a plain quote as one run of text', () => {
   for (const [name, markdown, blocks] of IMPORT) assert.deepEqual(fromMarkdown(markdown), blocks, name);
-});
-
-const QUOTED = Object.keys(contexts).find((where) => /quote|callout/.test(where));
-
-test('round-trip mode writes each matrix form in a callout inside a > [!tone] quote, as it writes the form alone', () => {
-  let native = 0;
-  for (const [name, block] of allForms()) {
-    if (!name.endsWith(` ${QUOTED}`)) continue;
-    const inner = block.slots.body[0];
-    const alone = toMarkdown([inner], ROUND_TRIP);
-    if (alone.lost.length) continue;
-    const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
-    assert.deepEqual(lost, [], name);
-    assert.equal(markdown, `${quote(`[!info] Note\n\n${alone.markdown.trimEnd()}`)}\n`, `${name}: not the callout's own Markdown with the form inside`);
-    assert.ok(isDeepStrictEqual(fromMarkdown(markdown), [block]), `${name}: not the same block back`);
-    native++;
-  }
-  assert.equal(native, 59, 'matrix forms kept inside a callout in its own Markdown');
 });
 
 test('a block in a callout that import cannot bring back is listed under its own path, and the rest of the callout is kept', () => {
