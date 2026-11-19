@@ -320,7 +320,7 @@ describe('render failures are tool errors, never a hang', () => {
     // machine's speed, so the reader's count is only bounded: one request at most. The server's
     // own fetches are counted exactly (test/fetch-probe.mjs): one, so no retry and no second
     // fetch after the timeout. The second run holds the server busy past the 300 ms before its
-    // fetch starts, so nothing is sent, and the verdict is the same.
+    // fetch starts, so nothing is sent (the reader gets no request), and the verdict is the same.
     for (const stallMs of [0, 1_000]) {
       const slow = await startFakeReader({ delayMs: 600_000 });
       try {
@@ -335,7 +335,8 @@ describe('render failures are tool errors, never a hang', () => {
         }
         await ended; // the server has exited: every fetch it made is in the log
         assert.equal(log.match(/^fetch$/gm)?.length ?? 0, 1, `stall ${stallMs} ms: the server fetched once`);
-        assert.ok(slow.requests.length <= 1, `stall ${stallMs} ms: the reader got one request at most`);
+        if (stallMs) assert.equal(slow.requests.length, 0, `stall ${stallMs} ms: the deadline ran out first, so the reader got no request`);
+        else assert.ok(slow.requests.length <= 1, 'the reader got one request at most');
       } finally {
         await slow.close();
       }
