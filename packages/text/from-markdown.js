@@ -184,8 +184,9 @@ function table(node) {
 function block(node, state) {
   switch (node.type) {
     case 'heading': {
-      const t = flattenText(node.children).trim();
-      return t ? [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), text: t }] : [];
+      // Inline content under the canonical name, marks and links kept, as a paragraph's.
+      const content = inline(node.children);
+      return blank(content) ? [] : [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), content }];
     }
     case 'paragraph': return paragraph(inline(node.children));
     case 'bullet_list': case 'ordered_list': return list(node);

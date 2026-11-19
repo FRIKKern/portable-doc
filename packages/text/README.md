@@ -70,14 +70,15 @@ its target instead.
 import { fromMarkdown } from '@portable-doc/text';
 
 fromMarkdown('## Plan\n\n- [x] parse\n- [ ] ship');
-// [{ type: 'heading', level: 2, text: 'Plan' },
+// [{ type: 'heading', level: 2, content: [{ type: 'text', value: 'Plan' }] },
 //  { type: 'list', ordered: false, task: true, items: [
 //    { content: [{ type: 'text', value: 'parse' }], checked: true },
 //    { content: [{ type: 'text', value: 'ship' }], checked: false } ] }]
 ```
 
 The rules are Barkpark's `FromMarkdown`: headings keep their level, inline
-marks become `strong`, `em`, `strikethrough`, `code` and `link` nodes, a
+marks become `strong`, `em`, `strikethrough`, `code` and `link` nodes, in a
+heading's `content` as in a paragraph's, a
 bullet list with `[ ]` or `[x]` items is a checklist, an ordered list keeps
 its `start`, a fence keeps the first word of its info string as `lang`, `>`
 is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:

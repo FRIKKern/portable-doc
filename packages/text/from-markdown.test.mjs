@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
-import { canon } from './golden-reads.mjs';
+import { READ_ALIASES, canon } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 import { ADDRESS_KEYS, safeUrl } from './util.js';
 
@@ -24,7 +24,7 @@ test('fromMarkdown reads headings, inline marks, links, task lists, tables and m
   ].join('\n\n');
   const blocks = fromMarkdown(md);
   assert.deepEqual(blocks, [
-    { type: 'heading', level: 2, text: 'Title' },
+    { type: 'heading', level: 2, content: [t('Title')] },
     {
       type: 'paragraph',
       content: [
@@ -45,10 +45,37 @@ test('fromMarkdown reads headings, inline marks, links, task lists, tables and m
   valid(blocks);
 });
 
+test('a heading keeps its marks and links as inline content, the way a paragraph does', () => {
+  const md = '# Hello **world** and [a link](https://example.com)';
+  const content = [t('Hello '), { type: 'strong', children: [t('world')] }, t(' and '), { type: 'link', href: 'https://example.com', children: [t('a link')] }];
+  assert.deepEqual(fromMarkdown(md), [{ type: 'heading', level: 1, content }]);
+  assert.deepEqual(fromMarkdown(md.slice(2))[0].content, content, 'the same inline content as a paragraph');
+  assert.equal(toMarkdown(fromMarkdown(md)), `${md}\n`, 'and it writes back as it was');
+  // A heading import leaves with no text is still dropped.
+  assert.deepEqual(fromMarkdown('# ![](javascript:x)\n\n## `` ``'), []);
+  // Import writes no block key under an old name (READ_ALIASES), in any block it makes.
+  const every = [
+    '# h', 'p **b**', '- a\n  - b', '1. a', '- [x] t', '```js\nx\n```', '```mermaid\ngraph TD\n```\n\n*cap*', '    indented',
+    '| a |\n| - |\n| 1 |', '> q\n>\n> — Who', '> [!warning] c', '---', '<div>html</div>',
+  ].join('\n\n');
+  const stack = [...fromMarkdown(every)];
+  const types = new Set();
+  while (stack.length) {
+    const v = stack.pop();
+    if (Array.isArray(v)) stack.push(...v);
+    else if (v && typeof v === 'object') {
+      if (typeof v.type === 'string') types.add(v.type);
+      for (const key of Object.keys(v)) assert.ok(!Object.hasOwn(READ_ALIASES, `${v.type}.${key}`), `import writes ${v.type}.${key}, an old name`);
+      stack.push(...Object.values(v));
+    }
+  }
+  for (const type of ['heading', 'paragraph', 'list', 'code', 'diagram', 'table', 'blockquote', 'callout', 'divider']) assert.ok(types.has(type), `the sample makes a ${type}`);
+});
+
 test('fromMarkdown follows Barkpark FromMarkdown on its own examples', () => {
   const list = (items, extra) => ({ type: 'list', ordered: true, items: items.map((v) => [t(v)]), ...extra });
   const cases = [
-    ['#### Four\n\n##### Five\n\n###### Six', [4, 5, 6].map((level, i) => ({ type: 'heading', level, text: ['Four', 'Five', 'Six'][i] }))],
+    ['#### Four\n\n##### Five\n\n###### Six', [4, 5, 6].map((level, i) => ({ type: 'heading', level, content: [t(['Four', 'Five', 'Six'][i])] }))],
     [
       '1. first\n2. second\n   - nested\n',
       [{ type: 'list', ordered: true, items: [[t('first')], { content: [t('second')], children: [{ type: 'list', ordered: false, items: [[t('nested')]] }] }] }],
@@ -100,7 +127,8 @@ test('a nested list reads back as a list in its item, not as text: fromMarkdown(
 
 test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {
   assert.deepEqual(fromMarkdown('<b>hi</b> <script>bad()</script>there <style>p{}</style>end'), [{ type: 'paragraph', content: [t('hi there end')] }]);
-  assert.deepEqual(fromMarkdown('# Title <script>bad()</script>'), [{ type: 'heading', level: 1, text: 'Title' }]);
+  // The space before the script stays, as in a paragraph; written back, the heading is "# Title".
+  assert.deepEqual(fromMarkdown('# Title <script>bad()</script>'), [{ type: 'heading', level: 1, content: [t('Title ')] }]);
   assert.deepEqual(fromMarkdown('a <script/> b'), [{ type: 'paragraph', content: [t('a  b')] }]);
 });
 
@@ -278,7 +306,7 @@ test('a heading, paragraph, list item or quote that import leaves with no text i
     ['- ![](javascript:x)\n  - a', [{ type: 'list', ordered: false, items: [{ content: [], children: [{ type: 'list', ordered: false, items: [[t('a')]] }] }] }]],
     // A table cell is not a block: it stays, empty.
     ['| a |\n|---|\n| ![](javascript:x) |', [{ type: 'table', head: [[t('a')]], rows: [[[]]] }]],
-    ['# a\n\n![](javascript:x)\n\nb', [{ type: 'heading', level: 1, text: 'a' }, { type: 'paragraph', content: [t('b')] }]],
+    ['# a\n\n![](javascript:x)\n\nb', [{ type: 'heading', level: 1, content: [t('a')] }, { type: 'paragraph', content: [t('b')] }]],
   ];
   for (const [md, blocks] of cases) {
     const got = fromMarkdown(md);
