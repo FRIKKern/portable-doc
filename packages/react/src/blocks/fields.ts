@@ -16,16 +16,13 @@
 
 import { type Block, escapeAttr as ea, escapeHtml as eh, isMap, safeUrl } from '../inline'
 import type { RenderCtx } from './chrome'
+import { numberText } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
 // Compose.stringish/1: a string, a finite number or a boolean as text; else "".
 const s = (v: unknown): string =>
-  typeof v === 'string'
-    ? v
-    : (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean'
-      ? String(v)
-      : ''
+  typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : typeof v === 'boolean' ? String(v) : ''
 
 // field_row_article/2 — `html` is pre-escaped by every caller.
 const row = (b: Block, html: string) =>

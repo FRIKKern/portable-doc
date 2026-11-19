@@ -2,6 +2,7 @@
 // App blocks: chat transcript rows, forms, schema fields, math, and the task
 // family (board, list, detail, roadmap, status legend).
 
+import { numberText } from './number-text.js';
 import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, nonblank, paras, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
 import { titled } from './blocks-layout.js';
 import { diffLines } from './diff.js';
@@ -199,7 +200,11 @@ const priority = (p) => {
   const d = str(p).trim().replace(/[^0-9]/g, '');
   return str(p).trim() === '' ? '' : `P${d || '?'}`;
 };
-const criteria = (c) => (isMap(c) && typeof c.met === 'number' && typeof c.total === 'number' && c.total > 0 ? `${c.met}/${c.total}` : '');
+const criteria = (c) => {
+  const met = isMap(c) && typeof c.met === 'number' ? numberText(c.met) : '';
+  const total = isMap(c) && typeof c.total === 'number' && c.total > 0 ? numberText(c.total) : '';
+  return met !== '' && total !== '' ? `${met}/${total}` : '';
+};
 const draft = (r) => (r.draft === true ? 'DRAFT ' : '');
 
 function taskLine(r, ctx, { status = true } = {}) {

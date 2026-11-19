@@ -10,6 +10,7 @@
 // the caller owns), and a missing target draws the identical placeholder.
 
 import { type Block, escapeHtml } from '../inline'
+import { numberText } from '../../../text/number-text.js'
 
 /** Pre-rendered transclusion HTML, keyed by the embed block's raw `target`. */
 export type EmbedHtml = Record<string, string>
@@ -19,7 +20,7 @@ export type EmbedHtml = Record<string, string>
 export function embedEmitter(embeds?: EmbedHtml): (b: Block) => string {
   return (b) => {
     const raw =
-      typeof b.target === 'string' ? b.target : typeof b.target === 'number' ? String(b.target) : ''
+      typeof b.target === 'string' ? b.target : typeof b.target === 'number' ? numberText(b.target) : ''
     const target = escapeHtml(raw)
     const html =
       embeds && Object.prototype.hasOwnProperty.call(embeds, raw) ? embeds[raw] : undefined

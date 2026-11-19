@@ -12,6 +12,7 @@
 import { type Block, escapeHtml, safeUrl, isMap } from '../inline'
 import type { RenderCtx } from './chrome'
 import { coverSpans, spanAttr, type Span } from './spans'
+import { numberText } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -68,7 +69,7 @@ const TEMPORAL_RE = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/
 const BG_RE = /^#[0-9a-fA-F]{6}$/
 
 function toStr(v: unknown): string {
-  return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : ''
+  return typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : ''
 }
 
 function colWidthStyle(colWidths: unknown, idx: number): string {
