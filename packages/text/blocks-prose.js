@@ -86,9 +86,11 @@ function callout(b, ctx) {
   return ctx.md ? quote(out) : out;
 }
 
+const CODE_KEYS = ['value', 'code', 'content', 'text'];
+
 /** A code block's source: the first non-blank of value, code, content, text. */
 export function codeSource(b) {
-  for (const key of ['value', 'code', 'content', 'text']) {
+  for (const key of CODE_KEYS) {
     const v = b[key];
     const s = Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? n : isMap(n) ? str(n.value) || str(n.text) : '')).join('') : str(v);
     if (s.trim() !== '') return s;
@@ -96,10 +98,16 @@ export function codeSource(b) {
   return '';
 }
 
+// An empty code block is a real block: Markdown writes its empty fence (with its
+// language), so it imports back as the same block. Plain text writes nothing.
 function code(b, ctx) {
   const source = codeSource(b);
-  if (source.trim() === '') return '';
-  return ctx.md ? fence(source, str(b.lang) || str(b.language)) : source.replace(/\n+$/, '');
+  const lang = str(b.lang) || str(b.language);
+  if (source.trim() === '') {
+    const blank = CODE_KEYS.map((k) => b[k]).find((v) => typeof v === 'string') ?? '';
+    return ctx.md ? fence(blank, lang) : '';
+  }
+  return ctx.md ? fence(source, lang) : source.replace(/\n+$/, '');
 }
 
 const divider = (_b, ctx) => (ctx.md ? '---' : '§');
@@ -130,7 +138,8 @@ const figure = (b, ctx) => paras(isMap(b.child) ? ctx.blocks([b.child]) : '', ca
 
 function diagram(b, ctx) {
   const source = str(b.source);
-  const src = source.trim() === '' ? '' : ctx.md ? fence(source, 'mermaid') : source.replace(/\n+$/, '');
+  // Like code, an empty diagram writes its empty fence in Markdown, so it round-trips.
+  const src = ctx.md ? fence(source, 'mermaid') : source.trim() === '' ? '' : source.replace(/\n+$/, '');
   return paras(src, caption(b, ctx));
 }
 

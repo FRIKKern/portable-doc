@@ -94,7 +94,8 @@ export function fence(source, lang = '') {
   const longest = maxOf((source.match(/`+/g) ?? []).map((r) => r.length), 0);
   const f = '`'.repeat(Math.max(3, longest + 1));
   const info = str(lang).trim().split(/\s/)[0].replace(/[^\w+#.-]/g, '');
-  return `${f}${info}\n${source.replace(/\n+$/, '')}\n${f}`;
+  const body = source.replace(/\n+$/, '');
+  return body === '' ? `${f}${info}\n${f}` : `${f}${info}\n${body}\n${f}`;
 }
 
 /** An inline code span that survives backticks in its content. */
