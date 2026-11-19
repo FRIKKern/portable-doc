@@ -1,60 +1,71 @@
-// Writes the shared work cases: { rules, cases: { name: { markdown, depths, work, cut } } }, from
-// the checkout in argv[2]: the hostile cases of its import-work-cases.mjs, and the old file's cases.
-// cut is the first line (from 0) past the budget, or null; work is the count of the whole text.
-import fs from 'node:fs';
-import { RULES } from './rules.mjs';
-const [REPO, FROM, OUT] = process.argv.slice(2);
-const { planText, normalize } = await import(`${REPO}/packages/text/import-work.js`);
-// The depths, from the rules text alone (markers and depth), not from the module.
-const SP = (c) => c === ' ' || c === '\t';
-function own(line) {
-  let i = 0, col = 0, m = 0, w = 0;
-  for (;;) {
-    while (i < line.length && SP(line[i])) { const width = line[i] === '\t' ? 4 - (col % 4) : 1; w += width; col += width; i++; }
-    if (line[i] === '>') { m++; i++; col++; continue; }
-    const mk = /^(?:[-+*]|[0-9]{1,9}[.)])(?=[ \t]|$)/.exec(line.slice(i));
-    if (!mk) return m + Math.floor(w / 2);
-    m++; i += mk[0].length; col += mk[0].length;
-  }
-}
-function depthReader() {
-  let before = 0, afterBlank = true;
-  return { next(line) {
-    const blank = /^[ \t]*$/.test(line);
-    const d = blank ? before : afterBlank ? own(line) : Math.max(own(line), before);
-    before = d; afterBlank = blank; return d;
-  } };
-}
-const BUDGET = 16_000_000;
-const NO_LIMIT = { budget: Infinity, lineBytes: null };
+// SPDX-License-Identifier: Apache-2.0
+// The inputs of the shared text-work cases: the text each case reads, and for a cut case its
+// limits. scripts/write-shared-cases.mjs reads them with @portable-doc/text and writes
+// work-cases.json and cut-cases.json; the outputs are not kept in the repository.
+
+import { CASES as HOSTILE } from '../../packages/text/import-work-cases.mjs';
+
 const X = (n, c = 'x') => c.repeat(n);
-const { CASES } = await import(`${REPO}/packages/text/import-work-cases.mjs`);
-const old = JSON.parse(fs.readFileSync(FROM, 'utf8'));
-const oldCases = old.cases ?? old;
-const out = {};
-const add = (name, markdown, keep = true) => {
-  const lines = normalize(markdown).split('\n');
-  const reader = depthReader();
-  const depths = lines.map((l) => reader.next(l));
-  let sum = 0;
-  let cut = null;
-  depths.forEach((d, i) => { sum += (d + 1) * (2 + Buffer.byteLength(lines[i])); if (cut === null && sum > BUDGET) cut = i; });
-  if (sum !== planText(markdown, NO_LIMIT).work) throw new Error(`depths and planText disagree: ${name}`);
-  out[name] = keep ? { markdown, depths, work: sum, cut } : { generator: name, work: sum, cut, lines: lines.length, bytes: Buffer.byteLength(markdown) };
+const lines = (n, line) => Array.from({ length: n }, (_, i) => line(i)).join('\n');
+const BUDGET = 16_000_000;
+const LINE = { budget: BUDGET, lineBytes: 40 };
+const NO_LINE = { budget: BUDGET, lineBytes: null };
+
+// Work cases kept from the first shared file. Three share a name with a hostile case in
+// import-work-cases.mjs and are its first, longer form (200 lazy lines, not 150).
+const FIRST = {
+  'lazy lines under a deep quote': `${X(300, '> ')}l0\n${lines(200, (i) => `l${i + 1}`)}`,
+  'quoted lines under a deep quote': `${X(300, '> ')}l0\n${lines(200, (i) => `> l${i + 1}`)}`,
+  'lazy lines under quote markers with no spaces': `${X(300, '>')}l0${X(200, '\nlxxxxxxxxxxxxxxx')}`,
+  'quote markers with no spaces on every line': X(40, `${X(150, '>')}x\n`),
+  'empty list items': `${X(50, '-\n')}${X(20, ' ')}x\n${X(50, '1.\n')}`,
+  'wide content columns': lines(60, (i) => `${X(i * 5, ' ')}-    x${i}\n\n${X(i * 5 + 5, ' ')}more`),
 };
-for (const [name, c] of Object.entries(oldCases)) if (c.markdown !== undefined) add(name, c.markdown);
-for (const [name, md] of Object.entries(CASES)) if (!(name in out)) add(name, md);
-let lazy = `${'> '.repeat(300)}l0`;
-for (let i = 1; lazy.length < 500_000; i++) lazy += `\n> l${i}`;
-add("'> ' x 300 + 'l0', then '\\n> l' + i for i = 1, 2, … until 500,000 characters", lazy, false);
-let lazyBare = `${'> '.repeat(300)}l0`;
-for (let i = 1; lazyBare.length < 500_000; i++) lazyBare += `\nl${i}`;
-add("'> ' x 300 + 'l0', then '\\nl' + i for i = 1, 2, … until 500,000 characters (lazy lines)", lazyBare, false);
-add("'- ' x 250,000 + 'end' (one line)", `${'- '.repeat(250_000)}end`, false);
-const body = Object.entries(out).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(',\n');
-fs.writeFileSync(OUT, `{\n "rules": ${JSON.stringify(RULES, null, 2).replace(/\n/g, '\n ')},\n "cases": {\n${body}\n }\n}\n`);
-for (const [k, v] of Object.entries(out)) {
-  const o = oldCases[k];
-  const moved = !o ? 'new  ' : o.work !== v.work || o.cut !== v.cut ? 'MOVED' : 'same ';
-  console.log(moved, k, o && moved === 'MOVED' ? `work ${o.work} -> ${v.work}, cut ${o.cut} -> ${v.cut}` : moved === 'new  ' ? `work ${v.work}, cut ${v.cut}` : '');
-}
+
+/** The work cases: name → text. Every hostile case of the import-work test, and the first file's own. */
+export const WORK = { ...FIRST, ...Object.fromEntries(Object.entries(HOSTILE).filter(([name]) => !(name in FIRST))) };
+
+// Texts too big to store, each named by how it is built; the files give their counts only.
+const upTo = (head, line) => {
+  let s = head;
+  for (let i = 1; s.length < 500_000; i++) s += line(i);
+  return s;
+};
+/** The work cases given by their generator only: name → text. */
+export const WORK_GENERATED = {
+  "'> ' x 300 + 'l0', then '\\n> l' + i for i = 1, 2, … until 500,000 characters": upTo(`${X(300, '> ')}l0`, (i) => `\n> l${i}`),
+  "'> ' x 300 + 'l0', then '\\nl' + i for i = 1, 2, … until 500,000 characters (lazy lines)": upTo(`${X(300, '> ')}l0`, (i) => `\nl${i}`),
+  "'- ' x 250,000 + 'end' (one line)": `${X(250_000, '- ')}end`,
+};
+
+/** The cut cases: name → [text, limits], read by readMarkdown with those limits. */
+export const CUT = {
+  'line: at the bound': [X(40), LINE],
+  'line: one byte over': [X(41), LINE],
+  'line: inside a quote': [`> a\n> ${X(41)}\n> b`, LINE],
+  'line: inside a list item': [`- a\n  ${X(41)}\n- b`, LINE],
+  'line: a table row': [`| a | b |\n| - | - |\n| 1 | 2 |\n| ${X(41)} |\n| 3 | 4 |`, LINE],
+  'line: under a paragraph, as a setext underline': [`Title\n${X(41, '=')}`, LINE],
+  'line: a link reference definition': [`[ref]: https://example.com/${X(30)}\n\nsee [ref]`, LINE],
+  'line: three long lines, one notice': [`${X(41)}\n${X(41, 'y')}\nok\n${X(41, 'z')}`, LINE],
+  'line: inside a fence': [`\`\`\`js\nconst a = 1;\n${X(41, 'y')}\nconst b = 2;\n\`\`\`\nafter`, LINE],
+  'line: a long fence opener opens nothing': [`\`\`\`${X(41)}\n**a**\nafter`, LINE],
+  'line: inside a quoted fence': [`> \`\`\`js\n> one\n> ${X(41)}\n> two\n> \`\`\`\nafter`, LINE],
+  'line: inside a list-item fence': [`- \`\`\`js\n  one\n  ${X(41)}\n  two\n  \`\`\`\n- b`, LINE],
+  'line: after a fence its quote closed': [`> \`\`\`\n> code\nplain\n${X(41)}\nmore`, LINE],
+  'budget: deep list items, then b0, then a deep quote': [`${lines(120, (i) => `${X(300, '- ')}a${i}`)}\n\nb0\n\n${X(300, '> ')}c0`, NO_LINE],
+  'budget: lone carriage returns under deep quotes': [`x\r${X(200, `${X(200, '> ')}y\r`)}`, NO_LINE],
+  'budget: lone carriage returns under deep list items': [`x\r${X(200, `${X(200, '- ')}y\r`)}`, NO_LINE],
+  'budget: a carriage return inside each list prefix': [X(100, `${X(10, '- \r- ')}y\n`), NO_LINE],
+  'line: lone carriage returns end lines for the line rule': [`short\r${X(41)}\rafter`, LINE],
+  'budget: NULs read as U+FFFD': ['> > a\0b', NO_LINE],
+};
+
+/** The cut case given by its generator only: its paragraph is described, not stored. */
+export const CUT_GENERATED = {
+  name: "budget: '- ' x 100,000 + a0, then b0, then '> ' x 300 + c0 (markdown as generator text)",
+  generator: "'- '.repeat(100000) + 'a0\\n\\nb0\\n\\n' + '> '.repeat(300) + 'c0'",
+  markdown: `${X(100_000, '- ')}a0\n\nb0\n\n${X(300, '> ')}c0`,
+  paragraph: '(- x100000) a0 b0 (> x300) c0, whitespace collapsed',
+  limits: NO_LINE,
+};

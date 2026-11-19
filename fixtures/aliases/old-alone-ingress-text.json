@@ -1,9 +1,0 @@
-{
-  "block": {
-    "type": "ingress",
-    "text": "i"
-  },
-  "reads": {
-    "content": "i"
-  }
-}
