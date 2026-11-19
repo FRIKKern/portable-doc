@@ -181,3 +181,33 @@ test('outside a checkout, the walk for Markdown skips what the root .gitignore n
   assert.equal(r.code, 1, r.out);
   assert.deepEqual(r.out.split('\n').filter((l) => l.includes('broken link')), ['docs/coverage/kept.md: broken link gone.md', 'docs/kept.md: broken link gone.md']);
 });
+
+test('a story whose title is the timeline end marker is written as text: the block keeps one start and one end, the job\'s check passes, and the README shows the title', async () => {
+  const { render } = await import('./lib/timeline.mjs');
+  const { replaceBlock } = await import('./lib/board.mjs');
+  const { default: MarkdownIt } = await import('markdown-it');
+  const root = repo();
+  git(root, 'checkout', '-q', 'main');
+  const now = new Date('2026-11-19T12:00:00Z');
+  const title = '<!-- timeline:end --> & <!-- note';
+  replaceBlock(path.join(root, 'README.md'), 'timeline', render([{ at: now, kind: 'task', text: `Delivered: [${title}](https://example.com/t)` }], now));
+  const text = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  assert.equal(text.split('<!-- timeline:start -->').length - 1, 1);
+  assert.equal(text.split('<!-- timeline:end -->').length - 1, 1);
+  const r = checkDocs(root, '--timeline-from-job');
+  assert.equal(r.code, 0, r.out);
+  assert.equal(replaceBlock(path.join(root, 'README.md'), 'timeline', '- **Today** · 1 change\n'), true, 'the next refresh still finds one block');
+  const html = new MarkdownIt({ html: true }).render(text);
+  assert.ok(html.includes('<a href="https://example.com/t">&lt;!-- timeline:end --&gt; &amp; &lt;!-- note</a>'), html);
+});
+
+test('--timeline-from-job in a repo with no commits says so in one plain line, with no stack trace', () => {
+  const root = path.join(tmp, `empty-${n++}`);
+  fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
+  fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts', 'check-docs.mjs'));
+  setReadme(root, readme('1 change'));
+  git(root, 'init', '-q');
+  const r = checkDocs(root, '--timeline-from-job');
+  assert.equal(r.code, 1, r.out);
+  assert.equal(r.out, 'README.md: --timeline-from-job is only for the housekeeping job, on main at origin/main; here HEAD has no commit\n');
+});

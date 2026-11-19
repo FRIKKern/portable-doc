@@ -181,6 +181,25 @@ test('import turns Markdown from a file or stdin into a doc that validate accept
   assert.equal(fs.readFileSync(file, 'utf8'), md);
 });
 
+test('a reader that stops early (| head -1) ends the command quietly with its own exit code: render 0, validate of a bad doc 1, diff of different docs 1', () => {
+  const quote = (s) => `'${s.replaceAll("'", "'\\''")}'`;
+  const headOne = (args) => {
+    const code = path.join(tmp, `exit-code-${args[0]}`);
+    const r = spawnSync('sh', ['-c', `{ ${[process.execPath, bin, ...args].map(quote).join(' ')}; echo $? > ${quote(code)}; } | head -1`], { encoding: 'utf8' });
+    return { ...r, code: fs.readFileSync(code, 'utf8').trim() };
+  };
+  // Each prints far more than a pipe holds, so the write is still going when head closes it.
+  const long = write('long.json', { blocks: Array.from({ length: 20_000 }, (_, i) => ({ type: 'paragraph', text: `Paragraph ${i} of a long doc, long enough to fill a pipe.` })) });
+  const rendered = headOne(['render', '--format', 'text', long]);
+  assert.deepEqual([rendered.stdout, rendered.stderr, rendered.code], ['Paragraph 0 of a long doc, long enough to fill a pipe.\n', '', '0']);
+  const bad = write('bad-many.json', { blocks: Array(1003).fill(5) });
+  const checked = headOne(['validate', bad]);
+  assert.deepEqual([checked.stdout.split('\n').length, checked.stderr, checked.code], [2, '', '1']);
+  const doc = (word) => ({ blocks: Array.from({ length: 20_000 }, (_, i) => ({ id: `p${i}`, type: 'paragraph', text: `Paragraph ${i} says ${word}.` })) });
+  const diffed = headOne(['diff', write('diff-a.json', doc('one')), write('diff-b.json', doc('two'))]);
+  assert.deepEqual([diffed.stdout.split('\n').length, diffed.stderr, diffed.code], [2, '', '1']);
+});
+
 test('validate, explain and render list the first MAX_ERRORS errors and say how many more there were', async () => {
   const file = write('many.json', { blocks: Array(1003).fill(5) });
   const checked = await call(['validate', file]);
