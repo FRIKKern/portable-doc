@@ -7,6 +7,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 import { main } from './index.js';
+import { loadCommands } from './registry.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -20,10 +21,10 @@ function runWithout(blocked, args, input) {
   return spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(register)}`, bin, ...args], { cwd: root, input, encoding: 'utf8' });
 }
 // The same entry point in-process, for the cases that need no real process.
-async function call(args, input = '') {
+async function call(args, input = '', entry = main) {
   const r = { stdout: '', stderr: '' };
   const io = { stdout: (t) => void (r.stdout += t), stderr: (t) => void (r.stderr += t), readStdin: async () => input, stdinIsTTY: false };
-  r.status = await main(args, io);
+  r.status = await entry(args, io);
   return r;
 }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'portable-doc-cli-'));
@@ -169,13 +170,47 @@ test('README.md\'s command sections are what node packages/cli/readme.mjs writes
   assert.equal(fs.readFileSync(path.join(here, 'README.md'), 'utf8'), await readme(), 'stale: run node packages/cli/readme.mjs');
 });
 
-test('a command file dropped into commands/ is in the usage, the dispatch and the README, with no other file changed', async () => {
-  // A copy of the package, so the real commands/ holds only real commands. Its
-  // node_modules link resolves the workspace packages as the real one does.
-  const copy = path.join(tmp, 'pkg', 'cli');
+// A copy of the package, so the real commands/ holds only real commands. Its
+// node_modules link resolves the workspace packages as the real one does.
+function packageCopy(name) {
+  const copy = path.join(tmp, name, 'cli');
   fs.cpSync(here, copy, { recursive: true });
-  fs.symlinkSync(path.join(root, 'node_modules'), path.join(tmp, 'pkg', 'node_modules'), 'dir');
-  fs.mkdirSync(path.join(copy, 'commands'), { recursive: true });
+  fs.symlinkSync(path.join(root, 'node_modules'), path.join(tmp, name, 'node_modules'), 'dir');
+  return copy;
+}
+
+test('stray files in commands/ (an editor lock or backup, a swap file, .DS_Store) are skipped, and every command still runs', async () => {
+  const copy = packageCopy('stray');
+  const commands = path.join(copy, 'commands');
+  fs.symlinkSync('ada@host.4242:1700000000', path.join(commands, '.#x.js')); // an Emacs lock: a link to nowhere
+  fs.writeFileSync(path.join(commands, 'x.js~'), 'an editor backup, not a command');
+  fs.writeFileSync(path.join(commands, 'x.js.swp'), Buffer.from([0x62, 0x30, 0x56, 0x49, 0x4d, 0]));
+  fs.writeFileSync(path.join(commands, '.DS_Store'), Buffer.from([0, 0, 0, 1, 0x42, 0x75, 0x64, 0x31]));
+  const { main: copyMain } = await import(pathToFileURL(path.join(copy, 'index.js')).href);
+  const names = [...(await loadCommands()).keys()];
+  assert.ok(names.length >= 6, names.join(' '));
+  for (const args of [['--version'], ['--help'], ...names.map((name) => [name, '--help'])]) {
+    const [got, want] = [await call(args, '', copyMain), await call(args)];
+    assert.deepEqual(got, want, args.join(' '));
+    assert.equal(got.status, 0, `${args.join(' ')}: ${got.stderr}`);
+  }
+});
+
+test('a file named like a command fails loudly and names itself when it has the wrong shape or does not load', async () => {
+  const folder = (file, source) => {
+    const dir = fs.mkdtempSync(path.join(tmp, 'commands-'));
+    fs.writeFileSync(path.join(dir, file), source);
+    return pathToFileURL(`${dir}${path.sep}`);
+  };
+  await assert.rejects(loadCommands(folder('half.js', 'export const order = 1;\n')), /^Error: commands\/half\.js exports no synopsis \(string\)$/);
+  await assert.rejects(loadCommands(folder('broken.js', 'export const = ;\n')), /^Error: commands\/broken\.js does not load: /);
+  // A module may throw anything, not only an Error.
+  await assert.rejects(loadCommands(folder('text.js', "throw 'no config';\n")), /^Error: commands\/text\.js does not load: no config$/);
+  await assert.rejects(loadCommands(folder('nothing.js', 'throw null;\n')), /^Error: commands\/nothing\.js does not load: null$/);
+});
+
+test('a command file dropped into commands/ is in the usage, the dispatch and the README, with no other file changed', async () => {
+  const copy = packageCopy('pkg');
   fs.writeFileSync(path.join(copy, 'commands', 'hello.js'), `export const order = 99;
 export const synopsis = '[name]';
 export const summary = 'say hello (a test fixture)';

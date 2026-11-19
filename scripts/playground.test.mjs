@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 import { parse as parseJs } from 'acorn';
@@ -15,6 +15,10 @@ import { playgroundExamples } from './playground/examples.mjs';
 import { parseJson, prettyBytes, tidyJson } from './playground/parse.js';
 import { decodeShare, encodeShare, MAX_DOC_BYTES, overCap, utf8Length } from './playground/share.js';
 import { docFromMarkdown, outputsOf } from './playground/outputs.js';
+import * as waysIn from './playground/ways-in.js';
+import { JSDOM } from 'jsdom';
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -262,4 +266,189 @@ test('the "last good render" note sits outside the tablist, which holds only tab
   assert.deepEqual(tablist.replace(/<button[^>]*role="tab"[^>]*>[^<]*<\/button>/g, ''), '', 'nothing in the tablist but tabs');
   assert.ok(html.includes('last good render'), 'the note is still shown');
   assert.ok(!render({ html: '', markdown: '', text: '', stale: false }).includes('last good render'));
+});
+
+// ── The doors ───────────────────────────────────────────────────────────
+// Every way a doc can come into the editor, the full list:
+//   typing or pasting in the JSON editor, Tab in it, and Format JSON (way: typed);
+//   Make a doc in the Paste Markdown box (markdown); the example picker (example);
+//   a share link in the address, on load and on hashchange (link).
+// There is no file open or drop, no restore from saved state and no query parameter.
+// Each door is driven on the real page, the playground bundle mounted in jsdom, built with a
+// 4 kB cap so the docs stay small: a byte over leaves the editor holding exactly what it held
+// and shows the refusal; a doc right at the cap goes in, and the refusal is gone. One test
+// runs the shipped bundle at its real cap, through the paste door.
+
+const SMALL = 4000;
+const compact = (doc) => JSON.stringify(doc);
+const laidOut = (doc) => JSON.stringify(doc, null, 2);
+/**
+ * Text of exactly `bytes` UTF-8 bytes, mostly in letters of more than one byte: one 4-byte
+ * emoji, then 'é' (2 bytes), with an ASCII letter to make the count. Its length in UTF-16
+ * units is about half its bytes, so a cap that counts `.length` lets these docs through.
+ */
+function letters(bytes) {
+  const text = `😀${'é'.repeat(Math.floor((bytes - 4) / 2))}${'a'.repeat((bytes - 4) % 2)}`;
+  assert.equal(utf8Length(text), bytes);
+  return text;
+}
+/** A one-paragraph doc whose JSON, written by `write`, is exactly `bytes` bytes, and far fewer UTF-16 units. */
+function docOf(bytes, write) {
+  const doc = (text) => ({ blocks: [{ type: 'paragraph', text }] });
+  const made = doc(letters(bytes - utf8Length(write(doc('')))));
+  assert.equal(utf8Length(write(made)), bytes);
+  assert.ok(write(made).length < bytes * 0.6, 'the doc is mostly letters of more than one byte');
+  return made;
+}
+const linkTo = (text) => `#doc=json.${Buffer.from(text).toString('base64url')}`;
+// Markdown of n bytes of letters makes one paragraph; this many bytes of doc JSON come with it.
+const MD_OVERHEAD = utf8Length(compact(JSON.parse(docFromMarkdown('a').text))) - 1;
+const TINY = { id: 'tiny', group: 'Block types', label: 'A tiny doc', doc: { blocks: [{ type: 'divider' }] } };
+const OVER_EXAMPLE = { id: 'over', group: 'Block types', label: 'An example a byte over', doc: docOf(SMALL + 1, laidOut) };
+const AT_EXAMPLE = { id: 'at', group: 'Block types', label: 'An example right at the cap', doc: docOf(SMALL, laidOut) };
+
+const bundles = new Map();
+const pages = [];
+after(() => pages.forEach((window) => window.close()));
+/** The playground page built with `cap`, mounted in jsdom on `hash`, once the editor shows. */
+async function mountPage({ cap = SMALL, hash = '', examples = [TINY, OVER_EXAMPLE, AT_EXAMPLE] } = {}) {
+  if (!bundles.has(cap)) bundles.set(cap, bundlePlayground({ cap }).toString('utf8'));
+  const dom = new JSDOM('<!doctype html><div id="playground"></div><script type="application/json" id="pd-examples"></script>', { url: `https://playground.example/${hash}`, runScripts: 'outside-only', pretendToBeVisual: true });
+  const { window } = dom;
+  const { document } = window;
+  pages.push(window);
+  document.getElementById('pd-examples').textContent = JSON.stringify(examples);
+  window.matchMedia = () => ({ matches: false, addEventListener() {} });
+  document.execCommand = () => false; // as a browser that has no insertText command
+  Object.assign(window, { TextDecoder, TextEncoder }); // browsers have them; jsdom does not
+  window.eval(bundles.get(cap));
+  const area = () => document.querySelector('textarea[aria-label="PortableDoc JSON"]');
+  const page = {
+    window,
+    text: () => area().value,
+    status: () => document.querySelector('.pg-status').textContent,
+    click: (label) => [...document.querySelectorAll('button')].find((b) => b.textContent === label).click(),
+    type(el, value) {
+      Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(el, value);
+      el.dispatchEvent(new window.Event('input', { bubbles: true }));
+    },
+    area,
+    /** Wait for `check` to hold: a hang bound, counted in polls. */
+    async until(check, what) {
+      for (let i = 0; i < 2_000; i++) {
+        if (check()) return;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      assert.fail(`the page never showed ${what()}`);
+    },
+  };
+  await page.until(() => area(), () => 'the editor');
+  return page;
+}
+
+const MB = (cap) => cap / 1_000_000;
+const refusal = (message) => `${message}. The editor still holds your doc.`;
+const tooBig = (cap) => refusal(`The doc is too big for the editor (over ${MB(cap)} MB)`);
+const typeIn = (page, text) => page.type(page.area(), text);
+/** Each door: how to send it a doc of `bytes`, what the page says over and at the cap, and the text that goes in. */
+const DOORS = [
+  {
+    door: 'typing or pasting in the JSON editor', way: 'typed',
+    send: (page, bytes) => typeIn(page, compact(docOf(bytes, compact))),
+    over: tooBig(SMALL), at: '', text: (bytes) => compact(docOf(bytes, compact)),
+  },
+  {
+    door: 'Tab in the JSON editor', way: 'typed',
+    async prepare(page, bytes) {
+      typeIn(page, compact(docOf(bytes - 2, compact)));
+      await page.until(() => page.text() === compact(docOf(bytes - 2, compact)), () => 'the text before Tab');
+    },
+    send(page) {
+      const area = page.area();
+      area.focus();
+      area.setSelectionRange(area.value.length, area.value.length);
+      area.dispatchEvent(new page.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    },
+    over: tooBig(SMALL), at: '', text: (bytes) => `${compact(docOf(bytes - 2, compact))}  `,
+  },
+  {
+    door: 'Format JSON', way: 'typed',
+    async prepare(page, bytes) {
+      typeIn(page, compact(docOf(bytes, laidOut)));
+      await page.until(() => page.text() === compact(docOf(bytes, laidOut)), () => 'the text before Format');
+    },
+    send: (page) => page.click('Format JSON'),
+    over: tooBig(SMALL), at: 'Formatted.', text: (bytes) => laidOut(docOf(bytes, laidOut)),
+  },
+  {
+    door: 'Make a doc in the Paste Markdown box', way: 'markdown',
+    async send(page, bytes) {
+      const box = () => page.window.document.querySelector('.pg-markdown');
+      if (!box()) page.click('Paste Markdown');
+      await page.until(box, () => 'the Markdown box');
+      page.type(box(), letters(bytes - MD_OVERHEAD));
+      await page.until(() => !page.window.document.querySelector('.pg-paste button').disabled, () => 'Make a doc enabled');
+      page.click('Make a doc');
+    },
+    over: refusal(`The Markdown makes a doc too big for the editor (over ${MB(SMALL)} MB)`), at: 'Made a doc of 1 block from the Markdown.',
+    text: (bytes) => docFromMarkdown(letters(bytes - MD_OVERHEAD), SMALL).text,
+  },
+  {
+    door: 'the example picker', way: 'example',
+    send(page, bytes) {
+      const select = page.window.document.querySelector('select');
+      select.value = bytes > SMALL ? OVER_EXAMPLE.id : AT_EXAMPLE.id;
+      select.dispatchEvent(new page.window.Event('change', { bubbles: true }));
+    },
+    over: refusal(`${OVER_EXAMPLE.label} is too big for the editor (over ${MB(SMALL)} MB)`), at: `Loaded ${AT_EXAMPLE.label}.`, text: () => laidOut(AT_EXAMPLE.doc),
+  },
+  {
+    door: 'a share link, on hashchange', way: 'link',
+    send: (page, bytes) => void (page.window.location.hash = linkTo(compact(docOf(bytes, compact)))),
+    over: refusal(`This link holds a doc too big to open (over ${MB(SMALL)} MB)`), at: 'Opened the doc from the link.', text: (bytes) => compact(docOf(bytes, compact)),
+  },
+];
+
+/** Send `door` a doc a byte over the cap, then one right at it, checking what the page shows. */
+async function holds(page, door, cap = SMALL) {
+  await door.prepare?.(page, cap + 1);
+  const before = page.text();
+  await door.send(page, cap + 1);
+  await page.until(() => page.status() === door.over, () => `${door.door}: "${door.over}", not "${page.status().slice(0, 120)}"`);
+  assert.ok(page.text() === before, `${door.door}: a byte over leaves the editor's doc as it was (${page.text().length} bytes, was ${before.length})`);
+  await door.prepare?.(page, cap);
+  await door.send(page, cap);
+  await page.until(() => page.status() === door.at && page.text() === door.text(cap), () => `${door.door}: a doc at the cap going in (${page.text().length} bytes, "${page.status().slice(0, 120)}")`);
+}
+
+test('every door holds the cap on the real page: a byte over leaves the editor as it was and says so; a doc at the cap goes in and the refusal is gone', async () => {
+  assert.deepEqual([...new Set(DOORS.map((d) => d.way))].sort(), Object.keys(waysIn.WAYS_IN).sort(), 'a door for every way in ways-in.js, and no door without one');
+  const page = await mountPage();
+  for (const door of DOORS) await holds(page, door);
+});
+
+test('a share link on load holds the cap too: a byte over opens the first example and says why; a doc at the cap opens', async () => {
+  const over = await mountPage({ hash: linkTo(compact(docOf(SMALL + 1, compact))) });
+  assert.equal(over.status(), `This link holds a doc too big to open (over ${MB(SMALL)} MB). Showing ${TINY.label} instead.`);
+  assert.ok(over.text() === laidOut(TINY.doc), `a byte over opens the first example (${over.text().length} bytes)`);
+  const at = await mountPage({ hash: linkTo(compact(docOf(SMALL, compact))) });
+  assert.equal(at.status(), 'Opened the doc from the link.');
+  assert.ok(at.text() === compact(docOf(SMALL, compact)), `a doc at the cap opens (${at.text().length} bytes)`);
+});
+
+test(`the shipped page carries the real cap, ${MAX_DOC_BYTES} bytes: pasted JSON a byte over is refused, and a doc at the cap goes in`, async () => {
+  const page = await mountPage({ cap: MAX_DOC_BYTES, examples: [TINY] });
+  await holds(page, { ...DOORS[0], over: tooBig(MAX_DOC_BYTES) }, MAX_DOC_BYTES);
+  page.window.close(); // before the doc settles: rendering 2 MB is not what this checks
+});
+
+test('every built-in example is under the cap', () => {
+  for (const example of playgroundExamples()) assert.equal(waysIn.enter('example', example, '').entered, true, example.label);
+});
+
+test("the editor's doc is created in ways-in.js and only its door is handed out: no setter is exported or returned", () => {
+  assert.deepEqual(Object.keys(waysIn).sort(), ['WAYS_IN', 'enter', 'opening', 'useEditorDoc']);
+  let doc;
+  renderToString(createElement(() => ((doc = waysIn.useEditorDoc({ text: '{}' })), null)));
+  assert.deepEqual(Object.keys(doc).sort(), ['say', 'settled', 'status', 'take', 'text']);
 });

@@ -5,7 +5,11 @@
 // a doc that freezes or crashes the tab. Errors are plain sentences for the status line.
 
 const PREFIX = '#doc=';
-export const MAX_DOC_BYTES = 2_000_000;
+// The shipped cap. build.mjs bakes it into the bundle as PLAYGROUND_DOC_CAP; a test build
+// sets a smaller one, so every door of the page can be driven with small docs. Unbundled,
+// as in node, nothing sets it and the cap is DOC_CAP_BYTES.
+export const DOC_CAP_BYTES = 2_000_000;
+export const MAX_DOC_BYTES = globalThis.PLAYGROUND_DOC_CAP ?? DOC_CAP_BYTES;
 
 // The one size rule. utf8Length counts the UTF-8 bytes of a text as TextEncoder
 // would make them (a lone surrogate is 3 bytes, as U+FFFD), without building them.
