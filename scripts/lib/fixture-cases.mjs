@@ -30,10 +30,10 @@ const READERS = {
   headings: () => markdownCases('headings'),
   'list-split': () => markdownCases('list-split'),
   'text-work': async () => {
-    const { CUT, CUT_GENERATED, SPLIT_ITEMS, WORK, WORK_GENERATED, splitItems } = await import(new URL('text-work/cases.mjs', FIXTURES).href);
-    // The 120,000-item case is read here at 1,000 items, its shape checked through every writer;
-    // the import tests read it at 20,000 on a small stack.
-    const generated = { ...WORK_GENERATED, [SPLIT_ITEMS]: splitItems(1_000) };
+    const { CUT, CUT_GENERATED, MARKED_PARAGRAPH, SPLIT_ITEMS, WORK, WORK_GENERATED, markedParagraph, splitItems } = await import(new URL('text-work/cases.mjs', FIXTURES).href);
+    // The 120,000-item and the 70,000-mark cases are read here at 1,000, their shapes checked
+    // through every writer; the import tests read them at 20,000 on a small stack.
+    const generated = { ...WORK_GENERATED, [SPLIT_ITEMS]: splitItems(1_000), [MARKED_PARAGRAPH]: markedParagraph(1_000) };
     const cut = [...Object.entries(CUT), [CUT_GENERATED.name, [CUT_GENERATED.markdown, CUT_GENERATED.limits]]];
     return [
       ...Object.entries({ ...WORK, ...generated }).map(([name, markdown]) => ({ name, blocks: readMarkdown(markdown).blocks })),

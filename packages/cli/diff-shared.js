@@ -22,7 +22,10 @@ export function canon(value) {
     if (v instanceof Text) parts.push(v.text);
     else if (Array.isArray(v)) {
       stack.push(CLOSE_LIST);
-      for (let i = v.length - 1; i >= 0; i--) stack.push(v[i], ...(i ? [COMMA] : []));
+      for (let i = v.length - 1; i >= 0; i--) {
+        stack.push(v[i]);
+        if (i) stack.push(COMMA);
+      }
       stack.push(OPEN_LIST);
     } else if (isMap(v)) {
       const keys = Object.keys(v).sort();

@@ -59,7 +59,9 @@ export async function transcript(live) {
     const started = performance.now();
     const result = await client.callTool({ name, arguments: args });
     const took = live && name === 'render' ? [`${Math.round(performance.now() - started)} ms`, ''] : [];
-    lines.push('', `## ${step}`, '', `\`${name}\``, '', json(args), '', '→', '', ...took, json(result.structuredContent));
+    lines.push('', `## ${step}`, '', `\`${name}\``, '', json(args), '', '→', '');
+    for (const line of took) lines.push(line);
+    lines.push(json(result.structuredContent));
     return result.structuredContent;
   };
   try {
