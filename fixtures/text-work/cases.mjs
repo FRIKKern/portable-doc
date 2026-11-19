@@ -30,13 +30,17 @@ const upTo = (head, line) => {
   for (let i = 1; s.length < 500_000; i++) s += line(i);
   return s;
 };
+/** `n` items, each with a nested list and then text, so each item's text splits off: n notices. */
+export const splitItems = (n) => lines(n, (i) => `- a${i}\n  - b\n\n  c${i}`);
+/** The name of the 120,000-item case in WORK_GENERATED; a test may read its shape at another size. */
+export const SPLIT_ITEMS = "120,000 items of '- a' + i + '\\n  - b\\n\\n  c' + i, joined by '\\n'";
+
 /** The work cases given by their generator only: name → text. */
 export const WORK_GENERATED = {
   "'> ' x 300 + 'l0', then '\\n> l' + i for i = 1, 2, … until 500,000 characters": upTo(`${X(300, '> ')}l0`, (i) => `\n> l${i}`),
   "'> ' x 300 + 'l0', then '\\nl' + i for i = 1, 2, … until 500,000 characters (lazy lines)": upTo(`${X(300, '> ')}l0`, (i) => `\nl${i}`),
   "'- ' x 250,000 + 'end' (one line)": `${X(250_000, '- ')}end`,
-  // Each item's text after its nested list splits off, so the import gives 120,000 notices.
-  "120,000 items of '- a' + i + '\\n  - b\\n\\n  c' + i, joined by '\\n'": lines(120_000, (i) => `- a${i}\n  - b\n\n  c${i}`),
+  [SPLIT_ITEMS]: splitItems(120_000),
 };
 
 /** The cut cases: name → [text, limits], read by readMarkdown with those limits. */

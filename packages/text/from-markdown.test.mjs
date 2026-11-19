@@ -216,11 +216,12 @@ test('notices come by kind, not by line: the cut ones (`budget`, `line`), then t
 });
 
 test('many split-off items, more than a spread of arguments holds on a small stack, still import as one list with a notice each', () => {
-  // On a 60 kB stack a spread of 20,000 notices overflows; the whole text then fell back to one code block.
+  // The shared 120,000-item case's shape: on a 60 kB stack a spread of 20,000 notices overflows,
+  // as the full size does on the default stack; the whole text then fell back to one code block.
   const items = 20_000;
   const script = `const { readMarkdown } = await import('./index.js');
-const md = Array.from({ length: ${items} }, (_, i) => \`- a\${i}\\n  - b\\n\\n  c\${i}\`).join('\\n');
-const { blocks, notices } = readMarkdown(md);
+const { splitItems } = await import('../../fixtures/text-work/cases.mjs');
+const { blocks, notices } = readMarkdown(splitItems(${items}));
 console.log(JSON.stringify([blocks.map((b) => b.type), blocks[0].items.length, notices.length]));`;
   const run = spawnSync(process.execPath, ['--stack-size=60', '--input-type=module', '-e', script], { cwd: here, encoding: 'utf8' });
   assert.deepEqual(JSON.parse(run.stdout), [['list'], 2 * items, items], run.stderr);
