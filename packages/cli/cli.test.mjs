@@ -233,7 +233,8 @@ test('every tracked file in commands/ is named as a command, so none is skipped 
   // Only tracked files: stray untracked ones in a working copy are the loader's to skip.
   const listed = spawnSync('git', ['ls-files', '-z', '--', 'commands'], { cwd: here, encoding: 'utf8' });
   assert.equal(listed.status, 0, listed.stderr);
-  const files = listed.stdout.split('\0').filter(Boolean).map((file) => path.basename(file));
+  // The path below commands/, so a file in a subfolder, which the loader never reads, fails too.
+  const files = listed.stdout.split('\0').filter(Boolean).map((file) => file.slice('commands/'.length));
   assert.ok(files.length > 0, 'git lists the command files');
   assert.deepEqual(files.filter((file) => !COMMAND_FILE.test(file)), [], 'tracked files in commands/ the loader would skip');
 });
