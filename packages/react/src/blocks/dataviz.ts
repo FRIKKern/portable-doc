@@ -8,7 +8,7 @@
 // `bp-dataviz bp-dataviz--empty` box (the browser twin of pdrender's placeholder).
 
 import { type Block, escapeHtml, escapeAttr, isMap, safeUrl } from '../inline'
-import { numberText } from '../../../text/number-text.js'
+import { numberText, styleAttr, styleOf } from '../../../text/number-text.js'
 import { maxOf, minOf } from '../min-max'
 import type { RenderCtx } from './chrome'
 
@@ -132,7 +132,7 @@ function statHtml(block: unknown, ctx: RenderCtx): string {
   if (max !== null && max > 0) {
     const nv = numeric(value)
     const pct = nv === null ? 0.0 : clamp(nv / max, 0.0, 1.0)
-    bar = `<div class="bp-stat__bar"><i style="width:${fmt(pct * 100)}%"></i></div>`
+    bar = `<div class="bp-stat__bar"><i${styleAttr([styleOf('width', pct * 100, (x) => `${fmt(x)}%`)])}></i></div>`
   }
   const labelHtml = label === '' ? '' : `<div class="bp-stat__l">${escapeHtml(label)}</div>`
   // THE KILDE LAW: a stat is a datum, and a datum carries its provenance.
@@ -415,7 +415,7 @@ function heatWidths(grid: number[][], cols: number): Array<[number, number]> {
   })
 }
 
-const heatGap = (pad: number) => (pad > 0 ? `<i style="grid-column:span ${numberText(pad)}"></i>` : '')
+const heatGap = (pad: number) => (pad > 0 ? `<i${styleAttr([styleOf('grid-column', pad, (x) => `span ${numberText(x)}`)])}></i>` : '')
 
 function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string {
   const maxNum = numeric(get(block, 'max'))
@@ -450,7 +450,7 @@ function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string 
     for (let j = 0; j < width; j++) {
       const v = row[j] ?? 0.0
       const iNorm = clamp(v / maxVal, 0.0, 1.0)
-      cells += `<i class="bp-heat__c" style="--i:${fmt3(iNorm)}" title="${fmt(v)}"></i>`
+      cells += `<i class="bp-heat__c"${styleAttr([styleOf('--i', iNorm, fmt3)])} title="${fmt(v)}"></i>`
     }
     body += label + cells + heatGap(gap)
   })
@@ -458,9 +458,9 @@ function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string 
   const track = rowLabels.length === 0 ? '' : 'auto '
   let legend = `<div class="bp-heat__legend">${ctx.t('less')} `
   for (const i of [0.15, 0.35, 0.55, 0.75, 1.0])
-    legend += `<i class="bp-heat__c" style="--i:${fmt3(i)}"></i>`
+    legend += `<i class="bp-heat__c"${styleAttr([styleOf('--i', i, fmt3)])}></i>`
   legend += ` ${ctx.t('more')}</div>`
-  return `<div class="bp-heat"><div class="bp-heat__grid" style="grid-template-columns:${track}repeat(${numberText(cols)},minmax(10px,44px))">${head}${body}</div>${legend}</div>`
+  return `<div class="bp-heat"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, (c) => `${track}repeat(${numberText(c)},minmax(10px,44px))`)])}>${head}${body}</div>${legend}</div>`
 }
 
 function heatCalendarHtml(grid: number[][], block: unknown, ctx: RenderCtx): string {
@@ -497,7 +497,7 @@ function heatCalendarHtml(grid: number[][], block: unknown, ctx: RenderCtx): str
   })
 
   const track = rowLabels.length === 0 ? '' : 'auto '
-  return `<div class="bp-heat bp-heat--cal"><div class="bp-heat__scroll"><div class="bp-heat__grid" style="grid-template-columns:${track}repeat(${numberText(weeks)},12px)">${head}${body}</div></div>${dualLegend(ctx)}</div>`
+  return `<div class="bp-heat bp-heat--cal"><div class="bp-heat__scroll"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', weeks, (w) => `${track}repeat(${numberText(w)},12px)`)])}>${head}${body}</div></div>${dualLegend(ctx)}</div>`
 }
 
 function matrixCell(bin: number, v: number, showVals: boolean): string {
@@ -557,7 +557,7 @@ function heatMatrixExtrasHtml(grid: number[][], block: unknown, ctx: RenderCtx):
   const track = gutter ? 'auto ' : ''
   const cellTrack = showVals ? 'minmax(28px,auto)' : 'minmax(10px,44px)'
   const sumTrack = showMarg ? ' auto' : ''
-  return `<div class="bp-heat bp-heat--mtx"><div class="bp-heat__grid" style="grid-template-columns:${track}repeat(${numberText(cols)},${cellTrack})${sumTrack}">${head}${body}${foot}</div>${dualLegend(ctx)}</div>`
+  return `<div class="bp-heat bp-heat--mtx"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, (c) => `${track}repeat(${numberText(c)},${cellTrack})${sumTrack}`)])}>${head}${body}${foot}</div>${dualLegend(ctx)}</div>`
 }
 
 const heatmap: Emit = (block, ctx) => {
@@ -805,7 +805,7 @@ function barRow(
   return (
     `<div class="${prefix}__row">` +
     `<span class="${prefix}__l">${escapeHtml(label)}</span>` +
-    `<span class="${prefix}__bar"><i style="width:${fmt(prop * 100)}%"></i></span>` +
+    `<span class="${prefix}__bar"><i${styleAttr([styleOf('width', prop * 100, (x) => `${fmt(x)}%`)])}></i></span>` +
     (digit === null ? '' : `<span class="${prefix}__d">${digit}</span>`) +
     extra +
     `</div>`
@@ -985,7 +985,7 @@ const route: Emit = (block, ctx) => {
   const [fx, fy] = last
 
   const svg =
-    `<svg class="bp-route__map" viewBox="0 0 ${numberText(ROUTE_W)} ${numberText(h)}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}" style="display:block;width:100%;max-width:${numberText(ROUTE_W)}px;height:auto;">` +
+    `<svg class="bp-route__map" viewBox="0 0 ${numberText(ROUTE_W)} ${numberText(h)}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}" ${styleAttr(['display:block', 'width:100%', styleOf('max-width', ROUTE_W, (w) => `${numberText(w)}px`), 'height:auto;'])}>` +
     `<path d="${d}" fill="none" stroke="${ROUTE_TRACK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>` +
     `<circle cx="${sx}" cy="${sy}" r="5.5" fill="none" stroke="${ROUTE_START}" stroke-width="3"/>` +
     `<circle cx="${fx}" cy="${fy}" r="5.5" fill="${ROUTE_FINISH}"/>` +

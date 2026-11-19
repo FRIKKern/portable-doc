@@ -29,7 +29,7 @@ import {
   countRole,
 } from './core'
 import type { RenderCtx } from './chrome'
-import { numberText } from '../../../text/number-text.js'
+import { numberText, styleAttr, styleOf } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -117,7 +117,7 @@ function momentumHtml(rows: Block[], ctx: RenderCtx): string {
     `<span class="bp-momentum__i bp-g--done">${glyphHtml('done', ctx)}<b>${numberText(done)}</b> ${ctx.t('done')}</span>` +
     `<span class="bp-momentum__grow"></span>` +
     `<span class="bp-momentum__pct">${numberText(pct)}%</span></div>` +
-    `<div class="bp-momentum__track"><span class="bp-momentum__fill" style="width:${numberText(pct)}%"></span></div></div>`
+    `<div class="bp-momentum__track"><span class="bp-momentum__fill"${styleAttr([styleOf('width', pct, (x) => `${numberText(x)}%`)])}></span></div></div>`
   )
 }
 
@@ -132,7 +132,7 @@ function rowHtml(r: Block, ctx: RenderCtx): string {
     priorityHtml(r.priority) + criteriaHtml(r.criteria) + blockedHtml(r.blocked_by) + workerHtml(r.worker)
   const metaHtml = meta === '' ? '' : `<span class="bp-trow__m">${meta}</span>`
   return (
-    `<div class="bp-trow bp-trow--${role}" style="padding-left:${numberText(pad)}px">` +
+    `<div class="bp-trow bp-trow--${role}"${styleAttr([styleOf('padding-left', pad, (x) => `${numberText(x)}px`)])}>` +
     arrow +
     glyphHtml(role, ctx) +
     `<span class="bp-trow__t">${draftHtml(r, ctx)}${title}</span>` +
