@@ -6,7 +6,7 @@
 
 import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
-import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
+import { IMPORT_WORK, MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 
@@ -219,26 +219,44 @@ function caption(node) {
   return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-function convert(nodes) {
+// `env` is the parse's: when its work budget ran out while reading a top-level block,
+// that block's place is where the plain-text rest starts.
+function convert(nodes, env) {
   const state = { ids: new Set() };
   const out = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
+    if (env.spent && env.spent.path === undefined) env.spent.path = `/blocks/${out.length}`;
     for (const b of blocks) out.push(b);
   }
   return out;
 }
 
-/** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate. Never throws. */
-export function fromMarkdown(markdown) {
+export { IMPORT_WORK };
+
+/**
+ * GFM Markdown as { blocks, notices, work }. `blocks` pass @portable-doc/validate. `work` is
+ * the import's count of lines × nesting depth re-scanned. Past IMPORT_WORK.budget the rest
+ * of the deeply nested text is kept as plain text, every word, and `notices` holds one
+ * { code: IMPORT_WORK.notice, path, work }: the block where that starts, and the count when
+ * it did. Never throws.
+ */
+export function readMarkdown(markdown) {
   const md = typeof markdown === 'string' ? markdown : '';
+  const env = {};
   try {
-    const blocks = convert(tree(parser.parse(md, {})));
-    if (validate({ blocks }).ok) return blocks;
+    const blocks = convert(tree(parser.parse(md, env)), env);
+    if (validate({ blocks }).ok) {
+      const notices = env.spent ? [{ code: IMPORT_WORK.notice, path: env.spent.path, work: env.spent.work }] : [];
+      return { blocks, notices, work: env.work ?? 0 };
+    }
   } catch {
     // fall through: the text as one code block
   }
-  return md.trim() === '' ? [] : [codeBlock(md)];
+  return { blocks: md.trim() === '' ? [] : [codeBlock(md)], notices: [], work: env.work ?? 0 };
 }
+
+/** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */
+export const fromMarkdown = (markdown) => readMarkdown(markdown).blocks;

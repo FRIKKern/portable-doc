@@ -36,3 +36,22 @@ export function toPlainText(doc: Doc | unknown, options?: TextOptions): string;
  * The result passes @portable-doc/validate. Never throws.
  */
 export function fromMarkdown(markdown: string): Block[];
+
+/**
+ * The import's work budget, counted in lines × nesting depth re-scanned, its limit on
+ * re-parsing deep source (times the input's length), and the notice it gives past either.
+ */
+export const IMPORT_WORK: { readonly budget: number; readonly lengthFactor: number; readonly notice: 'import_work_spent' };
+
+/** A note from the import: past a budget, the rest of the deep text from `path` on was kept as plain text. */
+export interface ImportNotice {
+  code: 'import_work_spent';
+  path: string;
+  work: number;
+}
+
+/**
+ * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
+ * of lines × nesting depth re-scanned; `notices` is empty unless a budget ran out. Never throws.
+ */
+export function readMarkdown(markdown: string): { blocks: Block[]; notices: ImportNotice[]; work: number };

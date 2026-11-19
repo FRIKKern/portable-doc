@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
-import { fromMarkdown } from './index.js';
+import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
+import { IMPORT_WORK, fromMarkdown, readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
 const words = (n, prefix = 'w') => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
@@ -67,4 +68,47 @@ test('100,000 levels of nesting import in under 1.5 s of CPU, with every word ke
     assert.notEqual(blocks[0].type, 'code', md.slice(0, 6));
     assert.ok(JSON.stringify(blocks).includes('end0'), md.slice(0, 6));
   }
+});
+
+// The worst shape review found: lazy continuation lines under a deep quote. markdown-it checks
+// every quote level on each line, so the import's work is lines × depth.
+const lazyUnderDeepQuote = () => {
+  let md = `${'> '.repeat(300)}l0`;
+  for (let i = 1; md.length < 500_000; i++) md += `\n> l${i}`;
+  return md;
+};
+
+test('the work budget stops lines nested deep at a stated count, keeps every word as plain text, and says so', () => {
+  const md = lazyUnderDeepQuote();
+  // A hang guard only, far above the real cost; the budget itself is counted in work.
+  const { blocks, notices, work } = underBudget(20_000, () => readMarkdown(md));
+  assert.deepEqual(notices, [{ code: 'import_work_spent', path: '/blocks/0', work: 5_899_296 }]);
+  assert.equal(IMPORT_WORK.notice, 'import_work_spent');
+  assert.equal(work, 5_899_296);
+  assert.ok(work > IMPORT_WORK.budget);
+  assert.deepEqual(blocks, keepsEveryWord(md, 'lazy lines under a deep quote'));
+  // One long line is limited by its length instead, with the same notice.
+  const line = readMarkdown(`${'- '.repeat(100_000)}end0`);
+  assert.deepEqual(line.notices.map((n) => n.code), ['import_work_spent']);
+  // Within the budget there is no notice.
+  assert.deepEqual(readMarkdown(words(60).map((w, i) => `${'  '.repeat(i)}- ${w}`).join('\n')).notices, []);
+});
+
+test('an ordinary 500 kB document of mixed blocks uses at most an eighth of the work budget', () => {
+  const section = (n) => [
+    `## Section ${n}`, '',
+    `A paragraph with **bold**, *emphasis*, \`code\` and [a link](https://example.com/${n}). It runs on, as prose does.`, '',
+    '- Point one', '  - A nested point', '    - Deeper still, with *marks*', '- Point two', '',
+    '1. First step', '2. Second step', '   1. A sub-step', '',
+    `> A quote about ${n}, with a list:`, '>', '> - inside the quote', '>   - nested in it', '>', '> — Someone', '',
+    '```js', `const x${n} = ${n};`, '```', '',
+    '| Name | Value |', '| --- | --- |', `| a${n} | 1 |`, '',
+    `> [!note] A callout ${n}`, '', '---', '',
+  ].join('\n');
+  let md = '';
+  for (let n = 0; md.length < 500_000; n++) md += section(n);
+  const { blocks, notices, work } = underBudget(20_000, () => readMarkdown(md));
+  assert.deepEqual(notices, []);
+  assert.ok(work <= IMPORT_WORK.budget / 8, `work ${work}, an eighth of the budget is ${IMPORT_WORK.budget / 8}`);
+  assert.ok(blocks.length > 10_000);
 });
