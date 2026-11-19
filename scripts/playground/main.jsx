@@ -13,7 +13,7 @@ import { blocksOf, parseJson } from './parse.js';
 import { encodeShare } from './share.js';
 import { copyText, shiftLines } from './editing.js';
 import { outputsOf } from './outputs.js';
-import { enter } from './ways-in.js';
+import { opening, taker } from './ways-in.js';
 import { MarkdownBox, Outputs } from './panes.jsx';
 
 const explain = explainWith(readCodes(codesMarkdown));
@@ -91,19 +91,9 @@ function App({ examples, initial }) {
   }, [text]);
   useEffect(() => setView((previous) => viewOf(settled, previous)), [settled]);
 
-  // New text enters the editor only here, by one of the ways in ways-in.js; a refused
-  // input leaves the doc as it was and says why. Typing settles after DEBOUNCE_MS.
-  const apply = (next, now) => {
-    if (next.status !== undefined) setStatus(next.status);
-    if (!next.entered) return false;
-    setText(next.text);
-    if (now) setSettled(next.text);
-    return true;
-  };
-  const take = (way, input, now = true) => {
-    const next = enter(way, input, text);
-    return next instanceof Promise ? next.then((n) => apply(n, now)) : apply(next, now);
-  };
+  // New text enters the editor only through this door, by one of the ways in ways-in.js; a
+  // refused input leaves the doc as it was and says why. Typing settles after DEBOUNCE_MS.
+  const take = taker({ text, setText, setSettled, setStatus });
   useEffect(() => {
     const onHash = () => take('link', location.hash).then((entered) => entered && setExampleId(''));
     window.addEventListener('hashchange', onHash);
@@ -240,14 +230,8 @@ function followTheme() {
 async function start() {
   followTheme();
   const examples = JSON.parse(document.getElementById('pd-examples').textContent);
-  const first = examples[0];
-  let initial = { text: enter('example', first, '').text, exampleId: first.id };
-  const shared = await enter('link', location.hash, initial.text);
-  if (shared.entered) initial = { text: shared.text, exampleId: '', status: shared.status };
-  else if (shared.error) {
-    initial.status = `${shared.error}. Showing ${first.label} instead.`;
-    dropHash(); // a reload then opens the page, not the same broken link
-  }
+  const initial = await opening(examples, location.hash);
+  if (initial.broken) dropHash(); // a reload then opens the page, not the same broken link
   createRoot(document.getElementById('playground')).render(<App examples={examples} initial={initial} />);
 }
 

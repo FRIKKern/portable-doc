@@ -15,7 +15,7 @@ import { playgroundExamples } from './playground/examples.mjs';
 import { parseJson, prettyBytes, tidyJson } from './playground/parse.js';
 import { decodeShare, encodeShare, MAX_DOC_BYTES, overCap, utf8Length } from './playground/share.js';
 import { docFromMarkdown, outputsOf } from './playground/outputs.js';
-import { enter, WAYS_IN } from './playground/ways-in.js';
+import { enter, opening, taker, WAYS_IN } from './playground/ways-in.js';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -290,11 +290,37 @@ test('every way text enters the playground refuses a doc over the cap, says so, 
   }
 });
 
-test('main.jsx takes new text only through the ways in, and names each one', () => {
+test('after a refused paste, a paste that goes in clears the refusal; the door shows each status and fills the editor only when the input goes in', () => {
+  const kept = '{"blocks":[]}';
+  const state = { text: kept, settled: kept, status: '' };
+  const take = (way, input, now) => taker({ text: state.text, setText: (t) => (state.text = t), setSettled: (t) => (state.settled = t), setStatus: (m) => (state.status = m) })(way, input, now);
+  assert.equal(take('typed', over(MAX_DOC_BYTES), false), false);
+  assert.deepEqual(state, { text: kept, settled: kept, status: 'The doc is too big for the editor (over 2 MB). The editor still holds your doc.' });
+  const small = '{"blocks":[{"type":"divider"}]}';
+  assert.equal(take('typed', small, false), true);
+  assert.deepEqual(state, { text: small, settled: kept, status: '' }, 'typing settles later; the refusal is gone');
+});
+
+test('the page opens on a share link, else on the first example, and says why a link would not open', async () => {
+  const examples = playgroundExamples();
+  const first = JSON.stringify(examples[0].doc, null, 2);
+  assert.deepEqual(await opening(examples, ''), { text: first, exampleId: examples[0].id });
+  const linked = await opening(examples, await encodeShare('{"blocks":[]}'));
+  assert.deepEqual([linked.exampleId, linked.status, JSON.parse(linked.text)], ['', 'Opened the doc from the link.', { blocks: [] }]);
+  const broken = await opening(examples, `#doc=json.${Buffer.from(over(MAX_DOC_BYTES)).toString('base64url')}`);
+  assert.deepEqual(broken, { text: first, exampleId: examples[0].id, status: `This link holds a doc too big to open (over 2 MB). Showing ${examples[0].label} instead.`, broken: true });
+});
+
+test('main.jsx takes new text only through the door in ways-in.js, and names each way in', () => {
   const source = fs.readFileSync(path.join(root, 'scripts', 'playground', 'main.jsx'), 'utf8');
-  const named = new Set([...source.matchAll(/\b(?:take|enter)\('([a-z]+)'/g)].map((m) => m[1]));
+  const named = new Set([...source.matchAll(/\btake\('([a-z]+)'/g)].map((m) => m[1]));
   assert.deepEqual([...named].sort(), Object.keys(WAYS_IN).sort(), 'every way in is wired, and nothing else is');
-  assert.equal(source.match(/\bsetText\(/g)?.length, 1, 'the editor text is set in one place');
-  for (const name of ['decodeShare', 'docFromMarkdown', 'tidyJson', 'fromMarkdown']) assert.ok(!new RegExp(`import[^;]*\\b${name}\\b`).test(source), `main.jsx imports no ${name}: text comes in through ways-in.js`);
+  // The editor's text changes only inside the door: main.jsx hands it the setters and never
+  // calls them, so it cannot build an entry of its own; settling re-renders the text it holds.
+  assert.equal(source.match(/\btaker\(/g)?.length, 1, 'one door');
+  assert.equal(source.match(/\bopening\(/g)?.length, 1, 'one way the page opens');
+  assert.equal(source.match(/\bsetText\(/g), null, 'main.jsx never sets the editor text itself');
+  assert.deepEqual(source.match(/\bsetSettled\([^)]*\)/g), ['setSettled(text)'], 'main.jsx settles only the text the editor holds');
+  for (const name of ['enter', 'decodeShare', 'docFromMarkdown', 'tidyJson', 'fromMarkdown']) assert.ok(!new RegExp(`import[^;]*\\b${name}\\b`).test(source), `main.jsx imports no ${name}: text comes in through the door`);
 });
 
