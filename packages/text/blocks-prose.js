@@ -2,10 +2,20 @@
 // Prose blocks: headings, paragraphs, lists, quotes, callouts, code, media,
 // buttons. Each handler takes (block, ctx) and returns a string ('' = nothing).
 
+import { fieldOf, namesOf, readField } from './read-aliases.js';
 import { asList, capitalize, fence, isMap, nonblank, paras, quote, safeUrl, str } from './util.js';
 
-/** A block's inline body: a non-empty `content` array, else its `text`. */
+/**
+ * A block's inline body. On a block type whose `text` is an old name for `content`, the field
+ * read through read-aliases.js; on any other (a list item, a quote), a non-empty `content`
+ * array, else its `text`. An inline array as it is, a `text` as a string; a `content` that is
+ * not an array (read only when no name holds a value of its type) shows nothing.
+ */
 export function body(b) {
+  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) {
+    const { name, value } = readField(b, 'content');
+    return Array.isArray(value) ? value : name === 'content' ? '' : str(value);
+  }
   return Array.isArray(b.content) && b.content.length ? b.content : str(b.text);
 }
 
@@ -29,7 +39,7 @@ function pullquote(b, ctx) {
 
 function blockquote(b, ctx) {
   const t = ctx.inline(body(b));
-  const cite = ctx.text(nonblank(b.cite) || nonblank(b.attribution));
+  const cite = ctx.text(nonblank(fieldOf(b, 'cite')));
   if (t === '' && cite === '') return '';
   if (ctx.md) return quote(paras(t, cite && `— ${cite}`));
   return [t && `“${t}”`, cite && `— ${cite}`].filter(Boolean).join('\n');
@@ -86,27 +96,18 @@ function callout(b, ctx) {
   return ctx.md ? quote(out) : out;
 }
 
-const CODE_KEYS = ['value', 'code', 'content', 'text'];
-
-/** A code block's source: the first non-blank of value, code, content, text. */
+/** A code block's source: its `value`, read through read-aliases.js; an inline array as its text. */
 export function codeSource(b) {
-  for (const key of CODE_KEYS) {
-    const v = b[key];
-    const s = Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? n : isMap(n) ? str(n.value) || str(n.text) : '')).join('') : str(v);
-    if (s.trim() !== '') return s;
-  }
-  return '';
+  const v = fieldOf(b, 'value');
+  return Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? n : isMap(n) ? str(n.value) || str(n.text) : '')).join('') : str(v);
 }
 
 // An empty code block is a real block: Markdown writes its empty fence (with its
 // language), so it imports back as the same block. Plain text writes nothing.
 function code(b, ctx) {
   const source = codeSource(b);
-  const lang = str(b.lang) || str(b.language);
-  if (source.trim() === '') {
-    const blank = CODE_KEYS.map((k) => b[k]).find((v) => typeof v === 'string') ?? '';
-    return ctx.md ? fence(blank, lang) : '';
-  }
+  const lang = str(fieldOf(b, 'lang'));
+  if (source.trim() === '') return ctx.md ? fence(source, lang) : '';
   return ctx.md ? fence(source, lang) : source.replace(/\n+$/, '');
 }
 
