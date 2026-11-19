@@ -2,25 +2,39 @@
 // Each line's depth for the import's count (import-work.js): how many containers markdown-it
 // may read the line in, read from the text alone, one line after another.
 //
-// A line's depth is its own markers (`>`, and list markers) plus the list items still open
-// from earlier marker lines that its text sits inside. Indentation alone opens nothing: it
-// adds depth only up to the containers already open from earlier marker lines, and a marker
-// adds at most one more. A blank line keeps the depth before it, and a line right after a
-// non-blank line keeps at least that line's depth, as it may be lazy. An item closes only
-// where markdown-it surely closes it: at a line less indented than its content after a blank
-// line, or at a quote or list marker left of its content; a blank line also ends every quote.
+// The count is a bound: a container counts as open until the reader is sure it has closed,
+// and a marker counts as opening one unless the reader is sure it cannot. A line's depth is
+// its own markers (`>`, and list markers) plus the list items open from earlier marker lines
+// that its text is indented into. Every place the reader picks between two readings, and the
+// one it takes (in doubt, the one that costs more):
 //
-// Inside a code fence a line is code: it is charged at the fence's opening line's depth,
-// whatever it holds. A line is charged as inside a fence only when the tracker is sure. A
-// fence ends at its closing fence, or at the first line that leaves the opener's container
-// (a quote line without its marker, a line indented less than the list item's content),
-// whichever comes first. In any doubt the line is charged as not in a fence, and from a
-// fence-like line the tracker is not sure of on, no fence is trusted until the text is read
-// afresh. Ending a fence too early only raises the count; believing in a fence the parser
-// has left is the one mistake that counts too low. The tracker is not sure of a fence-like
-// line inside a possible HTML block or link reference definition, of one whose indentation
-// against its container is 3 to 5 columns, or of one between an item's least and its true
-// content column.
+//  1. A marker opens. Every `>` and list marker in a line's prefix counts, also where
+//     markdown-it reads it as code, as text or as a rule (`- - -`). Costs more.
+//  2. Indentation counts an item from its least content column (its marker's end plus one),
+//     not from its content column as markdown-it sets it. Costs more.
+//  3. A line right after a non-blank line keeps at least that line's depth: it may be lazy.
+//     A blank line keeps the depth before it. Costs more.
+//  4. A blank line closes every quote and the items in them: markdown-it ends a quote there.
+//     After it, a line less indented than an item's least content column closes the item.
+//     Sure.
+//  5. A quote marker left of an item's least content column closes the item: it always ends
+//     a paragraph that far left. Sure.
+//  6. A list marker left of an item's least content column closes the item only at or left
+//     of the item's own marker. Between the marker and the least content column, or when the
+//     item is deeper in quotes than the line, the marker may continue the item's paragraph
+//     lazily (markdown-it does not let a marker 4 columns past the enclosing item's content
+//     end a paragraph), so the item stays open, and no fence is trusted from there on.
+//  7. Any other line not after a blank line closes nothing: it may be lazy. Costs more.
+//  8. A fence: inside it a line is charged at the fence's opening line's depth, whatever it
+//     holds, which can cost less, so a line counts as in a fence only where the tracker is
+//     sure; in doubt it is any line. A fence ends at its closing fence, or at the first line
+//     that leaves the opener's container (a quote line without its marker, a line indented
+//     less than the item's content), whichever comes first. The tracker is not sure of a
+//     fence-like line inside a possible HTML block or link reference definition, of one
+//     whose indentation against its container is 3 to 5 columns, of one between an item's
+//     least and its true content column, nor of any after a doubt (choice 6, or a fence-like
+//     line it was not sure of) until the text is read afresh. A sure fence line closes the
+//     items it is not in: a fence ends a paragraph that far left. Sure.
 
 const SP = (ch) => ch === 32 || ch === 9;
 export const isBlank = (line) => {
@@ -43,8 +57,9 @@ function listMarker(line, i) {
  * The prefix of `line`: m markers, w whitespace columns among them, `at` where the text after
  * it starts and `col` its column, `quotes` its quote markers and `base` the column after the
  * last of them, and its containers in order as `{ quote: true }` or a list item
- * `{ col, q, lo, hi }`: `col` its least content column in the line (its marker's end plus one),
- * `q` the quote markers before it, and `lo` and `hi` its least content column and its content
+ * `{ col, q, mark, lo, hi }`: `col` its least content column in the line (its marker's end plus
+ * one), `q` the quote markers before it, and `mark` its marker's column, `lo` and `hi` its least
+ * content column and its content
  * column as markdown-it sets it (1 to 4 columns after the marker; one, when more or none
  * follow), both counted from the column after its q-th quote marker. After a `>`, one space
  * or one column of a tab belongs to the marker, as in markdown-it. Tabs run to the next stop
@@ -70,19 +85,21 @@ export function prefix(line) {
     if (last && !last.quote && last.hi === undefined) last.hi = (i >= line.length || ws > 4 ? last.col : last.col - 1 + ws) - base;
     if (line.charCodeAt(i) === 62) {
       m++;
+      const mark = col - base;
       i++;
       col++;
       quotes++;
       base = i < line.length && SP(line.charCodeAt(i)) ? col + 1 : col;
-      containers.push({ quote: true });
+      containers.push({ quote: true, mark });
       continue;
     }
     const end = listMarker(line, i);
     if (end === -1) return { m, w, at: i, col, quotes, base, containers };
     m++;
+    const mark = col - base;
     col += end - i;
     i = end;
-    containers.push({ col: col + 1, q: quotes, lo: col + 1 - base });
+    containers.push({ col: col + 1, q: quotes, mark, lo: col + 1 - base });
   }
 }
 
@@ -167,6 +184,24 @@ const HTML_LONG = [
 // can shift markdown-it's columns from these).
 const place = (rel) => (rel <= 2 ? 'fence' : rel >= 6 ? 'code' : 'doubt');
 
+// Whether each marker of a line (prefix) surely is one: 0 to 3 columns past the content
+// column of the container before it (from `contained`, the open items the line is inside).
+// Four or more, markdown-it reads it as code, or as a paragraph's lazy text.
+function markersSure(p, contained) {
+  const hiAt = (q) => Math.max(0, ...contained.filter((it) => it.q === q).map((it) => it.hi));
+  let content = hiAt(0);
+  let q = 0;
+  for (const c of p.containers) {
+    if (c.mark < content || c.mark - content > 3) return false;
+    content = c.quote ? hiAt(++q) : c.hi;
+  }
+  return true;
+}
+
+// An ordered marker numbered other than 1 in a line's prefix: right after a paragraph line,
+// markdown-it reads it as the paragraph's text.
+const otherOrdered = (head) => [...head.matchAll(/(\d+)[.)]/g)].some((m) => Number(m[1]) !== 1);
+
 /** A reader of lines, one after another: next(line) gives its depth; reset() starts a new document. */
 export function depthReader() {
   let before;
@@ -176,6 +211,7 @@ export function depthReader() {
   let doubt; // a fence-like line the tracker was not sure of: no fence trusted after it
   let html; // a possible HTML block: { end } (a pattern, or null: a blank line ends it)
   let ref; // the lines since the last blank line include one that starts with '['
+  let loose; // the open items may hold one markdown-it has closed: no fence is trusted
   const reset = () => {
     before = 0;
     afterBlank = true;
@@ -184,6 +220,7 @@ export function depthReader() {
     doubt = false;
     html = null;
     ref = false;
+    loose = false;
   };
   reset();
 
@@ -215,6 +252,12 @@ export function depthReader() {
     return D;
   };
 
+  // Close the items `keep` turns down, and every item inside one of them.
+  const close = (keep) => {
+    const gone = new Set(items.filter((it) => !keep(it)));
+    if (gone.size) items = items.filter((it) => !gone.has(it) && !it.up.some((u) => gone.has(u)));
+  };
+
   const next = (line) => {
     const blank = isBlank(line);
     if (code) {
@@ -237,29 +280,34 @@ export function depthReader() {
     const own = p.containers.filter((c) => !c.quote);
     // A list marker after the leading quotes never continues a paragraph lazily.
     const listFirst = p.containers.length > L.n;
-    // Items this line closes: after a blank line, those it is not indented into (and every
-    // item in a quote, as the blank line ended the quote); otherwise those a quote marker or
-    // a list marker of this line sits left of, and, past a list marker, those deeper in quotes.
+    // Items this line surely closes (choices 4 to 7 above); every other stays open.
     const open = (it) => {
       if (afterBlank) return it.q === 0 && rel(0) >= it.lo;
       if (it.q < L.n) return rel(it.q) >= it.lo;
-      if (it.q === L.n) return !listFirst || rel(it.q) >= it.lo;
-      return !listFirst;
+      if (!listFirst || rel(it.q) >= it.lo) return true;
+      // A list marker that may continue the item's paragraph lazily stays open (choice 6).
+      return it.q === L.n ? rel(it.q) > it.mark : true;
     };
-    items = items.filter(open);
+    close(open);
+    const contained = items.filter((it) => it.q <= L.n && rel(it.q) >= it.hi);
+    const sure = markersSure(p, contained) && (afterBlank || !otherOrdered(line.slice(0, p.at)));
+    // Whether the items are exactly those markdown-it has open: not when one kept may be
+    // closed (lazy, past a quote this line leaves, or short of its content column), nor when
+    // this line's markers may not be markers.
+    let exact = (!loose || items.length === 0) && sure && !items.some((it) => it.q > L.n || rel(it.q) < it.hi);
     let K = 0;
     for (const it of items) if (it.q <= L.n && rel(it.q) >= it.lo) K++;
     const D = afterBlank ? p.m + K : Math.max(p.m + K, before);
     const f = opener(line, p.at);
     if (f) {
-      const contained = items.filter((it) => it.q <= L.n && rel(it.q) >= it.hi);
       const straddle = items.some((it) => it.q <= L.n && rel(it.q) >= it.lo && rel(it.q) < it.hi);
       const chain = [...contained, ...own];
       const innerHi = Math.max(0, ...chain.filter((it) => it.q === p.quotes).map((it) => it.hi));
-      const kind = doubt || html !== null || (ref && !afterBlank) || straddle ? 'doubt' : place(p.col - p.base - innerHi);
+      const kind = doubt || (loose && items.length > 0) || !sure || html !== null || (ref && !afterBlank) || straddle ? 'doubt' : place(p.col - p.base - innerHi);
       if (kind === 'doubt') doubt = true;
       else if (kind === 'fence') {
-        items = contained; // a fence never continues a paragraph: the others close here
+        close((it) => contained.includes(it)); // a fence never continues a paragraph: the others close here
+        exact = true;
         code = { chain, needQ: p.quotes, innerHi, ...f, D };
       }
     } else {
@@ -272,7 +320,15 @@ export function depthReader() {
       }
       if (text.startsWith('[')) ref = true;
     }
-    for (const c of own) items.push({ q: c.q, lo: c.lo, hi: c.hi });
+    // An item opened while the items are exact is inside those the line is in, and its own
+    // markers before it: it closes with any of them.
+    const up = exact ? [...contained] : [];
+    for (const c of own) {
+      const it = { q: c.q, mark: c.mark, lo: c.lo, hi: c.hi, up: [...up] };
+      items.push(it);
+      if (exact) up.push(it);
+    }
+    loose = !exact && items.length > 0;
     before = D;
     afterBlank = false;
     return D;

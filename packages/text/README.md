@@ -127,9 +127,13 @@ Where it differs from Barkpark, on purpose:
   indentation alone opens nothing. A blank line keeps the depth before it, and
   a line right after a non-blank line keeps at least that line's depth, as it
   may be lazy. Inside a code fence a line is code, at the fence's depth, but
-  only where the count is sure of the fence; in any doubt the line is counted
-  as any other (`import-depth.js` says when). The count is never below what markdown-it
-  does to read the same lines. The budget is 16,000,000 (`IMPORT_WORK`); an
+  only where the count is sure of the fence. The count is a bound: a container
+  counts as open until the count is sure it has closed, and a marker as
+  opening one unless the count is sure it cannot; wherever it picks between
+  two readings it takes the one that costs more (`import-depth.js` lists each
+  such place). The count is never below what markdown-it does to read the
+  same lines; a seeded neighbour search checks that from the closest cases
+  (`import-work-search.test.mjs`). The budget is 16,000,000 (`IMPORT_WORK`); an
   ordinary 500 kB document uses at most a sixth of it
   (`ordinary-work.test.mjs`, nine shapes).
 - Two rules keep text as plain text, every word, with Markdown syntax and tags
@@ -147,9 +151,10 @@ Where it differs from Barkpark, on purpose:
     reference. It is charged its bytes once. Inside an open code fence, the
     code after it starts with the fence's opening line again, so it stays
     code; in a list item that opening line makes a new item.
-- Behind the text's count, markdown-it's own count runs as a net. Should it
-  pass the budget where the text's count said it would not, the rest of the
-  text below the top level is kept as plain text, every word, with one
+- Behind the text's count, markdown-it's own count runs as a net. It counts
+  each container as markdown-it enters it; should that pass the budget where
+  the text's count said it would not, that container and the rest, at any
+  level, the top one included, are kept as plain text, every word, with one
   notice of rule `net`. The shared cases never fire it; one
   in the wild means the text's count is wrong, and is a bug to report.
 
@@ -161,7 +166,7 @@ stats, heatmap, pullquote and eyebrow travel only inside a portabledoc fence.
 Every other type comes back as whatever its Markdown reads as: an image as a
 link, a callout or pullquote as a quote, an equation as a `math` code block.
 
-`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/import-work.test.mjs packages/text/ordinary-work.test.mjs`
+`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/import-work.test.mjs packages/text/import-work-search.test.mjs packages/text/ordinary-work.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
 text, and the import rules, round trip and hostile input. The import-work
 test sweeps 300 seeded documents; `IMPORT_WORK_SWEEP=20000` runs a longer
