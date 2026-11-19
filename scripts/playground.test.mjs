@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 import { parse as parseJs } from 'acorn';
 import { buildSync, transformSync } from 'esbuild';
+import { underBudget } from './lib/cpu-budget.mjs';
 import { validate } from '@portable-doc/validate';
 import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
@@ -78,9 +79,8 @@ test('a doc from a link is pretty-printed only while the laid-out text stays und
   const nest = (depth) => '['.repeat(depth) + ']'.repeat(depth);
   assert.equal(tidyJson(nest(1000), MAX_DOC_BYTES).length, 2_000_000, 'depth 1000 lays out to exactly the cap');
   assert.equal(tidyJson(nest(1001), MAX_DOC_BYTES), nest(1001));
-  const started = performance.now();
-  assert.equal(tidyJson(nest(50_000), MAX_DOC_BYTES), nest(50_000), 'deep nesting kept as sent, not 5 GB of spaces or a stack overflow');
-  assert.ok(performance.now() - started < 500, 'the size check is cheap');
+  // The size check is cheap: 500 ms of CPU.
+  assert.equal(underBudget(500, () => tidyJson(nest(50_000), MAX_DOC_BYTES)), nest(50_000), 'deep nesting kept as sent, not 5 GB of spaces or a stack overflow');
   assert.equal(tidyJson('{"blocks":[]}', MAX_DOC_BYTES), '{\n  "blocks": []\n}');
   assert.equal(tidyJson('{"blocks":', MAX_DOC_BYTES), '{"blocks":');
 });
