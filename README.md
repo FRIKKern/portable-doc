@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 48 changes · Check the editor element's string methods against the writer registry ([#120](https://github.com/FRIKKern/portable-doc/pull/120))
+- **Today** · 49 changes · Guard round-trip list items with a walk over every fixture case ([#118](https://github.com/FRIKKern/portable-doc/pull/118))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
