@@ -5,11 +5,13 @@ import { MAX_SIMILARITY_WORK, matchBlocks } from './diff-match.js';
 import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
 
 // Large docs, the case git's diff driver meets on every `git diff`. Each must
-// finish far inside BUDGET_MS of CPU; matching that scanned or rescored every
-// pair took 6 to 100 s, and field diffs that re-read each level 4 to 22 s.
+// finish far inside its CPU budget: matching that scanned or rescored every
+// pair took 6 to 100 s, and field diffs that re-read each level 4 to 30 s.
 const BUDGET_MS = 5000;
+// One change deep in a large value: about 0.15 s now, so 1 s still leaves a wide margin.
+const DEEP_BUDGET_MS = 1000;
 
-const timed = (a, b) => underBudget(BUDGET_MS, () => diffDocs(asDoc(a), asDoc(b)));
+const timed = (a, b, budget = BUDGET_MS) => underBudget(budget, () => diffDocs(asDoc(a), asDoc(b)));
 const para = (text) => ({ type: 'paragraph', text });
 
 test('60,000 identical paragraphs without ids diff as equal', () => {
@@ -43,7 +45,7 @@ test('a one-cell change in a 20,000-row table under lists nested 40 deep costs t
   const nest = (inner) => Array.from({ length: 40 }).reduce((b, _, i) => ({ type: 'list', items: [{ text: `level ${i}`, children: [b] }] }), inner);
   // About 1.2 MB of JSON.
   const table = (last) => ({ type: 'table', rows: Array.from({ length: 20_000 }, (_, i) => [`row ${i} of the long table`, i === 19_999 ? last : 'a cell that stays the same']) });
-  const { changes } = timed([nest(table('old'))], [nest(table('new'))]);
+  const { changes } = timed([nest(table('old'))], [nest(table('new'))], DEEP_BUDGET_MS);
   assert.equal(changes.length, 1);
   assert.deepEqual(changes[0].fields.map((f) => [f.path.endsWith('.rows[19999][1]'), f.from, f.to]), [[true, 'old', 'new']]);
 });
@@ -54,6 +56,6 @@ test('a one-number change at the bottom of a chart value 990 levels deep, holdin
     for (let i = 0; i < 984; i++) x = [x];
     return { type: 'chart', series: [{ x }] };
   };
-  const { changes } = timed([chart(1)], [chart(2)]);
+  const { changes } = timed([chart(1)], [chart(2)], DEEP_BUDGET_MS);
   assert.deepEqual(changes[0].fields.map((f) => [f.path, f.from, f.to]), [[`series[0].x${'[0]'.repeat(984)}[99999]`, 1, 2]]);
 });

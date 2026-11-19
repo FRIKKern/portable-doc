@@ -87,11 +87,12 @@ added, `-` removed, `>` moved, `~` changed, with the block's type and id, or
 its position (`paragraph at [2]`, 0-based, in the new doc; in the old one for
 a removed block) when it has no id. Text gets a word diff, `[-old-]{+new+}`,
 with long unchanged runs cut to a few words around each change. Inline
-`content` is compared as Markdown, so marks and links show (`**bold**`, a
-Markdown link). Other fields show `path: old → new`, with `(none)` for a side
-that does not have the field. A string prints bare unless it would read as
-another JSON value: `"2"` prints quoted, `2` does not. Changes to the doc's own keys (`title`, …) come
-first, as `~ doc:`. Every string from a doc, and every file name, has its
+`content` is compared as Markdown at the block's own `content`, so marks and
+links show (`**bold**`, a Markdown link). Other fields show
+`path: old → new`, with `(none)` for a side that does not have the field; a
+`null` is a value, not an absent field. A string prints bare unless it would
+read as another JSON value: `"2"` prints quoted, `2` does not. Changes to the
+doc's own keys (`title`, …) come first, as `~ doc:`. Every string from a doc, and every file name, has its
 control characters escaped, as in `validate`.
 
 Color: `--color auto` (the default) colors only on a terminal, and not when

@@ -84,7 +84,7 @@ const pathOf = (at, key) => (typeof key === 'number' ? `${at}[${key}]` : at ? `$
 /**
  * What differs between two values, as [{ path, from?, to? } | { path, words }]; a side that is absent has no from or to.
  * Equality is decided bottom-up: two maps or two arrays are equal when nothing under them differs, so each
- * value is read once, however deep. Only scalars, and values of different kinds, are compared by `canon`.
+ * value is read once, however deep. Only scalars and values of different kinds go through `canon`.
  * Inline `content` is read as Markdown once, at the outermost `content`; below it, parts compare by position.
  */
 export function fieldDiff(a, b, at = '', out = [], budget = { cells: MAX_TOTAL_CELLS }, inContent = false) {
@@ -107,7 +107,8 @@ export function fieldDiff(a, b, at = '', out = [], budget = { cells: MAX_TOTAL_C
       return out;
     }
   }
-  if (canon(a) === canon(b)) return out;
+  // canon writes an absent side as null; a null against an absent value is still a change.
+  if (a !== undefined && b !== undefined && canon(a) === canon(b)) return out;
   out.push({ path: at, ...(a !== undefined && { from: a }), ...(b !== undefined && { to: b }) });
   return out;
 }

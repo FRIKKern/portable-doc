@@ -117,7 +117,7 @@ function readmeRepo(driver) {
 }
 
 test('the README external diff driver: seven arguments, a new file, a rename, a broken side, and always exit 0 so git goes on', () => {
-  const { repo, git, diff } = readmeRepo('portable-doc');
+  const { repo, env, git, diff } = readmeRepo('portable-doc');
   const put = (name, value) => fs.writeFileSync(path.join(repo, name), typeof value === 'string' ? value : JSON.stringify(value));
   put('notes.pd.json', before);
   put('old-name.pd.json', [p('r', 'Renamed only.')]);
@@ -137,6 +137,12 @@ test('the README external diff driver: seven arguments, a new file, a rename, a 
   assert.match(r.stdout, /^portable-doc diff a\/old-name\.pd\.json b\/z-new-name\.pd\.json: the same blocks; only the JSON layout differs\n/m);
   const usage = spawnSync(process.execPath, [bin, 'diff', '--git', 'only', 'three', 'args'], { encoding: 'utf8' });
   assert.equal(usage.status, 2);
+  // A reader that quits early, as a pager does, still leaves git at 0, with no error.
+  // (git starts a pager only on a terminal, so `| head -1` stands in for it.)
+  put('notes.pd.json', Array.from({ length: 20_000 }, (_, i) => p(`n${i}`, `Paragraph ${i}, long enough that the diff fills a pipe.`)));
+  const code = path.join(tmp, 'git-exit-code');
+  const paged = spawnSync('sh', ['-c', `{ git -C '${repo}' diff; echo $? > '${code}'; } | head -1`], { env, encoding: 'utf8' });
+  assert.deepEqual([paged.stdout.split('\n').length, paged.stderr, fs.readFileSync(code, 'utf8').trim()], [2, '', '0']);
 });
 
 test('the README textconv driver: git diffs the rendered text, and shows the raw file when it does not parse', () => {
@@ -184,4 +190,17 @@ test('diff and validate count depth the same way: a doc whose deepest container,
   const git = await call(['diff', '--git', 'notes.pd.json', old, 'a'.repeat(40), '100644', past, 'b'.repeat(40), '100644']);
   assert.equal(git.status, 0, git.stderr);
   assert.match(git.stdout + git.stderr, new RegExp(`nested deeper than ${MAX_VALUE_DEPTH} levels`));
+});
+
+test('a null is not an absent value: docs that differ only by a null in a row, a field or the doc differ', async () => {
+  const cases = [
+    [{ blocks: [{ type: 'table', rows: [['x', null, null]] }] }, { blocks: [{ type: 'table', rows: [['x']] }] }, ['rows[0][1]', 'rows[0][2]']],
+    [{ blocks: [{ id: 'p', type: 'paragraph', text: 'a', note: null }] }, { blocks: [{ id: 'p', type: 'paragraph', text: 'a' }] }, ['note']],
+    [{ title: null, blocks: [] }, { blocks: [] }, ['title']],
+  ];
+  for (const [a, b, paths] of cases) {
+    const r = await call(['diff', '--json', write(a), write(b)]);
+    assert.equal(r.status, 1, JSON.stringify(a));
+    assert.deepEqual(JSON.parse(r.stdout).changes.flatMap((c) => c.fields), paths.map((path) => ({ path, from: null })));
+  }
 });
