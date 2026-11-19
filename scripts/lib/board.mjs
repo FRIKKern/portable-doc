@@ -49,9 +49,15 @@ export function milestones(file = new URL('../../docs/ROADMAP.md', import.meta.u
     .map(([, id, name, reward]) => ({ id, name: name.trim(), reward: reward.trim().replace(/`/g, '') }));
 }
 
-// Replaces the text between <!-- name:start --> and <!-- name:end --> in a file.
+// Replaces the text between <!-- name:start --> and <!-- name:end --> in a file. The file must
+// hold exactly one of each, start first, so a decoy block (say, in a code sample) is never written.
 export function replaceBlock(file, name, body) {
   const text = fs.readFileSync(file, 'utf8');
+  const [start, end] = [`<!-- ${name}:start -->`, `<!-- ${name}:end -->`];
+  const count = (marker) => text.split(marker).length - 1;
+  if (count(start) !== 1 || count(end) !== 1 || text.indexOf(start) > text.indexOf(end)) {
+    throw new Error(`${file}: needs exactly one ${start} and one ${end}, start first`);
+  }
   const re = new RegExp(`(<!-- ${name}:start -->\\n)[\\s\\S]*?(<!-- ${name}:end -->)`);
   if (!re.test(text)) throw new Error(`${file}: no ${name} block`);
   const next = text.replace(re, (_, a, b) => a + body + b);
