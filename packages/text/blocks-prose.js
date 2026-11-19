@@ -96,10 +96,13 @@ export function codeSource(b) {
   return '';
 }
 
+// An empty code block is a real block: Markdown writes its empty fence (with its
+// language), so it imports back as the same block. Plain text writes nothing.
 function code(b, ctx) {
   const source = codeSource(b);
-  if (source.trim() === '') return '';
-  return ctx.md ? fence(source, str(b.lang) || str(b.language)) : source.replace(/\n+$/, '');
+  const lang = str(b.lang) || str(b.language);
+  if (source.trim() === '') return ctx.md ? fence(typeof b.value === 'string' ? b.value : '', lang) : '';
+  return ctx.md ? fence(source, lang) : source.replace(/\n+$/, '');
 }
 
 const divider = (_b, ctx) => (ctx.md ? '---' : '§');
