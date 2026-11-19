@@ -28,6 +28,7 @@ import {
 } from '../inline'
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
+import { fieldOf, namesOf, readField } from '../../../text/read-aliases.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
 import type { RenderCtx } from './chrome'
 
@@ -35,10 +36,20 @@ type Emit = (block: Block, ctx: RenderCtx) => string
 
 /* ── prose core (walk.ex) ─────────────────────────────────────────────────── */
 
+// On a block type whose `text` is an old name for `content`, the body is that field read
+// through the alias table (packages/text/read-aliases.js); on any other, a non-empty
+// `content` array, else `text`. A `content` that is not an array (read only when no name
+// holds a value of its type) shows nothing.
 function paragraphInline(b: Block): unknown {
-  const content = b.content
-  if (Array.isArray(content) && content.length) return content
-  const text = str(b.text)
+  let text: string
+  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) {
+    const { name, value } = readField(b, 'content')
+    if (Array.isArray(value)) return value
+    text = name === 'content' ? '' : str(value)
+  } else {
+    if (Array.isArray(b.content) && b.content.length) return b.content
+    text = str(b.text)
+  }
   return text !== '' ? text : []
 }
 
@@ -227,7 +238,7 @@ const apiEndpoint: Emit = (b) => {
 // renders nothing.
 const expandable: Emit = (b, ctx) => {
   const summary = str(b.summary)
-  const blocks = asList(b.blocks ?? b.children)
+  const blocks = asList(fieldOf(b, 'blocks'))
   if (summary === '' && blocks.length === 0) return ''
 
   const inner = renderBlocks(blocks, ctx)
@@ -344,7 +355,7 @@ const toc: Emit = (b) => {
 // the Elixir article golden the parity harness compares against.
 const blockquote: Emit = (b) => {
   const inner = renderInlines(paragraphInline(b))
-  const rawCite = str(b.cite) || str(b.attribution)
+  const rawCite = str(fieldOf(b, 'cite'))
   const cite = rawCite ? `<cite class="bp-blockquote__cite">${escapeHtml(rawCite)}</cite>` : ''
   return `<blockquote class="bp-blockquote"><p>${inner}</p>${cite}</blockquote>`
 }
@@ -817,7 +828,7 @@ const diagram: Emit = (b) => {
 const asciicast: Emit = (b) => {
   const src = str(b.src)
   const caption = str(b.caption)
-  const poster = str(b.poster).trim()
+  const poster = str(fieldOf(b, 'posterAt')).trim()
   const posterAttr = poster === '' ? '' : ` data-cast-poster="${escapeAttr(poster)}"`
   const rows = typeof b.rows === 'number' && Number.isInteger(b.rows) ? b.rows : undefined
   const rowsAttr = rows !== undefined && rows >= 6 && rows <= 40 ? ` data-cast-rows="${rows}"` : ''
@@ -1099,7 +1110,7 @@ const columns: Emit = (b, ctx) => {
 const terminal: Emit = (b, ctx) => {
   const title = escapeHtml(str(b.title))
   const footer = str(b.footer)
-  const kids = asList<Block>(b.children ?? b.blocks)
+  const kids = asList<Block>(fieldOf(b, 'children'))
   const body = renderBlocks(kids, ctx)
   const live =
     b.live === true || b.live === 'true' || b.live === 'live'
