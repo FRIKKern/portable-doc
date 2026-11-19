@@ -28,7 +28,6 @@ const PLAIN_STRING = 'the schema types it as a plain string, so the test cannot 
 // The fields a writer may write short or not at all, each with the writers it excuses and why.
 // This list only shrinks. Each row must excuse a word in this run, so a stale row turns the test red.
 const LISTED = [
-  ['xLabels', ['HTML'], "the chart's HTML draws only the first and last label; a later change gives the chart a text alternative carrying every label"],
   ['tone', READABLE, `a setting, written as its label; ${PLAIN_STRING}`],
   ['verdict', READABLE, `a setting, written as the colour of the digits; ${PLAIN_STRING}`],
   ['lang', READABLE, `a setting, written only as a fence's first word; ${PLAIN_STRING}`],
