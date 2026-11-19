@@ -5,8 +5,8 @@ export interface ReadAlias {
   readonly reason: string;
   readonly convert?: 'inline-from-string' | 'columns-from-cols' | 'head-from-header';
 }
-/** The second names a reader still accepts, keyed "type.old", in the shape of the pack's spec/read-aliases.json. */
-export const TABLE: { readonly _comment: string; readonly aliases: Readonly<Record<string, ReadAlias>> };
+/** The second names a reader still accepts, keyed "type.old", in the shape of the pack's spec/read-aliases.json, frozen. */
+export function aliasTable(): { readonly _comment: string; readonly aliases: Readonly<Record<string, ReadAlias>> };
 /** The JSON types the schema gives name `name` on a block of `type`, or null when any type is allowed. */
 export function typesOf(type: string, name: string): readonly string[] | null;
 /** Whether a name holding `value` counts as absent by blankness alone: undefined, null, a blank string, or an empty array. */

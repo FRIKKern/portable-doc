@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import { blockSchema, validate } from '@portable-doc/validate';
-import { TABLE, convertOf, currentName, namesOf, readField } from './read-aliases.js';
+import { aliasTable, convertOf, currentName, namesOf, readField } from './read-aliases.js';
 
 const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
 
@@ -18,7 +18,7 @@ export const NOT_FIELDS = new Set(['then', 'toJSON', 'constructor', '$$typeof', 
 // A second name for a key, mapped to the key's own name, as the alias table in
 // alias-table.js has it. Goldens and writers use the current name; readers accept the old one
 // for old docs until the format drops it.
-export const READ_ALIASES = Object.freeze(Object.fromEntries(Object.entries(TABLE.aliases).map(([from, { to }]) => [from, to])));
+export const READ_ALIASES = Object.freeze(Object.fromEntries(Object.entries(aliasTable().aliases).map(([from, { to }]) => [from, to])));
 
 const asArray = (v) => (Array.isArray(v) ? v : []);
 
@@ -284,7 +284,7 @@ function runs(nodes, marks = [], out = []) {
 const isInline = (v) => Array.isArray(v) && v.length > 0 && v.every((n) => n && INLINE.has(n.type));
 // The fields of each block type that have old names, from the alias table.
 const ALIASED = new Map();
-for (const { to } of Object.values(TABLE.aliases)) {
+for (const { to } of Object.values(aliasTable().aliases)) {
   const [type, field] = [to.slice(0, to.indexOf('.')), to.slice(to.indexOf('.') + 1)];
   if (!ALIASED.has(type)) ALIASED.set(type, new Set());
   ALIASED.get(type).add(field);

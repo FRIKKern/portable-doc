@@ -4,13 +4,11 @@
 // one home here; when it is, the synced file takes TABLE's place, with a test that the two are
 // equal. read-aliases.js reads fields by it; scripts/generate-alias-types.mjs derives each
 // name's types from it and the schema.
+//
+// A plain literal, with no work at load: a bundle that imports a module beside this one but
+// never reads a field leaves the table out. read-aliases.js freezes it on first use.
 
-const deepFreeze = (value) => {
-  if (value && typeof value === 'object') for (const inner of Object.values(Object.freeze(value))) deepFreeze(inner);
-  return value;
-};
-
-export const TABLE = deepFreeze({
+export const TABLE = {
   _comment: 'Second names a reader still accepts. When a block holds both names, the `to` name wins. An entry without `convert` is a plain rename; a `convert` kind is implemented by every reader and tested by the shared case of that kind.',
   aliases: {
     'asciicast.poster': { to: 'asciicast.posterAt', reason: 'renamed 2026-11-19; poster means an address on every other block' },
@@ -29,4 +27,4 @@ export const TABLE = deepFreeze({
     'table.header': { to: 'table.head', reason: 'header\'s array form is head; header: true means the first row is the head', convert: 'head-from-header' },
     'terminal.blocks': { to: 'terminal.children', reason: 'children is the one name for nested blocks, as on every container' },
   },
-});
+};

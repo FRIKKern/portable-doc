@@ -15,19 +15,40 @@
 
 import { TABLE } from './alias-table.js';
 import { ALIAS_TYPES } from './alias-types.js';
-import { isMap } from './util.js';
 
-export { TABLE };
+// util.js's isMap, written here: util.js does work at load, and React bundles this module alone.
+const isMap = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
-// "type.field" → [field, ...its old names in TABLE's order], and "type.old" → field.
-const NAMES = new Map();
-const CURRENT = new Map();
-for (const [from, { to }] of Object.entries(TABLE.aliases)) {
-  const [type, old] = from.split('.');
-  const field = to.slice(type.length + 1);
-  if (!NAMES.has(to)) NAMES.set(to, [field]);
-  NAMES.get(to).push(old);
-  CURRENT.set(from, field);
+// Nothing runs at load, so a bundle that imports this module and never reads a field leaves
+// the table out. The first read freezes the table and the types and builds the name lists.
+const deepFreeze = (value) => {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) for (const inner of Object.values(Object.freeze(value))) deepFreeze(inner);
+  return value;
+};
+
+let NAMES; // "type.field" → [field, ...its old names in TABLE's order]
+let CURRENT; // "type.old" → field
+
+function built() {
+  if (NAMES) return;
+  deepFreeze(TABLE);
+  deepFreeze(ALIAS_TYPES);
+  const names = new Map();
+  const current = new Map();
+  for (const [from, { to }] of Object.entries(TABLE.aliases)) {
+    const [type, old] = from.split('.');
+    const field = to.slice(type.length + 1);
+    if (!names.has(to)) names.set(to, [field]);
+    names.get(to).push(old);
+    current.set(from, field);
+  }
+  [NAMES, CURRENT] = [names, current];
+}
+
+/** The alias table, frozen: { _comment, aliases: { "type.old": { to, reason, convert? } } }. */
+export function aliasTable() {
+  built();
+  return TABLE;
 }
 
 const OF_TYPE = {
@@ -43,6 +64,7 @@ const OF_TYPE = {
 
 /** The JSON types the schema gives name `name` on a block of `type`, or null when any type is allowed. */
 export function typesOf(type, name) {
+  built();
   return ALIAS_TYPES[`${type}.${name}`] ?? null;
 }
 
@@ -60,17 +82,19 @@ export function absentAs(type, name, value) {
 
 /** The names `field` of a block of `type` is read under: its own first, then its old names. */
 export function namesOf(type, field) {
+  built();
   return NAMES.get(`${type}.${field}`) ?? [field];
 }
 
 /** The current name an old name `key` stands for on a block of `type`, or undefined when `key` is no old name. */
 export function currentName(type, key) {
+  built();
   return CURRENT.get(`${type}.${key}`);
 }
 
 /** The convert kind of an old name, or undefined for a plain rename. */
 export function convertOf(type, key) {
-  return TABLE.aliases[`${type}.${key}`]?.convert;
+  return aliasTable().aliases[`${type}.${key}`]?.convert;
 }
 
 /**

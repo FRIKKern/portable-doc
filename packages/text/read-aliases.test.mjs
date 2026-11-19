@@ -5,7 +5,9 @@ import { renderPortableDocument } from '@portable-doc/react';
 import { OUT, aliasTypesSource } from '../../scripts/generate-alias-types.mjs';
 import { canon } from './golden-reads.mjs';
 import { toMarkdown, toPlainText } from './index.js';
-import { TABLE, absent, namesOf, readField, typesOf } from './read-aliases.js';
+import { aliasTable, absent, namesOf, readField, typesOf } from './read-aliases.js';
+
+const TABLE = aliasTable();
 
 // One table, one rule: every renderer and the round-trip canon read an aliased field through
 // read-aliases.js. These cases are the shared ones (the same blocks and reads go to Barkpark's
@@ -80,8 +82,8 @@ test('a block with two old names for one field reads and compares as the first o
   assert.notDeepEqual(canon(two), canon({ type: 'code', value: 'b' }));
 });
 
-// Each field whose behaviour changes under the rule: the block, then what HTML (a fragment),
-// Markdown and text show now. The old behaviour is in each comment.
+// Each field whose behaviour changes under the rule: the block, then what HTML (a fragment, or
+// { whole } for the whole render), Markdown and text show now. The old behaviour is in each comment.
 const CHANGED = [
   // table: head [] used to win and leave no head row; the header rows show now.
   [{ type: 'table', head: [], header: [t('H')], rows: [[t('r')]] }, '<th class="bp-table__th"><span>H</span></th>', '| H |\n| --- |\n| r |\n', 'H\n-\nr\n'],
@@ -105,12 +107,26 @@ const CHANGED = [
   [{ type: 'terminal', title: 'T', children: 'x', blocks: kid }, '<div class="bp-term__body"><p>kid</p></div>', '**T**\n\nkid\n', 'T\n\nkid\n'],
   // table head 'x' used to leave no head row.
   [{ type: 'table', head: 'x', header: [t('H')], rows: [[t('r')]] }, '<th class="bp-table__th"><span>H</span></th>', '| H |\n| --- |\n| r |\n', 'H\n-\nr\n'],
+  // asciicast: posterAt, the current name, is read before poster.
+  [{ type: 'asciicast', src: 'https://e.example/c.cast', poster: 'npt:0:01', posterAt: 'npt:0:09' }, 'data-cast-poster="npt:0:09"', '[Terminal recording](https://e.example/c.cast)\n', 'Terminal recording: https://e.example/c.cast\n'],
+  // A blank old name alone is absent, so HTML no longer shows its spaces (Markdown and text
+  // already showed nothing): heading, eyebrow, pullquote, callout text '  '.
+  [{ type: 'heading', text: '  ' }, { whole: '<h2></h2>' }, '', ''],
+  [{ type: 'eyebrow', text: '  ' }, { whole: '<p class="bp-role-eyebrow"></p>' }, '', ''],
+  [{ type: 'pullquote', text: '  ' }, { whole: '<p class="bp-role-pullquote"></p>' }, '', ''],
+  [{ type: 'callout', text: '  ' }, { whole: '<div class="bp-callout bp-callout--info"><span></span></div>' }, '> **Info**\n', 'Info\n'],
+  // blockquote attribution '  ' alone: HTML used to show a cite of spaces (a lone dash); no cite now.
+  [{ type: 'blockquote', content: t('q'), attribution: '  ' }, { whole: '<blockquote class="bp-blockquote"><p>q</p></blockquote>' }, '> q\n', '“q”\n'],
+  // table: a column's own type styles it with no cols present (cols folds into columns);
+  // main took types from cols only and showed a plain 3.
+  [{ type: 'table', columns: [{ key: 'a', text: 'A', type: 'delta' }], rows: [{ a: 3 }] }, '<th class="bp-table__th bp-table__th--num"><span>A</span></th></tr></thead><tbody><tr><td class="bp-table__td bp-table__td--num"><span>▲ 3</span></td>', '| A |\n| --- |\n| ▲ 3 |\n', 'A\n---\n▲ 3\n'],
 ];
 
 test('each field whose behaviour changes under the rule shows the same winner in HTML, Markdown and text', () => {
   for (const [block, fragment, markdown, plain] of CHANGED) {
     const label = JSON.stringify(block);
-    if (fragment === '') assert.equal(html(block), '', label);
+    // A whole render ({ whole }) is compared whole; a fragment is looked for.
+    if (fragment === '' || fragment.whole !== undefined) assert.equal(html(block), fragment.whole ?? '', label);
     else assert.ok(html(block).includes(fragment), `${label}\n${html(block)}`);
     assert.equal(md(block), markdown, label);
     assert.equal(text(block), plain, label);
@@ -181,4 +197,13 @@ test('a field the schema types as text reads a finite number as its digits, as b
     assert.equal(md(block), markdown, label);
     assert.equal(text(block), plain, label);
   }
+});
+
+test('React\'s embed and field-blocks bundles leave the alias table out; index carries it once', () => {
+  // The table has no work at load, so a bundle that never reads a field drops it.
+  const dist = new URL('../react/dist/', import.meta.url);
+  const reason = TABLE.aliases['blockquote.attribution'].reason;
+  const count = (file) => fs.readFileSync(new URL(file, dist), 'utf8').split(reason).length - 1;
+  for (const file of ['embed.mjs', 'embed.cjs', 'field-blocks.mjs', 'field-blocks.cjs']) assert.equal(count(file), 0, file);
+  for (const file of ['index.mjs', 'index.cjs']) assert.equal(count(file), 1, file);
 });
