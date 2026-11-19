@@ -986,11 +986,13 @@ const paperLinks: Emit = (b, ctx) => {
 
 /* section (compose.ex section_grid_html / compose_section_stack) */
 
+// A digit string too large for a number parses to Infinity, which is no integer, so the three
+// grid readers below take it as no number, as they take NaN.
 function gridTracks(n: unknown): number {
   if (typeof n === 'number' && Number.isInteger(n) && n > 0) return n
   if (typeof n === 'string' && /^\d+$/.test(n)) {
     const i = Number.parseInt(n, 10)
-    if (i > 0) return i
+    if (Number.isInteger(i) && i > 0) return i
   }
   return 2
 }
@@ -1012,15 +1014,15 @@ function spanInt(v: unknown): number | null {
   if (typeof v === 'number' && Number.isInteger(v) && v > 0) return v
   if (typeof v === 'string' && /^\d+$/.test(v)) {
     const i = Number.parseInt(v, 10)
-    if (i > 0) return i
+    if (Number.isInteger(i) && i > 0) return i
   }
   return null
 }
 
 function orderInt(v: unknown): number | null {
   if (typeof v === 'number' && Number.isInteger(v)) return v
-  if (typeof v === 'string' && /^-?\d+$/.test(v)) return Number.parseInt(v, 10)
-  return null
+  const i = typeof v === 'string' && /^-?\d+$/.test(v) ? Number.parseInt(v, 10) : NaN
+  return Number.isInteger(i) ? i : null
 }
 
 // Present-only `order:K;grid-column:span N` (order-then-span join, matching

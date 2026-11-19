@@ -61,3 +61,18 @@ test('no writer shows a number that is not finite, over every value of every bas
   assert.ok(blocks > 39_000, `${blocks} blocks`);
   assert.deepEqual([...wrong].map(([key, first]) => `${key} (first: ${first})`), []);
 });
+
+test('a digit string too large for a number is no number: a grid span or order is left out, and tracks fall back, as when missing', () => {
+  const big = '9'.repeat(400);
+  const grid = (child, layout = {}) => [{ type: 'section', layout: { mode: 'grid', ...layout }, blocks: [{ type: 'paragraph', text: 'x', ...child }] }];
+  // The HTML writers only: a Markdown writer that keeps the block as data keeps the string too.
+  for (const writer of writers.filter((w) => w.writes === 'html')) {
+    const out = (blocks) => writer.write(blocks).output;
+    assert.equal(out(grid({ span: big })), out(grid({})), `${writer.name}: span`);
+    assert.equal(out(grid({ order: big })), out(grid({})), `${writer.name}: order`);
+    assert.equal(out(grid({ order: `-${big}` })), out(grid({})), `${writer.name}: order below`);
+    assert.equal(out(grid({}, { tracks: big })), out(grid({})), `${writer.name}: tracks`);
+  }
+  const html = writers.find((w) => w.name === 'HTML').write(grid({ span: '3', order: '2' }, { tracks: '4' })).output;
+  for (const shown of ['grid-column:span 3', 'order:2', '--bp-tracks:4']) assert.ok(html.includes(shown), `a digit string that fits is read: ${shown}`);
+});
