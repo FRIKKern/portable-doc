@@ -3,6 +3,15 @@
 // the neighbour search (import-work-search.test.mjs).
 
 const X = (n, c = 'x') => c.repeat(n);
+const Q = (n) => X(n, '> ');
+const lines = (n, level) => Array.from({ length: n }, (_, i) => level(i + 1)).flat().join('\n');
+
+/** D callouts, each in the one before: a level's `[!tone]` line, then a bare `>`, so the next is a block of its body. `marker` '' makes them plain quotes. */
+export const callouts = (D, marker = '[!info] ') => lines(D, (i) => [`${Q(i)}${marker}h${i - 1}`, Q(i).trimEnd()]);
+
+/** C callouts, then P plain quotes under the innermost, W lines in each. */
+export const calloutsOverQuotes = (C, P, W) =>
+  [callouts(C, '[!info] '), lines(P, (j) => [...Array.from({ length: W }, (_, w) => `${Q(C + j)}plain${j} w${w}`), Q(C + j).trimEnd()])].join('\n');
 
 // markdown-it's own count (parsedWork) is what reading the text costs; the text's count may
 // be more, never less, for the whole text and for every run of first lines (what the import
@@ -64,6 +73,10 @@ export const CASES = {
   'a fence-like line behind one quote marker and a tab, then deep quote lines': `>\t\`\`\`\n${X(300, `${X(60, '>')} x\n`)}`,
   'a fence-like line behind quote markers with tabs, then deep spaced quote lines': `>\t>\t> \t\`\`\`\n${X(60, `${X(300, '> ')}x\n`)}`,
   'NULs under a deep quote': `${X(150, '> ')}${X(300, '\0')}\n${X(150, '> ')}a`,
+  // Callouts in callouts: the import reads each callout's body as blocks, 50 callouts deep.
+  'callouts 1000 deep': callouts(1000),
+  'callouts 150 deep, a paragraph in each': lines(150, (i) => [`${Q(i)}[!info] h${i}`, Q(i).trimEnd(), `${Q(i)}p${i} words`, Q(i).trimEnd()]),
+  ...Object.fromEntries([[10, 40, 5], [30, 30, 3], [3, 90, 2]].map(([C, P, W]) => [`${C} callouts over ${P} plain quotes, ${W} lines in each`, calloutsOverQuotes(C, P, W)])),
 };
 
 /** A seeded run of numbers in [0, n), the same on every machine: mulberry32, in 32-bit integer math. */

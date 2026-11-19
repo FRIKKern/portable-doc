@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { assertPack } from './lib/npm-pack.mjs';
+import { assertDist, assertPack } from './lib/npm-pack.mjs';
 
 const packages = fileURLToPath(new URL('../packages/', import.meta.url));
 
@@ -20,6 +20,19 @@ const PACKS = {
 
 for (const [name, list] of Object.entries(PACKS)) {
   test(`packages/${name} packs exactly its own list`, () => assertPack(path.join(packages, name), list));
+}
+
+// `dist/` above packs whatever the build left, so each built dist is checked against its kinds:
+// the files package.json exports, their type files and maps. Run `npm run build` in a package
+// first to check its dist; with no dist, the test says it checked nothing. The editor's dist is
+// not built in this repo (it comes from the editor's own source), so it is checked only where one
+// is present.
+for (const name of Object.keys(PACKS)) {
+  test(`packages/${name} dist, when built, holds only its export entries, their type files and their maps`, (t) => {
+    if (!assertDist(path.join(packages, name))) {
+      t.diagnostic(`packages/${name}/dist is not built, so it was not checked${name === 'editor' ? ': the editor\'s dist is not built in this repo' : ''}`);
+    }
+  });
 }
 
 test('every package that is not private has a files list and its list here; every list here is such a package', () => {

@@ -534,7 +534,7 @@ function isBlankParagraphRun(nodes: unknown, depth = 0): boolean {
 function isBlankParagraphNode(n: unknown, depth: number): boolean {
   if (depth >= MAX_DEPTH) return false
   if (typeof n === 'string') return n.trim() === ''
-  if (typeof n === 'number') return false // renders its digits
+  if (typeof n === 'number') return !Number.isFinite(n) // a finite number renders its digits; NaN and Infinity render nothing
   if (Array.isArray(n)) return isBlankParagraphRun(n, depth + 1) // shallow-flattened shape
   if (!isMap(n)) return true // null/bool — renderInline emits '' for these
   // Only an UNMARKED whitespace text leaf counts as scaffold; every other node

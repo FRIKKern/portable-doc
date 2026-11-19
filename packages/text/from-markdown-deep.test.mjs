@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
 import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
-import { parsedWork } from './from-markdown.js';
+import { parsedWork, readPlan } from './from-markdown.js';
+import { CASES, callouts, calloutsOverQuotes } from './import-work-cases.mjs';
+import { planText } from './import-work.js';
 import { IMPORT_WORK, fromMarkdown, readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
@@ -117,4 +119,74 @@ test('a list item past the parse levels reads only its own lines: each later ite
   assert.equal(list.items.length, 20);
   list.items.forEach((item, i) => assert.match(JSON.stringify(item), new RegExp(`"a${i}"`)));
   assert.ok(parsedWork(items) <= readMarkdown(items).work, `markdown-it ${parsedWork(items)}, the text's count ${readMarkdown(items).work}`);
+});
+
+// ── callouts in callouts ──
+
+// The callouts down the first one's body, and the deepest.
+function calloutChain(block) {
+  let depth = 0;
+  let at = block;
+  for (let next = at.slots?.body?.find((b) => b.type === 'callout'); next; next = at.slots?.body?.find((b) => b.type === 'callout')) {
+    at = next;
+    depth++;
+  }
+  return { depth: depth + 1, deepest: at };
+}
+
+test('callouts nested past MAX_NEST in a document: the blocks around them stay, callouts go 50 deep, the deepest keeps the rest as its text', () => {
+  for (const D of [51, 101]) {
+    const md = `# Title0\n\nIntro0.\n\n${callouts(D)}\n\nOutro0.`;
+    const blocks = keepsEveryWord(md, `${D} deep`);
+    assert.deepEqual(blocks.map((b) => b.type), ['heading', 'paragraph', 'callout', 'paragraph'], `${D} deep`);
+    assert.deepEqual(readMarkdown(md).notices, [], `${D} deep`);
+    const { depth, deepest: last } = calloutChain(blocks[2]);
+    assert.equal(depth, 51, `${D} deep: 50 callouts read their body as blocks, the 51st keeps its body as text`);
+    assert.equal(last.slots, undefined);
+    // The deeper markers stay as the literal text they are, as in any quote kept as text.
+    assert.deepEqual(last.content, [t(Array.from({ length: D - 50 }, (_, i) => `h${50 + i}`).join(' [!info] '))], `${D} deep`);
+  }
+});
+
+test('callouts 1000 deep cost what plain quotes as deep cost, in the text\'s count and in markdown-it\'s; past the budget the rest is plain text, as for plain quotes', () => {
+  const NO_LIMIT = { ...IMPORT_WORK, budget: Infinity, lineBytes: null };
+  const marked = callouts(1000);
+  const plain = callouts(1000, '');
+  // Within 1.05: the `[!info] ` on every other line is all the callouts add.
+  for (const count of [(md) => planText(md, NO_LIMIT).work, parsedWork]) {
+    assert.ok(count(marked) <= 1.05 * count(plain), `callouts ${count(marked)}, plain quotes ${count(plain)}`);
+  }
+  // The text before the cut reads as one callout, 50 deep; the rest is the plain paragraph
+  // after it, and the notice names that paragraph.
+  for (const md of [marked, plain]) {
+    const { blocks, notices } = readMarkdown(md);
+    assert.deepEqual(blocks.map((b) => b.type), [md === marked ? 'callout' : 'blockquote', 'paragraph']);
+    assert.deepEqual(notices.map((n) => [n.code, n.rule, n.path]), [[IMPORT_WORK.notice, 'budget', '/blocks/1']]);
+  }
+  assert.equal(calloutChain(readMarkdown(marked).blocks[0]).depth, 51);
+});
+
+test('a callout\'s parts are each read once: the nodes the read visits stay within the tokens markdown-it made, for callouts 1000 and 150 deep and over plain quotes', () => {
+  const NO_LIMIT = { ...IMPORT_WORK, budget: Infinity, lineBytes: null };
+  for (const name of ['callouts 1000 deep', 'callouts 150 deep, a paragraph in each', ...Object.keys(CASES).filter((n) => / callouts over \d+ plain quotes/.test(n))]) {
+    const { count } = readPlan(planText(CASES[name], NO_LIMIT), NO_LIMIT);
+    // Read once, a node is one visit and at least one token (0.56 to 0.79 here). Reading a callout's
+    // text again at each level is 1.8 to 20 visits a token; where that text is deep source it is also
+    // parsed again, and the count test above catches that.
+    assert.ok(count.tokens > 0 && count.visits <= count.tokens, `${name}: ${count.visits} visits, ${count.tokens} tokens`);
+  }
+});
+
+test('callouts over plain quotes, and callouts 150 deep, keep their structure with no notice', () => {
+  for (const [C, P, W] of [[10, 40, 5], [30, 30, 3], [3, 90, 2]]) {
+    const md = calloutsOverQuotes(C, P, W);
+    const blocks = keepsEveryWord(md, `${C} over ${P}`);
+    assert.deepEqual(readMarkdown(md).notices, []);
+    const { depth, deepest: last } = calloutChain(blocks[0]);
+    assert.equal(depth, C, `${C} over ${P}`);
+    assert.deepEqual(last.slots.body.map((b) => b.type), ['blockquote'], `${C} over ${P}: the plain quotes are one quote of text`);
+  }
+  const md = CASES['callouts 150 deep, a paragraph in each'];
+  assert.deepEqual(readMarkdown(md).notices, []);
+  assert.equal(calloutChain(keepsEveryWord(md, '150 deep')[0]).depth, 51);
 });

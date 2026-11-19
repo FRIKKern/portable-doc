@@ -28,9 +28,11 @@ export type Block = { type: string } & Record<string, unknown>
 /* ── escaping (mirrors Render.Util.escape_html/escape_attr/safe_url) ──────────── */
 
 /** Escape the five HTML-significant chars in EXACT order `& < > " '` (ampersand
- * first so entities never double-escape). Non-string → "" (fail-soft twin). */
+ * first so entities never double-escape). A finite number is its digits; NaN,
+ * Infinity and any other non-string → "" (fail-soft twin), as the text renderers
+ * write them. */
 export function escapeHtml(s: unknown): string {
-  if (typeof s === 'number') s = String(s)
+  if (typeof s === 'number') s = Number.isFinite(s) ? String(s) : ''
   if (typeof s !== 'string') return ''
   return s
     .replace(/&/g, '&amp;')
@@ -426,7 +428,7 @@ export function inlineText(nodes: unknown): string {
   const stack: Array<[unknown, boolean]> = [[nodes, false]]
   while (stack.length) {
     const [n, inList] = stack.pop()!
-    if (typeof n === 'string' || typeof n === 'number') text += String(n)
+    if (typeof n === 'string' || (typeof n === 'number' && Number.isFinite(n))) text += String(n)
     else if (Array.isArray(n)) for (let i = n.length - 1; i >= 0; i--) stack.push([n[i], true])
     else if (inList && isMap(n)) {
       const leaf = textLeafValue(n)
@@ -513,8 +515,7 @@ function isBlockWrapper(n: unknown): n is Record<string, unknown> {
 /** Render one inline node to an HTML string. */
 export function renderInline(node: Inline, depth = 0, insideLink = false): string {
   if (depth >= MAX_DEPTH) return escapeHtml(tooDeepNotice)
-  if (typeof node === 'string') return escapeHtml(node)
-  if (typeof node === 'number') return escapeHtml(String(node))
+  if (typeof node === 'string' || typeof node === 'number') return escapeHtml(node)
   // A bare ARRAY where an inline node was expected (`content: [[{text…}]]` —
   // flattened one level too shallow by an upstream author path). This is the
   // js-only divergence from the Elixir twin: inline.ex `compose_inline(l) when
@@ -682,8 +683,7 @@ export function withWikilinkRenderer<T>(renderer: WikilinkRenderer | undefined, 
  * `InlineRenderer.Inline`, and the ONE place the block-wrapper unwrap above
  * applies. */
 export function renderInlines(nodes: unknown, depth = 0): string {
-  if (typeof nodes === 'string') return escapeHtml(nodes)
-  if (typeof nodes === 'number') return escapeHtml(String(nodes))
+  if (typeof nodes === 'string' || typeof nodes === 'number') return escapeHtml(nodes)
   if (!Array.isArray(nodes)) return ''
   return unwrapBlockWrappers(nodes)
     .map((n) => renderInline(n as Inline, depth))
@@ -696,8 +696,7 @@ export function renderInlines(nodes: unknown, depth = 0): string {
  * than routing them back through `compose_inline_children/1`, and this leg is
  * bounded exactly as that one. */
 function renderInlineChildren(nodes: unknown, depth: number, insideLink: boolean): string {
-  if (typeof nodes === 'string') return escapeHtml(nodes)
-  if (typeof nodes === 'number') return escapeHtml(String(nodes))
+  if (typeof nodes === 'string' || typeof nodes === 'number') return escapeHtml(nodes)
   if (!Array.isArray(nodes)) return ''
   return nodes.map((n) => renderInline(n as Inline, depth, insideLink)).join('')
 }
@@ -712,7 +711,7 @@ export function renderCell(cell: unknown): string {
   return nodes
     .map((n) => {
       if (typeof n === 'string') return `<span>${escapeHtml(n)}</span>`
-      if (typeof n === 'number') return `<span>${escapeHtml(String(n))}</span>`
+      if (typeof n === 'number') return Number.isFinite(n) ? `<span>${escapeHtml(n)}</span>` : ''
       if (!isMap(n)) return ''
       if (str(n.type) === 'text') {
         const marks = asList(n.marks)
