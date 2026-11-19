@@ -282,15 +282,26 @@ test('the "last good render" note sits outside the tablist, which holds only tab
 const SMALL = 4000;
 const compact = (doc) => JSON.stringify(doc);
 const laidOut = (doc) => JSON.stringify(doc, null, 2);
-/** A one-paragraph doc whose JSON, written by `write`, is exactly `bytes` bytes. */
+/**
+ * Text of exactly `bytes` UTF-8 bytes, mostly in letters of more than one byte: one 4-byte
+ * emoji, then 'é' (2 bytes), with an ASCII letter to make the count. Its length in UTF-16
+ * units is about half its bytes, so a cap that counts `.length` lets these docs through.
+ */
+function letters(bytes) {
+  const text = `😀${'é'.repeat(Math.floor((bytes - 4) / 2))}${'a'.repeat((bytes - 4) % 2)}`;
+  assert.equal(utf8Length(text), bytes);
+  return text;
+}
+/** A one-paragraph doc whose JSON, written by `write`, is exactly `bytes` bytes, and far fewer UTF-16 units. */
 function docOf(bytes, write) {
-  const doc = (n) => ({ blocks: [{ type: 'paragraph', text: 'a'.repeat(n) }] });
-  const made = doc(bytes - write(doc(0)).length);
+  const doc = (text) => ({ blocks: [{ type: 'paragraph', text }] });
+  const made = doc(letters(bytes - utf8Length(write(doc('')))));
   assert.equal(utf8Length(write(made)), bytes);
+  assert.ok(write(made).length < bytes * 0.6, 'the doc is mostly letters of more than one byte');
   return made;
 }
 const linkTo = (text) => `#doc=json.${Buffer.from(text).toString('base64url')}`;
-// Markdown of n letters makes one paragraph; this many bytes of doc JSON come with it.
+// Markdown of n bytes of letters makes one paragraph; this many bytes of doc JSON come with it.
 const MD_OVERHEAD = utf8Length(compact(JSON.parse(docFromMarkdown('a').text))) - 1;
 const TINY = { id: 'tiny', group: 'Block types', label: 'A tiny doc', doc: { blocks: [{ type: 'divider' }] } };
 const OVER_EXAMPLE = { id: 'over', group: 'Block types', label: 'An example a byte over', doc: docOf(SMALL + 1, laidOut) };
@@ -375,12 +386,12 @@ const DOORS = [
       const box = () => page.window.document.querySelector('.pg-markdown');
       if (!box()) page.click('Paste Markdown');
       await page.until(box, () => 'the Markdown box');
-      page.type(box(), 'a'.repeat(bytes - MD_OVERHEAD));
+      page.type(box(), letters(bytes - MD_OVERHEAD));
       await page.until(() => !page.window.document.querySelector('.pg-paste button').disabled, () => 'Make a doc enabled');
       page.click('Make a doc');
     },
     over: refusal(`The Markdown makes a doc too big for the editor (over ${MB(SMALL)} MB)`), at: 'Made a doc of 1 block from the Markdown.',
-    text: (bytes) => docFromMarkdown('a'.repeat(bytes - MD_OVERHEAD), SMALL).text,
+    text: (bytes) => docFromMarkdown(letters(bytes - MD_OVERHEAD), SMALL).text,
   },
   {
     door: 'the example picker', way: 'example',
