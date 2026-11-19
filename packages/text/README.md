@@ -118,9 +118,12 @@ Where it differs from Barkpark, on purpose:
   deepest item, its items and their blocks one space apart, as Barkpark does.
   A quote keeps all its text, as one run, at any depth.
 - The import counts its work from the text, before it parses, so every
-  importer of the same text cuts it at the same line. Each line costs
+  importer of the same text cuts it at the same line. Lines are those
+  markdown-it reads: `\n`, `\r\n` and a lone `\r` each end a line, and a NUL
+  counts as U+FFFD (its core rule `normalize`). Each line costs
   (depth + 1) × (2 + its UTF-8 bytes). Its depth is its quote and list markers
-  plus one per 2 columns of indentation among them; a blank line keeps the
+  plus one per 2 columns of indentation among them, a tab running to the next
+  stop of 4; a blank line keeps the
   depth before it, and a line right after a non-blank line keeps at least that
   line's depth, as it may be lazy. The count is never below what markdown-it
   does to read the same lines. The budget is 16,000,000 (`IMPORT_WORK`); an
@@ -139,6 +142,11 @@ Where it differs from Barkpark, on purpose:
     reference. It is charged its bytes once. Inside an open code fence, the
     code after it starts with the fence's opening line again, so it stays
     code; in a list item that opening line makes a new item.
+- Behind the text's count, markdown-it's own count runs as a net. Should it
+  pass the budget where the text's count said it would not, the rest of the
+  text below the top level is kept as plain text, every word, with one
+  notice `{ rule: 'net', path, work }`. The shared cases never fire it; one
+  in the wild means the text's count is wrong, and is a bug to report.
 
 **Round trip.** For heading, paragraph, list, code, table, blockquote, divider
 and diagram, `fromMarkdown(toMarkdown(doc))` gives back an equivalent doc:
@@ -150,4 +158,6 @@ link, a callout or pullquote as a quote, an equation as a `math` code block.
 
 `node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/import-work.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
-text, and the import rules, round trip and hostile input.
+text, and the import rules, round trip and hostile input. The import-work
+test sweeps 300 seeded documents; `IMPORT_WORK_SWEEP=20000` runs a longer
+sweep (about two minutes).
