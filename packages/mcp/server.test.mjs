@@ -12,10 +12,11 @@ import { MAX_MESSAGE_BYTES } from './stdio.js';
 import { MAX_OPS } from './tools.js';
 import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs';
 import { withinBudget } from '../../scripts/lib/cpu-budget.mjs';
+import { HANG_MS } from '../../scripts/lib/hang.mjs';
+import { READER_WAIT, REQUEST } from './test/request.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
 const CPU_REPORT = fileURLToPath(new URL('test/cpu-report.mjs', import.meta.url));
-const TIMEOUT = { timeout: 20_000 };
 const brokenDir = new URL('../../fixtures/broken/', import.meta.url);
 const broken = fs.readdirSync(brokenDir).filter((file) => file.endsWith('.json')).sort()
   .map((file) => ({ file, ...JSON.parse(fs.readFileSync(new URL(file, brokenDir), 'utf8')) }));
@@ -32,7 +33,7 @@ function deepDoc(levels) {
 
 async function connect(env = {}) {
   const client = new Client({ name: 'test', version: '0.0.0' });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env, stderr: 'pipe' }));
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...READER_WAIT, ...env }, stderr: 'pipe' }), REQUEST);
   return client;
 }
 
@@ -43,7 +44,7 @@ async function connect(env = {}) {
  * process's cpuUsage cannot see it.
  */
 async function connectTimed(env = {}) {
-  const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', CPU_REPORT, BIN], env, stderr: 'pipe' });
+  const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', CPU_REPORT, BIN], env: { ...READER_WAIT, ...env }, stderr: 'pipe' });
   const cpu = [];
   let rest = '';
   transport.stderr.on('data', (chunk) => {
@@ -52,7 +53,7 @@ async function connectTimed(env = {}) {
     for (const line of lines) if (/^cpu-us \d+$/.test(line)) cpu.push(Number(line.slice(7)));
   });
   const client = new Client({ name: 'test', version: '0.0.0' });
-  await client.connect(transport);
+  await client.connect(transport, REQUEST);
   // Each message the server writes is followed by one report, on another pipe. Count the
   // messages (the initialize reply so far) so a report is never matched to the wrong one.
   let messages = 1;
@@ -62,7 +63,7 @@ async function connectTimed(env = {}) {
     onmessage(message, extra);
   };
   const reportsIn = async () => {
-    const deadline = Date.now() + 10_000; // hang deadline: a report follows each message at once
+    const deadline = Date.now() + HANG_MS; // hang deadline: a report follows each message at once
     while (cpu.length < messages) {
       if (Date.now() > deadline) throw new Error('the server sent no CPU report'); // hang deadline
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -79,7 +80,7 @@ async function connectTimed(env = {}) {
   return client;
 }
 
-const call = (client, name, args) => client.callTool({ name, arguments: args }, undefined, TIMEOUT);
+const call = (client, name, args) => client.callTool({ name, arguments: args }, undefined, REQUEST);
 
 async function protocolError(promise, pattern) {
   await assert.rejects(promise, (e) => {
@@ -108,7 +109,7 @@ describe('over stdio with the SDK client', () => {
   });
 
   test('lists five tools, each with an input schema', async () => {
-    const { tools } = await client.listTools();
+    const { tools } = await client.listTools(undefined, REQUEST);
     assert.deepEqual(tools.map((t) => t.name), ['validate', 'explain', 'apply_ops', 'render', 'blocks']);
     for (const t of tools) assert.equal(t.inputSchema.type, 'object');
   });
@@ -177,7 +178,7 @@ describe('over stdio with the SDK client', () => {
     assert.equal((await call(client, 'explain', { errors: Array(1000).fill({ code: 'too_deep', path: '' }) })).structuredContent.explanations.length, 1000);
     await protocolError(call(client, 'explain', { errors: [], doc: 'x' }), /doc must be an object/);
     await protocolError(call(client, 'nope', {}), /no tool "nope"; tools: validate, explain, apply_ops, render, blocks/);
-    await assert.rejects(client.request({ method: 'tools/call', params: { name: 'validate', arguments: [] } }, CallToolResultSchema, TIMEOUT), (e) => {
+    await assert.rejects(client.request({ method: 'tools/call', params: { name: 'validate', arguments: [] } }, CallToolResultSchema, REQUEST), (e) => {
       assert.equal(e.code, ErrorCode.InvalidParams);
       assert.match(e.message, /"arguments"/);
       return true;
@@ -230,7 +231,7 @@ describe('over stdio with the SDK client', () => {
   });
 
   test('the server still answers after every bad call', async () => {
-    assert.equal((await client.listTools()).tools.length, 5);
+    assert.equal((await client.listTools(undefined, REQUEST)).tools.length, 5);
   });
 });
 
@@ -299,8 +300,8 @@ describe('render failures are tool errors, never a hang', () => {
     }
     const full = await startFakeReader({ raw: JSON.stringify({ html: 'x'.repeat(MAX_HTML_BYTES - 11) }) });
     try {
-      assert.equal((await render({ blocks: [] }, { base: full.base, token: FAKE_TOKEN, timeoutMs: 10_000 })).html.length, MAX_HTML_BYTES - 11);
-      await render([{ id: 'b', type: 'divider' }], { base: full.base, token: FAKE_TOKEN, timeoutMs: 10_000 });
+      assert.equal((await render({ blocks: [] }, { base: full.base, token: FAKE_TOKEN, timeoutMs: HANG_MS })).html.length, MAX_HTML_BYTES - 11);
+      await render([{ id: 'b', type: 'divider' }], { base: full.base, token: FAKE_TOKEN, timeoutMs: HANG_MS });
       assert.deepEqual(JSON.parse(full.requests.at(-1).body), { blocks: [{ id: 'b', type: 'divider' }] });
     } finally {
       await full.close();
@@ -310,7 +311,7 @@ describe('render failures are tool errors, never a hang', () => {
     toolError(await renderWith({ BARKPARK_URL: gone.base }), /failed: connect ECONNREFUSED/);
     // A reader that never answers while the test runs: only BARKPARK_TIMEOUT_MS can end the
     // call, and the error names it. No clock is read; if the timeout did not fire, the call
-    // would hang until the SDK request timeout (TIMEOUT) and fail.
+    // would hang until the SDK request's hang deadline (HANG_MS) and fail.
     const slow = await startFakeReader({ delayMs: 600_000 });
     try {
       toolError(await renderWith({ BARKPARK_URL: slow.base, BARKPARK_TIMEOUT_MS: '300' }), /no answer within 300 ms/);
@@ -357,7 +358,7 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
     const answered = new Promise((resolve) => waiters.push(resolve));
     child.stdin.write(text);
     let timer;
-    await Promise.race([answered, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error('no answer within 10 s')), 10_000)))]).finally(() => clearTimeout(timer));
+    await Promise.race([answered, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`no answer within ${HANG_MS} ms`)), HANG_MS)))]).finally(() => clearTimeout(timer));
     assert.equal(lines.length, count + 1);
     return lines.at(-1);
   };

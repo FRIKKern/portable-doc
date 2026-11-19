@@ -8,6 +8,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { CLOSE_GRACE_MS, closeGraceMs, MAX_GRACE_MS, preview, startPreview } from './preview.js';
+import { HANG_MS } from '../../scripts/lib/hang.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
@@ -44,10 +45,6 @@ function start(file) {
 }
 
 const page = async (url) => (await fetch(url)).text();
-
-// Hang deadlines: long enough that no loaded machine reaches them doing the work, so they
-// only stop a wait that would never end.
-const HANG_MS = 30_000;
 
 /** Open /events and resolve once an event named `name` arrives (or reject after `ms`). */
 async function nextEvent(url, name, ms = HANG_MS) {
