@@ -6,9 +6,7 @@ One cell per golden per renderer, drawn from [`conformance/`](conformance/); eve
 
 ## Vision
 
-One document format for every Barkpark app. A Paper, a Barkdown note or a
-Barkever note is written once and reads and edits the same everywhere: Barkpark
-Studio, the web, Barkdown, Barkever, barkpark-studio and the phone.
+One document format for every Barkpark app. A Paper, a Barkdown note or a Barkever note is written once and reads and edits the same everywhere: Barkpark Studio, the web, Barkdown, Barkever, barkpark-studio and the phone.
 
 Today the format's rules live inside [Barkpark](https://github.com/FRIKKern/barkpark)
 and are rendered in eight places that drift apart. This repo becomes their one
@@ -34,10 +32,8 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 6 changes
-  - text: a portabledoc fence with an unsafe address in any field stays code ([#78](https://github.com/FRIKKern/portable-doc/pull/78))
-- **Yesterday** · 14 changes
-  - Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
+- **Today** · 8 changes · Playground: pasted Markdown keeps under the doc cap, and the stale note leaves the tablist ([#79](https://github.com/FRIKKern/portable-doc/pull/79))
+- **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
