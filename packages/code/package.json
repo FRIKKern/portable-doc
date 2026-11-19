@@ -26,7 +26,6 @@
     "src/reader-tabs.js",
     "LICENSE",
     "README.md",
-    "RELEASING.md",
     "SOURCE.json"
   ],
   "sideEffects": [

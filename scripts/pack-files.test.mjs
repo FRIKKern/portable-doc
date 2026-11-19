@@ -10,7 +10,7 @@ const packages = fileURLToPath(new URL('../packages/', import.meta.url));
 // What each package that can be published packs: its runtime code, its types, its notices and
 // its README, never a test or a script. A folder ending in `/` is the build's output.
 const PACKS = {
-  code: ['LICENSE', 'README.md', 'RELEASING.md', 'SOURCE.json', 'dist/', 'package.json', 'src/code-highlight.js', 'src/reader-code.js', 'src/reader-tabs.js'],
+  code: ['LICENSE', 'README.md', 'SOURCE.json', 'dist/', 'package.json', 'src/code-highlight.js', 'src/reader-code.js', 'src/reader-tabs.js'],
   editor: [
     'EMBED-CONTRACT.md', 'LICENSE', 'README.md', 'THIRD-PARTY-NOTICES.txt', 'contract.d.ts', 'dist/', 'host-profile/surface.json',
     'index.d.ts', 'package.json', 'third-party-notices.json',

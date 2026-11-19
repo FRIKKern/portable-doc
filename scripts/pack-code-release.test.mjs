@@ -9,7 +9,6 @@ const manifest = JSON.parse(readFileSync(resolve(root, 'packages/code/package.js
 const files = [
   'LICENSE',
   'README.md',
-  'RELEASING.md',
   'SOURCE.json',
   'dist/bp-paper-code.js',
   'package.json',
