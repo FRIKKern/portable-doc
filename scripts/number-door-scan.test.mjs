@@ -13,7 +13,8 @@
 //   - join on an array or tuple that may hold a number;
 //   - in a style value (inside an open style="…" or style='…' in the template, or after a CSS
 //     `name:` in a fragment with no markup, the name a word or a span), a template span that
-//     calls a number writer with an argument that may hold a number. Writers are known by symbol:
+//     calls a number writer with an argument that may hold a number, or with no argument at all
+//     (its body has turned a number into text, so the number is its own). Writers are known by symbol:
 //     numberText, stringOf, a const naming a writer, or a function in React's source whose body
 //     calls one so. Inside styleOf's write callback a call is trusted only when each such argument
 //     is the callback's own parameter, the finite number styleOf hands it; styleOf leaves a
@@ -40,9 +41,9 @@
 // - A number used as a computed key (`{ [n]: 1 }`) whose keys are then shown.
 // - In a style: a value built without a template (string concatenation, or a join built outside
 //   it); a number writer reached through an object's or a class's method, or as a value passed
-//   around (its text made before the template); a writer whose number is not an argument
-//   (`() => numberText(n)`); a property named by a span and written with a space (`${k}: …`, read
-//   as a label). Each has a plant row that the scan must not name. packages/text writes no HTML
+//   around (its text made before the template); a writer given arguments, none of which may hold
+//   a number, whose number comes from elsewhere (`(s: string) => s + numberText(n)`); a property
+//   named by a span and written with a space (`${k}: …`, read as a label). Each has a plant row that the scan must not name. packages/text writes no HTML
 //   style, so the style rules read React only; a style written there would go unseen.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
@@ -103,7 +104,8 @@ function reactRoutes(only) {
   // (number-text.js). A function in React's source is one when its body calls a writer with an
   // argument that may hold a number, unless the call is trusted; a const that names a writer is one.
   // A call is trusted inside styleOf's write callback when each argument of it that may hold a
-  // number is the callback's own parameter: the finite number styleOf hands it.
+  // number is the callback's own parameter: the finite number styleOf hands it. A writer called
+  // with no argument writes a number of its own, so it is never trusted.
   const symOf = (node) => {
     let sym = checker.getSymbolAtLocation(node);
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
@@ -120,7 +122,8 @@ function reactRoutes(only) {
     const param = fn.parameters[0] && symOf(fn.parameters[0].name);
     return call.arguments.every((a) => !mayHold(typeOf(a)) || (!!param && ts.isIdentifier(a) && symOf(a) === param));
   };
-  const writerCall = (n) => ts.isCallExpression(n) && isWriter(symOf(n.expression)) && n.arguments.some((a) => mayHold(typeOf(a))) && !trusted(n);
+  const writerCall = (n) =>
+    ts.isCallExpression(n) && isWriter(symOf(n.expression)) && (n.arguments.length === 0 || (n.arguments.some((a) => mayHold(typeOf(a))) && !trusted(n)));
   const has = (node, hit) => {
     let found = false;
     const look = (n) => {
@@ -275,16 +278,19 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i style="color:${ea(s)}">`', null],
       ['`${s}:${s}`', null],
       ['`<b>${numberText(n)}</b>`', null],
+      ['`<i style="width:${wn()}%">`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${numberText(x)}%;height:${wn()}px`)])}>`', STYLE],
+      ['`<i style="color:${nw()}">`', null],
       // Listed limits (the header's "What it cannot see"): each is a number in a style that the
       // scan does not name. Concatenation; a join built outside the template; an object's method;
-      // a class's method; a value passed around; a writer whose number is not an argument; a
-      // property named by a span and written with a space.
+      // a class's method; a value passed around; a writer given only arguments with no number,
+      // whose number comes from elsewhere; a property named by a span and written with a space.
       ['\'<i style="width:\' + numberText(n) + \'%">\'', null],
       ['`<i style="${css}">`', null],
       ['`<i style="width:${W.w(n)}%">`', null],
       ['`<i style="width:${k.w(n)}%">`', null],
       ['`<i style="width:${t}%">`', null],
-      ['`<i style="width:${wn()}%">`', null],
+      ['`<i style="width:${ws(s)}%">`', null],
       ['`${s}: ${numberText(n)}px`', null],
     ];
     const head = [
@@ -298,6 +304,8 @@ test('the scan finds each route it names, in React by type and in text by syntax
       'const t = numberText(hn)',
       "const css = ['width:' + numberText(hn) + '%'].join(';')",
       'const wn = () => numberText(hn)',
+      "const nw = () => 'red'",
+      'const ws = (x: string) => x + numberText(hn)',
       "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
       "  if (typeof b.count !== 'number') return []",
       '  const n = b.count',
