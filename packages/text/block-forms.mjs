@@ -5,6 +5,7 @@
 
 import { blockSchema, validate } from '@portable-doc/validate';
 import { READ_ALIASES, goldenBlocks } from './golden-reads.mjs';
+import { ADDRESS_KEYS } from './util.js';
 
 const BLOCKS = blockSchema.definitions.blocks;
 
@@ -53,6 +54,26 @@ function blanked(value, key) {
   return value;
 }
 
+const hasAddress = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && ADDRESS_KEYS.some((k) => Object.hasOwn(v, k));
+
+/** A block without its address keys, and without every nested map that holds one (a link node, a link mark) and a list that empties. */
+function withoutAddresses(block) {
+  const out = dropAddressed(block);
+  for (const key of ADDRESS_KEYS) delete out[key];
+  return out;
+}
+
+function dropAddressed(value) {
+  if (Array.isArray(value)) return value.filter((v) => !hasAddress(v)).map(dropAddressed);
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    const kept = dropAddressed(v);
+    if (!(Array.isArray(v) && v.length > 0 && kept.length === 0)) out[k] = kept;
+  }
+  return out;
+}
+
 /** A block with each alias key under its canonical name; a string becomes one text run where the canonical key takes inline content. */
 function canonical(block) {
   const out = {};
@@ -80,7 +101,8 @@ function goldenOf(type) {
  * - `value <key>=<v>`: the golden with one declared key set to another value (each boolean,
  *   each heading level, a sample for the rest), and `id`: the golden with an id;
  * - `empty` and `empty <key>`: the type alone, and with each canonical array key empty;
- * - `whitespace`: the golden with every string as whitespace.
+ * - `whitespace`: the golden with every string as whitespace, and `whitespace, no address`:
+ *   that without an address anywhere (a blank address is never kept), when it validates.
  * Only `filled with an alias` writes an alias. A form that does not validate is left out.
  */
 export function formsOf(type) {
@@ -101,13 +123,15 @@ export function formsOf(type) {
   }
   add('empty', { type });
   for (const [key, node] of props) if (branches(node).some((b) => b.type === 'array')) add(`empty ${key}`, { type, [key]: [] });
+  if (golden) add('whitespace, no address', withoutAddresses(blanked(golden)));
   return [...out];
 }
 
 /** A block as a list item's child, and inside a quote: a callout's body, written as `> [!info]`. */
 export const contexts = {
   'in a list item': (block) => ({ type: 'list', ordered: false, items: [{ content: [{ type: 'text', value: 'Item' }], children: [block] }] }),
-  'in a quote': (block) => ({ type: 'callout', tone: 'info', content: [{ type: 'text', value: 'Note' }], slots: { body: [block] } }),
+  // A callout is what Markdown writes as a quote (`> [!tone]`); a blockquote holds inline content only.
+  'in a callout (a Markdown quote)': (block) => ({ type: 'callout', tone: 'info', content: [{ type: 'text', value: 'Note' }], slots: { body: [block] } }),
 };
 
 /** Every form of every schema type, bare and in each context, as [name, block]; contexts only for the base forms. */
