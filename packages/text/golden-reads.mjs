@@ -16,7 +16,7 @@ const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
 export const NOT_FIELDS = new Set(['then', 'toJSON', 'constructor', '$$typeof', 'length', '__proto__', 'valueOf', 'toString', 'nodeType', 'props', 'key', 'ref', '_owner', '_store']);
 
 // A second name for a key, mapped to the key's own name, as the alias table in
-// read-aliases.js has it. Goldens and writers use the current name; readers accept the old one
+// alias-table.js has it. Goldens and writers use the current name; readers accept the old one
 // for old docs until the format drops it.
 export const READ_ALIASES = Object.freeze(Object.fromEntries(Object.entries(TABLE.aliases).map(([from, { to }]) => [from, to])));
 

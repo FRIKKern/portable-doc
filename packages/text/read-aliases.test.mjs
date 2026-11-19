@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
+import { OUT, aliasTypesSource } from '../../scripts/generate-alias-types.mjs';
 import { canon } from './golden-reads.mjs';
 import { toMarkdown, toPlainText } from './index.js';
 import { TABLE, absent, namesOf, readField, typesOf } from './read-aliases.js';
@@ -41,8 +43,17 @@ test('the rule: absent is undefined, null, a blank string or an empty array; the
   // A value of a type the schema does not give the name is absent too.
   assert.deepEqual(readField({ type: 'heading', content: 'Hi', text: 'Yo' }, 'content'), { name: 'text', value: 'Yo' });
   assert.deepEqual(readField({ type: 'heading', content: 'Hi' }, 'content'), { name: 'content', value: 'Hi' });
-  assert.deepEqual(readField({ type: 'code', value: 7, code: 'x' }, 'value'), { name: 'code', value: 'x' });
-  assert.deepEqual(readField({ type: 'code', code: 7 }, 'value'), { name: 'value', value: undefined });
+  assert.deepEqual(readField({ type: 'code', value: true, code: 'x' }, 'value'), { name: 'code', value: 'x' });
+  assert.deepEqual(readField({ type: 'code', code: true }, 'value'), { name: 'value', value: undefined });
+  // A field the schema types as text reads a string or a finite number; NaN and Infinity are absent.
+  assert.deepEqual(readField({ type: 'blockquote', cite: 7, attribution: 'Ann' }, 'cite'), { name: 'cite', value: 7 });
+  assert.deepEqual(readField({ type: 'heading', text: 7 }, 'content'), { name: 'text', value: 7 });
+  assert.deepEqual(readField({ type: 'blockquote', cite: NaN, attribution: 'Ann' }, 'cite'), { name: 'attribution', value: 'Ann' });
+  assert.deepEqual(readField({ type: 'blockquote', cite: Infinity, attribution: 'Ann' }, 'cite'), { name: 'attribution', value: 'Ann' });
+});
+
+test('alias-types.js is what scripts/generate-alias-types.mjs makes from the schema and the table, byte for byte', () => {
+  assert.equal(fs.readFileSync(OUT, 'utf8'), aliasTypesSource(), 'alias-types.js differs from the schema: run npm run alias-types');
 });
 
 test('each name\'s types are read from spec/blocks.schema.json: every name of every aliased field has some, and a name the schema leaves out takes those of its field\'s other names', () => {
@@ -88,25 +99,12 @@ const CHANGED = [
   // blockquote: HTML showed a cite of spaces; Ann now, as Markdown and text already did.
   [{ type: 'blockquote', content: t('q'), cite: '  ', attribution: 'Ann' }, '<cite class="bp-blockquote__cite">Ann</cite>', '> q\n>\n> — Ann\n', '“q”\n— Ann\n'],
   // The type clause: a value of a type the schema does not give the name is absent, so an old
-  // name of the right type wins over it. blockquote cite 7 used to show 7.
-  [{ type: 'blockquote', content: t('q'), cite: 7, attribution: 'Ann' }, '<cite class="bp-blockquote__cite">Ann</cite>', '> q\n>\n> — Ann\n', '“q”\n— Ann\n'],
-  // code value 7 used to show 7.
-  [{ type: 'code', value: 7, code: 'x' }, '<pre class="bp-codeblock">x</pre>', '```\nx\n```\n', 'x\n'],
-  // code lang 7 used to name the fence 7.
-  [{ type: 'code', value: 'x', lang: 7, language: 'py' }, '<pre class="bp-codeblock">x</pre>', '```py\nx\n```\n', 'x\n'],
-  // expandable blocks 'x' used to leave the body empty.
+  // name of the right type wins over it. expandable blocks 'x' used to leave the body empty.
   [{ type: 'expandable', summary: 'S', blocks: 'x', children: kid }, '<div class="bp-expandable__body"><p>kid</p></div>', '**S**\n\nkid\n', 'S\n\nkid\n'],
   // terminal children 'x' used to leave the body empty.
   [{ type: 'terminal', title: 'T', children: 'x', blocks: kid }, '<div class="bp-term__body"><p>kid</p></div>', '**T**\n\nkid\n', 'T\n\nkid\n'],
   // table head 'x' used to leave no head row.
   [{ type: 'table', head: 'x', header: [t('H')], rows: [[t('r')]] }, '<th class="bp-table__th"><span>H</span></th>', '| H |\n| --- |\n| r |\n', 'H\n-\nr\n'],
-  // A number under an old name of string type, alone, is absent; renderers used to show its digits.
-  [{ type: 'heading', text: 7 }, '<h2></h2>', '', ''],
-  [{ type: 'code', code: 7 }, '', '```\n```\n', ''],
-  [{ type: 'blockquote', content: t('q'), attribution: 7 }, '<blockquote class="bp-blockquote"><p>q</p></blockquote>', '> q\n', '“q”\n'],
-  [{ type: 'code', value: 'x', language: 7 }, '<pre class="bp-codeblock">x</pre>', '```\nx\n```\n', 'x\n'],
-  // asciicast: posterAt, the current name, is read before poster.
-  [{ type: 'asciicast', src: 'https://e.example/c.cast', poster: 'npt:0:01', posterAt: 'npt:0:09' }, 'data-cast-poster="npt:0:09"', '[Terminal recording](https://e.example/c.cast)\n', 'Terminal recording: https://e.example/c.cast\n'],
 ];
 
 test('each field whose behaviour changes under the rule shows the same winner in HTML, Markdown and text', () => {
@@ -161,4 +159,26 @@ test('a heading whose content is a string beside a text reads the text, as befor
   assert.equal(md(block), '## Yo\n');
   assert.equal(text(block), 'Yo\n');
   assert.deepEqual(canon(block), canon({ type: 'heading', content: t('Yo') }));
+});
+
+test('a field the schema types as text reads a finite number as its digits, as before; NaN and Infinity read as absent, as before', () => {
+  const SAME = [
+    [{ type: 'blockquote', content: t('q'), cite: 7, attribution: 'Ann' }, '<blockquote class="bp-blockquote"><p>q</p><cite class="bp-blockquote__cite">7</cite></blockquote>', '> q\n>\n> — 7\n', '“q”\n— 7\n'],
+    [{ type: 'code', value: 7, code: 'x' }, '<pre class="bp-codeblock">7</pre>', '```\n7\n```\n', '7\n'],
+    [{ type: 'code', value: 'x', lang: 7, language: 'py' }, '<pre class="bp-codeblock">x</pre>', '```7\nx\n```\n', 'x\n'],
+    [{ type: 'heading', text: 7 }, '<h2>7</h2>', '## 7\n', '7\n'],
+    [{ type: 'code', code: 7 }, '<pre class="bp-codeblock">7</pre>', '```\n7\n```\n', '7\n'],
+    [{ type: 'blockquote', content: t('q'), attribution: 7 }, '<blockquote class="bp-blockquote"><p>q</p><cite class="bp-blockquote__cite">7</cite></blockquote>', '> q\n>\n> — 7\n', '“q”\n— 7\n'],
+    [{ type: 'code', value: 'x', language: 7 }, '<pre class="bp-codeblock">x</pre>', '```7\nx\n```\n', 'x\n'],
+    // NaN: not a finite number, so absent; Ann shows, as on main.
+    [{ type: 'blockquote', content: t('q'), cite: NaN, attribution: 'Ann' }, '<blockquote class="bp-blockquote"><p>q</p><cite class="bp-blockquote__cite">Ann</cite></blockquote>', '> q\n>\n> — Ann\n', '“q”\n— Ann\n'],
+    // Infinity alone under an old name: absent, so nothing shows, as on main.
+    [{ type: 'heading', text: Infinity }, '<h2></h2>', '', ''],
+  ];
+  for (const [block, h, markdown, plain] of SAME) {
+    const label = String(Object.entries(block).map(([k, v]) => `${k}:${typeof v === 'number' ? v : JSON.stringify(v)}`));
+    assert.equal(html(block), h, label);
+    assert.equal(md(block), markdown, label);
+    assert.equal(text(block), plain, label);
+  }
 });
