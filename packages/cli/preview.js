@@ -15,7 +15,9 @@ import { explainError, shown } from './words.js';
 const HOST = '127.0.0.1';
 // How long stopping waits for open /events streams to take their end. Only a client that
 // never reads uses it up; it is a deadline on that wait, not a measure of work.
+// PORTABLE_DOC_CLOSE_GRACE_MS, a whole number of milliseconds, sets another for the command.
 export const CLOSE_GRACE_MS = 1000;
+const graceFromEnv = (value) => (/^\d+$/.test(value ?? '') ? Number(value) : CLOSE_GRACE_MS);
 const DEFAULT_PORT = 4317;
 const DEBOUNCE_MS = 120;
 
@@ -81,7 +83,7 @@ ${reasons}${body ?? ''}
  * Serve `file` until stopped. `deps` are the CLI's own `load` (read + parse,
  * with explain's words for a failure) and `renderHtml`, so the page says and
  * shows exactly what `explain` and `render --format html` do.
- * Resolves to { url, close() } once it listens; `port` undefined tries 4317, then any free port.
+ * Resolves to { url, close({ graceMs }), waiting() } once it listens; `port` undefined tries 4317, then any free port.
  * `watch` is fs.watch, replaceable in tests.
  */
 export async function startPreview({ file, port, load, renderHtml, io, watch = fs.watch }) {
@@ -205,7 +207,10 @@ export async function startPreview({ file, port, load, renderHtml, io, watch = f
         server.closeAllConnections();
       });
     });
-  return { url: `http://${HOST}:${server.address().port}/`, close };
+  // How many open /events streams have writes held back, waiting on a client that reads
+  // slower than the server sends: their socket buffers are full.
+  const waiting = () => [...clients].filter((res) => res.writableNeedDrain).length;
+  return { url: `http://${HOST}:${server.address().port}/`, close, waiting };
 }
 
 function openBrowser(url, io) {
@@ -247,6 +252,6 @@ export async function preview(files, opts, io, { load, renderHtml, UsageError, s
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
   });
-  await session.close();
+  await session.close({ graceMs: graceFromEnv(process.env.PORTABLE_DOC_CLOSE_GRACE_MS) });
   return 0;
 }

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
-import { preview, startPreview } from './preview.js';
+import { CLOSE_GRACE_MS, preview, startPreview } from './preview.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
@@ -22,9 +22,13 @@ const docFile = (content) => {
   return file;
 };
 
-/** Start `portable-doc preview <file> --port 0`; resolves to { url, child, exited } once it prints its URL. */
+/**
+ * Start `portable-doc preview <file> --port 0`; resolves to { url, child, exited } once it prints its URL.
+ * Its stop waits up to HANG_MS for open streams to take their end, so a slow machine cannot cut one.
+ */
 function start(file) {
-  const child = spawn(process.execPath, [bin, 'preview', file, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const env = { ...process.env, PORTABLE_DOC_CLOSE_GRACE_MS: String(HANG_MS) };
+  const child = spawn(process.execPath, [bin, 'preview', file, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'], env });
   const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
   after(() => child.exitCode === null && child.kill('SIGKILL'));
   return new Promise((resolve, reject) => {
@@ -240,10 +244,31 @@ function openStream(url) {
   });
 }
 
-// Each watcher error sends one reload. EVENTS is more than the socket buffers between server
-// and client hold (about 20,000 on macOS loopback, measured), so a paused stream's end waits
-// behind data the server has not sent yet. The never-reads test below fails if they hold it all.
-const EVENTS = 40_000;
+// Each watcher error sends one reload to every open stream. Send them in batches, letting
+// the server write and any reading client read between batches, until exactly one stream (the
+// paused one) still has writes held back: its socket buffers are full, at whatever size this
+// system gives them. Then send as many again, so its end waits behind data not yet sent.
+const turn = () => new Promise((resolve) => setImmediate(resolve));
+async function overfill(session, watcher) {
+  let sent = 0;
+  const emit = (n) => {
+    for (let i = 0; i < n; i++) watcher.emit('error', new Error('gone'));
+    sent += n;
+  };
+  const settle = async () => {
+    for (let i = 0; i < 100_000 && session.waiting() > 1; i++) await turn(); // hang bound
+    await turn();
+  };
+  while (session.waiting() !== 1) {
+    if (sent >= 5_000_000) assert.fail(`the socket buffers did not fill in ${sent} events`);
+    emit(1000);
+    await settle();
+  }
+  emit(sent);
+  await settle();
+  assert.equal(session.waiting(), 1, 'the paused stream still has writes held back');
+  return sent;
+}
 
 test('stopping the server ends each open /events stream cleanly, even one far behind on reading: it gets every event, then the end', async () => {
   const watcher = Object.assign(new EventEmitter(), { close() {} });
@@ -251,8 +276,7 @@ test('stopping the server ends each open /events stream cleanly, even one far be
   const reading = await openStream(session.url);
   const behind = await openStream(session.url);
   behind.res.pause();
-  const events = EVENTS;
-  for (let i = 0; i < events; i++) watcher.emit('error', new Error('gone'));
+  const events = await overfill(session, watcher);
   // The grace is a hang deadline here: the paused stream drains as fast as the machine allows.
   const closed = session.close({ graceMs: HANG_MS });
   behind.res.resume();
@@ -263,15 +287,32 @@ test('stopping the server ends each open /events stream cleanly, even one far be
   }
 });
 
-test('a client that never reads cannot hold the stop: close() cuts it once the grace is up', async () => {
+/**
+ * A paused stream with its buffers full, then close() under mocked timers: the grace runs out
+ * when the test says, not when the machine gets round to it. Resolves to the stream's outcome.
+ */
+async function stopStuck(t, name, close, graceMs) {
   const watcher = Object.assign(new EventEmitter(), { close() {} });
-  const session = await startPreview({ ...fakes, file: docFile(heading('Stuck')), port: 0, watch: () => watcher });
+  const session = await startPreview({ ...fakes, file: docFile(heading(name)), port: 0, watch: () => watcher });
   const stuck = await openStream(session.url);
   stuck.res.pause();
-  for (let i = 0; i < EVENTS; i++) watcher.emit('error', new Error('gone'));
-  // The stuck stream's end can never be sent, so close() returns only because the grace ran out.
-  await session.close({ graceMs: 20 });
+  await overfill(session, watcher);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let closed = false;
+  const closing = close(session).then(() => (closed = true));
+  t.mock.timers.tick(graceMs - 1);
+  await turn();
+  assert.equal(closed, false, 'close() still waits on the stream that never reads');
+  t.mock.timers.tick(1);
+  await closing;
   stuck.res.resume();
-  // Were the socket buffers to hold all EVENTS, the end would go out and this would be 'end'.
-  assert.equal(await stuck.outcome, 'aborted');
+  return stuck.outcome;
+}
+
+test('a client that never reads cannot hold the stop: close() cuts it once the grace it was given is up', async (t) => {
+  assert.equal(await stopStuck(t, 'Stuck', (session) => session.close({ graceMs: 20 }), 20), 'aborted');
+});
+
+test(`by default, close() cuts a client that never reads once CLOSE_GRACE_MS (${CLOSE_GRACE_MS} ms) is up`, async (t) => {
+  assert.equal(await stopStuck(t, 'Stuck by default', (session) => session.close(), CLOSE_GRACE_MS), 'aborted');
 });
