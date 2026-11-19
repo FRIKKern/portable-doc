@@ -639,8 +639,12 @@ function toneLabel(tone: unknown, ctx: RenderCtx): string {
 
 const callout: Emit = (b, ctx) => {
   const toneMod = calloutToneClass(b.tone)
-  // The callout body slot flattens to ONE PdText wrapping the composed inline
-  // children — walk.ex renders it as a bare `<span>`.
+  // The callout's content flattens to ONE PdText wrapping the composed inline
+  // children — walk.ex renders it as a bare `<span>`. Its `slots.body` blocks
+  // follow it inside `.bp-callout__body`; a callout with no body renders the
+  // same bytes as before. walk.ex does not render the body yet, so a callout
+  // WITH a body differs from Barkpark until it does.
+  const blocks = renderBlocks(slotElements(b, 'body'), ctx)
   const body = `<span>${renderInlines(paragraphInline(b))}</span>`
 
   if (b.collapsible === true) {
@@ -650,13 +654,14 @@ const callout: Emit = (b, ctx) => {
     return (
       `<details${open} class="bp-callout bp-callout--${toneMod}">` +
       `<summary class="bp-callout__summary">${summary}</summary>` +
-      `<div class="bp-callout__body">${body}</div></details>`
+      `<div class="bp-callout__body">${body}${blocks}</div></details>`
     )
   }
 
   const title = str(b.title)
   const titleHtml = title !== '' ? `<strong>${escapeHtml(title)}</strong> ` : ''
-  return `<div class="bp-callout bp-callout--${toneMod}">${titleHtml}${body}</div>`
+  const rest = blocks === '' ? '' : `<div class="bp-callout__body">${blocks}</div>`
+  return `<div class="bp-callout bp-callout--${toneMod}">${titleHtml}${body}${rest}</div>`
 }
 
 /* code / divider / image (figures.ex + walk.ex) */

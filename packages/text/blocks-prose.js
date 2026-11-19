@@ -94,9 +94,12 @@ function callout(b, ctx) {
   if (ctx.md && b[QUOTED] === true) return marked(b, ctx);
   const tone = CALLOUT_TONES.includes(str(b.tone)) ? str(b.tone) : 'info';
   const label = ctx.text(nonblank(b.title) || capitalize(tone), { oneLine: true });
-  const inner = ctx.inline(body(b)) || ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : []);
+  const content = ctx.inline(body(b));
+  const rest = ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : []);
   const head = ctx.md ? `**${label}:**` : `${label}:`;
-  const out = inner === '' ? head.replace(/:(\**)$/, '$1') : /\n/.test(inner) ? `${head}\n\n${inner}` : `${head} ${inner}`;
+  const after = (inner) => (inner === '' ? head.replace(/:(\**)$/, '$1') : /\n/.test(inner) ? `${head}\n\n${inner}` : `${head} ${inner}`);
+  // Its content after the label, then each block of its body: a callout imported from Markdown carries both.
+  const out = content === '' ? after(rest) : paras(after(content), rest);
   return ctx.md ? quote(out) : out;
 }
 
