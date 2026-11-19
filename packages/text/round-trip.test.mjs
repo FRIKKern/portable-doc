@@ -28,12 +28,23 @@ test('the forms cover every schema type, vary values past the golden, write no a
   for (const type of SCHEMA_TYPES) assert.ok(types.has(type), `${type}: no form`);
   const names = new Set(FORMS.map(([name]) => name));
   for (const level of [1, 3, 4, 5, 6]) assert.ok(names.has(`heading value level=${level}`), `heading level ${level} is a form`);
-  for (const name of ['heading filled', 'heading filled with an alias', 'paragraph empty content', 'paragraph whitespace', 'list empty items', 'callout whitespace in a callout (a Markdown quote)', 'code filled in a list item']) assert.ok(names.has(name), `${name} is a form`);
+  for (const name of ['heading filled', 'heading filled with an alias', 'paragraph empty content', 'paragraph whitespace', 'paragraph whitespace, no address', 'list empty items', 'callout whitespace in a callout (a Markdown quote)', 'code filled in a list item']) assert.ok(names.has(name), `${name} is a form`);
   for (const type of SCHEMA_TYPES) for (const [form, block] of formsOf(type)) {
     if (form === 'filled with an alias') continue;
     for (const key of Object.keys(block)) assert.ok(!Object.hasOwn(READ_ALIASES, `${type}.${key}`), `${type} ${form}: writes the alias ${key}`);
   }
   assert.deepEqual(Object.keys(contexts), ['in a list item', 'in a callout (a Markdown quote)']);
+});
+
+test('a paragraph of whitespace comes back in round-trip mode, bare and in each context; with a blank link address it is reported lost', () => {
+  const rows = FORMS.filter(([name]) => name.startsWith('paragraph whitespace'));
+  assert.equal(rows.length, 6);
+  for (const [name, block] of rows) {
+    const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
+    if (name.startsWith('paragraph whitespace, no address')) {
+      assert.deepEqual([lost, fromMarkdown(markdown)], [[], [block]], name);
+    } else assert.deepEqual(lost.map((l) => l.reason), ['address'], name);
+  }
 });
 
 test('round-trip mode: each form import accepts comes back exactly; any other is written readably and reported with its reason', () => {
@@ -59,7 +70,7 @@ const NATIVE_IN_CONTEXT = ['list filled in a list item'];
 
 test('round-trip mode keeps a block in a list item or a callout by a portabledoc fence of the whole container, never in the container\'s own Markdown', () => {
   const contextual = FORMS.filter(([name]) => Object.keys(contexts).some((where) => name.endsWith(` ${where}`)));
-  assert.equal(contextual.length, 584, 'every base form in each context');
+  assert.equal(contextual.length, 594, 'every base form in each context');
   const native = [];
   let fenced = 0;
   for (const [name, block] of contextual) {
@@ -76,7 +87,7 @@ test('round-trip mode keeps a block in a list item or a callout by a portabledoc
     fenced++;
   }
   assert.deepEqual(native, NATIVE_IN_CONTEXT);
-  assert.equal(fenced, 115, 'context rows kept by a fence of the whole container');
+  assert.equal(fenced, 117, 'context rows kept by a fence of the whole container');
 });
 
 test('round-trip mode keeps a whole doc of every keepable form, in order, and fences a block its neighbour would change', () => {
