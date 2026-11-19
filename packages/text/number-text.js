@@ -3,8 +3,10 @@
 //
 // A finite number shows its digits; NaN, Infinity and -Infinity show nothing, as the text writers
 // have always written them, so the HTML, Markdown and plain text agree by construction.
-// A non-finite position (a roadmap bar's left or width, or its today line) leaves that property out
-// of the style, rather than writing the empty text the door gives it.
+// In a style, the same rule is one step wider: a property whose number is not finite is left out
+// whole (styleOf), never written with its number dropped (`width:%`), and a style attribute with no
+// property left is not written at all (styleAttr). A roadmap bar's left or width and its today line
+// are such properties.
 
 /**
  * A number as shown text.
@@ -32,4 +34,27 @@ export function stringOf(v) {
   if (typeof v === 'number') return numberText(v);
   if (Array.isArray(v)) return v.map((x) => (x == null ? '' : stringOf(x))).join(',');
   return String(v);
+}
+
+/**
+ * One style property that carries a number, as `prop:value`; '' when the number is not finite, so
+ * the property is left out whole.
+ * @param {string} prop
+ * @param {number | null | undefined} n
+ * @param {(n: number) => string} [write] the value from the finite number; by default its digits
+ * @returns {string}
+ */
+export function styleOf(prop, n, write = numberText) {
+  return typeof n === 'number' && Number.isFinite(n) ? `${prop}:${write(n)}` : '';
+}
+
+/**
+ * A style attribute (with its leading space) from its properties, the empty ones left out; '' when
+ * none is left, so no empty style="" is written.
+ * @param {string[]} props
+ * @returns {string}
+ */
+export function styleAttr(props) {
+  const kept = props.filter((p) => p !== '');
+  return kept.length ? ` style="${kept.join(';')}"` : '';
 }

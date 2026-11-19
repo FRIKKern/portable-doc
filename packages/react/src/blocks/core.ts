@@ -29,7 +29,7 @@ import {
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
 import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.js'
-import { numberText, stringOf } from '../../../text/number-text.js'
+import { numberText, stringOf, styleAttr, styleOf } from '../../../text/number-text.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
 import type { RenderCtx } from './chrome'
 import { minOf } from '../min-max'
@@ -1029,12 +1029,7 @@ function orderInt(v: unknown): number | null {
 // cell_layout_attr/1).
 function cellLayoutAttr(child: unknown): string {
   if (!isMap(child)) return ''
-  const parts: string[] = []
-  const order = orderInt(child.order)
-  if (order !== null) parts.push(`order:${numberText(order)}`)
-  const span = spanInt(child.span)
-  if (span !== null) parts.unshift(`grid-column:span ${numberText(span)}`)
-  return parts.length ? ` style="${parts.join(';')}"` : ''
+  return styleAttr([styleOf('grid-column', spanInt(child.span), (x) => `span ${numberText(x)}`), styleOf('order', orderInt(child.order))])
 }
 
 const HR = '<hr class="bp-hr">'
@@ -1085,7 +1080,7 @@ const section: Emit = (b, ctx) => {
       `<div style="display:flex;flex-direction:column">` +
       HR +
       titleHtml +
-      `<div class="bp-section__grid" style="--bp-tracks:${numberText(tracks)};--bp-grid-gap:${gap}">` +
+      `<div class="bp-section__grid"${styleAttr([styleOf('--bp-tracks', tracks), `--bp-grid-gap:${gap}`])}>` +
       cells +
       `</div>` +
       HR +
@@ -1113,7 +1108,7 @@ const columns: Emit = (b, ctx) => {
   const inner = cols
     .map((col) => `<div class="bp-cols__c">${renderBlocks(asList<Block>(col), ctx)}</div>`)
     .join('')
-  return `<div class="bp-cols" style="--bp-cols:${numberText(n)}">${inner}</div>`
+  return `<div class="bp-cols"${styleAttr([styleOf('--bp-cols', n)])}>${inner}</div>`
 }
 
 /* terminal (compose.ex :article) */
@@ -1468,7 +1463,7 @@ function clampfWidth(n: unknown, left: number): number | null {
   if (nonFinite(n)) return null
   return typeof n === 'number' ? Math.min(Math.max(n, 1), 100 - left) : Math.max(1, 100 - left)
 }
-const pct = (prop: string, v: number | null) => (v === null ? '' : `${prop}:${numberText(v)}%`)
+const pct = (prop: string, v: number | null) => styleOf(prop, v, (x) => `${numberText(x)}%`)
 
 // The two cannot-place strings: components.ex roadmap_unplaced_copy/0 and
 // roadmap_lane_unplaced_copy/0. An Elixir test reads these literals (and the Go
@@ -1496,7 +1491,7 @@ const roadmap: Emit = (b, ctx) => {
   const todayLeft = clampf(todayVal)
   const today =
     typeof todayVal === 'number' && todayLeft !== null
-      ? `<span class="bp-rm__today" style="${pct('left', todayLeft)}"></span>`
+      ? `<span class="bp-rm__today"${styleAttr([pct('left', todayLeft)])}></span>`
       : ''
   const scaleCells = asList(b.scale)
   const scale =
@@ -1516,7 +1511,7 @@ const roadmap: Emit = (b, ctx) => {
         (truthy(m.phase_row) ? ' bp-rm__lane--phase' : '') +
         (placed ? '' : ' bp-rm__lane--unplaced')
       const body = placed
-        ? `<span class="bp-rm__bar bp-rm__bar--${role}" style="${[pct('left', left), pct('width', width)].filter(Boolean).join(';')}"></span>`
+        ? `<span class="bp-rm__bar bp-rm__bar--${role}"${styleAttr([pct('left', left), pct('width', width)])}></span>`
         : `<span class="bp-rm__unplaced">${ctx.t(ROADMAP_LANE_UNPLACED_COPY)}</span>`
       return `<div class="${cls}"><span class="bp-rm__lbl">${draftHtml(m, ctx)}${title}</span><div class="bp-rm__track">${body}${today}</div></div>`
     })

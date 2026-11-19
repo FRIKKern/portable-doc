@@ -12,7 +12,7 @@
 import { type Block, escapeHtml, safeUrl, isMap } from '../inline'
 import type { RenderCtx } from './chrome'
 import { coverSpans, spanAttr, type Span } from './spans'
-import { numberText } from '../../../text/number-text.js'
+import { numberText, styleOf } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -75,7 +75,8 @@ function toStr(v: unknown): string {
 function colWidthStyle(colWidths: unknown, idx: number): string {
   if (!Array.isArray(colWidths)) return ''
   const w = colWidths[idx]
-  return typeof w === 'number' && Number.isInteger(w) && w > 0 ? `width:${numberText(w)}px;` : ''
+  const p = typeof w === 'number' && Number.isInteger(w) && w > 0 ? styleOf('width', w, (x) => `${numberText(x)}px`) : ''
+  return p === '' ? '' : `${p};`
 }
 
 function sheetMerges(merges: unknown): Span[] {
