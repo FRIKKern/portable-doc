@@ -17,15 +17,18 @@ const HOST = '127.0.0.1';
 // never reads uses it up; it is a deadline on that wait, not a measure of work.
 export const CLOSE_GRACE_MS = 1000;
 
+// The longest wait setTimeout takes: past it, Node waits 1 ms instead.
+export const MAX_GRACE_MS = 2_147_483_647;
+
 /**
  * The command's grace, from PORTABLE_DOC_CLOSE_GRACE_MS: CLOSE_GRACE_MS when it is unset or
- * empty, else a whole number of milliseconds, 0 or more. Anything else throws, naming it.
+ * empty, else a whole number of milliseconds from 0 to MAX_GRACE_MS. Anything else throws, naming it.
  */
 export function closeGraceMs(env = process.env) {
   const value = env.PORTABLE_DOC_CLOSE_GRACE_MS ?? '';
   if (value === '') return CLOSE_GRACE_MS;
-  if (/^\d+$/.test(value) && Number.isSafeInteger(Number(value))) return Number(value);
-  throw new Error(`PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds, 0 or more, not "${shown(value)}"`);
+  if (/^\d+$/.test(value) && Number(value) <= MAX_GRACE_MS) return Number(value);
+  throw new Error(`PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds from 0 to ${MAX_GRACE_MS}, not "${shown(value)}"`);
 }
 const DEFAULT_PORT = 4317;
 const DEBOUNCE_MS = 120;

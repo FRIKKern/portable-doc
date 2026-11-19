@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
-import { CLOSE_GRACE_MS, closeGraceMs, preview, startPreview } from './preview.js';
+import { CLOSE_GRACE_MS, closeGraceMs, MAX_GRACE_MS, preview, startPreview } from './preview.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
@@ -317,11 +317,11 @@ test(`by default, close() cuts a client that never reads once CLOSE_GRACE_MS (${
   assert.equal(await stopStuck(t, 'Stuck by default', (session) => session.close(), CLOSE_GRACE_MS), 'aborted');
 });
 
-test('the command takes its grace from PORTABLE_DOC_CLOSE_GRACE_MS: unset or empty is the default, a whole number of 0 or more is used, anything else is refused', () => {
+test('the command takes its grace from PORTABLE_DOC_CLOSE_GRACE_MS: unset or empty is the default, a whole number up to the longest timer is used, anything else is refused', () => {
   const grace = (value) => closeGraceMs(value === undefined ? {} : { PORTABLE_DOC_CLOSE_GRACE_MS: value });
-  for (const [value, ms] of [[undefined, CLOSE_GRACE_MS], ['', CLOSE_GRACE_MS], ['0', 0], ['20', 20], ['30000', 30_000]]) assert.equal(grace(value), ms, String(value));
-  for (const value of [' 20', '20 ', 'abc', '-5', '1.5', '1e3', '0x10', '99999999999999999999']) {
-    assert.throws(() => grace(value), { message: `PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds, 0 or more, not "${value}"` }, value);
+  for (const [value, ms] of [[undefined, CLOSE_GRACE_MS], ['', CLOSE_GRACE_MS], ['0', 0], ['20', 20], ['30000', 30_000], ['2147483647', MAX_GRACE_MS]]) assert.equal(grace(value), ms, String(value));
+  for (const value of [' 20', '20 ', 'abc', '-5', '1.5', '1e3', '0x10', '2147483648', '99999999999999999999']) {
+    assert.throws(() => grace(value), { message: `PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds from 0 to 2147483647, not "${value}"` }, value);
   }
 });
 
@@ -333,5 +333,24 @@ test('preview refuses a bad PORTABLE_DOC_CLOSE_GRACE_MS before it serves anythin
   child.stdout.on('data', (d) => ((out += d), child.kill('SIGKILL')));
   child.stderr.on('data', (d) => (err += d));
   const code = await new Promise((resolve) => child.on('exit', resolve));
-  assert.deepEqual({ code, out, err }, { code: 2, out: '', err: 'portable-doc preview: PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds, 0 or more, not "-5"\n' });
+  assert.deepEqual({ code, out, err }, { code: 2, out: '', err: 'portable-doc preview: PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds from 0 to 2147483647, not "-5"\n' });
+});
+
+test('preview stops its session with the grace PORTABLE_DOC_CLOSE_GRACE_MS sets', async (t) => {
+  const was = process.env.PORTABLE_DOC_CLOSE_GRACE_MS;
+  t.after(() => (was === undefined ? delete process.env.PORTABLE_DOC_CLOSE_GRACE_MS : (process.env.PORTABLE_DOC_CLOSE_GRACE_MS = was)));
+  process.env.PORTABLE_DOC_CLOSE_GRACE_MS = '1234';
+  const closes = [];
+  const start = async () => ({ url: 'http://127.0.0.1:1/', close: async (options) => void closes.push(options) });
+  const before = new Set(process.listeners('SIGTERM'));
+  let serving;
+  const served = new Promise((resolve) => (serving = resolve));
+  const io = { stdout: () => serving(), stderr() {} };
+  const done = preview([docFile(heading('Grace'))], {}, io, { ...fakes, UsageError: Error, start });
+  await served;
+  await turn(); // preview listens for the signal right after it prints the URL
+  // Call preview's own SIGTERM handler, not every handler in this process.
+  process.listeners('SIGTERM').find((listener) => !before.has(listener))();
+  assert.equal(await done, 0);
+  assert.deepEqual(closes, [{ graceMs: 1234 }]);
 });
