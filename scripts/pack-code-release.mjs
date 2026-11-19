@@ -27,7 +27,6 @@ const releaseFilename = `portable-doc-code-${releaseVersion}.tgz`
 const requiredFiles = [
   'LICENSE',
   'README.md',
-  'RELEASING.md',
   'SOURCE.json',
   'dist/bp-paper-code.js',
   'package.json',
