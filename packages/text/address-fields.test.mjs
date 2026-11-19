@@ -8,7 +8,7 @@ import { JSDOM } from 'jsdom';
 import MarkdownIt from 'markdown-it';
 import { FENCE_TYPES } from './from-markdown.js';
 import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
-import { ADDRESS_KEYS, LINKED_BY_RULE } from './util.js';
+import { ADDRESS_KEYS, LINKED_BY_RULE, safeUrl } from './util.js';
 
 // Which fields of a ```portabledoc fence does a renderer put where text is live? Ask the
 // renderers, not the field names: put a probe in one field at a time, splice the fence with
@@ -21,7 +21,6 @@ import { ADDRESS_KEYS, LINKED_BY_RULE } from './util.js';
 
 const goldens = new URL('../../goldens/blocks/', import.meta.url);
 const MARK = 'https://marker.example/p';
-const SCRIPT = 'javascript:alert(1)';
 // The first 13 rows are copied from packages/editor/src/canvas/__safe_url_paint.test.mjs, which
 // matches safe_url/1 row for row (a test below fails if they differ); the rest are more data:,
 // http:// and javascript: forms. Under a LINKED_BY_RULE entry only a value its rule allows may be live.
@@ -49,7 +48,7 @@ const RAW_TEXT = new Set(['script', 'style', 'xmp', 'iframe', 'noembed', 'nofram
 
 /** Is `token` anywhere live in this HTML: in an attribute not on INERT_ATTRS, in raw text (style, script, …), in a comment, or in a name? */
 export function liveInHtml(html, token) {
-  if (!html.includes(token) && !html.includes('&')) return false;
+  if (!mayHold(html, token)) return false;
   const stack = [...JSDOM.fragment(html).childNodes];
   while (stack.length) {
     const node = stack.pop();
@@ -68,23 +67,24 @@ export function liveInHtml(html, token) {
   return false;
 }
 
-// Markdown has no inert list of its own: it is rendered with the most permissive reader this
-// test can build (raw HTML on, bare URLs linked, every destination kept as written, no scheme
-// check) and that HTML is judged by the HTML rule. Code becomes text in `code`, a link title
-// becomes `title`, an image's alt becomes `alt`.
-const markdown = new MarkdownIt('default', { html: true, linkify: true });
-markdown.validateLink = () => true;
-markdown.normalizeLink = (url) => url;
-
-/** Is `token` live in this Markdown, read by the permissive reader? */
-export const liveInMarkdown = (src, token) => (src.includes(token) || src.includes('&')) && liveInHtml(markdown.render(src), token);
-
-/** Is `token` live in this output? Plain text has no inert place: the token anywhere counts. */
-const LIVE = {
-  html: liveInHtml,
-  markdown: liveInMarkdown,
-  text: (out, token) => out.includes(token),
+// Markdown has no inert list of its own: it is rendered to HTML and judged by the HTML rule
+// (code becomes text in `code`, a link title `title`, an image's alt `alt`). It is read twice.
+// The strict reader (raw HTML on, bare URLs left as text) shows what the renderer itself
+// linked; the permissive one (bare URLs linked too) shows what any reader could make live.
+// Both keep every destination as written, with no scheme check.
+const reader = (linkify) => {
+  const md = new MarkdownIt('default', { html: true, linkify });
+  md.validateLink = () => true;
+  md.normalizeLink = (url) => url;
+  return md;
 };
+const STRICT = reader(false);
+const PERMISSIVE = reader(true);
+const mayHold = (out, token) => out.includes(token) || out.includes('&#');
+
+/** Is `token` live in this Markdown, read by the strict reader, or with `permissive` by one that links bare URLs too? */
+export const liveInMarkdown = (src, token, permissive = false) => mayHold(src, token) && liveInHtml((permissive ? PERMISSIVE : STRICT).render(src), token);
+
 let probes = 0;
 /** A probe value: `base` with a token found nowhere else at the end of its path, and in its host when it has one
  * (so a renderer that keeps only the hostname is seen too). */
@@ -163,56 +163,93 @@ function goldenBlocks() {
   return out;
 }
 
-/** Probe every field of `blocks` through `render`: which are live somewhere, and how many probes rendered. */
+// A probe is looked for in three readings: the HTML, the Markdown by the strict reader, and the
+// Markdown by the permissive one. Plain text has no live place: it is read only for whether the
+// token is there at all.
+const LINKED = 'linked markdown';
+const OWN = ['html', 'markdown']; // what the renderer itself linked
+const REFUSED = URL_CASES.filter((v) => safeUrl(v) === null);
+
+/** Probe every field of `blocks` through `render`: for each field, where a probe for a value is live and whether plain text holds it. */
 function survey(blocks, render = REAL) {
-  const linked = new Map();
-  const leaks = [];
+  const fields = [];
   const types = new Set();
   let rendered = 0;
   for (const block of blocks) {
     const seen = new Set();
     const paths = [...strings(block), ...readsMissing(block, render)].filter((p) => p.at(-1) !== 'type' && !seen.has(JSON.stringify(p)) && seen.add(JSON.stringify(p)));
     for (const path of paths) {
-      const field = name(block.type, path);
-      // Where a probe for `base` is live: a list of outputs, [] when nowhere or the fence stays code.
+      const memo = new Map();
+      // Where a probe for `base` is live, and whether the plain text holds it; nowhere when the fence stays code.
       const probe = (base) => {
+        if (memo.has(base)) return memo.get(base);
         const { value, token } = tokened(base);
         const copy = withValue(block, path, value);
         const doc = copy && spliced(copy);
-        if (!doc) return [];
-        if (base === MARK) rendered++, types.add(block.type);
-        return Object.keys(render).filter((where) => LIVE[where](render[where](doc), token));
+        let result = { live: [], text: false };
+        if (doc) {
+          if (base === MARK) rendered++, types.add(block.type);
+          const md = render.markdown(doc);
+          const strict = liveInMarkdown(md, token);
+          // The permissive reader links all the strict one does.
+          const linked = strict || liveInMarkdown(md, token, true);
+          const live = [liveInHtml(render.html(doc), token) && 'html', strict && 'markdown', linked && LINKED].filter(Boolean);
+          result = { live, text: render.text(doc).includes(token) };
+        }
+        memo.set(base, result);
+        return result;
       };
-      const where = probe(MARK);
-      if (where.length) linked.set(field, { key: path.at(-1), where, probe });
-      const leak = probe(SCRIPT);
-      if (leak.length) leaks.push(`javascript: live: ${field} (${leak.join(', ')})`);
+      probe(MARK);
+      fields.push({ field: name(block.type, path), key: path.at(-1), probe });
     }
   }
-  return { linked, leaks, types, rendered };
+  return { fields, types, rendered };
 }
 
-/** What breaks the rules: a script probe live anywhere, a live field on neither list, a ruled field live for a value its rule does not allow, a rule that links nothing. */
-function problems({ linked, leaks }, rules = LINKED_BY_RULE) {
-  const out = [...leaks];
-  for (const [field, { key, where, probe }] of linked) {
-    if (ADDRESS_KEYS.includes(key)) continue;
+/** Is `field` an address field: on ADDRESS_KEYS by name (the name net below holds every address-like name to it), or on LINKED_BY_RULE? */
+const isAddress = (field, key, rules) => ADDRESS_KEYS.includes(key) || Object.hasOwn(rules, field);
+/** Would `field`'s own rule refuse `value`: its LINKED_BY_RULE entry, else the safe-URL rule? */
+const refusedFor = (field, value, rules) => (Object.hasOwn(rules, field) ? !allowed(value, rules[field]) : safeUrl(value) === null);
+
+/** Where `field` is live with an https:// address in what the renderer itself wrote. */
+const linkedWhere = (f) => f.probe(MARK).live.filter((w) => OWN.includes(w));
+
+/** What breaks the rules, one line each:
+ * 1. a value the safe-URL rule refuses is live anywhere, in any reading of any output;
+ * 2. an address field's refused value is in the plain text at all;
+ * 3. a field the renderer links is on neither list;
+ * 4. a LINKED_BY_RULE field the renderer links with a value its rule does not allow;
+ * and a rule whose field is linked nowhere. */
+function problems({ fields }, rules = LINKED_BY_RULE) {
+  const out = new Set();
+  for (const f of fields) {
+    const { field, key, probe } = f;
+    const address = isAddress(field, key, rules);
+    for (const base of REFUSED) {
+      const { live, text } = probe(base);
+      if (live.length) out.add(`refused value live: ${field} = ${JSON.stringify(base)} (${live.join(', ')})`);
+      if (address && text) out.add(`refused value in plain text: ${field} = ${JSON.stringify(base)} (text)`);
+    }
+    const where = linkedWhere(f);
+    if (!where.length || ADDRESS_KEYS.includes(key)) continue;
     if (!Object.hasOwn(rules, field)) {
-      out.push(`live but on neither list: ${field} (${where.join(', ')})`);
+      out.add(`live but on neither list: ${field} (${where.join(', ')})`);
       continue;
     }
-    for (const value of [MARK, ...URL_CASES]) {
-      const at = probe(value);
-      if (at.length && !allowed(value, rules[field])) out.push(`live against its rule: ${field} = ${JSON.stringify(value)} (${at.join(', ')})`);
+    for (const base of [MARK, ...URL_CASES].filter((v) => !REFUSED.includes(v) && refusedFor(field, v, rules))) {
+      const { live, text } = probe(base);
+      const own = live.filter((w) => OWN.includes(w));
+      if (own.length) out.add(`live against its rule: ${field} = ${JSON.stringify(base)} (${own.join(', ')})`);
+      if (text) out.add(`refused value in plain text: ${field} = ${JSON.stringify(base)} (text)`);
     }
   }
-  for (const field of Object.keys(rules)) if (!linked.has(field)) out.push(`on LINKED_BY_RULE but linked nowhere: ${field}`);
-  return out;
+  for (const field of Object.keys(rules)) if (!fields.some((f) => f.field === field && linkedWhere(f).length)) out.add(`on LINKED_BY_RULE but linked nowhere: ${field}`);
+  return [...out];
 }
 
 // ── tests ───────────────────────────────────────────────────────────────
 
-test('the search: a probe is live everywhere but text, alt, title, aria-label, class, id and code', () => {
+test('the search: a probe is live everywhere but text, alt, title, aria-label, class, id and code; a bare URL only to a reader that links them', () => {
   const T = 'pdprobe000zzz';
   const U = `https://x.example/${T}`;
   for (const html of [
@@ -225,53 +262,76 @@ test('the search: a probe is live everywhere but text, alt, title, aria-label, c
   ]) assert.ok(liveInHtml(html, T), html);
   for (const html of [`<p>${U}</p>`, `<img alt="${U}">`, `<p title="${U}">`, `<b aria-label="${U}">`, `<p class="k-${T}">`, `<h2 id="${T}">`, `<pre><code>${U}</code></pre>`])
     assert.ok(!liveInHtml(html, T), html);
-  // Markdown is read as HTML by a reader that links bare URLs too.
-  for (const md of [`[a](${U})`, `![a](${U})`, `<${U}>`, `[a][1]\n\n[1]: ${U}`, `<a href="${U}">a</a>`, `<i style="background:url(${U})">x</i>`, U, `\\[a\\](${U})`,
+  // Markdown is read as HTML: by the strict reader, and by the permissive one, which links bare URLs too.
+  for (const md of [`[a](${U})`, `![a](${U})`, `<${U}>`, `[a][1]\n\n[1]: ${U}`, `<a href="${U}">a</a>`, `<i style="background:url(${U})">x</i>`,
     `x <style>@import url(${U});</style>`, `x <script>location='${U}'</script>`])
-    assert.ok(liveInMarkdown(md, T), md);
-  for (const md of [`\`${U}\``, `    ${U}`, `\`\`\`\n${U}\n\`\`\``, `\`\`\`${T}\nx\n\`\`\``, `[a](/b "${U}")`, `![${U}](/a.png)`, `x ${T} y`])
-    assert.ok(!liveInMarkdown(md, T), md);
-  assert.ok(LIVE.text(`site (${U})`, T));
-  assert.ok(!LIVE.text(`Source: ${U}`, T));
+    assert.ok(liveInMarkdown(md, T) && liveInMarkdown(md, T, true), md);
+  for (const md of [U, `\\[a\\](${U})`, `x //${T}.evil.example/x`]) assert.ok(!liveInMarkdown(md, T) && liveInMarkdown(md, T, true), md);
+  for (const md of [`\`${U}\``, `    ${U}`, `\`\`\`\n${U}\n\`\`\``, `\`\`\`${T}\nx\n\`\`\``, `[a](/b "${U}")`, `![${U}](/a.png)`, `x ${T} y`, `javascript:alert(1)//${T}`])
+    assert.ok(!liveInMarkdown(md, T, true), md);
 });
 
-test('every field a renderer puts where text is live is on ADDRESS_KEYS, or on LINKED_BY_RULE and kept to its rule', () => {
+test('no refused value is live anywhere, and every field a renderer links is on ADDRESS_KEYS, or on LINKED_BY_RULE and kept to its rule', () => {
   const blocks = goldenBlocks();
   const found = survey(blocks);
   // The search is live: every fence type the goldens hold rendered (a spliced code block too),
-  // 228 marker probes rendered today, and a link's href is live in all three outputs.
+  // 228 marker probes rendered today, and a link's href is live in every reading and in the plain text.
   assert.deepEqual([...found.types].sort(), [...new Set(blocks.map((b) => b.type))].sort());
   assert.ok(found.rendered >= 200, `${found.rendered} probes rendered`);
-  assert.deepEqual(found.linked.get('paragraph.content[].marks[].href')?.where, ['html', 'markdown', 'text']);
+  assert.deepEqual(found.fields.find((f) => f.field === 'paragraph.content[].marks[].href').probe(MARK), { live: ['html', 'markdown', LINKED], text: true });
   assert.deepEqual(problems(found), []);
 });
 
 // Each plant below is a renderer change the search must catch, or must let through. The real
 // renderers cannot be changed inside a test, so each stub wraps them and adds its own output.
-const only = (type) => goldenBlocks().filter((b) => b.type === type);
+const GOLDEN = goldenBlocks();
+const only = (type) => GOLDEN.filter((b) => b.type === type);
 const attr = (s) => String(s).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 const https = (v) => typeof v === 'string' && v.startsWith('https://');
 const plant = (where, add) => ({ ...REAL, [where]: (doc) => REAL[where](doc) + doc.map(add).join('') });
 const html = (add) => plant('html', (b) => (b.type === 'stat' && https(b.unit) ? add(attr(b.unit)) : ''));
+const unplanted = new Map();
+/** The real renderers' survey of one type, made once: probes are memoised, so later checks reuse them. */
+const real = (type) => (unplanted.has(type) ? unplanted : unplanted.set(type, survey(only(type)))).get(type);
+const baseline = (type, rules = LINKED_BY_RULE) => problems(real(type), rules);
+/** What breaks the rules for one field only: a plant check needs no other field's probes. */
+const problemsOf = (found, field, rules) => problems({ ...found, fields: found.fields.filter((f) => f.field === field) }, rules);
+/** Does a report on `field` starting with `prefix` name output `where` with the plant, and not without it? */
+function caught(type, render, [field, prefix], where, rules = LINKED_BY_RULE) {
+  const has = (lines) => lines.some((l) => l.startsWith(prefix) && l.slice(l.lastIndexOf('(') + 1, -1).split(', ').includes(where));
+  return !has(problemsOf(real(type), field, rules)) && has(problemsOf(survey(only(type), render), field, rules));
+}
+const neither = (field) => [field, `live but on neither list: ${field} (`];
+const refusedLive = (field, value) => [field, `refused value live: ${field} = ${JSON.stringify(value)} (`];
 
 test('plants: a renderer that puts a field in any live place is caught, a form no one named included', () => {
+  const unit = (add) => plant('markdown', (b) => (b.type === 'stat' && https(b.unit) ? add(b.unit) : ''));
   const cases = [
-    ['diagram.source linked by a renderer: a field named like a ruled one is not under its rule', 'diagram', plant('markdown', (b) => (https(b.source) ? `\n\n[source](${b.source})\n` : '')), 'diagram.source (markdown)'],
-    ['code.lang as a Markdown link', 'code', plant('markdown', (b) => (https(b.lang) ? `\n\n[lang](${b.lang})\n` : '')), 'code.lang (markdown)'],
-    ['stat.label as a Markdown reference link', 'stat', plant('markdown', (b) => (https(b.label) ? `\n\n[site][1]\n\n[1]: ${b.label}\n` : '')), 'stat.label (markdown)'],
-    ['a CSS url() quoted with &quot;', 'stat', html((u) => `<i style="background:url(&quot;${u}&quot;)"></i>`), 'stat.unit (html)'],
-    ['a second srcset candidate', 'stat', html((u) => `<img srcset="/a.png 1x, ${u} 2x" alt="">`), 'stat.unit (html)'],
-    ['@import "…" in a style element', 'stat', html((u) => `<style>@import "${u}";</style>`), 'stat.unit (html)'],
-    ['image-set("…" 1x)', 'stat', html((u) => `<i style="background-image:image-set(&quot;${u}&quot; 1x)"></i>`), 'stat.unit (html)'],
-    ['a meta refresh', 'stat', html((u) => `<meta http-equiv="refresh" content="0;url=${u}">`), 'stat.unit (html)'],
-    ['an iframe srcdoc', 'stat', html((u) => `<iframe srcdoc="&lt;a href=&quot;${u}&quot;&gt;x&lt;/a&gt;"></iframe>`), 'stat.unit (html)'],
-    ['an SVG <set> of href', 'stat', html((u) => `<svg><a><set attributeName="href" to="${u}"/></a></svg>`), 'stat.unit (html)'],
-    ['a made-up element and attribute', 'stat', html((u) => `<pd-portal destination="${u}"></pd-portal>`), 'stat.unit (html)'],
-    ['only the hostname, as an icon query', 'stat', plant('html', (b) => (b.type === 'stat' && https(b.unit) ? `<img alt="" src="https://icons.example/?d=${new URL(b.unit.trim()).hostname}">` : '')), 'stat.unit (html)'],
-    ['an inline <style> mid-paragraph in Markdown', 'stat', plant('markdown', (b) => (https(b.unit) ? `\n\nx <style>@import url(${b.unit});</style>\n` : '')), 'stat.unit (markdown)'],
-    ['an inline <script> mid-paragraph in Markdown', 'stat', plant('markdown', (b) => (https(b.unit) ? `\n\nx <script>location='${b.unit}'</script>\n` : '')), 'stat.unit (markdown)'],
+    ['diagram.source linked: a field named like a ruled one is not under its rule', 'diagram', plant('markdown', (b) => (https(b.source) ? `\n\n[source](${b.source})\n` : '')), 'diagram.source', 'markdown'],
+    ['code.lang as a Markdown link', 'code', plant('markdown', (b) => (https(b.lang) ? `\n\n[lang](${b.lang})\n` : '')), 'code.lang', 'markdown'],
+    ['stat.label as a Markdown reference link', 'stat', plant('markdown', (b) => (b.type === 'stat' && https(b.label) ? `\n\n[site][1]\n\n[1]: ${b.label}\n` : '')), 'stat.label', 'markdown'],
+    ['a CSS url() quoted with &quot;', 'stat', html((u) => `<i style="background:url(&quot;${u}&quot;)"></i>`), 'stat.unit', 'html'],
+    ['a second srcset candidate', 'stat', html((u) => `<img srcset="/a.png 1x, ${u} 2x" alt="">`), 'stat.unit', 'html'],
+    ['@import "…" in a style element', 'stat', html((u) => `<style>@import "${u}";</style>`), 'stat.unit', 'html'],
+    ['image-set("…" 1x)', 'stat', html((u) => `<i style="background-image:image-set(&quot;${u}&quot; 1x)"></i>`), 'stat.unit', 'html'],
+    ['a meta refresh', 'stat', html((u) => `<meta http-equiv="refresh" content="0;url=${u}">`), 'stat.unit', 'html'],
+    ['an iframe srcdoc', 'stat', html((u) => `<iframe srcdoc="&lt;a href=&quot;${u}&quot;&gt;x&lt;/a&gt;"></iframe>`), 'stat.unit', 'html'],
+    ['an SVG <set> of href', 'stat', html((u) => `<svg><a><set attributeName="href" to="${u}"/></a></svg>`), 'stat.unit', 'html'],
+    ['a made-up element and attribute', 'stat', html((u) => `<pd-portal destination="${u}"></pd-portal>`), 'stat.unit', 'html'],
+    ['only the hostname, as an icon query', 'stat', plant('html', (b) => (b.type === 'stat' && https(b.unit) ? `<img alt="" src="https://icons.example/?d=${new URL(b.unit).hostname}">` : '')), 'stat.unit', 'html'],
+    ['an inline <style> mid-paragraph in Markdown', 'stat', unit((u) => `\n\nx <style>@import url(${u});</style>\n`), 'stat.unit', 'markdown'],
+    ['an inline <script> mid-paragraph in Markdown', 'stat', unit((u) => `\n\nx <script>location='${u}'</script>\n`), 'stat.unit', 'markdown'],
   ];
-  for (const [what, type, render, field] of cases) assert.ok(problems(survey(only(type), render)).includes(`live but on neither list: ${field}`), what);
+  for (const [what, type, render, field, where] of cases) assert.ok(caught(type, render, neither(field), where), what);
+});
+
+test('plants: a refused value is caught live in any reading, and in an address field\'s plain text at all', () => {
+  // An address field: plain text writes a refused source as "site (…)".
+  const text = plant('text', (b) => (b.type === 'stat' && typeof b.source === 'string' ? `\nsite (${b.source})\n` : ''));
+  assert.ok(caught('stat', text, ['stat.source', `refused value in plain text: stat.source = ${JSON.stringify('javascript:alert(1)')} (`], 'text'), 'site (javascript:…) in plain text');
+  // A words field written as bare Markdown text, which a reader that links bare URLs links.
+  const bare = plant('markdown', (b) => (b.type === 'stat' && typeof b.denom === 'string' && b.denom.startsWith('//') ? `\n\nsee ${b.denom}\n` : ''));
+  assert.ok(caught('stat', bare, refusedLive('stat.denom', '//evil.example/x'), LINKED), 'a refused value the permissive reader links');
 });
 
 test('plants: a field written where text is inert (alt, title, aria-label, text, a code span, a link title) is let through', () => {
@@ -279,17 +339,19 @@ test('plants: a field written where text is inert (alt, title, aria-label, text,
     plant('html', (b) => (b.type === 'stat' ? `<img alt="${attr(b.unit)}" title="${attr(b.label)}"><b aria-label="${attr(b.body)}">${attr(b.unit)}</b>` : '')),
     plant('markdown', (b) => (b.type === 'stat' ? `\n\n\`${b.unit}\` and [x](/a "${String(b.label).replaceAll('"', '')}") and ![${b.body}](/a.png)\n` : '')),
   ];
-  for (const render of inert) assert.deepEqual(problems(survey(only('stat'), render)).filter((p) => !p.startsWith('on LINKED_BY_RULE but linked nowhere: stats.')), []);
+  const before = baseline('stat');
+  for (const render of inert) assert.deepEqual(problems(survey(only('stat'), render)), before);
 });
 
-test('plants: a LINKED_BY_RULE entry whose renderer lets through more than its prefix is caught, through new URL() too', () => {
+test('plants: a LINKED_BY_RULE field linked with a value its rule does not allow is caught, through new URL() too', () => {
   const rules = { ...LINKED_BY_RULE, 'stat.label': { prefix: 'https://', trimmed: true } };
   const label = (b) => (b.type === 'stat' && typeof b.label === 'string' ? b.label : '');
-  // Links https:// and data: only.
-  const data = plant('markdown', (b) => (/^\s*(?:https:\/\/|data:)/.test(label(b)) ? `\n\n[site](${label(b).trim()})\n` : ''));
-  const dataFound = problems(survey(only('stat'), data), rules);
-  assert.ok(dataFound.some((p) => p.startsWith('live against its rule: stat.label = "data:text/html,x"')), dataFound.join('\n'));
-  assert.ok(!dataFound.some((p) => p.startsWith('live against its rule: stat.label = "https://')), 'an https:// label is allowed');
+  const against = (value) => ['stat.label', `live against its rule: stat.label = ${JSON.stringify(value)} (`];
+  // Links https:// and paths.
+  const paths = plant('markdown', (b) => (/^\s*(?:https:\/\/|\/)/.test(label(b)) ? `\n\n[site](${label(b).trim()})\n` : ''));
+  assert.ok(caught('stat', paths, against('/media/files/x.png'), 'markdown', rules), 'a path, which safe_url allows and the rule does not');
+  assert.ok(caught('stat', paths, refusedLive('stat.label', '//evil.example/x'), 'markdown', rules), 'a protocol-relative path, which safe_url refuses');
+  assert.ok(!problemsOf(survey(only('stat'), paths), 'stat.label', rules).some((p) => p.startsWith(against('https://example.com/a')[1])), 'an https:// label is allowed');
   // Refuses javascript:, data:, vbscript:, http: and //, then links what new URL() makes of the rest.
   const normalizing = plant('markdown', (b) => {
     const v = label(b);
@@ -300,8 +362,8 @@ test('plants: a LINKED_BY_RULE entry whose renderer lets through more than its p
       return '';
     }
   });
-  const normalized = problems(survey(only('stat'), normalizing), rules);
-  assert.ok(normalized.some((p) => p.startsWith('live against its rule: stat.label = "java\\tscript:alert(1)"')), normalized.join('\n'));
+  assert.ok(caught('stat', normalizing, refusedLive('stat.label', 'java\tscript:alert(1)'), 'markdown', rules), 'java\\tscript: written as javascript:');
+  assert.ok(caught('stat', normalizing, against('mailto:a@b.c'), 'markdown', rules), 'mailto:, which the rule does not allow');
 });
 
 test('the safe_url/1 rows here are the editor test\'s rows, as copied', () => {
