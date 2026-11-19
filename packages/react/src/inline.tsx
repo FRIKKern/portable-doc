@@ -498,7 +498,7 @@ export function unwrapBlockWrappers(nodes: unknown[]): unknown[] {
   if (!nodes.some(isBlockWrapper)) return nodes
   const out: unknown[] = []
   for (const n of nodes) {
-    if (isBlockWrapper(n)) out.push(...(n.content as unknown[]))
+    if (isBlockWrapper(n)) for (const c of n.content as unknown[]) out.push(c)
     else out.push(n)
   }
   return out

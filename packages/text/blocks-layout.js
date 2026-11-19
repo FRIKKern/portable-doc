@@ -2,7 +2,7 @@
 // Containers and composed blocks: sections, columns, tabs, steps, cards,
 // notes, pipelines, tables of contents, file trees, diffs, embeds.
 
-import { asList, codeSpan, fence, isMap, maxOf, nonblank, paras, str, tableOut } from './util.js';
+import { asList, codeSpan, fence, isMap, maxOf, nonblank, paras, parasOf, str, tableOut } from './util.js';
 import { body, bodyOf, linked } from './blocks-prose.js';
 import { fieldOf, itemOf } from './read-aliases.js';
 
@@ -25,11 +25,11 @@ function terminal(b, ctx) {
 }
 
 const tabs = (b, ctx) =>
-  paras(...asList(b.tabs).filter(isMap).map((t) => paras(titled(ctx, str(t.label)), ctx.blocks(asList(t.blocks)))));
+  parasOf(asList(b.tabs).filter(isMap).map((t) => paras(titled(ctx, str(t.label)), ctx.blocks(asList(t.blocks)))));
 
 function codeTabs(b, ctx) {
-  return paras(
-    ...asList(b.tabs)
+  return parasOf(
+    asList(b.tabs)
       .filter(isMap)
       .map((t) => {
         const source = str(itemOf(t, 'code-tabs.tabs[]', 'value'));

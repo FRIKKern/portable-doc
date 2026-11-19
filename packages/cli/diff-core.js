@@ -140,7 +140,7 @@ export function diffDocs(a, b) {
   a.blocks.forEach((blk, i) => matchedA.has(i) || rows.push([i, 0, block('removed', blk, i, null)]));
   b.blocks.forEach((blk, j) => matchedB.has(j) || rows.push([j, 2, block('added', blk, null, j)]));
   rows.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
-  changes.push(...rows.map(([, , c]) => c));
+  for (const [, , c] of rows) changes.push(c);
   const count = (kind) => changes.filter((c) => c.kind === kind).length;
   return { equal: changes.length === 0, summary: { added: count('added'), removed: count('removed'), moved: count('moved'), changed: count('changed') }, changes };
 }
