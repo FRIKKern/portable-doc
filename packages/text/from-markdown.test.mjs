@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
 import { MAX_NEST } from './from-markdown-inline.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
-import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
+import { LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 import { ADDRESS_KEYS, safeUrl } from './util.js';
 
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
@@ -160,6 +160,29 @@ test('a list item\'s text after its nested list stays after it, in source order,
     const written = toMarkdown(blocks);
     assert.deepEqual(tokensOf(written), tokens, `depth ${depth}: the import, written back as Markdown`);
     assert.deepEqual(tokensOf(toPlainText(fromMarkdown(written))), tokens, `depth ${depth}: the round trip`);
+  }
+});
+
+test('a split list item says so: one list_item_split notice per new item, with its path and source lines; an ordered list numbers on', () => {
+  const ul = (...items) => ({ type: 'list', ordered: false, items });
+  const ol = (...items) => ({ type: 'list', ordered: true, items });
+  const item = (value, ...children) => (children.length ? { content: [t(value)], children } : [t(value)]);
+  const split = (path, line, lines) => ({ code: LIST_ITEM_SPLIT, path, line, lines });
+  const cases = [
+    ['- w0\n  - w1\n    - w2\n\n  w3 after the nested list', [ul(item('w0', ul(item('w1', ul(item('w2'))))), item('w3 after the nested list'))], [split('/blocks/0/items/1', 5, 1)], '- w0\n  - w1\n    - w2\n- w3 after the nested list\n'],
+    ['- a\n\n  b\n\n  - c\n\n  d', [ul(item('a b', ul(item('c'))), item('d'))], [split('/blocks/0/items/1', 7, 1)], '- a b\n  - c\n- d\n'],
+    // the item after the split takes the next number: w4, item 2 in the source, is item 3
+    ['1. w0\n   1. w1\n      1. w2\n\n   w3 after the nested list\n2. w4', [ol(item('w0', ol(item('w1', ol(item('w2'))))), item('w3 after the nested list'), item('w4'))], [split('/blocks/0/items/1', 5, 1)], '1. w0\n   1. w1\n      1. w2\n2. w3 after the nested list\n3. w4\n'],
+    // text after a later nested list splits again; the moved text spans its blank line
+    ['- a\n  - b\n\n  c\n\n  more c\n\n  - d\n\n  e', [ul(item('a', ul(item('b'))), item('c more c', ul(item('d'))), item('e'))], [split('/blocks/0/items/1', 4, 3), split('/blocks/0/items/2', 10, 1)], '- a\n  - b\n- c more c\n  - d\n- e\n'],
+    // a split inside a nested list, then one outside it, in source order
+    ['- x\n  - y\n    - z\n\n    z2\n\n  x2', [ul(item('x', ul(item('y', ul(item('z'))), item('z2'))), item('x2'))], [split('/blocks/0/items/0/children/0/items/1', 5, 1), split('/blocks/0/items/1', 7, 1)], '- x\n  - y\n    - z\n  - z2\n- x2\n'],
+  ];
+  for (const [markdown, blocks, notices, written] of cases) {
+    const read = readMarkdown(markdown);
+    assert.deepEqual([read.blocks, read.notices], [blocks, notices], markdown);
+    assert.equal(toMarkdown(read.blocks), written, markdown);
+    assert.deepEqual(readMarkdown(written), { blocks, notices: [], work: readMarkdown(written).work }, `${markdown}: the round trip splits nothing more`);
   }
 });
 
