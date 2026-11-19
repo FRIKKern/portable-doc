@@ -68,7 +68,7 @@ const heading: Emit = (b) => {
   // inline dispatcher; otherwise the bare `text` string (escaped). The 16/16
   // capstone headings persist the `content[]` shape — reading `text` alone left
   // them rendering an empty `<h2></h2>`.
-  return `<h${level}>${renderInlines(paragraphInline(b))}</h${level}>`
+  return `<h${numberText(level)}>${renderInlines(paragraphInline(b))}</h${numberText(level)}>`
 }
 
 // The h1/h2/h3 authoring-drift aliases (charter D57), the JS twin of compose.ex's
@@ -115,13 +115,13 @@ const tabs: Emit = (b, ctx) => {
       const activeClass = i === 0 ? ' bp-tabs__tab--active' : ''
       return (
         `<button type="button" class="bp-tabs__tab${activeClass}" role="tab" ` +
-        `aria-selected="${i === 0}" data-tab-index="${i}">${escapeHtml(t.label)}</button>`
+        `aria-selected="${i === 0}" data-tab-index="${numberText(i)}">${escapeHtml(t.label)}</button>`
       )
     })
     .join('')
 
   const panels = entries
-    .map((t, i) => `<div class="bp-tabs__panel" data-tab-index="${i}">${renderBlocks(t.blocks, ctx)}</div>`)
+    .map((t, i) => `<div class="bp-tabs__panel" data-tab-index="${numberText(i)}">${renderBlocks(t.blocks, ctx)}</div>`)
     .join('')
 
   return (
@@ -193,7 +193,7 @@ const codeTabs: Emit = (b) => {
 // the Elixir _raw clause. No method and no path is the honest empty state.
 function apiEndpointParamRow(param: unknown): string {
   if (!isMap(param)) return ''
-  const required = param.required === true || String(param.required).trim().toLowerCase() === 'true'
+  const required = param.required === true || stringOf(param.required).trim().toLowerCase() === 'true'
   return (
     `<tr><td>${escapeHtml(str(param.name))}</td><td>${escapeHtml(str(param.in))}</td>` +
     `<td>${escapeHtml(str(param.type))}</td><td>${required ? 'Yes' : 'No'}</td></tr>`
@@ -338,12 +338,12 @@ const toc: Emit = (b) => {
 
     let label = escapeHtml(item.text)
     if (numbered) {
-      const numStr = counters.slice(1, rel + 1).join('.')
+      const numStr = counters.slice(1, rel + 1).map((c) => numberText(c)).join('.')
       label = `${numStr}. ${label}`
     }
     const inner =
       item.anchor !== '' ? `<a href="#${escapeAttr(item.anchor)}">${label}</a>` : label
-    rows.push(`<li class="bp-toc__item" data-level="${rel}">${inner}</li>`)
+    rows.push(`<li class="bp-toc__item" data-level="${numberText(rel)}">${inner}</li>`)
   }
 
   const sticky = b.sticky === true
@@ -425,8 +425,8 @@ const diff: Emit = (b) => {
   const counts =
     `<div class="text-dim" style="font-size: 12px; margin-bottom: 4px;">` +
     leadHtml +
-    `<span style="color: var(--ok);">+${added}</span> ` +
-    `<span style="color: var(--danger);">−${removed}</span></div>`
+    `<span style="color: var(--ok);">+${numberText(added)}</span> ` +
+    `<span style="color: var(--danger);">−${numberText(removed)}</span></div>`
 
   let body: string
   if (rows.length > CHAT_DIFF_BUDGET) {
@@ -434,7 +434,7 @@ const diff: Emit = (b) => {
     body =
       `<details><summary style="cursor: pointer; list-style: none;">` +
       diffSectionRowsHtml(head) +
-      `<div class="text-dim" style="font-size: 12px; padding: 1px 0;">… +${overflow} more lines</div>` +
+      `<div class="text-dim" style="font-size: 12px; padding: 1px 0;">… +${numberText(overflow)} more lines</div>` +
       `</summary>${diffSectionRowsHtml(rest)}</details>`
   } else {
     body = diffSectionRowsHtml(head)
@@ -568,7 +568,7 @@ export function listStart(b: Block): number | null {
 const list: Emit = (b, ctx) => {
   const tag = b.ordered === true ? 'ol' : 'ul'
   const start = b.ordered === true && (b as { task?: unknown }).task !== true ? listStart(b) : null
-  return `<${tag}${start === null ? '' : ` start="${start}"`}>${asList(b.items)
+  return `<${tag}${start === null ? '' : ` start="${numberText(start)}"`}>${asList(b.items)
     .map(
       (item) =>
         `<li><span>${renderInlines(itemInlines(item))}</span>${renderBlocks(listChildren(item), ctx)}</li>`,
@@ -840,7 +840,7 @@ const asciicast: Emit = (b) => {
   const poster = str(fieldOf(b, 'posterAt')).trim()
   const posterAttr = poster === '' ? '' : ` data-cast-poster="${escapeAttr(poster)}"`
   const rows = typeof b.rows === 'number' && Number.isInteger(b.rows) ? b.rows : undefined
-  const rowsAttr = rows !== undefined && rows >= 6 && rows <= 40 ? ` data-cast-rows="${rows}"` : ''
+  const rowsAttr = rows !== undefined && rows >= 6 && rows <= 40 ? ` data-cast-rows="${numberText(rows)}"` : ''
   return (
     `<figure style="margin:var(--bp-air-asciicast, 1.6rem) 0 0;margin-inline:var(--bp-evidence-pull, 0px);width:var(--bp-evidence-width, 100%);box-sizing:border-box;overflow-x:auto">` +
     `<div class="bp-asciicast" data-cast-src="${safeUrl(src)}"${posterAttr}${rowsAttr} style="border:1px solid;border-radius:6px;overflow:hidden"></div>` +
@@ -1029,9 +1029,9 @@ function cellLayoutAttr(child: unknown): string {
   if (!isMap(child)) return ''
   const parts: string[] = []
   const order = orderInt(child.order)
-  if (order !== null) parts.push(`order:${order}`)
+  if (order !== null) parts.push(`order:${numberText(order)}`)
   const span = spanInt(child.span)
-  if (span !== null) parts.unshift(`grid-column:span ${span}`)
+  if (span !== null) parts.unshift(`grid-column:span ${numberText(span)}`)
   return parts.length ? ` style="${parts.join(';')}"` : ''
 }
 
@@ -1083,7 +1083,7 @@ const section: Emit = (b, ctx) => {
       `<div style="display:flex;flex-direction:column">` +
       HR +
       titleHtml +
-      `<div class="bp-section__grid" style="--bp-tracks:${tracks};--bp-grid-gap:${gap}">` +
+      `<div class="bp-section__grid" style="--bp-tracks:${numberText(tracks)};--bp-grid-gap:${gap}">` +
       cells +
       `</div>` +
       HR +
@@ -1111,7 +1111,7 @@ const columns: Emit = (b, ctx) => {
   const inner = cols
     .map((col) => `<div class="bp-cols__c">${renderBlocks(asList<Block>(col), ctx)}</div>`)
     .join('')
-  return `<div class="bp-cols" style="--bp-cols:${n}">${inner}</div>`
+  return `<div class="bp-cols" style="--bp-cols:${numberText(n)}">${inner}</div>`
 }
 
 /* terminal (compose.ex :article) */

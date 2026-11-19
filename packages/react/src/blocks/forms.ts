@@ -56,7 +56,7 @@ function controlHtml(type: string, id: string, q: Record<string, unknown>, ctx: 
       // Cap the ladder span at 101 rungs (render-time DoS guard, forms.ex).
       max = Math.min(max, min + 100)
       const labels: string[] = []
-      if (max >= min) for (let i = min; i <= max; i++) labels.push(String(i))
+      if (max >= min) for (let i = min; i <= max; i++) labels.push(numberText(i))
       return radioGroup(id, labels)
     }
     default:

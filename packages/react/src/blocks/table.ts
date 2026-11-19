@@ -24,6 +24,7 @@ import { type Block, asList, escapeHtml, isMap, renderCell } from '../inline'
 import { sparkSvg } from './dataviz'
 import { fieldOf, itemOf, readField } from '../../../text/read-aliases.js'
 import { coverSpans, spanAttr, type Span } from './spans'
+import { numberText, stringOf } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -69,7 +70,7 @@ const table: Emit = (b, ctx) => {
   if (rowCount(b.rows) * recordKeyCount(columns) > TABLE_CELL_CAP)
     return `<span>${escapeHtml(ctx.t('Table too large to show'))}</span>`
   const cols = asList(b.cols)
-  const typeAt = (c: unknown) => (isMap(c) && c.type != null ? String(c.type) : undefined)
+  const typeAt = (c: unknown) => (isMap(c) && c.type != null ? stringOf(c.type) : undefined)
   const types = Array.from({ length: Math.max(columns.length, cols.length) }, (_, j) => typeAt(columns[j]) ?? typeAt(cols[j]) ?? '')
   const cls = (base: string, i: number) => {
     const m = COL_MOD[types[i] ?? '']
@@ -117,7 +118,7 @@ const table: Emit = (b, ctx) => {
     .map((cells, r) => {
       const tds = cells
         .map((cell, i) =>
-          covered.has(`${r},${i}`)
+          covered.has(`${numberText(r)},${numberText(i)}`)
             ? ''
             : `<td class="${cls('bp-table__td', i)}"${spanAttr(anchors, r, i)}>${typedCell(cell, types[i] ?? '')}</td>`,
         )
@@ -137,7 +138,7 @@ function typedCell(cell: unknown, type: string): string {
   if (type === 'delta') {
     const n = cellNum(cell)
     // Glyph FIRST, then the magnitude — the direction survives with zero colour.
-    if (n !== null) return renderCell(`${DELTA_GLYPHS[Math.sign(n) + 1]} ${Math.abs(n)}`)
+    if (n !== null) return renderCell(`${DELTA_GLYPHS[Math.sign(n) + 1]} ${numberText(Math.abs(n))}`)
   } else if (type === 'spark' && Array.isArray(cell)) {
     const vals = cell.map(cellNum).filter((n): n is number => n !== null)
     if (vals.length) return sparkSvg(vals, 'bp-table__spark')
