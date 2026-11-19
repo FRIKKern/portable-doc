@@ -29,7 +29,12 @@ const codeBlock = (value, lang) => (lang ? { type: 'code', value, lang } : { typ
 // heading, paragraph, list item or quote is dropped, never kept empty.
 const blank = (content) => renderInline(content, true) === '';
 const paragraph = (content) => (blank(content) ? [] : [{ type: 'paragraph', content }]);
-const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ? inline(node.children) : [text(flattenText([node]).trim())]);
+// `count`, when given, gets the nodes read on `visits` (a paragraph or heading is one).
+function textOf(node, count = undefined) {
+  if (node.type !== 'paragraph' && node.type !== 'heading') return [text(flattenText([node], count).trim())];
+  if (count) count.visits++;
+  return inline(node.children);
+}
 
 // ── lists ───────────────────────────────────────────────────────────────
 
@@ -111,13 +116,28 @@ function calloutMarker(content) {
   return { tone, rest: merge([text(m[2]), ...content.slice(1)]) };
 }
 
-function quote(node) {
+/**
+ * A quote. With a `[!tone]` marker at the head of its first paragraph it is a callout: that
+ * paragraph is its content, and every block after it is read as blocks into `slots.body`,
+ * fences and all. A plain quote holds inline content only, so it stays one run of all its text.
+ * A callout MAX_NEST callouts deep keeps its body as text too, joined to its content, as a
+ * list that deep does: the doc stays within the depth validate allows. Each child's text is
+ * read once, and a callout's body only as blocks, so no part of the tree is read twice.
+ */
+function quote(node, state) {
   const children = node.children;
-  // Each child's text once: deep source in it is parsed again each time it is read.
-  const parts = children.map(textOf);
+  const first = children.length ? textOf(children[0], state.count) : [];
+  const marker = calloutMarker(first);
+  if (marker && state.depth < MAX_NEST) {
+    state.depth++;
+    const body = convert(children.slice(1), state);
+    state.depth--;
+    const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
+    return [body.length ? { ...callout, slots: { body } } : callout];
+  }
+  const parts = [first, ...children.slice(1).map((child) => textOf(child, state.count))];
   const content = joined(parts);
-  const marker = calloutMarker(content);
-  if (marker) return [{ type: 'callout', tone: marker.tone, content: marker.rest }];
+  if (marker) return [{ type: 'callout', tone: marker.tone, content: calloutMarker(content).rest }];
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
@@ -214,7 +234,7 @@ function block(node, state) {
     case 'paragraph': return paragraph(inline(node.children));
     case 'bullet_list': case 'ordered_list': return list(node);
     case 'fence': case 'code_block': return code(node, state);
-    case 'blockquote': return quote(node);
+    case 'blockquote': return quote(node, state);
     case 'table': return [table(node)];
     case 'hr': return [{ type: 'divider' }];
     case 'html_block': {
@@ -235,10 +255,18 @@ function caption(node) {
   return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-// Each block of `nodes` onto `out`. Where the net first fires, its path is the block's place.
+/**
+ * A read's state: the ids fences used, how many callouts deep the read is (quote()), and its
+ * count: the tokens markdown-it made and the nodes read, so a test sees no part read twice.
+ */
+const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 } });
+
+// Each block of `nodes` onto `out`, sharing `state`: the ids fences used, and how many callouts
+// deep they are. Where the net first fires, its path is the block's place.
 function convert(nodes, state, out = [], net = undefined) {
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
+    state.count.visits++;
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
     if (net?.fired && net.path === undefined) net.path = `/blocks/${out.length}`;
@@ -276,15 +304,15 @@ export function readMarkdown(markdown, limits = IMPORT_WORK) {
  * A plan from planText as { blocks, notices }, or null when the blocks do not validate. Each
  * part read is a fresh document for markdown-it; the net's count runs across them all. The
  * import-work test also reads a plan made with a wrong count here, to see the net catch it;
- * `parsed` is markdown-it's own count, for the tests.
+ * `parsed` is markdown-it's own count and `count` the read's (readState), for the tests.
  */
 export function readPlan(plan, limits) {
-  const state = { ids: new Set() };
+  const state = readState();
   const net = { work: 0, budget: limits.budget };
   const blocks = [];
   const paths = {};
   for (const part of plan.parts) {
-    if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line })), state, blocks, net);
+    if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line }), state.count), state, blocks, net);
     else {
       paths[part.rule] ??= `/blocks/${blocks.length}`;
       blocks.push({ type: 'paragraph', content: [text(part.plain)] });
@@ -293,7 +321,7 @@ export function readPlan(plan, limits) {
   if (!validate({ blocks }).ok) return null;
   const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
-  return { blocks, notices, parsed: net.work };
+  return { blocks, notices, parsed: net.work, count: state.count };
 }
 
 /** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */
@@ -302,6 +330,6 @@ export const fromMarkdown = (markdown) => readMarkdown(markdown).blocks;
 /** For the import-work test: what markdown-it re-scans to read `markdown` whole, deep source included. */
 export function parsedWork(markdown) {
   const env = {};
-  convert(tree(parser.parse(markdown, env)), { ids: new Set() });
+  convert(tree(parser.parse(markdown, env)), readState());
   return env.work ?? 0;
 }

@@ -89,10 +89,11 @@ function ownEnd(state, line, endLine) {
 const spent = (env) => env.net !== undefined && env.net.work > env.net.budget;
 
 /** Flat open/close tokens as nodes: { type, tok, children }. Iterative. */
-export function tree(tokens) {
+export function tree(tokens, count = undefined) {
   const root = { children: [] };
   const stack = [root];
   for (const tok of asList(tokens)) {
+    if (count) count.tokens++;
     if (tok.nesting === -1) {
       if (stack.length > 1) stack.pop();
       continue;
@@ -100,7 +101,7 @@ export function tree(tokens) {
     const node = { type: tok.nesting === 1 ? tok.type.replace(/_open$/, '') : tok.type, tok, children: [] };
     stack.at(-1).children.push(node);
     if (tok.nesting === 1) stack.push(node);
-    else if (Array.isArray(tok.children)) node.children = tree(tok.children);
+    else if (Array.isArray(tok.children)) node.children = tree(tok.children, count);
   }
   return root.children;
 }
@@ -192,9 +193,10 @@ function leafText(node) {
 
 /**
  * The plain text of some nodes, block siblings joined by a space. Iterative, so depth costs no
- * stack; a deep_source is parsed here and its nodes read in its place.
+ * stack; a deep_source is parsed here and its nodes read in its place. `count`, when given,
+ * gets each node read on `visits` and each token parsed here on `tokens`.
  */
-export function flattenText(nodes) {
+export function flattenText(nodes, count = undefined) {
   let out = '';
   let skipping = null;
   const stack = [...asList(nodes)].reverse();
@@ -206,6 +208,7 @@ export function flattenText(nodes) {
       continue;
     }
     if (!isMap(node)) continue;
+    if (count) count.visits++;
     if (node.type === 'deep_source') {
       const { content, meta: env } = node.tok;
       stack.push(SEP);
@@ -220,7 +223,7 @@ export function flattenText(nodes) {
       }
       const base = env.base;
       env.base = node.tok.map[0]; // the deep source's lines count from its first line
-      const nodes = tree(parser.parse(content, env));
+      const nodes = tree(parser.parse(content, env), count);
       env.base = base;
       for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
       continue;
