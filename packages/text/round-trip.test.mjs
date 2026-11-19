@@ -79,7 +79,7 @@ test('round-trip mode reports a fence import would keep back for a reused id, an
     { path: '/blocks/1', id: null, type: null, reason: 'not-a-block' },
     { path: '/blocks/2', id: 'x', type: 'heading', reason: 'id' },
   ]);
-  assert.deepEqual(fromMarkdown(markdown), [doc[0], { type: 'heading', level: 1, text: 'b' }]);
+  assert.deepEqual(fromMarkdown(markdown), [doc[0], { type: 'heading', level: 1, content: [{ type: 'text', value: 'b' }] }]);
   assert.equal(toMarkdown(doc), '# a\n\n# b\n');
   assert.equal(toMarkdown(doc, { mode: 'readable' }), toMarkdown(doc));
 });
