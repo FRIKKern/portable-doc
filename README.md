@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 7 changes · README timeline: at most one line per period; check-docs: one block, job flag only at origin/main ([#80](https://github.com/FRIKKern/portable-doc/pull/80))
+- **Today** · 8 changes · Playground: pasted Markdown keeps under the doc cap, and the stale note leaves the tablist ([#79](https://github.com/FRIKKern/portable-doc/pull/79))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
