@@ -282,7 +282,7 @@ export function inline(nodes, depth = 0) {
       continue;
     }
     if (skipping) continue;
-    out.push(...(n.type === 'inline' ? inline(n.children, depth) : inlineNode(n, depth)));
+    for (const node of n.type === 'inline' ? inline(n.children, depth) : inlineNode(n, depth)) out.push(node);
   }
   return merge(out);
 }

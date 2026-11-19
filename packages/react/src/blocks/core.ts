@@ -32,6 +32,7 @@ import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.j
 import { numberText, stringOf } from '../../../text/number-text.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
 import type { RenderCtx } from './chrome'
+import { minOf } from '../min-max'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -325,7 +326,7 @@ const toc: Emit = (b) => {
 
   const depth = Number.isInteger(b.depth) && (b.depth as number) > 0 ? Math.min(b.depth as number, 6) : 2
   const numbered = b.numbered === true
-  const minLevel = Math.min(...items.map((i) => i.level))
+  const minLevel = minOf(items.map((i) => i.level))
   const counters = new Array(depth + 1).fill(0)
 
   const rows: string[] = []

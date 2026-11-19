@@ -3,7 +3,7 @@
 // family (board, list, detail, roadmap, status legend).
 
 import { numberText } from './number-text.js';
-import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, nonblank, paras, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
+import { STATUS_ROLES, asList, capitalize, fence, fmtNum, isMap, nonblank, paras, parasOf, roleOf, roleLabel, safeUrl, statusText, str } from './util.js';
 import { titled } from './blocks-layout.js';
 import { diffLines } from './diff.js';
 import { itemOf } from './read-aliases.js';
@@ -223,8 +223,8 @@ function taskBoard(b, ctx) {
     const role = BOARD_ROLES.includes(roleOf(r.status)) ? roleOf(r.status) : 'open';
     by.set(role, [...(by.get(role) ?? []), r]);
   }
-  return paras(
-    ...BOARD_ROLES.filter((role) => by.has(role)).map((role) =>
+  return parasOf(
+    BOARD_ROLES.filter((role) => by.has(role)).map((role) =>
       paras(`${ctx.bold(capitalize(roleLabel(role)))} (${by.get(role).length})`, ctx.list(by.get(role).map((r) => ({ head: taskLine(r, ctx, { status: false }) })))),
     ),
   );
@@ -243,7 +243,7 @@ function tasks(b, ctx) {
   const groups = [...phases].map(([name, rs]) =>
     paras(name && `${ctx.bold(one(ctx, name))} · ${count(rs, 'done')}/${rs.length}`, ctx.list(rs.map((r) => ({ head: taskLine(r, ctx) })))),
   );
-  return paras(titled(ctx, nonblank(b.title)), momentum, ...groups);
+  return parasOf([titled(ctx, nonblank(b.title)), momentum, ...groups]);
 }
 
 function taskDetail(b, ctx) {
