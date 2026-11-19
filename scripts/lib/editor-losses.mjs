@@ -12,20 +12,20 @@ const EXPORT_FIELDS = 'the export keeps card media alt, stat denom and old-named
 
 /** [writer, kind of loss, words lost on the shared cases, the Barkpark fix that removes it] */
 export const EDITOR_LOSSES = [
-  ['editor export', 'a callout body', 0, CALLOUT_BODY],
-  ['editor export', 'card media', 0, EXPORT_FIELDS],
-  ['editor export', 'a stat denominator', 0, EXPORT_FIELDS],
-  ['editor export', 'an old-named field', 0, EXPORT_FIELDS],
-  ['editor export', 'a chart label', 0, 'the export writes every chart label'],
-  ['editor source', 'a callout body', 0, CALLOUT_BODY],
-  ['editor source', 'a list nested in a list item', 0, SOURCE_ROUND_TRIP],
-  ['editor source', 'another block in a list item', 0, SOURCE_ROUND_TRIP],
-  ["editor source", "a heading's text", 0, SOURCE_ROUND_TRIP],
-  ['editor source', 'a link address', 0, SOURCE_ROUND_TRIP],
-  ["editor source", "a block's old text name", 0, SOURCE_ROUND_TRIP],
-  ['editor source', 'a block setting', 0, SOURCE_ROUND_TRIP],
-  ['editor source', 'an open field', 0, SOURCE_ROUND_TRIP],
-  ['editor source', 'an old-named field', 0, SOURCE_ROUND_TRIP],
+  ['editor export', 'a callout body', 1906, CALLOUT_BODY],
+  ['editor export', 'card media', 14, EXPORT_FIELDS],
+  ['editor export', 'a stat denominator', 2, EXPORT_FIELDS],
+  ['editor export', 'an old-named field', 10, EXPORT_FIELDS],
+  ['editor export', 'a chart label', 32, 'the export writes every chart label'],
+  ['editor source', 'a callout body', 1830, CALLOUT_BODY],
+  ['editor source', 'a list nested in a list item', 851, SOURCE_ROUND_TRIP],
+  ['editor source', 'another block in a list item', 101, SOURCE_ROUND_TRIP],
+  ['editor source', "a heading's text", 53, SOURCE_ROUND_TRIP],
+  ['editor source', 'a link address', 8, SOURCE_ROUND_TRIP],
+  ['editor source', "a block's old text name", 40, SOURCE_ROUND_TRIP],
+  ['editor source', 'a block setting', 20, SOURCE_ROUND_TRIP],
+  ['editor source', 'an open field', 2, SOURCE_ROUND_TRIP],
+  ['editor source', 'an old-named field', 4, SOURCE_ROUND_TRIP],
 ];
 
 const SETTINGS = ['id', 'role', 'tone', 'source', 'sourceDefault', 'kind', 'lang'];
