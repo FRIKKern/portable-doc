@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
-import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 import { canon } from './golden-reads.mjs';
+import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 import { ADDRESS_KEYS, safeUrl } from './util.js';
 
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
