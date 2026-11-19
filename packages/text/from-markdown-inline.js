@@ -27,41 +27,66 @@ export const parser = new MarkdownIt('default', { html: true, linkify: true, typ
 parser.validateLink = () => true;
 parser.normalizeLink = (url) => url;
 
-// The import's work: what markdown-it re-scans. It tokenizes each container's lines
-// again one level down, so every tokenize call adds the lines it took and their
-// characters: a line nested d deep counts d + 1 times, in whichever parse reaches it.
-// Lines, because markdown-it checks every open container on each line (lazy lines under
-// a deep quote); characters, because on one long line (`- - - - …`) its thematic-break
-// rule rescans the rest of the line at each level. Past IMPORT_WORK.budget, containers
-// below the top level are not parsed any more: their text is kept as plain text, every
-// word (flattenText), with the IMPORT_WORK.notice notice. An ordinary document uses at
-// most an eighth of it. Only hostile input, deep with many lines or thousands of levels
-// on one line, gets past it.
-export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, notice: 'import_work_spent' });
+// What markdown-it re-scans, counted as it parses (env.work): each tokenize call adds the
+// lines it took and their characters, so a line nested d deep counts d + 1 times, in
+// whichever parse reaches it. The import's budget is counted from the text before parsing
+// (import-work.js), and the test checks that count is never below this one. This count is
+// the net behind it (env.net, shared by the import's parses). The net counts each container
+// as it is entered, from the lines it will take, and settles the count when it is done; so
+// should the work pass the budget, the container that would pass it is not parsed, at any
+// level, the top one included: its text is kept as plain text, every word (flattenText),
+// and the import gives a notice with rule 'net'. It fires only where the text's count is
+// wrong, so a notice from it is a bug to report.
 
 // markdown-it's own tokenize, except that where it would skip the lines too deep to
-// parse (from the first non-blank line in this container to its end) they are kept.
-// Within one call the level does not change, so checking it once on entry is the same.
+// parse (from the first non-blank line in this container to its end), or the net stops
+// it, they are kept. Within one call the level does not change, so checking it once on
+// entry is the same.
 const tokenize = parser.block.tokenize.bind(parser.block);
 parser.block.tokenize = (state, startLine, endLine) => {
   const env = state.env;
   env.work ??= 0;
-  if ((env.work <= IMPORT_WORK.budget || state.level === 0) && state.level < state.md.options.maxNesting) {
+  const line = state.skipEmptyLines(startLine);
+  const end = ownEnd(state, line, endLine);
+  // The work this call will take, counted on entry: its own lines and their characters.
+  const ahead = env.net ? workOf(state, startLine, end) : 0;
+  if (env.net) env.net.work += ahead;
+  const cut = spent(env);
+  if (state.level < state.md.options.maxNesting && !cut) {
     tokenize(state, startLine, endLine);
-    // The lines this container took, and their characters: a list item or quote is given
-    // the outer end and stops early.
-    // bMarks keeps a last entry at the source's end; lineMax is no guide, as a quote shrinks it to its own end.
-    const end = state.bMarks[state.line] ?? state.src.length;
-    env.work += Math.max(0, state.line - startLine) + Math.max(0, end - state.bMarks[startLine]);
+    const work = workOf(state, startLine, state.line);
+    env.work += work;
+    if (env.net) env.net.work += work - ahead;
     return;
   }
-  const line = state.skipEmptyLines(startLine);
+  if (env.net && !cut) env.net.work -= ahead; // read later, as deep source, and counted then
   if (line >= endLine || state.sCount[line] < state.blkIndent) return void (state.line = line);
   const tok = state.push('deep_source', '', 0);
-  tok.content = state.getLines(line, endLine, state.blkIndent, false);
-  tok.meta = env; // the import's budget, shared by every parse of its deep source
-  state.line = endLine;
+  tok.content = state.getLines(line, end, state.blkIndent, false);
+  tok.meta = env; // the parse's count and net, shared by every parse of its deep source
+  tok.map = [(env.base ?? 0) + line, (env.base ?? 0) + end]; // its lines in the whole text, from 0
+  tok.cut = cut; // the net stopped it: kept as plain text
+  state.line = end;
 };
+
+// The lines from startLine to end, and their characters. A list item or quote is given the
+// outer end and stops early; bMarks keeps a last entry at the source's end (lineMax is no
+// guide, as a quote shrinks it to its own end).
+const workOf = (state, startLine, end) =>
+  Math.max(0, end - startLine) + Math.max(0, (state.bMarks[end] ?? state.src.length) - state.bMarks[startLine]);
+
+// The end of this container's own lines: a list item is given the outer end, and its own
+// lines stop at the first line indented less than it, as markdown-it's own tokenize stops
+// there. A quote's lazy lines (sCount -1, markdown-it's mark) are its own.
+function ownEnd(state, line, endLine) {
+  if (line >= endLine || state.sCount[line] < state.blkIndent) return line;
+  let end = line;
+  while (end < endLine && (state.isEmpty(end) || state.sCount[end] < 0 || state.sCount[end] >= state.blkIndent)) end++;
+  return end;
+}
+
+/** Whether the parse's net is past its budget. */
+const spent = (env) => env.net !== undefined && env.net.work > env.net.budget;
 
 /** Flat open/close tokens as nodes: { type, tok, children }. Iterative. */
 export function tree(tokens) {
@@ -184,14 +209,20 @@ export function flattenText(nodes) {
     if (node.type === 'deep_source') {
       const { content, meta: env } = node.tok;
       stack.push(SEP);
-      if (env.work <= IMPORT_WORK.budget) {
-        const nodes = tree(parser.parse(content, env));
-        for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
-      } else {
-        // Past the budget: the rest as plain text, and the import says so.
-        env.spent ??= { work: env.work };
+      if (node.tok.cut || spent(env)) {
+        // The net: the rest as plain text, and the import says so: from which line, and how many.
+        const { net } = env;
+        net.fired = true;
+        net.line = Math.min(net.line ?? Infinity, node.tok.map[0] + 1);
+        net.lines = (net.lines ?? 0) + content.replace(/\n+$/, '').split('\n').length;
         if (!skipping) out += `${out === '' || /\s$/.test(out) ? '' : ' '}${content.replace(/\s+/g, ' ').trim()}`;
+        continue;
       }
+      const base = env.base;
+      env.base = node.tok.map[0]; // the deep source's lines count from its first line
+      const nodes = tree(parser.parse(content, env));
+      env.base = base;
+      for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
       continue;
     }
     if (BLOCK.has(node.type)) stack.push(SEP);
