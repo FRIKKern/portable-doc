@@ -27,24 +27,26 @@ export function Outputs({ view, onRenderClick }) {
   const sources = { html: view.html, markdown: view.markdown, text: view.text };
   return (
     <section className="pg-pane" aria-label="Output">
-      <div className="pg-tabs" role="tablist" aria-label="Output" onKeyDown={onKeyDown}>
-        {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            ref={(node) => {
-              buttons.current[id] = node;
-            }}
-            type="button"
-            role="tab"
-            id={`pg-tab-${id}`}
-            aria-controls={`pg-panel-${id}`}
-            aria-selected={tab === id}
-            tabIndex={tab === id ? 0 : -1}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="pg-tabbar">
+        <div className="pg-tabs" role="tablist" aria-label="Output" onKeyDown={onKeyDown}>
+          {TABS.map(([id, label]) => (
+            <button
+              key={id}
+              ref={(node) => {
+                buttons.current[id] = node;
+              }}
+              type="button"
+              role="tab"
+              id={`pg-tab-${id}`}
+              aria-controls={`pg-panel-${id}`}
+              aria-selected={tab === id}
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         {view.stale ? <span className="pg-stale">last good render</span> : null}
       </div>
       <div className="pg-render" role="tabpanel" id="pg-panel-render" aria-labelledby="pg-tab-render" hidden={tab !== 'render'} onClick={onRenderClick}>

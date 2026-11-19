@@ -119,3 +119,65 @@ test('a git checkout fails and says why when origin/main does not resolve, with 
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /cannot check the timeline block: HEAD and origin\/main share no commit/);
 });
+
+test('the timeline refusal also says to fetch origin/main, in case main has moved since the last fetch', () => {
+  const root = repo();
+  setReadme(root, readme('2 changes'));
+  assert.match(checkDocs(root).out, /so put it back as it is there, or `git fetch origin main` if main has moved/);
+});
+
+test('check-docs refuses a README without exactly one timeline start marker and one end marker, start first, so no decoy block is the one compared', () => {
+  const block = '<!-- timeline:start -->\n- x\n<!-- timeline:end -->\n';
+  const cases = {
+    none: '# synthetic\n',
+    'two blocks': `# synthetic\n\n${block}\n${block}`,
+    'a lone end': `# synthetic\n\n${block}<!-- timeline:end -->\n`,
+    'end before start': '# synthetic\n\n<!-- timeline:end -->\n- x\n<!-- timeline:start -->\n',
+  };
+  for (const [name, text] of Object.entries(cases)) {
+    const root = repo();
+    setReadme(root, text);
+    commit(root, 'same README on main and the branch');
+    git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    const r = checkDocs(root);
+    assert.equal(r.code, 1, `${name}: ${r.out}`);
+    assert.match(r.out, /README\.md: needs exactly one <!-- timeline:start --> and one <!-- timeline:end -->, start first/, name);
+  }
+});
+
+test('--timeline-from-job is an error anywhere but a checkout whose HEAD is origin/main: on a branch, ahead of origin/main, or outside a checkout', () => {
+  const root = repo();
+  setReadme(root, readme('1 change', 'Branch work.'));
+  commit(root, 'branch work');
+  let r = checkDocs(root, '--timeline-from-job');
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /README\.md: --timeline-from-job is only for the housekeeping job, on main at origin\/main; here HEAD is [0-9a-f]{12} and origin\/main is [0-9a-f]{12}/);
+  git(root, 'checkout', '-q', 'main');
+  setReadme(root, readme('1 change', 'Ahead of origin.'));
+  commit(root, 'not pushed');
+  assert.equal(checkDocs(root, '--timeline-from-job').code, 1, 'main ahead of origin/main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  assert.equal(checkDocs(root, '--timeline-from-job').code, 0, 'main at origin/main');
+  const plain = path.join(tmp, `plain-${n++}`);
+  fs.mkdirSync(path.join(plain, 'scripts'), { recursive: true });
+  fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(plain, 'scripts', 'check-docs.mjs'));
+  setReadme(plain, readme('1 change'));
+  r = checkDocs(plain, '--timeline-from-job');
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /--timeline-from-job is only for the housekeeping job, on main at origin\/main; here this is not a git checkout of this repo/);
+});
+
+test('outside a checkout, the walk for Markdown skips what the root .gitignore names, as git would: a bare name at any depth, a leading / at the root', () => {
+  const root = path.join(tmp, `plain-${n++}`);
+  fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
+  fs.copyFileSync(path.join(scripts, 'check-docs.mjs'), path.join(root, 'scripts', 'check-docs.mjs'));
+  setReadme(root, readme('1 change'));
+  fs.writeFileSync(path.join(root, '.gitignore'), '# build output\nbuild/\n/coverage\nnotes.md\n*.log\n');
+  for (const f of ['build/x.md', 'docs/build/z.md', 'coverage/y.md', 'notes.md', 'docs/notes.md', 'docs/coverage/kept.md', 'docs/kept.md']) {
+    fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
+    fs.writeFileSync(path.join(root, f), '[gone](gone.md)\n');
+  }
+  const r = checkDocs(root);
+  assert.equal(r.code, 1, r.out);
+  assert.deepEqual(r.out.split('\n').filter((l) => l.includes('broken link')), ['docs/coverage/kept.md: broken link gone.md', 'docs/kept.md: broken link gone.md']);
+});
