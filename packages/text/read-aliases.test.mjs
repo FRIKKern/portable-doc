@@ -35,13 +35,16 @@ test('one table in the pack file\'s shape: 27 rows, sorted, each old name and it
   assert.ok(Object.isFrozen(TABLE.aliases['code.code']));
 });
 
-test('the rule: absent is undefined, null, a blank string or an empty array; the first name not absent wins, current name first; all absent reads the current name as stored', () => {
+test('the rule: absent is undefined, null, a blank string or an empty array; the first name not absent wins, current name first; all absent reads the first name present as stored', () => {
   for (const value of [undefined, null, '', '  \n\t', []]) assert.equal(absent(value), true, JSON.stringify(value));
   for (const value of ['a', 0, false, {}, [''], t(' ')]) assert.equal(absent(value), false, JSON.stringify(value));
   assert.deepEqual(readField({ type: 'code', value: 'v', code: 'c' }, 'value'), { name: 'value', value: 'v' });
   assert.deepEqual(readField({ type: 'code', value: ' ', content: [], text: 't' }, 'value'), { name: 'text', value: 't' });
   assert.deepEqual(readField({ type: 'code', value: '  ', code: '' }, 'value'), { name: 'value', value: '  ' });
-  assert.deepEqual(readField({ type: 'code', code: '  ' }, 'value'), { name: 'value', value: undefined });
+  // Every name absent: the first name present (not undefined or null) is read as stored, so whitespace written under an old name is kept.
+  assert.deepEqual(readField({ type: 'code', code: '  ' }, 'value'), { name: 'code', value: '  ' });
+  assert.deepEqual(readField({ type: 'code', value: null, code: '' }, 'value'), { name: 'code', value: '' });
+  assert.deepEqual(readField({ type: 'code', value: null }, 'value'), { name: 'value', value: null });
   // A field with no old names, and a block type with none, read the field alone.
   assert.deepEqual(readField({ type: 'code', footer: ' ' }, 'footer'), { name: 'footer', value: ' ' });
   assert.deepEqual(readField({ type: 'divider', text: 't' }, 'content'), { name: 'content', value: undefined });
@@ -49,7 +52,7 @@ test('the rule: absent is undefined, null, a blank string or an empty array; the
   assert.deepEqual(readField({ type: 'heading', content: 'Hi', text: 'Yo' }, 'content'), { name: 'text', value: 'Yo' });
   assert.deepEqual(readField({ type: 'heading', content: 'Hi' }, 'content'), { name: 'content', value: 'Hi' });
   assert.deepEqual(readField({ type: 'code', value: true, code: 'x' }, 'value'), { name: 'code', value: 'x' });
-  assert.deepEqual(readField({ type: 'code', code: true }, 'value'), { name: 'value', value: undefined });
+  assert.deepEqual(readField({ type: 'code', code: true }, 'value'), { name: 'code', value: true });
   // A field the schema types as text reads a string or a finite number; NaN and Infinity are absent.
   assert.deepEqual(readField({ type: 'blockquote', cite: 7, attribution: 'Ann' }, 'cite'), { name: 'cite', value: 7 });
   assert.deepEqual(readField({ type: 'heading', text: 7 }, 'content'), { name: 'text', value: 7 });

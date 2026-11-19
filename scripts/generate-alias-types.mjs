@@ -1,7 +1,9 @@
 // Writes packages/text/alias-types.js: for every name of every field in the alias table
 // (packages/text/alias-table.js), the JSON types spec/blocks.schema.json gives it on its block
 // type or item. A name the schema does not declare takes the types of its field's other names;
-// a field none of whose names the schema types takes the types in UNTYPED. The readers import the small module instead of the schema, so React does not bundle the schema.
+// a field none of whose names the schema types takes the types in UNTYPED. It also writes, for
+// every field, whether whitespace is content there (the table's whitespace column). The readers
+// import the small module instead of the schema, so React does not bundle the schema.
 // `npm run alias-types` writes it; read-aliases.test.mjs regenerates it and compares.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +13,16 @@ import { TABLE } from '../packages/text/alias-table.js';
 
 export const OUT = fileURLToPath(new URL('../packages/text/alias-types.js', import.meta.url));
 
-const at = (ref) => ref.split('/').slice(1).reduce((node, key) => node?.[key], schema);
+// The schema the helpers below read: the spec's, or a planted copy (setSchema) in a test.
+let SCHEMA = schema;
+/** Reads `s` in place of spec/blocks.schema.json until called again; returns the one it replaced. */
+export function setSchema(s) {
+  const was = SCHEMA;
+  SCHEMA = s;
+  return was;
+}
+
+const at = (ref) => ref.split('/').slice(1).reduce((node, key) => node?.[key], SCHEMA);
 
 // The JSON types a schema node allows, or null when it does not constrain the type.
 function schemaTypes(node, seen = new Set()) {
@@ -48,12 +59,20 @@ const objectOf = (node) => {
 /**
  * The properties the schema gives an owner: a block type ("code"), a block type and a path to
  * a list of items in it ("steps.steps[]", "task-detail.task.criteria[]"), or an inline node
- * ("inline:text"). An owner the schema gives no properties has none ({}).
+ * ("inline:text"): those definitions.inline gives every inline node, and those of its option
+ * whose `type` is that node's. An owner the schema gives no properties has none ({}).
  */
 export function ownerProperties(owner) {
-  if (owner.startsWith('inline:')) return {};
+  if (owner.startsWith('inline:')) {
+    const nodeType = owner.slice('inline:'.length);
+    const inline = resolve(SCHEMA.definitions?.inline);
+    const own = (inline?.anyOf ?? inline?.oneOf ?? []).map(resolve).find((o) => o?.properties?.type?.const === nodeType || o?.properties?.type?.enum?.includes(nodeType));
+    const { type: _, ...shared } = inline?.properties ?? {};
+    const { type: __, ...mine } = own?.properties ?? {};
+    return { ...shared, ...mine };
+  }
   const [type, ...path] = owner.split('.');
-  let node = objectOf(schema.definitions?.blocks?.[type]);
+  let node = objectOf(SCHEMA.definitions?.blocks?.[type]);
   for (const step of path) {
     const list = step.endsWith('[]');
     node = objectOf(node?.properties?.[list ? step.slice(0, -2) : step]);
@@ -70,16 +89,16 @@ export function ownerProperties(owner) {
  * shrinks. "owner.name" → { types (null: any), why }.
  */
 export const UNTYPED = Object.freeze({
-  'code-tabs.tabs[].code': { types: null, why: 'main read a tab\'s value ?? code: any value a tab held' },
-  'code-tabs.tabs[].value': { types: null, why: 'main read a tab\'s value ?? code: any value a tab held' },
-  'inline:code.children': { types: null, why: 'main read an inline code node\'s children as flat text, whatever they held' },
+  'code-tabs.tabs[].code': { types: ['string'], why: 'main showed str(value ?? code): only text shows' },
+  'code-tabs.tabs[].value': { types: ['string'], why: 'main showed str(value ?? code): only text shows' },
+  'inline:code.children': { types: ['string', 'array', 'object'], why: 'main showed the flat text of children: a string, a number or an array of inlines' },
   'inline:code.value': { types: ['string'], why: 'main read str(value) || the children: text, else the children' },
   'inline:text.text': { types: ['string'], why: 'main read str(value) || str(text): text' },
   'inline:text.value': { types: ['string'], why: 'main read str(value) || str(text): text' },
   'notes.items[].content': { types: ['array'], why: 'main read a note\'s non-empty content array, else its text' },
   'notes.items[].text': { types: ['string'], why: 'main read a note\'s non-empty content array, else str(text)' },
-  'table.columns[].label': { types: null, why: 'main read a column\'s text ?? label: any value, an inline array as its words' },
-  'table.columns[].text': { types: null, why: 'main read a column\'s text ?? label: any value, an inline array as its words' },
+  'table.columns[].label': { types: ['string', 'array', 'object'], why: 'main showed a column\'s text ?? label as text or as the words of an array' },
+  'table.columns[].text': { types: ['string', 'array', 'object'], why: 'main showed a column\'s text ?? label as text or as the words of an array' },
   'task-detail.criteria[].criterion': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
   'task-detail.criteria[].text': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
   'task-detail.task.criteria[].criterion': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
@@ -113,9 +132,26 @@ export function aliasTypes() {
   return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
 
+/** The UNTYPED names the schema types: each must leave the map. Empty while the map is right. */
+export function untypedButTyped() {
+  return Object.keys(UNTYPED).filter((key) => Object.hasOwn(ownerProperties(key.slice(0, key.lastIndexOf('.'))), key.slice(key.lastIndexOf('.') + 1)));
+}
+
+/** "owner.field" → whether whitespace is content in that field (the table's whitespace column). */
+export function aliasWhitespace() {
+  const out = {};
+  for (const [from, { to, whitespace }] of Object.entries(TABLE.aliases)) {
+    if (whitespace !== 'content' && whitespace !== 'blank') throw new Error(`${from}: whitespace is 'content' or 'blank'`);
+    if (Object.hasOwn(out, to) && out[to] !== (whitespace === 'content')) throw new Error(`${from}: the rows of ${to} disagree on whitespace`);
+    out[to] = whitespace === 'content';
+  }
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
+}
+
 /** The text of packages/text/alias-types.js. */
 export function aliasTypesSource() {
   const rows = Object.entries(aliasTypes()).map(([key, types]) => `  '${key}': ${types === null ? 'null' : JSON.stringify(types).replace(/"/g, "'")},`);
+  const spaces = Object.entries(aliasWhitespace()).map(([key, content]) => `  '${key}': ${content},`);
   return `// SPDX-License-Identifier: Apache-2.0
 // Generated by scripts/generate-alias-types.mjs from spec/blocks.schema.json and alias-table.js:
 // do not edit. \`npm run alias-types\` writes it again.
@@ -124,6 +160,12 @@ export function aliasTypesSource() {
 
 export const ALIAS_TYPES = {
 ${rows.join('\n')}
+};
+
+// "owner.field" → whether whitespace is content in that field (the table's whitespace column):
+// true, a string of only whitespace is a value; false, it is blank, like an empty string.
+export const ALIAS_WHITESPACE = {
+${spaces.join('\n')}
 };
 `;
 }

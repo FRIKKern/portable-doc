@@ -6,21 +6,23 @@
 // An owner is what a key names before its field: a block type ("code"), a block type and the
 // path to a list of items in it ("steps.steps[]"), or an inline node type ("inline:text").
 //
-// The rule, for one field of one block or item:
-// - A name is absent when its value is undefined, null, a string that is empty or only
-//   whitespace, or an empty array; or when its value is not of a type spec/blocks.schema.json
-//   gives that name on that block type or item (alias-types.js, made from the schema). A name
-//   the schema does not declare takes the types the schema gives the other names of its field;
-//   where it types none of them (an item or an inline node it leaves open), each takes the types
-//   main's reader accepted (UNTYPED in scripts/generate-alias-types.mjs; null: any). A name
-//   typed as text reads a string or a finite number.
-// - The first name that is not absent wins: the field's own (current) name first, then its
-//   old names in TABLE's order.
-// - When every name is absent, the current name's stored value is read as it is: nothing is
-//   invented, so a code block of only spaces stays one.
+// The rule, word for word as in the table's _comment:
+//   For each field, read the names in order: the current name first, then the old names in
+//   table order. Skip a name that is missing, null, or holds the wrong type. Where the row's
+//   whitespace-is-content column says yes, take the first remaining name whose value holds any
+//   character, whitespace included. Where it says no, take the first remaining name whose value
+//   holds a non-whitespace character, else the first that holds any character. If none does,
+//   take the first remaining name as stored. If no name remains, the field is empty. A string
+//   holds the characters it has; a non-empty array or a number holds a non-whitespace character.
+// "Missing" is no own property or undefined. A name's type is what spec/blocks.schema.json gives it
+// on its owner (alias-types.js, made from the schema); a name the schema does not declare takes the
+// types of its field's other names, or, where it types none of them, those main's reader accepted
+// (UNTYPED in scripts/generate-alias-types.mjs; null: any). Text is a string or a finite number.
+// The whitespace column is ALIAS_WHITESPACE in alias-types.js, made from the table: yes for the
+// inline rows (a text leaf, an inline code node), where whitespace is running text; no for labels.
 
 import { TABLE } from './alias-table.js';
-import { ALIAS_TYPES } from './alias-types.js';
+import { ALIAS_TYPES, ALIAS_WHITESPACE } from './alias-types.js';
 
 // util.js's isMap, written here: util.js does work at load, and React bundles this module alone.
 const isMap = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -42,6 +44,7 @@ function built() {
   if (NAMES) return;
   deepFreeze(TABLE);
   deepFreeze(ALIAS_TYPES);
+  deepFreeze(ALIAS_WHITESPACE);
   const names = new Map();
   const current = new Map();
   for (const [from, { to }] of Object.entries(TABLE.aliases)) {
@@ -77,16 +80,22 @@ export function typesOf(owner, name) {
   return ALIAS_TYPES[`${owner}.${name}`] ?? null;
 }
 
-/** Whether a name holding `value` counts as absent by blankness alone: undefined, null, a blank string, or an empty array. */
-export function absent(value) {
-  return value === undefined || value === null || (typeof value === 'string' && value.trim() === '') || (Array.isArray(value) && value.length === 0);
+/** Whether `value` is of a type the schema gives name `name` of `owner`. */
+function ofTypes(owner, name, value) {
+  const types = typesOf(owner, name);
+  return types === null || types.some((t) => OF_TYPE[t]?.(value));
 }
 
-/** Whether name `name` of `owner` holding `value` counts as absent: blank, or not of a type the schema gives it. */
-export function absentAs(owner, name, value) {
-  if (absent(value)) return true;
-  const types = typesOf(owner, name);
-  return types !== null && !types.some((t) => OF_TYPE[t]?.(value));
+/** Whether whitespace is content in field `field` of `owner` (the table's whitespace column); a field with no old names: false. */
+export function whitespaceIsContent(owner, field) {
+  built();
+  return ALIAS_WHITESPACE[`${owner}.${field}`] === true;
+}
+
+/** What a value holds: 2, a non-whitespace character; 1, only whitespace; 0, no character. A string holds the characters it has; a non-empty array or a number holds a non-whitespace character. */
+export function holds(value) {
+  if (typeof value === 'string') return value === '' ? 0 : /\S/.test(value) ? 2 : 1;
+  return (Array.isArray(value) && value.length > 0) || typeof value === 'number' || (isMap(value) && Object.keys(value).length > 0) ? 2 : 0;
 }
 
 /** The names `field` of `owner` is read under: its own first, then its old names. */
@@ -123,8 +132,17 @@ export const fieldOf = (block, field) => readField(block, field).value;
  */
 export function readItem(item, owner, field) {
   if (!isMap(item)) return { name: field, value: undefined };
-  for (const name of namesOf(owner, field)) if (!absentAs(owner, name, item[name])) return { name, value: item[name] };
-  return { name: field, value: item[field] };
+  const spaceIsContent = whitespaceIsContent(owner, field);
+  let first, spaced;
+  for (const name of namesOf(owner, field)) {
+    const value = Object.hasOwn(item, name) ? item[name] : undefined;
+    if (value === undefined || value === null || !ofTypes(owner, name, value)) continue;
+    const held = holds(value);
+    if (held === 2 || (held === 1 && spaceIsContent)) return { name, value };
+    if (held === 1) spaced ??= { name, value };
+    first ??= { name, value };
+  }
+  return spaced ?? first ?? { name: field, value: undefined };
 }
 
 /** readItem's value alone. */

@@ -62,12 +62,19 @@ its target instead.
   `text` for `content`, a code block's `code`, `content` or `text` for `value`,
   a table's `header` for `head`, and the other rows of the one alias table in
   `alias-table.js` (the pack's `spec/read-aliases.json`, until it is synced
-  here). Every renderer reads such a field through that table: a name is absent
-  when it is undefined, null, blank or an empty array, or holds a value of a
-  type the schema does not give it (a field the schema types as text reads a
-  string or a finite number); the first name not absent wins, the current
-  name first, then the old names in the table's order; when all are absent,
-  the current name is read as stored. A table's `cols` gives only each
+  here). Every renderer reads such a field through that table, by one rule:
+  For each field, read the names in order: the current name first, then the
+  old names in table order. Skip a name that is missing, null, or holds the
+  wrong type. Where the row's whitespace-is-content column says yes, take
+  the first remaining name whose value holds any character, whitespace
+  included. Where it says no, take the first remaining name whose value
+  holds a non-whitespace character, else the first that holds any character.
+  If none does, take the first remaining name as stored. If no name remains,
+  the field is empty. A string holds the characters it has; a non-empty
+  array or a number holds a non-whitespace character. A name's type is the
+  one the schema gives it; a field the schema types as text reads a string
+  or a finite number. The whitespace column is yes for a text leaf and an
+  inline code node, where whitespace is running text, and no for labels. A table's `cols` gives only each
   column's type, beside or in place of `columns`.
 - **Links.** Only the schemes the renderer allows become links: `http`,
   `https`, `mailto`, `tel`, a root-relative `/path` (not `//host`), and `#`,
