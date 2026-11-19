@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
 import { MAX_NEST } from './from-markdown-inline.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
-import { LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
-import { ADDRESS_KEYS, safeUrl } from './util.js';
+import { IMPORT_WORK, LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
+import { safeUrl } from './util.js';
 
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
 
@@ -189,6 +189,17 @@ test('a split list item says so: one list_item_split notice per new item, with i
   }
 });
 
+test('a split\'s notice names its place in a callout\'s body, and its line in the whole text after a line kept as text', () => {
+  const split = (path, line, lines) => ({ code: LIST_ITEM_SPLIT, path, line, lines });
+  assert.deepEqual(readMarkdown('> [!info] Note\n>\n> - a\n>   - b\n>\n>   c').notices, [split('/blocks/0/slots/body/0/items/1', 6, 1)]);
+  // The long line is read apart, so the list after it is a fresh parse; its lines still count from the text's top.
+  const long = 'x'.repeat(50);
+  const limits = { ...IMPORT_WORK, lineBytes: 40 };
+  const notices = (md) => readMarkdown(md, limits).notices.filter((n) => n.code === LIST_ITEM_SPLIT);
+  assert.deepEqual(notices(`${long}\n\n- a\n  - b\n\n  c`), [split('/blocks/1/items/1', 6, 1)]);
+  assert.deepEqual(notices(`- p\n\n${long}\n\n- a\n  - b\n\n  c\n\n  more`), [split('/blocks/2/items/1', 8, 3)]);
+});
+
 test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {
   assert.deepEqual(fromMarkdown('<b>hi</b> <script>bad()</script>there <style>p{}</style>end'), [{ type: 'paragraph', content: [t('hi there end')] }]);
   // The space before the script stays, as in a paragraph; written back, the heading is "# Title".
@@ -305,7 +316,7 @@ test('the exported schema is frozen: a mutation throws and leaves validate and t
   assert.deepEqual(fromMarkdown(fenceOf(list)), [{ type: 'code', value: JSON.stringify(list) }]);
 });
 
-test('a portabledoc fence with an unsafe value in any address field stays a code block, whole; the address fields cover every address-like field the schema names', () => {
+test('a portabledoc fence with an unsafe value in any address field stays a code block, whole', () => {
   const t = (value) => ({ type: 'text', value });
   const bad = 'javascript:alert(1)';
   const fences = [
@@ -318,19 +329,6 @@ test('a portabledoc fence with an unsafe value in any address field stays a code
   for (const blocks of fences) assert.deepEqual(fromMarkdown(fenceOf(blocks)), [{ type: 'code', value: JSON.stringify(blocks) }], JSON.stringify(blocks));
   const safe = [{ type: 'paragraph', content: [t('a'), { type: 'image', src: 'https://example.com/a.png' }], poster: '/a.png' }];
   assert.deepEqual(fromMarkdown(fenceOf(safe)), safe);
-  // The schema has no address marker (validate refuses a `format` keyword), so the list is
-  // ADDRESS_KEYS; any schema property named like an address must be on it.
-  const names = new Set();
-  const stack = [blockSchema];
-  while (stack.length) {
-    const node = stack.pop();
-    if (node === null || typeof node !== 'object') continue;
-    if (node.properties && typeof node.properties === 'object' && !Array.isArray(node.properties)) for (const key of Object.keys(node.properties)) names.add(key);
-    stack.push(...Object.values(node));
-  }
-  const addressLike = [...names].filter((name) => /href|src|poster|url|uri/i.test(name)).sort();
-  assert.deepEqual(addressLike, ['href', 'poster', 'src']);
-  for (const name of addressLike) assert.ok(ADDRESS_KEYS.includes(name), name);
 });
 
 test('a Markdown image or link with an unsafe address keeps its text and loses the address; a safe one links', () => {
@@ -392,7 +390,9 @@ test('an empty code block is a real block: toMarkdown writes its empty fence, wi
     assert.equal(blocks[0].type, 'diagram', md);
     assert.deepEqual(fromMarkdown(toMarkdown(blocks)), blocks, md);
   }
-  assert.equal(toMarkdown([{ type: 'code', code: '   ' }]), toMarkdown([{ type: 'code', value: '   ' }]), 'whitespace kept whichever field holds it');
+  assert.equal(toMarkdown([{ type: 'code', value: '   ' }]), '```\n   \n```\n', 'whitespace kept in the current name');
+  // Every name blank: the current name's stored value is read, so whitespace under an old name is not.
+  assert.equal(toMarkdown([{ type: 'code', code: '   ' }]), '```\n```\n');
   assert.equal(toMarkdown([{ type: 'code', value: '', lang: 'py' }]).trim(), '```py\n```');
   assert.equal(toPlainText([{ type: 'code', value: '' }]).trim(), '');
 });

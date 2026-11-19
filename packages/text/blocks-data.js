@@ -4,6 +4,7 @@
 
 import { asList, fmtNum, isMap, maxOf, paras, str, tableOut } from './util.js';
 import { titled } from './blocks-layout.js';
+import { fieldOf, readField } from './read-aliases.js';
 
 const get = (m, k) => (isMap(m) ? m[k] : undefined);
 
@@ -262,9 +263,12 @@ const int = (v, min) => {
 };
 
 function table(b, ctx) {
-  let head = asList(b.head ?? b.header);
+  let head = asList(fieldOf(b, 'head'));
   let rows = asList(b.rows);
-  const columns = asList(b.columns);
+  // A real `columns` builds the head; `cols`, read in its place, gives only each column's type.
+  const read = readField(b, 'columns');
+  const columns = read.name === 'columns' ? asList(read.value) : [];
+  const cols = asList(b.cols);
   const maps = columns.length && columns.every(isMap);
   const keyed = maps && !columns.every((c) => typeof c.text === 'string') && columns.every((c) => typeof c.key === 'string' && c.key !== '');
   const rowTotal = Array.isArray(b.rows) ? b.rows.length : b.rows == null ? 0 : 1;
@@ -276,7 +280,9 @@ function table(b, ctx) {
     head = rowCells(rows[0]);
     rows = rows.slice(1);
   }
-  const types = asList(b.cols).map((c) => (isMap(c) ? String(c.type ?? '') : ''));
+  // columns-from-cols: a column's own type, else the type cols gives at its place.
+  const typeAt = (c) => (isMap(c) && c.type != null ? String(c.type) : null);
+  const types = Array.from({ length: Math.max(columns.length, cols.length) }, (_, j) => typeAt(columns[j]) ?? typeAt(cols[j]) ?? '');
   const cell = (c) => ctx.inline(cellContent(c), { oneLine: true });
   const typed = (c, type) => {
     const n = typeof c === 'number' ? c : typeof c === 'string' && c.trim() !== '' && Number.isFinite(Number(c)) ? Number(c) : null;

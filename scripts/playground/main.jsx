@@ -9,19 +9,17 @@ import { fieldBlocks } from '../../packages/react/src/field-blocks.ts';
 import { embedBlocks } from '../../packages/react/src/embed.ts';
 import { explainWith, readCodes } from '../../packages/mcp/explain-words.js';
 import codesMarkdown from '../../packages/validate/CODES.md';
-import { blocksOf, parseJson, tidyJson } from './parse.js';
-import { decodeShare, encodeShare, MAX_DOC_BYTES } from './share.js';
+import { blocksOf, parseJson } from './parse.js';
+import { encodeShare } from './share.js';
 import { copyText, shiftLines } from './editing.js';
-import { docFromMarkdown, outputsOf } from './outputs.js';
+import { outputsOf } from './outputs.js';
+import { opening, useEditorDoc } from './ways-in.js';
 import { MarkdownBox, Outputs } from './panes.jsx';
 
 const explain = explainWith(readCodes(codesMarkdown));
 const renderOptions = { blocks: { ...fieldBlocks, ...embedBlocks() } };
-const DEBOUNCE_MS = 200;
 const LONG_LINK = 8000;
 const pretty = (value) => JSON.stringify(value, null, 2);
-// A doc from a link is laid out like the examples, unless that would pass the link cap.
-const tidy = (text) => tidyJson(text, MAX_DOC_BYTES);
 // Engine messages for a blown stack differ by browser and mean nothing to a reader.
 const plainWords = (error) => (error instanceof RangeError && /call stack|recursion/i.test(error.message) ? 'the doc nests too deep to draw' : error.message);
 
@@ -77,61 +75,39 @@ function Checks({ view }) {
 }
 
 function App({ examples, initial }) {
-  const [text, setText] = useState(initial.text);
-  const [settled, setSettled] = useState(initial.text);
+  const { text, settled, status, take, say: setStatus } = useEditorDoc(initial);
   const [view, setView] = useState(() => viewOf(initial.text, { html: '', markdown: '', text: '', blocks: 0, checks: [] }));
   const [exampleId, setExampleId] = useState(initial.exampleId);
-  const [status, setStatus] = useState(initial.status ?? '');
   const [link, setLink] = useState('');
   const [pasting, setPasting] = useState(false);
   const tabOut = useRef(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(text), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
   useEffect(() => setView((previous) => viewOf(settled, previous)), [settled]);
+
   useEffect(() => {
-    const onHash = () => decodeShare(location.hash).then((shared) => {
-      if (shared === null) return;
-      const next = tidy(shared);
-      setText(next);
-      setSettled(next);
-      setExampleId('');
-      setStatus('Opened the doc from the link.');
-    }, (error) => setStatus(`${error.message}. The editor still holds your doc.`));
+    const onHash = () => take('link', location.hash).then((entered) => entered && setExampleId(''));
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const load = (next) => {
-    setText(next);
-    setSettled(next);
-  };
   const pick = (event) => {
     const example = examples.find((candidate) => candidate.id === event.target.value);
-    if (!example) return;
+    if (!example || !take('example', example)) return;
     setExampleId(example.id);
-    load(pretty(example.doc));
     setLink('');
-    setStatus(`Loaded ${example.label}.`);
     dropHash();
   };
   const fromMarkdown = (markdown) => {
-    const made = docFromMarkdown(markdown);
-    if (made.error) return setStatus(`${made.error}. The editor still holds your doc.`);
-    load(made.text);
+    if (!take('markdown', markdown)) return;
     setExampleId('');
     setLink('');
     setPasting(false);
-    setStatus(`Made a doc of ${made.blocks} ${made.blocks === 1 ? 'block' : 'blocks'} from the Markdown.`);
     dropHash();
   };
   const format = () => {
     const parsed = parseJson(text);
     if (!parsed.ok) return setStatus(`Cannot format: line ${parsed.error.line}, column ${parsed.error.column}: ${parsed.error.message}.`);
-    load(pretty(parsed.value));
-    setStatus('Formatted.');
+    if (take('typed', pretty(parsed.value))) setStatus('Formatted.');
   };
   const share = async () => {
     const parsed = parseJson(text);
@@ -215,8 +191,7 @@ function App({ examples, initial }) {
               aria-label="PortableDoc JSON"
               aria-describedby="pg-keys"
               onChange={(event) => {
-                setText(event.target.value);
-                setExampleId('');
+                if (take('typed', event.target.value, false)) setExampleId('');
               }}
               onKeyDown={onKeyDown}
             />
@@ -245,15 +220,8 @@ function followTheme() {
 async function start() {
   followTheme();
   const examples = JSON.parse(document.getElementById('pd-examples').textContent);
-  const first = examples[0];
-  let initial = { text: pretty(first.doc), exampleId: first.id };
-  try {
-    const shared = await decodeShare(location.hash);
-    if (shared !== null) initial = { text: tidy(shared), exampleId: '', status: 'Opened the doc from the link.' };
-  } catch (error) {
-    initial.status = `${error.message}. Showing ${first.label} instead.`;
-    dropHash(); // a reload then opens the page, not the same broken link
-  }
+  const initial = await opening(examples, location.hash);
+  if (initial.broken) dropHash(); // a reload then opens the page, not the same broken link
   createRoot(document.getElementById('playground')).render(<App examples={examples} initial={initial} />);
 }
 

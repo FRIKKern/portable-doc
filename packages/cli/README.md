@@ -76,6 +76,12 @@ $ cat notes.json | npx portable-doc render --format text
   with `@portable-doc/react/paper-surface.css`. It loads the built package, so
   run `npm run react:build` once first; without it, or without `react`
   installed, the command exits 2 and says what to run.
+- `--round-trip` writes Markdown that `import` reads back as the same blocks,
+  for each block import accepts (the types are listed in the text package's
+  README). Each block it cannot keep that way is written readably and listed on
+  stderr with its path, type, id and reason, and the exit is then 3. stderr ends
+  with `kept N of M blocks`, or `kept every block, M of M blocks`. No flag
+  hides it.
 - `-o -` writes to stdout. `-o` never replaces the input file, by any path,
   symlink or hard link to it.
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.
@@ -228,7 +234,9 @@ git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
 
 Each command is one file in [`commands/`](commands/), named after it: its
 place in the list, its usage, its `--help` text, its section of this README
-and its code. `portable-doc --help`, the dispatch and the sections above are
+and its code. A command file is a plain `name.js`, the name in lowercase
+letters, digits and dashes; any other file there, such as an editor's lock or
+backup, is skipped. `portable-doc --help`, the dispatch and the sections above are
 built from that folder, so there is no other list to update. After adding or
 changing a command, run `node packages/cli/readme.mjs` to rewrite the
 sections; `npm run check` fails while they differ.

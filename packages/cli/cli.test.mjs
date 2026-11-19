@@ -7,6 +7,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 import { main } from './index.js';
+import { BUILT_IN, COMMAND_FILE, loadCommands } from './registry.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -20,10 +21,10 @@ function runWithout(blocked, args, input) {
   return spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(register)}`, bin, ...args], { cwd: root, input, encoding: 'utf8' });
 }
 // The same entry point in-process, for the cases that need no real process.
-async function call(args, input = '') {
+async function call(args, input = '', entry = main) {
   const r = { stdout: '', stderr: '' };
   const io = { stdout: (t) => void (r.stdout += t), stderr: (t) => void (r.stderr += t), readStdin: async () => input, stdinIsTTY: false };
-  r.status = await main(args, io);
+  r.status = await entry(args, io);
   return r;
 }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'portable-doc-cli-'));
@@ -79,6 +80,18 @@ test('render markdown and text match @portable-doc/text, and an invalid doc is r
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /unknown_block_type at \/blocks\/1\/type/);
   assert.equal((await call(['render', '--format', 'text', '--force'], JSON.stringify(broken.doc))).stdout, toPlainText(broken.doc));
+});
+
+test('render --round-trip writes what import reads back; a block it cannot keep is listed on stderr, with the count kept, and exits 3', async () => {
+  const kept = [{ type: 'heading', level: 1, text: 'Hi', id: 'h' }];
+  const ok = await call(['render', '--round-trip'], JSON.stringify(kept));
+  assert.deepEqual([ok.status, ok.stdout, ok.stderr], [0, toMarkdown(kept, { mode: 'round-trip' }).markdown, '<stdin>: kept every block, 1 of 1 block\n']);
+  const doc = [...kept, { type: 'image', src: 'https://example.com/a.png', alt: 'A', id: 'cover' }];
+  const lossy = await call(['render', '--round-trip', '-o', path.join(tmp, 'round-trip.md')], JSON.stringify(doc));
+  assert.equal(lossy.status, 3);
+  assert.equal(fs.readFileSync(path.join(tmp, 'round-trip.md'), 'utf8'), toMarkdown(doc, { mode: 'round-trip' }).markdown);
+  assert.equal(lossy.stderr, '<stdin>: /blocks/1 image id cover: not kept, written readably: a portabledoc fence may not hold its type, or a block in it\n<stdin>: kept 1 of 2 blocks\n');
+  assert.equal((await call(['render', '--round-trip', '--format', 'text'], JSON.stringify(doc))).status, 2);
 });
 
 test('render html is the React renderer\'s markup, field and embed blocks included', () => {
@@ -169,13 +182,77 @@ test('README.md\'s command sections are what node packages/cli/readme.mjs writes
   assert.equal(fs.readFileSync(path.join(here, 'README.md'), 'utf8'), await readme(), 'stale: run node packages/cli/readme.mjs');
 });
 
-test('a command file dropped into commands/ is in the usage, the dispatch and the README, with no other file changed', async () => {
-  // A copy of the package, so the real commands/ holds only real commands. Its
-  // node_modules link resolves the workspace packages as the real one does.
-  const copy = path.join(tmp, 'pkg', 'cli');
+// A copy of the package, so the real commands/ holds only real commands. Its
+// node_modules link resolves the workspace packages as the real one does.
+function packageCopy(name) {
+  const copy = path.join(tmp, name, 'cli');
   fs.cpSync(here, copy, { recursive: true });
-  fs.symlinkSync(path.join(root, 'node_modules'), path.join(tmp, 'pkg', 'node_modules'), 'dir');
-  fs.mkdirSync(path.join(copy, 'commands'), { recursive: true });
+  fs.symlinkSync(path.join(root, 'node_modules'), path.join(tmp, name, 'node_modules'), 'dir');
+  return copy;
+}
+
+test('stray files in commands/ (an editor lock or backup, a swap file, .DS_Store) are skipped, and every command still runs', async () => {
+  const copy = packageCopy('stray');
+  const commands = path.join(copy, 'commands');
+  fs.symlinkSync('ada@host.4242:1700000000', path.join(commands, '.#x.js')); // an Emacs lock: a link to nowhere
+  fs.writeFileSync(path.join(commands, 'x.js~'), 'an editor backup, not a command');
+  fs.writeFileSync(path.join(commands, 'x.js.swp'), Buffer.from([0x62, 0x30, 0x56, 0x49, 0x4d, 0]));
+  fs.writeFileSync(path.join(commands, '.DS_Store'), Buffer.from([0, 0, 0, 1, 0x42, 0x75, 0x64, 0x31]));
+  const { main: copyMain } = await import(pathToFileURL(path.join(copy, 'index.js')).href);
+  const names = [...(await loadCommands()).keys()];
+  assert.ok(names.length >= 6, names.join(' '));
+  for (const args of [['--version'], ['--help'], ...names.map((name) => [name, '--help'])]) {
+    const [got, want] = [await call(args, '', copyMain), await call(args)];
+    assert.deepEqual(got, want, args.join(' '));
+    assert.equal(got.status, 0, `${args.join(' ')}: ${got.stderr}`);
+  }
+});
+
+test('a file named like a command fails loudly and names itself when it has the wrong shape or does not load', async () => {
+  const folder = (file, source) => {
+    const dir = fs.mkdtempSync(path.join(tmp, 'commands-'));
+    fs.writeFileSync(path.join(dir, file), source);
+    return pathToFileURL(`${dir}${path.sep}`);
+  };
+  await assert.rejects(loadCommands(folder('half.js', 'export const order = 1;\n')), /^Error: commands\/half\.js exports no synopsis \(string\)$/);
+  await assert.rejects(loadCommands(folder('broken.js', 'export const = ;\n')), /^Error: commands\/broken\.js does not load: /);
+  // A module may throw anything, not only an Error.
+  await assert.rejects(loadCommands(folder('text.js', "throw 'no config';\n")), /^Error: commands\/text\.js does not load: no config$/);
+  await assert.rejects(loadCommands(folder('nothing.js', 'throw null;\n')), /^Error: commands\/nothing\.js does not load: null$/);
+  // An order that is not a finite number would break the sort; typeof NaN is 'number'.
+  const shaped = (order) => `export const order = ${order};
+export const synopsis = '';
+export const summary = 's';
+export const usage = 'u';
+export const readme = '## T';
+export const run = () => 0;
+`;
+  await assert.rejects(loadCommands(folder('odd.js', shaped('NaN'))), /^Error: commands\/odd\.js exports order NaN, not a finite number$/);
+  await assert.rejects(loadCommands(folder('odd.js', shaped('Infinity'))), /^Error: commands\/odd\.js exports order Infinity, not a finite number$/);
+  assert.deepEqual([...(await loadCommands(folder('fine.js', shaped(-2.5)))).keys()], ['fine']);
+  // A word the bin answers before any lookup can never be a command: refused, or not a command file at all.
+  await assert.rejects(loadCommands(folder('help.js', shaped(1))), /^Error: commands\/help\.js: help is the built-in usage, not a command name$/);
+  for (const word of [...BUILT_IN.usage, ...BUILT_IN.version]) {
+    const loading = loadCommands(folder(`${word}.js`, shaped(1)));
+    const commands = await loading.catch((error) => assert.match(error.message, new RegExp(`^commands/${word}\\.js: ${word} is the built-in `)));
+    assert.ok(!commands?.has(word), `${word}.js never becomes a command`);
+  }
+});
+
+test('every tracked file in commands/ is named as a command, so none is skipped from the usage by its name', () => {
+  // The loader skips a file not named like a command, as it must for an editor's lock or backup
+  // file. So a command checked in as hello.mjs would be missing with no error; this catches it.
+  // Only tracked files: stray untracked ones in a working copy are the loader's to skip.
+  const listed = spawnSync('git', ['ls-files', '-z', '--', 'commands'], { cwd: here, encoding: 'utf8' });
+  assert.equal(listed.status, 0, listed.stderr);
+  // The path below commands/, so a file in a subfolder, which the loader never reads, fails too.
+  const files = listed.stdout.split('\0').filter(Boolean).map((file) => file.slice('commands/'.length));
+  assert.ok(files.length > 0, 'git lists the command files');
+  assert.deepEqual(files.filter((file) => !COMMAND_FILE.test(file)), [], 'tracked files in commands/ the loader would skip');
+});
+
+test('a command file dropped into commands/ is in the usage, the dispatch and the README, with no other file changed', async () => {
+  const copy = packageCopy('pkg');
   fs.writeFileSync(path.join(copy, 'commands', 'hello.js'), `export const order = 99;
 export const synopsis = '[name]';
 export const summary = 'say hello (a test fixture)';

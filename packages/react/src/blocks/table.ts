@@ -22,6 +22,7 @@
 import type { RenderCtx } from './chrome'
 import { type Block, asList, escapeHtml, isMap, renderCell } from '../inline'
 import { sparkSvg } from './dataviz'
+import { fieldOf, readField } from '../../../text/read-aliases.js'
 import { coverSpans, spanAttr, type Span } from './spans'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
@@ -61,17 +62,22 @@ function tableSpans(spans: unknown, nRows: number, nCols: number): Span[] {
 const rowCount = (rows: unknown) => (Array.isArray(rows) ? rows.length : rows == null ? 0 : 1)
 
 const table: Emit = (b, ctx) => {
-  if (rowCount(b.rows) * recordKeyCount(asList(b.columns)) > TABLE_CELL_CAP)
+  // A real `columns` builds the head; `cols`, read in its place, gives only each column's
+  // type (columns-from-cols: a column's own type, else the type cols gives at its place).
+  const read = readField(b, 'columns')
+  const columns = read.name === 'columns' ? asList(read.value) : []
+  if (rowCount(b.rows) * recordKeyCount(columns) > TABLE_CELL_CAP)
     return `<span>${escapeHtml(ctx.t('Table too large to show'))}</span>`
-  const types = asList(b.cols).map((c) => (isMap(c) ? String(c.type ?? '') : ''))
+  const cols = asList(b.cols)
+  const typeAt = (c: unknown) => (isMap(c) && c.type != null ? String(c.type) : undefined)
+  const types = Array.from({ length: Math.max(columns.length, cols.length) }, (_, j) => typeAt(columns[j]) ?? typeAt(cols[j]) ?? '')
   const cls = (base: string, i: number) => {
     const m = COL_MOD[types[i] ?? '']
     return m ? `${base} ${base}${m}` : base
   }
-  // head is opt-in (`head`, or the legacy `header` alias).
-  let head = asList(b.head ?? b.header)
+  // head is opt-in (`head`, or its old name `header`, through the alias table).
+  let head = asList(fieldOf(b, 'head'))
   let body = asList(b.rows)
-  const columns = asList(b.columns)
   if (!head.length && columns.length && columns.every(isMap)) {
     const maps = columns as Array<Record<string, unknown>>
     const keys = maps.map((column) => (typeof column.key === 'string' ? column.key : ''))

@@ -47,6 +47,22 @@ test('any committed symbolic link fails the check, named by its path', () => {
   assert.match(r.out, /"p" is a committed symbolic link/);
 });
 
+test('a link still in HEAD is refused after `git rm --cached` takes it out of the index, and a conflicted link is named once', () => {
+  const root = repo({ links: { 'docs/link': '../outside' }, files: { 'docs/a.md': 'a' } });
+  git(root, ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', 'with a link']);
+  git(root, ['rm', '-q', '--cached', 'docs/link']);
+  assert.equal(git(root, ['ls-files', 'docs/link']), '', 'the index holds no link');
+  let r = check(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /"docs\/link" is a committed symbolic link/);
+  // The same link in the index's three conflict stages, and in HEAD: one line.
+  const blob = git(root, ['hash-object', '-w', '--stdin'], 'x');
+  git(root, ['update-index', '--index-info'], [1, 2, 3].map((stage) => `120000 ${blob} ${stage}\tdocs/link\n`).join(''));
+  r = check(root);
+  assert.equal(r.code, 1, r.out);
+  assert.equal(r.out.match(/is a committed symbolic link/g).length, 1, r.out);
+});
+
 test('a name with a tab, a newline and a space reads whole', () => {
   const name = 'odd/a\tb\nc d';
   let r = check(repo({ links: { [name]: 'x' } }));
@@ -65,7 +81,7 @@ test('this repo\'s own index passes, and importing the module runs nothing', asy
   assert.deepEqual(committedLinks(path.join(scripts, '..')), []);
 });
 
-test('a copy inside another repo\'s checkout fails, as it cannot read this repo\'s index', () => {
+test('a copy inside another repo\'s checkout fails, as it cannot read this repo\'s index or HEAD', () => {
   const inner = path.join(repo(), 'inner');
   fs.mkdirSync(path.join(inner, 'scripts'), { recursive: true });
   fs.copyFileSync(path.join(scripts, 'check-links.mjs'), path.join(inner, 'scripts', 'check-links.mjs'));

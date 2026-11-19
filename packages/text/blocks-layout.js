@@ -4,6 +4,7 @@
 
 import { asList, codeSpan, fence, isMap, maxOf, nonblank, paras, str, tableOut } from './util.js';
 import { body, linked } from './blocks-prose.js';
+import { fieldOf } from './read-aliases.js';
 
 /** A bold title line (plain: the title alone). */
 export const titled = (ctx, raw) => {
@@ -20,7 +21,7 @@ const columns = (b, ctx) => ctx.blocks(asList(b.columns).flatMap((col) => asList
 function terminal(b, ctx) {
   const live = b.live === true || b.live === 'true' || b.live === 'live';
   const title = [ctx.text(str(b.title), { oneLine: true }), live ? '(live)' : ''].filter(Boolean).join(' ');
-  return paras(title && ctx.bold(title), ctx.blocks(asList(b.children ?? b.blocks)), ctx.text(str(b.footer)));
+  return paras(title && ctx.bold(title), ctx.blocks(asList(fieldOf(b, 'children'))), ctx.text(str(b.footer)));
 }
 
 const tabs = (b, ctx) =>
@@ -51,7 +52,7 @@ function apiEndpoint(b, ctx) {
   return paras(ctx.md ? codeSpan(head) : head, table);
 }
 
-const expandable = (b, ctx) => paras(titled(ctx, str(b.summary)), ctx.blocks(asList(b.blocks ?? b.children)));
+const expandable = (b, ctx) => paras(titled(ctx, str(b.summary)), ctx.blocks(asList(fieldOf(b, 'blocks'))));
 
 function footnote(b, ctx) {
   const items = asList(b.notes)

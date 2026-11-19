@@ -7,6 +7,7 @@
 
 import fs from 'node:fs';
 import { blockSchema, validate } from '@portable-doc/validate';
+import { aliasTable, convertOf, currentName, namesOf, readField } from './read-aliases.js';
 
 const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
 
@@ -14,31 +15,21 @@ const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
 // promise and JSON checks, React's element checks, and the prototype's own.
 export const NOT_FIELDS = new Set(['then', 'toJSON', 'constructor', '$$typeof', 'length', '__proto__', 'valueOf', 'toString', 'nodeType', 'props', 'key', 'ref', '_owner', '_store']);
 
-// A second name for a key, mapped to the key's own name. Goldens and writers use the
-// canonical name; readers accept the alias for old docs until the format drops it. Shared by
-// the golden-reads test (which pins it) and the round-trip test (which never writes an alias).
-export const READ_ALIASES = Object.freeze({
-  'blockquote.attribution': 'blockquote.cite',
-  'callout.text': 'callout.content',
-  'code.code': 'code.value',
-  'code.content': 'code.value',
-  'code.language': 'code.lang',
-  'code.text': 'code.value',
-  'eyebrow.text': 'eyebrow.content',
-  'heading.text': 'heading.content',
-  'paragraph.text': 'paragraph.content',
-  'pullquote.text': 'pullquote.content',
-  'table.cols': 'table.columns',
-  'table.header': 'table.head',
-  'terminal.blocks': 'terminal.children',
-});
+// A second name for a key, mapped to the key's own name, as the alias table in
+// alias-table.js has it. Goldens and writers use the current name; readers accept the old one
+// for old docs until the format drops it.
+export const READ_ALIASES = Object.freeze(Object.fromEntries(Object.entries(aliasTable().aliases).map(([from, { to }]) => [from, to])));
+
+const asArray = (v) => (Array.isArray(v) ? v : []);
 
 /** Every golden block whose type is in `types`, as { file, block }, in file order. */
 export function goldenBlocks(types) {
   const out = [];
   for (const file of fs.readdirSync(GOLDENS).filter((f) => f.endsWith('.golden.json')).sort()) {
     const { input } = JSON.parse(fs.readFileSync(new URL(file, GOLDENS), 'utf8'));
-    for (const block of Array.isArray(input) ? input : (input?.blocks ?? [input])) if (block && types.has(block.type)) out.push({ file, block });
+    // A golden's input is a blocks array, a doc { blocks }, or one block, which may hold its own `blocks`.
+    const blocks = Array.isArray(input) ? input : typeof input?.type === 'string' ? [input] : asArray(input?.blocks);
+    for (const block of blocks) if (block && types.has(block.type)) out.push({ file, block });
   }
   return out;
 }
@@ -192,19 +183,19 @@ export function changesRender(block, path, key, renders, nodes = DECLARED.get(ke
 }
 
 /**
- * The paths of the keys `block` leaves out that change a render when given a valid value.
- * A key that changes nothing alone is tried again with each boolean the schema declares
- * beside it flipped, since a key can matter only under a flag (a list's start, once ordered).
+ * For each object in `block`, once per pathName, the keys a doc could fill there that the
+ * object leaves out: the keys the schema declares at it (every key the schema declares
+ * anywhere, where it leaves the object open) and the keys the Proxy sees `renders` read
+ * there. As { path, declared, keys: [{ key, nodes }] }, `nodes` being the schema nodes to
+ * draw sample values from.
  */
-export function behaviourReads(block, renders) {
+export function candidates(block, renders) {
   const seen = new Map();
   for (const { path } of reads(block, renders)) {
     const at = JSON.stringify(path.slice(0, -1));
     seen.set(at, new Set([...(seen.get(at) ?? []), path.at(-1)]));
   }
-  const copy = structuredClone(block);
-  const before = outputs([copy], renders);
-  const found = [];
+  const out = [];
   const done = new Set();
   const stack = [[block, []]];
   while (stack.length) {
@@ -215,10 +206,26 @@ export function behaviourReads(block, renders) {
     if (Array.isArray(value) || done.has(name)) continue;
     done.add(name);
     const declared = declaredAt(block.type, path);
-    const nodesOf = (key) => declared?.get(key) ?? DECLARED.get(key) ?? ANY_TYPE;
-    const candidates = [...new Set([...(declared ?? DECLARED).keys(), ...(seen.get(JSON.stringify(path)) ?? [])])].filter((key) => key !== 'type' && !NOT_FIELDS.has(key) && !Object.hasOwn(value, key));
-    const quiet = candidates.filter((key) => {
-      if (!probe(copy, path, key, nodesOf(key), renders, before)) return true;
+    const keys = [...new Set([...(declared ?? DECLARED).keys(), ...(seen.get(JSON.stringify(path)) ?? [])])]
+      .filter((key) => key !== 'type' && !NOT_FIELDS.has(key) && !Object.hasOwn(value, key))
+      .map((key) => ({ key, nodes: declared?.get(key) ?? DECLARED.get(key) ?? ANY_TYPE }));
+    out.push({ path, declared, keys });
+  }
+  return out;
+}
+
+/**
+ * The paths of the keys `block` leaves out that change a render when given a valid value.
+ * A key that changes nothing alone is tried again with each boolean the schema declares
+ * beside it flipped, since a key can matter only under a flag (a list's start, once ordered).
+ */
+export function behaviourReads(block, renders) {
+  const copy = structuredClone(block);
+  const before = outputs([copy], renders);
+  const found = [];
+  for (const { path, declared, keys } of candidates(block, renders)) {
+    const quiet = keys.filter(({ key, nodes }) => {
+      if (!probe(copy, path, key, nodes, renders, before)) return true;
       found.push([...path, key]);
       return false;
     });
@@ -229,7 +236,7 @@ export function behaviourReads(block, renders) {
       const kept = at[flag];
       at[flag] = !kept;
       const flipped = outputs([copy], renders);
-      for (const key of quiet) if (key !== flag && !found.some((p) => p.at(-1) === key && p.length === path.length + 1) && probe(copy, path, key, nodesOf(key), renders, flipped)) found.push([...path, key]);
+      for (const { key, nodes } of quiet) if (key !== flag && !found.some((p) => p.at(-1) === key && p.length === path.length + 1) && probe(copy, path, key, nodes, renders, flipped)) found.push([...path, key]);
       if (had) at[flag] = kept;
       else delete at[flag];
     }
@@ -275,16 +282,33 @@ function runs(nodes, marks = [], out = []) {
   }, []);
 }
 const isInline = (v) => Array.isArray(v) && v.length > 0 && v.every((n) => n && INLINE.has(n.type));
+// The fields of each block type that have old names, from the alias table.
+const ALIASED = new Map();
+for (const { to } of Object.values(aliasTable().aliases)) {
+  const [type, field] = [to.slice(0, to.indexOf('.')), to.slice(to.indexOf('.') + 1)];
+  if (!ALIASED.has(type)) ALIASED.set(type, new Set());
+  ALIASED.get(type).add(field);
+}
+
 export function canon(v) {
   if (isInline(v)) return runs(v);
   if (Array.isArray(v)) return v.map(canon);
-  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'id').map(([k, x]) => canonField(v, k, x)));
-  return v;
+  if (!v || typeof v !== 'object') return v;
+  const type = typeof v.type === 'string' ? v.type : '';
+  const out = {};
+  for (const [k, x] of Object.entries(v)) {
+    // An aliased field and its old names are read below, the way the renderers read them.
+    if (k !== 'id' && !ALIASED.get(type)?.has(k) && !folded(type, k)) out[k] = canon(x);
+  }
+  for (const field of ALIASED.get(type) ?? []) {
+    if (!namesOf(type, field).some((name) => Object.hasOwn(v, name))) continue;
+    const { name, value } = readField(v, field);
+    if (value === undefined || !(name === field || folded(type, name))) continue;
+    out[field] = name !== field && convertOf(type, name) === 'inline-from-string' && typeof value === 'string' ? runs([{ type: 'text', value }]) : canon(value);
+  }
+  return out;
 }
 
-// A key under its canonical name (READ_ALIASES); a string an alias holds for inline `content` is one run.
-function canonField(block, key, value) {
-  const to = typeof block.type === 'string' ? READ_ALIASES[`${block.type}.${key}`]?.split('.')[1] : undefined;
-  if (!to || Object.hasOwn(block, to)) return [key, canon(value)];
-  return [to, to === 'content' && typeof value === 'string' ? runs([{ type: 'text', value }]) : canon(value)];
-}
+// An old name canon folds into its field. A table's `cols` is kept as it is: the renderers read
+// it for each column's type even beside a real `columns`, and never build a head from it.
+const folded = (type, key) => currentName(type, key) !== undefined && convertOf(type, key) !== 'columns-from-cols';

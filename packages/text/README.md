@@ -25,10 +25,18 @@ toMarkdown(doc);  // '## Release notes\n\nRead [the docs](https://example.com)\n
 toPlainText(doc); // 'Release notes\n\nRead the docs (https://example.com)\n'
 ```
 
-Both take the blocks array itself or `{ blocks: [...] }`. The one option,
-`embeds`, maps an `embed` block's `target` to the document shown in its place.
+Both take the blocks array itself or `{ blocks: [...] }`. The option
+`embeds` maps an `embed` block's `target` to the document shown in its place.
 An embed inside its own document, or past the first 100 in one render, shows
 its target instead.
+
+`toMarkdown` has two modes:
+
+- **Readable**, the default, writes Markdown for people and reads one way.
+- **Round trip**, `toMarkdown(doc, { mode: 'round-trip' })`, returns
+  `{ markdown, lost }`. Every block import accepts comes back the same, and the
+  rest are written readably and reported in `lost`. The types it keeps are
+  listed under [Round trip](#round-trip).
 
 ## The rules
 
@@ -50,6 +58,17 @@ its target instead.
   or a table delimiter row at the start of a line. A table cell's `|` is
   escaped, and so are `&` and backslash in a link URL. Plain text is never
   escaped.
+- **Old names.** A field may still be stored under an old name: a heading's
+  `text` for `content`, a code block's `code`, `content` or `text` for `value`,
+  a table's `header` for `head`, and the other rows of the one alias table in
+  `alias-table.js` (the pack's `spec/read-aliases.json`, until it is synced
+  here). Every renderer reads such a field through that table: a name is absent
+  when it is undefined, null, blank or an empty array, or holds a value of a
+  type the schema does not give it (a field the schema types as text reads a
+  string or a finite number); the first name not absent wins, the current
+  name first, then the old names in the table's order; when all are absent,
+  the current name is read as stored. A table's `cols` gives only each
+  column's type, beside or in place of `columns`.
 - **Links.** Only the schemes the renderer allows become links: `http`,
   `https`, `mailto`, `tel`, a root-relative `/path` (not `//host`), and `#`,
   `?`, `./`, `../`. Any other link (`javascript:`, `data:`, …) shows its text only.
@@ -81,14 +100,16 @@ marks become `strong`, `em`, `strikethrough`, `code` and `link` nodes, in a
 heading's `content` as in a paragraph's, a
 bullet list with `[ ]` or `[x]` items is a checklist, an ordered list keeps
 its `start`, a fence keeps the first word of its info string as `lang`, `>`
-is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:
+is a quote and `> [!tone]` a callout, `---` a divider. A callout's first
+paragraph is its `content`, and every block after it in the quote is read
+into its `slots.body`. Two fences do more:
 
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
-  every block in it is a heading, paragraph, list, code, table, callout,
-  divider, diagram, chart, stat, stats, heatmap, pullquote or eyebrow: at the
-  top, and nested wherever the schema puts blocks (a list item's `children`,
-  a callout's `slots.body`, …). Otherwise the fence stays a code block.
+  every block in it is of a fence type (`FENCE_TYPES`, listed under
+  [Round trip](#round-trip)): at the top, and nested wherever the schema puts
+  blocks (a list item's `children`, a callout's `slots.body`, …). Otherwise the
+  fence stays a code block.
 
 It never throws. The result always passes `@portable-doc/validate`; if the
 parser or the walk ever fails, the whole input comes back as one code block.
@@ -114,6 +135,11 @@ Where it differs from Barkpark, on purpose:
   order; more text after a later nested list splits again. In an ordered list
   the new item takes the next number, and the numbers after it continue from
   there. Each split adds a `list_item_split` notice (`LIST_ITEM_SPLIT`).
+- A callout's blocks after its first paragraph are its `slots.body`, read as
+  blocks: lists, code, fences, callouts in callouts, to `MAX_NEST` (50)
+  callouts deep; a callout deeper keeps its body as text, as a list that deep
+  does. Barkpark's importer joins them into the callout's text. A plain `>` quote holds inline content only, so
+  its blocks stay one run of text in both.
 - What `toMarkdown` writes reads back: a quote's last paragraph `— Name` is
   its `cite`, and an emphasised paragraph right after a mermaid fence is the
   diagram's `caption`.
@@ -122,31 +148,101 @@ Where it differs from Barkpark, on purpose:
   however deep it is nested. Lists inside lists keep their shape to
   `MAX_NEST` (50) levels; a list nested deeper is kept as the text of the
   deepest item, its items and their blocks one space apart, as Barkpark does.
-  A quote keeps all its text, as one run, at any depth.
-- The import counts its work as what it re-scans: lines × nesting depth, plus
-  characters. Its budget is 16,000,000 (`IMPORT_WORK`), and an ordinary document
-  uses a small part of it: a 500 kB one of mixed blocks uses about a sixteenth.
-  Hostile input runs out of it: deep with many lines, or thousands of levels on
-  one line. Past the budget, the rest is kept as plain text, so Markdown syntax
-  and tags in it show as literal text. No word is lost, the import stays linear
-  in time with no deep stack, and `readMarkdown` returns an `import_work_spent`
-  notice with the path where the plain text starts.
-- `readMarkdown` returns `{ blocks, notices, work }`. The notices, in source
-  order:
-  - `{ code: 'import_work_spent', path, work }`: past the work budget, the
-    rest from `path` on is plain text.
-  - `{ code: 'list_item_split', path, line, lines }`: text after a nested list
-    became the new item at `path`; `line` is its first source line (from 1)
-    and `lines` how many lines it spans.
+  A plain quote keeps all its text, as one run, at any depth.
+- The import counts its work from the text, before it parses, so every
+  importer of the same text cuts it at the same line. Lines are those
+  markdown-it reads: `\n`, `\r\n` and a lone `\r` each end a line, and a NUL
+  counts as U+FFFD (its core rule `normalize`). Each line costs
+  (depth + 1) × (2 + its UTF-8 bytes). Its depth is its quote and list markers
+  plus one per 2 columns of indentation among them, a tab running to the next
+  stop of 4; a blank line keeps the depth before it, and a line right after a
+  non-blank line keeps at least that line's depth, as it may be lazy. The
+  tests check the count is never below what markdown-it does to read the same
+  lines: hostile shapes, seeded sweeps, and a seeded neighbour search
+  (`import-work-search.test.mjs`). The budget is 16,000,000 (`IMPORT_WORK`);
+  an ordinary 500 kB document uses at most a third of it
+  (`ordinary-work.test.mjs`, nine shapes).
+- Two rules keep text as plain text, every word, with Markdown syntax and tags
+  in it shown as literal text, and `readMarkdown` returns one notice per
+  rule, `{ code: 'import_work_spent', rule, path, line, lines }`: the path
+  of the first plain paragraph, the first line kept as text (from 1), and how
+  many:
+  - From the line where the work passes the budget, the rest of the text is
+    one top-level paragraph, whitespace collapsed. Containers open at that
+    line close there.
+  - A line longer than `IMPORT_WORK.lineBytes` (set from the shared pack) is
+    one top-level paragraph, as typed. The text before it and the text after
+    it are each read as a document, so a quote, list or table open at that
+    line ends there; the line makes no setext heading and defines no link
+    reference. It is charged its bytes once. Inside an open code fence, the
+    code after it starts with the fence's opening line again, so it stays
+    code; in a list item that opening line makes a new item.
+- Behind the text's count, markdown-it's own count runs as a net. It counts
+  each container as markdown-it enters it; should that pass the budget where
+  the text's count said it would not, that container and the rest, at any
+  level, the top one included, are kept as plain text, every word, with one
+  notice of rule `net`. The shared cases never fire it; one
+  in the wild means the text's count is wrong, and is a bug to report.
+- Each list item split off at text after its nested list adds a notice
+  `{ code: 'list_item_split', path, line, lines }`: the new item's path, its
+  text's first source line (from 1) and how many lines it spans. These come in
+  source order, after any `budget` or `line` notice and before a `net` one.
 
-**Round trip.** For heading, paragraph, list, code, table, blockquote, divider
-and diagram, `fromMarkdown(toMarkdown(doc))` gives back an equivalent doc:
-the same blocks once ids are dropped and inline content is compared as text
-runs with their marks, written as nodes or as marks. Callout, chart, stat,
-stats, heatmap, pullquote and eyebrow travel only inside a portabledoc fence.
-Every other type comes back as whatever its Markdown reads as: an image as a
-link, a callout or pullquote as a quote, an equation as a `math` code block.
+## Round trip
 
-`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs`
+In readable mode, heading, paragraph, list, code, table,
+blockquote, divider and diagram come back from `fromMarkdown(toMarkdown(doc))`
+as an equivalent doc: the same blocks once ids are dropped, and inline content
+compared as text runs with their marks. Every other type comes back as whatever
+its Markdown reads as: an image as a link, a callout or pullquote as a quote, an
+equation as a `math` code block.
+
+Round-trip mode decides per block by trying it: it writes the block, reads it
+back and compares, never by a list of types.
+
+- A block is written in its own Markdown when that reads back as exactly the
+  block, ids and all.
+- Otherwise it goes in a portabledoc fence, when import splices that fence
+  (`checkFence`, the importer's own rule).
+- Otherwise it is written readably and listed in `lost` as
+  `{ path, id, type, reason }`.
+- A block whose neighbour changes how it reads, such as an emphasised
+  paragraph right after a diagram, is fenced.
+- A fence reusing an earlier fence's id is lost, as import would keep it back.
+- A callout is written as a `> [!tone]` quote with each block of its body
+  inside, decided the same way, so one that cannot be kept is listed under its
+  own path (`/blocks/0/slots/body/1`); a callout that line cannot hold (a
+  title, a tone import does not know) is fenced whole.
+
+<!-- round-trip-types:start -->
+<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/scripts/write-readme.mjs`; `npm run check` fails when this part is stale. -->
+The round trip is lossless only for blocks of these types, and only where import accepts the block:
+
+- in their own Markdown or a portabledoc fence: `callout`, `chart`, `code`, `diagram`, `divider`, `eyebrow`, `heading`, `heatmap`, `list`, `paragraph`, `pullquote`, `stat`, `stats`, `table`;
+- in their own Markdown only, for the forms that read back as themselves: `blockquote`.
+<!-- round-trip-types:end -->
+
+Round-trip mode reads the Markdown back once per block and once for the whole.
+On the block goldens, round-trip costs tenths of a millisecond of CPU a block
+once warm, and about a millisecond on a cold first call; readable mode costs
+microseconds a block, so round-trip costs tens of times as much.
+`node packages/text/bench-round-trip.mjs` measures it on your machine.
+
+The round-trip test checks this on every block type the schema names, with
+forms read from the schema and the goldens, not a hand list:
+
+- each golden, with canonical key names and as the pack writes it;
+- each value of a boolean or enum and of a small range (every heading level),
+  and a sample for the other keys;
+- the type empty, and with each array key empty;
+- every string as whitespace.
+
+Each form is tried bare, as a list item's child and inside a callout. A form of
+a type a fence may not hold must be reported lost, unless its own Markdown
+reads back as it, so a type is kept only once import accepts it.
+
+`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs packages/text/round-trip-nesting.test.mjs packages/text/import-work.test.mjs packages/text/import-work-search.test.mjs packages/text/ordinary-work.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
-text, and the import rules, round trip and hostile input.
+text, and the import rules, round trip and hostile input. The import-work
+test sweeps 300 seeded documents; `IMPORT_WORK_SWEEP=20000` runs a longer
+sweep (about two minutes).
