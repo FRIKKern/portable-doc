@@ -13,7 +13,7 @@ import { validate } from '@portable-doc/validate';
 import { CASES as HEADINGS } from '../../fixtures/headings/cases.mjs';
 import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
 import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
-import { CUT, CUT_GENERATED, SPLIT_ITEMS, WORK, WORK_GENERATED, splitItems } from '../../fixtures/text-work/cases.mjs';
+import { CUT, CUT_GENERATED, MARKED_PARAGRAPH, SPLIT_ITEMS, WORK, WORK_GENERATED, markedParagraph, splitItems } from '../../fixtures/text-work/cases.mjs';
 import { KEEP_BYTES, sharedCases } from '../../scripts/write-shared-cases.mjs';
 import { fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 
@@ -102,9 +102,9 @@ const WRITERS = [
 const big = (blocks) => JSON.stringify(blocks).length > KEEP_BYTES;
 
 const fromText = (texts) => Object.entries(texts).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]);
-// The 120,000-item case is read here at 1,000 items, its shape word-checked through every writer;
-// the import tests read it at 20,000 on a small stack.
-const generated = { ...WORK_GENERATED, [SPLIT_ITEMS]: splitItems(1_000) };
+// The 120,000-item and the 70,000-mark cases are read here at 1,000, their shapes word-checked
+// through every writer; the import tests read them at 20,000 on a small stack.
+const generated = { ...WORK_GENERATED, [SPLIT_ITEMS]: splitItems(1_000), [MARKED_PARAGRAPH]: markedParagraph(1_000) };
 
 /** The shared cases of each folder under fixtures/, as [name, blocks, words it must keep?]. */
 const SOURCES = {
