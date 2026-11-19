@@ -100,7 +100,7 @@ Where it differs from Barkpark, on purpose:
   and may nest no deeper than `MAX_VALUE_DEPTH` from `@portable-doc/validate`
   (1000 JSON levels, counted in the doc), or it stays a code block.
 - A heading, paragraph, list item or quote that import leaves with no text
-  (`# ![](javascript:x)`, a script, a blank code span) is dropped, never kept
+  (only an unsafe image, a script or a blank code span) is dropped, never kept
   empty. "No text" is `toMarkdown`'s measure: it would write nothing for it. A
   list whose items all drop goes too; an item with a nested list stays. Table
   cells stay as they are.
