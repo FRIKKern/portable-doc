@@ -119,6 +119,7 @@ function App({ examples, initial }) {
   };
   const fromMarkdown = (markdown) => {
     const made = docFromMarkdown(markdown);
+    if (made.error) return setStatus(`${made.error}. The editor still holds your doc.`);
     load(made.text);
     setExampleId('');
     setLink('');
