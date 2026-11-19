@@ -97,7 +97,7 @@ function list(node, depth = 0) {
 
 // ── quotes and callouts ─────────────────────────────────────────────────
 
-const quoteContent = (children) => merge(children.flatMap((c, i) => [...(i ? [text(' ')] : []), ...textOf(c)]));
+const joined = (parts) => merge(parts.flatMap((p, i) => [...(i ? [text(' ')] : []), ...p]));
 
 // `[!type]` (or `[!type]+`, `[!type]-`) at the head of a quote: { tone, rest }, else null.
 function calloutMarker(content) {
@@ -111,13 +111,15 @@ function calloutMarker(content) {
 
 function quote(node) {
   const children = node.children;
-  const marker = calloutMarker(quoteContent(children));
+  // Each child's text once: deep source in it is parsed again each time it is read.
+  const parts = children.map(textOf);
+  const content = joined(parts);
+  const marker = calloutMarker(content);
   if (marker) return [{ type: 'callout', tone: marker.tone, content: marker.rest }];
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
-  if (cite) return [{ type: 'blockquote', content: quoteContent(children.slice(0, -1)), cite: cite[1] }];
-  const content = quoteContent(children);
+  if (cite) return [{ type: 'blockquote', content: joined(parts.slice(0, -1)), cite: cite[1] }];
   return blank(content) ? [] : [{ type: 'blockquote', content }];
 }
 

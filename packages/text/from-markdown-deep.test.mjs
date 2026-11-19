@@ -95,6 +95,16 @@ test('the work budget stops lines nested deep at a stated count, keeps every wor
   assert.deepEqual(readMarkdown(words(60).map((w, i) => `${'  '.repeat(i)}- ${w}`).join('\n')).notices, []);
 });
 
+test('a quote is charged its own lines, not the rest of the source, and lazy lines under a quote past the parse levels are charged once per level', () => {
+  const rest = 'x '.repeat(5_000);
+  // The quote's line, its two characters and its line end; the 10 kB paragraph after it is the top level's.
+  assert.equal(readMarkdown(`> a\n# h\n\n${rest}`).work - readMarkdown(`a\n# h\n\n${rest}`).work, 5);
+  // 150 quotes deep, past the levels one parse builds: each lazy line `lxxx` is 151 tokenize calls,
+  // each charged the line and its 5 characters with the line end.
+  const lazy = (n) => `${'>'.repeat(150)}l0${'\nlxxx'.repeat(n)}`;
+  assert.equal((readMarkdown(lazy(200)).work - readMarkdown(lazy(100)).work) / 100, 151 * 6);
+});
+
 test('an ordinary 500 kB document of mixed blocks uses at most an eighth of the work budget', () => {
   const section = (n) => [
     `## Section ${n}`, '',

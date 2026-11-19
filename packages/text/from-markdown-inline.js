@@ -50,7 +50,8 @@ parser.block.tokenize = (state, startLine, endLine) => {
     tokenize(state, startLine, endLine);
     // The lines this container took, and their characters: a list item or quote is given
     // the outer end and stops early.
-    const end = state.line < state.lineMax ? state.bMarks[state.line] : state.src.length;
+    // bMarks keeps a last entry at the source's end; lineMax is no guide, as a quote shrinks it to its own end.
+    const end = state.bMarks[state.line] ?? state.src.length;
     env.work += Math.max(0, state.line - startLine) + Math.max(0, end - state.bMarks[startLine]);
     return;
   }
