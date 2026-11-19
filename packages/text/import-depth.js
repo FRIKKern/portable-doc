@@ -254,8 +254,9 @@ export function depthReader() {
 
   // Close the items `keep` turns down, and every item inside one of them.
   const close = (keep) => {
-    const gone = new Set(items.filter((it) => !keep(it)));
-    if (gone.size) items = items.filter((it) => !gone.has(it) && !it.up.some((u) => gone.has(u)));
+    const gone = new Set();
+    for (const it of items) if (!keep(it) || gone.has(it.up)) gone.add(it); // parents come first
+    if (gone.size) items = items.filter((it) => !gone.has(it));
   };
 
   const next = (line) => {
@@ -306,7 +307,8 @@ export function depthReader() {
       const kind = doubt || (loose && items.length > 0) || !sure || html !== null || (ref && !afterBlank) || straddle ? 'doubt' : place(p.col - p.base - innerHi);
       if (kind === 'doubt') doubt = true;
       else if (kind === 'fence') {
-        close((it) => contained.includes(it)); // a fence never continues a paragraph: the others close here
+        const inFence = new Set(contained);
+        close((it) => inFence.has(it)); // a fence never continues a paragraph: the others close here
         exact = true;
         code = { chain, needQ: p.quotes, innerHi, ...f, D };
       }
@@ -320,13 +322,13 @@ export function depthReader() {
       }
       if (text.startsWith('[')) ref = true;
     }
-    // An item opened while the items are exact is inside those the line is in, and its own
-    // markers before it: it closes with any of them.
-    const up = exact ? [...contained] : [];
+    // An item opened while the items are exact is inside the innermost the line is in, or its
+    // own marker before it (`up`): it closes with it.
+    let up = exact ? (contained.at(-1) ?? null) : null;
     for (const c of own) {
-      const it = { q: c.q, mark: c.mark, lo: c.lo, hi: c.hi, up: [...up] };
+      const it = { q: c.q, mark: c.mark, lo: c.lo, hi: c.hi, up };
       items.push(it);
-      if (exact) up.push(it);
+      if (exact) up = it;
     }
     loose = !exact && items.length > 0;
     before = D;

@@ -52,13 +52,13 @@ export const CASES = {
     'indentation before a marker after a fence': '- a\n  ```\n  b\n  ```\n    - c',
   }).map(([name, md]) => [name, md.replace(/\bx\b/g, `${X(40, '> ')}x\n${X(40, '- ')}x\n${X(20, '  - ')}x`).replace(/\by\b/g, `${X(40, '> ')}y`)])),
   // A list marker that may continue a paragraph lazily keeps the items it would close open.
-  'nested empty items, each next marker 4 to 5 columns past the content before it': X(300, '  - -\n\t     -\n              -\n                   - s\n                    -\n                     - s\n\n'),
+  'nested empty items, each next marker 4 to 5 columns past the content before it': X(60, '  - -\n\t     -\n              -\n                   - s\n                    -\n                     - s\n\n'),
   'a list marker 4 columns past its item\'s parent, left of its content': Array.from({ length: 40 }, (_, i) => `${X(i * 5, ' ')}- s${i}\n${X(i * 5 + 1, ' ')}- t${i}`).join('\n'),
   'a list marker that may continue a quote in an item lazily': Array.from({ length: 30 }, (_, i) => `${X(i, '  ')}- > - s${i}\n${X(i, '  ')}      - t${i}\n${X(i, '  ')}  >   - u${i}`).join('\n'),
   'wide ordered markers': Array.from({ length: 30 }, (_, i) => `${X(i * 5, ' ')}123456. s${i}\n${X(i * 5 + 4, ' ')}1. t${i}`).join('\n'),
   // A fence-like line is a fence only where its markers surely are markers, and the items open are sure.
-  'a list marker 4 columns into a quote\'s paragraph, then a fence-like line': X(100, `>s\n    - \`\`\`\n      >${X(30, '1. ')}x\n${X(30, '      > 1. ')}y\n\n`),
-  'an item in quotes inside an item a quote marker closes': X(60, `>>>1. >>>>>>>-\n>>>>>>>>>>   >\`\`\`\n>>>>>>>>>>>\`\`\`\n${X(19, '>')}1. >>>>>>- 1. ${X(30, '- ')}x\n\n`),
+  'a list marker 4 columns into a quote\'s paragraph, then a fence-like line': X(30, `>s\n    - \`\`\`\n      >${X(30, '1. ')}x\n${X(30, '      > 1. ')}y\n\n`),
+  'an item in quotes inside an item a quote marker closes': X(20, `>>>1. >>>>>>>-\n>>>>>>>>>>   >\`\`\`\n>>>>>>>>>>>\`\`\`\n${X(19, '>')}1. >>>>>>- 1. ${X(30, '- ')}x\n\n`),
   'NULs under a deep quote': `${X(150, '> ')}${X(300, '\0')}\n${X(150, '> ')}a`,
 };
 

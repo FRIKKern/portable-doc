@@ -121,6 +121,20 @@ test('the net: where the text\'s count was wrong and markdown-it\'s own count pa
   assert.deepEqual(netNotices(readMarkdown(md, limits)), []);
 });
 
+test('the net fires at the top level too: a count planted short of a flat text\'s own work keeps every word, as plain text', () => {
+  const md = Array.from({ length: 40 }, (_, i) => `w${i} **x${i}** [y${i}](https://example.com/${i})`).join('\n\n');
+  const plan = planText(md, NO_LIMIT);
+  // Flat text: markdown-it's work is all at the top level, with no container below it to skip.
+  const read = readPlan({ ...plan, work: 1 }, { ...IMPORT_WORK, budget: parsedWork(md) - 1 });
+  assert.deepEqual(read.notices, [{ code: 'import_work_spent', rule: 'net', path: '/blocks/0', line: 1, lines: 79 }]);
+  assert.deepEqual(read.blocks, [p(md.replace(/\s+/g, ' '))]);
+  // A list's own top level passes the budget, not its items: it is cut before any item is read.
+  const list = Array.from({ length: 40 }, (_, i) => `- a${i}\n  - b${i}`).join('\n');
+  const listRead = readPlan(planText(list, NO_LIMIT), { ...IMPORT_WORK, budget: 100 });
+  assert.deepEqual(listRead.notices, [{ code: 'import_work_spent', rule: 'net', path: '/blocks/0', line: 1, lines: 80 }]);
+  assert.deepEqual(listRead.blocks, [p(list.replace(/\s+/g, ' '))]);
+});
+
 test('a line past the line bound is one plain top-level paragraph, as typed, between the text before it and the text after it, each read as a document', () => {
   const read = (md) => readMarkdown(md, LINE);
   assert.deepEqual(read(X(40)), { blocks: [p(X(40))], notices: [], work: 42 }, 'at the bound, an ordinary line');

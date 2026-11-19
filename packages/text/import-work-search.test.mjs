@@ -8,8 +8,8 @@ import { planText } from './import-work.js';
 // to markdown-it's, one small edit at a time, always on to the neighbour with the lowest
 // count / markdown-it, and the count must never fall below it. IMPORT_WORK_STEPS=2000 runs
 // a longer one by hand.
-const STEPS = Number(process.env.IMPORT_WORK_STEPS) || 40;
-const SEEDS = 4;
+const STEPS = Number(process.env.IMPORT_WORK_STEPS) || 200;
+const SEEDS = 6;
 const NEIGHBOURS = 12;
 const NO_LIMIT = { budget: Infinity, lineBytes: null };
 
