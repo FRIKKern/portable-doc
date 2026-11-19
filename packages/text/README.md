@@ -50,6 +50,15 @@ its target instead.
   or a table delimiter row at the start of a line. A table cell's `|` is
   escaped, and so are `&` and backslash in a link URL. Plain text is never
   escaped.
+- **Old names.** A field may still be stored under an old name: a heading's
+  `text` for `content`, a code block's `code`, `content` or `text` for `value`,
+  a table's `header` for `head`, and the other rows of the one alias table in
+  `read-aliases.js` (the pack's `spec/read-aliases.json`, until it is synced
+  here). Every renderer reads such a field through that table: a name is absent
+  when it is undefined, null, blank or an empty array; the first name not
+  absent wins, the current name first, then the old names in the table's
+  order; when all are absent, the current name is read as stored. A table's
+  `cols` gives only each column's type, beside or in place of `columns`.
 - **Links.** Only the schemes the renderer allows become links: `http`,
   `https`, `mailto`, `tel`, a root-relative `/path` (not `//host`), and `#`,
   `?`, `./`, `../`. Any other link (`javascript:`, `data:`, …) shows its text only.
