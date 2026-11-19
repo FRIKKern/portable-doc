@@ -42,7 +42,8 @@ const ROWS = {
 };
 
 // Forms that should round-trip and do not today, each with what goes wrong. Only shrinks:
-// a form that round-trips now must leave it.
+// a form that round-trips now must leave it. Its length, and the count of rows marked `not`,
+// are pinned, so growing either is an edit a reviewer sees.
 const FAILS_TODAY = {
   'blockquote empty': 'toMarkdown writes nothing, so it comes back as no block',
   'callout filled': 'toMarkdown writes a quote with a bold label, which imports as a blockquote; a [!tone] quote would import as the callout',
@@ -81,6 +82,7 @@ function forms() {
 
 test('every block type a fence or the prose writer takes has a round-trip row, and every row is such a type', () => {
   assert.deepEqual(Object.keys(ROWS), TYPES, 'ROWS lists exactly these types, sorted: add a row for a new type');
+  assert.equal(Object.values(ROWS).filter((row) => row.not).length, 8, 'the count of rows marked not is pinned: change it in the same edit');
   for (const [type, row] of Object.entries(ROWS)) {
     assert.ok(!(row.not && row.empty), `${type}: a row that cannot round-trip has no empty form to test`);
     if (row.empty) assert.equal(row.empty.type, type, `${type}: its empty form is a ${type}`);
@@ -89,6 +91,7 @@ test('every block type a fence or the prose writer takes has a round-trip row, a
 
 test('a block survives toMarkdown then fromMarkdown, filled and empty, except the rows marked not and the forms in FAILS_TODAY', () => {
   const names = forms().map(([name]) => name);
+  assert.equal(Object.keys(FAILS_TODAY).length, 16, 'FAILS_TODAY\'s length is pinned: change it in the same edit');
   assert.deepEqual(Object.keys(FAILS_TODAY).filter((name) => !names.includes(name)), [], 'FAILS_TODAY names a form no row has');
   const start = process.cpuUsage();
   for (const [name, block] of forms()) {
