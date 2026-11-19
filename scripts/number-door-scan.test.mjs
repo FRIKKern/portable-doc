@@ -55,12 +55,15 @@ const ESCAPES = new Set(['escapeHtml', 'escapeAttr']);
 // An encoder writes an array through String, so a number array's NaN reaches it as "NaN".
 const ENCODES = new Set(['encodeURIComponent', 'encodeURI']);
 const DOOR = 'packages/text/number-text.js';
-/** The template text before a span leaves it inside a style value: an open style="…", or a CSS
- * declaration (`width:`, `--i:`) in a fragment with no markup. */
-const styleValue = (text) => {
-  const open = text.lastIndexOf('style="');
-  if (open >= 0 && !text.includes('"', open + 7)) return true;
-  return !text.includes('<') && /(?:^|;)\s*(?:--)?[a-z][a-z-]*:[^;"]*$/.test(text);
+/** Where the template text before a span leaves it: 'attr' inside an open style="…" or style='…',
+ * 'decl' after a CSS declaration's `name:` in a fragment with no markup (`width:`, `--i:`, or a
+ * name from a span directly before the number, `${p}:`; not `${k}: ` with a space, which is a
+ * label), else null. A span stands in the text as \u0000. */
+const styleContext = (text) => {
+  const opens = [...text.matchAll(/style=(["'])/g)];
+  const last = opens.at(-1);
+  if (last && !text.includes(last[1], last.index + last[0].length)) return 'attr';
+  return !text.includes('<') && /(?:^|;)\s*(?:(?:--)?[a-z][a-z-]*:[^;"']*|\u0000:)$/.test(text) ? 'decl' : null;
 };
 
 /** Each route in React's source files (or the given ones), as "file:line: why: code". */
@@ -88,41 +91,72 @@ function reactRoutes(only) {
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
     return sym?.getName();
   };
-  // A number writer is numberText or stringOf, or a function in React's source whose body calls a
-  // number writer outside a styleOf call. In a style value, a number writer may be called only
-  // inside styleOf, which leaves a property whose number is not finite out whole.
-  const inStyleOf = (node) => {
-    for (let p = node.parent; p; p = p.parent) if (ts.isCallExpression(p) && calleeName(p.expression) === 'styleOf') return true;
-    return false;
+  // Number writers are found by symbol, never by name. The door's are numberText and stringOf
+  // (number-text.js). A function in React's source is one when its body calls a writer with an
+  // argument that may hold a number, unless the call is trusted; a const that names a writer is one.
+  // A call is trusted inside styleOf's write callback when each argument of it that may hold a
+  // number is the callback's own parameter: the finite number styleOf hands it.
+  const symOf = (node) => {
+    let sym = checker.getSymbolAtLocation(node);
+    if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
+    return sym;
   };
-  const numberWriters = new Set(['numberText', 'stringOf']);
-  const callsWriter = (node) => {
-    let hit = false;
+  const fromDoor = (sym, names) => !!sym && names.includes(sym.getName()) && (sym.declarations ?? []).some((d) => /number-text\.(?:d\.ts|js)$/.test(d.getSourceFile().fileName));
+  const isCallOf = (n, name) => ts.isCallExpression(n) && fromDoor(symOf(n.expression), [name]);
+  const writers = new Set();
+  const isWriter = (sym) => fromDoor(sym, ['numberText', 'stringOf']) || writers.has(sym);
+  const trusted = (call) => {
+    let fn = call.parent;
+    while (fn && !ts.isFunctionLike(fn)) fn = fn.parent;
+    if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || !isCallOf(fn.parent, 'styleOf') || fn.parent.arguments[2] !== fn) return false;
+    const param = fn.parameters[0] && symOf(fn.parameters[0].name);
+    return call.arguments.every((a) => !mayHold(typeOf(a)) || (!!param && ts.isIdentifier(a) && symOf(a) === param));
+  };
+  const writerCall = (n) => ts.isCallExpression(n) && isWriter(symOf(n.expression)) && n.arguments.some((a) => mayHold(typeOf(a))) && !trusted(n);
+  const has = (node, hit) => {
+    let found = false;
     const look = (n) => {
-      if (hit) return;
-      if (ts.isCallExpression(n) && numberWriters.has(calleeName(n.expression)) && !inStyleOf(n)) hit = true;
+      if (found) return;
+      if (hit(n)) found = true;
       else ts.forEachChild(n, look);
     };
     look(node);
-    return hit;
+    return found;
+  };
+  // A styleOf call not inside a styleAttr call: written straight into style="…", it leaves
+  // style="" when its number is not finite.
+  const bareStyleOf = (n) => {
+    if (!isCallOf(n, 'styleOf')) return false;
+    for (let p = n.parent; p; p = p.parent) if (isCallOf(p, 'styleAttr')) return false;
+    return true;
   };
   const bodies = [];
-  for (const s of program.getSourceFiles().filter((s) => s.fileName.startsWith(path.join(react, 'src') + path.sep))) {
+  const aliases = [];
+  for (const sf of program.getSourceFiles().filter((f) => f.fileName.startsWith(path.join(react, 'src') + path.sep))) {
     const collect = (n) => {
-      if (ts.isFunctionDeclaration(n) && n.name && n.body) bodies.push([n.name.text, n.body]);
-      else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) bodies.push([n.name.text, n.initializer.body]);
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) bodies.push([symOf(n.name), n.body]);
+      else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+        if (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer)) bodies.push([symOf(n.name), n.initializer.body]);
+        else if (ts.isIdentifier(n.initializer)) aliases.push([symOf(n.name), n.initializer]);
+      }
       ts.forEachChild(n, collect);
     };
-    collect(s);
+    collect(sf);
   }
   for (let grew = true; grew; ) {
     grew = false;
-    for (const [name, body] of bodies) if (!numberWriters.has(name) && callsWriter(body)) grew = !!numberWriters.add(name);
+    for (const [sym, body] of bodies) if (sym && !writers.has(sym) && has(body, writerCall)) grew = !!writers.add(sym);
+    for (const [sym, init] of aliases) if (sym && !writers.has(sym) && isWriter(symOf(init))) grew = !!writers.add(sym);
   }
   const found = [];
   for (const sf of program.getSourceFiles().filter((s) => files.includes(s.fileName))) {
     const rel = path.relative(root, sf.fileName);
-    const at = (node, why) => found.push(`${rel}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}: ${why}: ${node.getText(sf).replace(/\s+/g, ' ').slice(0, 80)}`);
+    const seen = new Set();
+    const at = (node, why) => {
+      const where = `${rel}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}: ${why}`;
+      if (!seen.has(where)) found.push(`${where}: ${node.getText(sf).replace(/\s+/g, ' ').slice(0, 80)}`);
+      seen.add(where);
+    };
     const visit = (node) => {
       if (ts.isCallExpression(node)) {
         const callee = node.expression;
@@ -141,7 +175,9 @@ function reactRoutes(only) {
       } else if (ts.isTemplateExpression(node)) {
         let text = node.head.text;
         for (const span of node.templateSpans) {
-          if (styleValue(text) && callsWriter(span.expression)) at(span.expression, 'a number in a style value outside styleOf');
+          const where = styleContext(text);
+          if (where && has(span.expression, writerCall)) at(span.expression, 'a number in a style value outside styleOf');
+          if (where === 'attr' && has(span.expression, bareStyleOf)) at(span.expression, 'styleOf in a style attribute without styleAttr');
           text += '\u0000' + span.literal.text;
         }
       }
@@ -183,6 +219,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
   try {
     const plant = path.join(dir, 'plant.ts');
     // One route per line; each line names the reason the scan must give for it.
+    const STYLE = 'a number in a style value outside styleOf';
     const rows = [
       ['`${b.count}`', 'a template span that may hold a number'],
       ['String(n)', 'String of a non-string'],
@@ -213,32 +250,61 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ["'a'.concat(String(s))", null],
       ['String(s)', null],
       ['`${s}`', null],
-      ['`<i style="width:${numberText(n)}%">`', 'a number in a style value outside styleOf'],
-      ['`<i style="--i:${fmt(n)}">`', 'a number in a style value outside styleOf'],
-      ['`padding-left:${fmt(n)}px`', 'a number in a style value outside styleOf'],
-      ['`a;order:${numberText(n)}`', 'a number in a style value outside styleOf'],
+      ['`<i style="width:${numberText(n)}%">`', STYLE],
+      ['`<i style="--i:${fmt(n)}">`', STYLE],
+      ['`padding-left:${fmt(n)}px`', STYLE],
+      ['`a;order:${numberText(n)}`', STYLE],
+      ["`<i style='width:${numberText(n)}%'>`", STYLE],
+      ['`${s}:${numberText(n)}px`', STYLE],
+      ['`<i style="color:${eh(n)}">`', ['escapeHtml of a number', STYLE]],
+      ['`<i style="${[\'width:\', numberText(n), \'%\'].join(\'\')}">`', STYLE],
+      ['`<i style="width:${String(numberText(n))}%">`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${numberText(x)}%;height:${numberText(n)}px`)])}>`', STYLE],
+      ['`<i style="${styleOf(\'width\', n)}">`', 'styleOf in a style attribute without styleAttr'],
       ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${fmt(x)}%`)])}>`', null],
       ['`<i style="color:${s}">`', null],
+      ['`<i style="color:${eh(s)}">`', null],
+      ['`<i style="color:${ea(s)}">`', null],
+      ['`${s}:${s}`', null],
       ['`<b>${numberText(n)}</b>`', null],
+      // Listed limits (the header's "What it cannot see"): each is a number in a style that the
+      // scan does not name. Concatenation; a join built outside the template; an object's method;
+      // a class's method; a value passed around; a writer whose number is not an argument.
+      ['\'<i style="width:\' + numberText(n) + \'%">\'', null],
+      ['`<i style="${css}">`', null],
+      ['`<i style="width:${W.w(n)}%">`', null],
+      ['`<i style="width:${k.w(n)}%">`', null],
+      ['`<i style="width:${t}%">`', null],
+      ['`<i style="width:${wn()}%">`', null],
+    ];
+    const head = [
+      "import { escapeHtml as eh, escapeAttr as ea } from '../inline'",
+      "import { numberText, styleAttr, styleOf } from '../../../text/number-text.js'",
+      'const fmt = (x: number) => numberText(x, 1)',
+      'declare const hn: number',
+      'const W = { w: (x: number) => numberText(x) }',
+      'class K { w(x: number) { return numberText(x) } }',
+      'const k = new K()',
+      'const t = numberText(hn)',
+      "const css = ['width:' + numberText(hn) + '%'].join(';')",
+      'const wn = () => numberText(hn)',
+      "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
+      "  if (typeof b.count !== 'number') return []",
+      '  const n = b.count',
+      '  return [',
     ];
     fs.writeFileSync(
       plant,
       [
-        "import { escapeHtml as eh } from '../inline'",
-        "import { numberText, styleAttr, styleOf } from '../../../text/number-text.js'",
-        'const fmt = (x: number) => numberText(x, 1)',
-        "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
-        "  if (typeof b.count !== 'number') return []",
-        '  const n = b.count',
-        '  return [',
+        ...head,
         ...rows.map(([code]) => `    ${code},`),
         '  ]',
         '}',
         '',
       ].join('\n'),
     );
-    const found = reactRoutes([plant]).map((r) => { const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/); return `${rows[line - 8][0]} -> ${why}`; });
-    assert.deepEqual(found.sort(), rows.filter(([, why]) => why).map(([code, why]) => `${code} -> ${why}`).sort());
+    const found = reactRoutes([plant]).map((r) => { const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/); return `${rows[line - head.length - 1][0]} -> ${why}`; });
+    assert.deepEqual(found.sort(), rows.flatMap(([code, why]) => [why ?? []].flat().map((w) => `${code} -> ${w}`)).sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
