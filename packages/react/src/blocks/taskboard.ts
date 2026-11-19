@@ -29,6 +29,7 @@ import {
   countRole,
 } from './core'
 import type { RenderCtx } from './chrome'
+import { numberText } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -77,7 +78,7 @@ function boardCol(role: string, label: string, rows: Block[], ctx: RenderCtx): s
       return `<div class="bp-bcard">${glyphHtml(rowRole, ctx)}<span class="bp-bcard__t">${draftHtml(m, ctx)}${title}</span>${metaHtml}</div>`
     })
     .join('')
-  return `<div class="bp-board__col bp-board__col--${role}"><div class="bp-board__head"><span class="bp-board__label">${label}</span><span class="bp-board__count">${rows.length}</span></div><div class="bp-board__cards">${cards}</div></div>`
+  return `<div class="bp-board__col bp-board__col--${role}"><div class="bp-board__head"><span class="bp-board__label">${label}</span><span class="bp-board__count">${numberText(rows.length)}</span></div><div class="bp-board__cards">${cards}</div></div>`
 }
 
 const taskBoard: Emit = (b, ctx) => {
@@ -111,12 +112,12 @@ function momentumHtml(rows: Block[], ctx: RenderCtx): string {
   const pct = Math.round((done / total) * 100)
   return (
     `<div class="bp-momentum"><div class="bp-momentum__row">` +
-    `<span class="bp-momentum__i">${glyphHtml('progress', ctx)}<b>${prog}</b> ${ctx.t('in flight')}</span>` +
-    `<span class="bp-momentum__i bp-g--ready">${glyphHtml('ready', ctx)}<b>${ready}</b> ${ctx.t('ready')}</span>` +
-    `<span class="bp-momentum__i bp-g--done">${glyphHtml('done', ctx)}<b>${done}</b> ${ctx.t('done')}</span>` +
+    `<span class="bp-momentum__i">${glyphHtml('progress', ctx)}<b>${numberText(prog)}</b> ${ctx.t('in flight')}</span>` +
+    `<span class="bp-momentum__i bp-g--ready">${glyphHtml('ready', ctx)}<b>${numberText(ready)}</b> ${ctx.t('ready')}</span>` +
+    `<span class="bp-momentum__i bp-g--done">${glyphHtml('done', ctx)}<b>${numberText(done)}</b> ${ctx.t('done')}</span>` +
     `<span class="bp-momentum__grow"></span>` +
-    `<span class="bp-momentum__pct">${pct}%</span></div>` +
-    `<div class="bp-momentum__track"><span class="bp-momentum__fill" style="width:${pct}%"></span></div></div>`
+    `<span class="bp-momentum__pct">${numberText(pct)}%</span></div>` +
+    `<div class="bp-momentum__track"><span class="bp-momentum__fill" style="width:${numberText(pct)}%"></span></div></div>`
   )
 }
 
@@ -131,7 +132,7 @@ function rowHtml(r: Block, ctx: RenderCtx): string {
     priorityHtml(r.priority) + criteriaHtml(r.criteria) + blockedHtml(r.blocked_by) + workerHtml(r.worker)
   const metaHtml = meta === '' ? '' : `<span class="bp-trow__m">${meta}</span>`
   return (
-    `<div class="bp-trow bp-trow--${role}" style="padding-left:${pad}px">` +
+    `<div class="bp-trow bp-trow--${role}" style="padding-left:${numberText(pad)}px">` +
     arrow +
     glyphHtml(role, ctx) +
     `<span class="bp-trow__t">${draftHtml(r, ctx)}${title}</span>` +
@@ -164,7 +165,7 @@ function phaseHtml(name: string | null, rows: Block[], ctx: RenderCtx): string {
   const hdr =
     `<div class="bp-phase"><span class="bp-phase__nm">${escapeHtml(name)}</span>` +
     `<span class="bp-phase__rule"></span>` +
-    `<span class="bp-phase__n">${done}/${total}</span></div>`
+    `<span class="bp-phase__n">${numberText(done)}/${numberText(total)}</span></div>`
   return hdr + body
 }
 

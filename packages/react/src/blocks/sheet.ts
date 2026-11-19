@@ -75,7 +75,7 @@ function toStr(v: unknown): string {
 function colWidthStyle(colWidths: unknown, idx: number): string {
   if (!Array.isArray(colWidths)) return ''
   const w = colWidths[idx]
-  return typeof w === 'number' && Number.isInteger(w) && w > 0 ? `width:${w}px;` : ''
+  return typeof w === 'number' && Number.isInteger(w) && w > 0 ? `width:${numberText(w)}px;` : ''
 }
 
 function sheetMerges(merges: unknown): Span[] {
@@ -95,7 +95,7 @@ function sheetMerges(merges: unknown): Span[] {
 
 function cellStyleFragment(styles: unknown, r: number, c: number): string {
   if (!isMap(styles)) return ''
-  const s = styles[`${r},${c}`]
+  const s = styles[`${numberText(r)},${numberText(c)}`]
   if (!isMap(s)) return ''
   const parts = [
     s.b === true ? 'font-weight:bold;' : '',
@@ -112,7 +112,7 @@ function errStyle(cell: string): string {
 
 function explicitAl(styles: unknown, r: number, c: number): boolean {
   if (!isMap(styles)) return false
-  const s = styles[`${r},${c}`]
+  const s = styles[`${numberText(r)},${numberText(c)}`]
   return isMap(s) && (s.al === 'left' || s.al === 'center' || s.al === 'right')
 }
 
@@ -160,7 +160,7 @@ const sheet: Emit = (b, ctx) => {
     .map((row, r) => {
       const cells = row
         .map((cell, c) => {
-          if (covered.has(`${r},${c}`)) return ''
+          if (covered.has(`${numberText(r)},${numberText(c)}`)) return ''
           const wStyle = colWidthStyle(colWidths, c)
           const span = spanAttr(anchors, r, c)
           const extra = cellStyleFragment(styles, r, c)

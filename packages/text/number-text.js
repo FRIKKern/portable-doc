@@ -9,14 +9,16 @@
 /**
  * A number as shown text.
  * @param {number} n
- * @param {number | 'whole'} [digits] fixed digits after the point (toFixed), or 'whole' for a whole
- *   number written in full, with no exponent; by default the digits String gives
+ * @param {number | 'whole' | { significant: number }} [digits] fixed digits after the point
+ *   (toFixed); 'whole' for a whole number written in full, with no exponent; or { significant } for
+ *   the number rounded to that many significant digits; by default the digits String gives
  * @returns {string} '' for NaN, Infinity or -Infinity
  */
 export function numberText(n, digits) {
   if (typeof n !== 'number' || !Number.isFinite(n)) return '';
   if (digits === undefined) return String(n);
   if (digits === 'whole') return Math.abs(n) < 1e21 ? String(n) : BigInt(n).toString();
+  if (typeof digits === 'object') return String(Number(n.toPrecision(digits.significant)));
   return n.toFixed(digits);
 }
 

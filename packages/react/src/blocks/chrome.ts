@@ -1,4 +1,5 @@
 import type { Block } from '../inline'
+import { stringOf } from '../../../text/number-text.js'
 
 /**
  * The renderer's own words — chrome, never author content — in the caller's
@@ -50,7 +51,7 @@ export function makeCtx(strings?: ChromeStrings | null): RenderCtx {
     t(english, vars) {
       const hit = map && typeof map[english] === 'string' ? map[english] : english
       if (!vars) return hit
-      return Object.keys(vars).reduce((acc, k) => acc.split(`%{${k}}`).join(String(vars[k])), hit)
+      return Object.keys(vars).reduce((acc, k) => acc.split(`%{${k}}`).join(stringOf(vars[k])), hit)
     },
   }
 }
