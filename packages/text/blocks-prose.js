@@ -88,7 +88,7 @@ const orderedList = (b, ctx) => list({ ...b, ordered: true }, ctx);
 const CALLOUT_TONES = ['success', 'warning', 'danger', 'neutral', 'loss', 'peace'];
 
 function callout(b, ctx) {
-  if (ctx.md && ctx.options.mode === 'round-trip') return marked(b, ctx);
+  if (ctx.md && ctx.options.mode === 'round-trip' && !nonblank(b.title)) return marked(b, ctx);
   const tone = CALLOUT_TONES.includes(str(b.tone)) ? str(b.tone) : 'info';
   const label = ctx.text(nonblank(b.title) || capitalize(tone), { oneLine: true });
   const inner = ctx.inline(body(b)) || ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : []);
@@ -100,6 +100,7 @@ function callout(b, ctx) {
 /**
  * A callout in round-trip mode, in the form import reads: `> [!tone] content`, then each block
  * of its body inside the quote. round-trip.js keeps it only where it reads back as the block.
+ * A callout with a title, which that line cannot hold, is written as in readable mode.
  */
 function marked(b, ctx) {
   const tone = /^\w+$/.test(str(b.tone)) ? str(b.tone) : 'info';
