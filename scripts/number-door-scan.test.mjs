@@ -11,10 +11,15 @@
 //   - a template span, or an operand of + or += beside a string, that may hold a number;
 //   - concat on a string given a value that may hold a number;
 //   - join on an array or tuple that may hold a number;
-//   - in a style value (after an open style=" in the template, or after a CSS `name:` in a
-//     fragment with no markup), a template span that calls a number writer outside styleOf. A
-//     number writer is numberText, stringOf, or a function in React's source whose body calls one
-//     outside styleOf. styleOf leaves a property whose number is not finite out whole.
+//   - in a style value (inside an open style="…" or style='…' in the template, or after a CSS
+//     `name:` in a fragment with no markup, the name a word or a span), a template span that
+//     calls a number writer with an argument that may hold a number. Writers are known by symbol:
+//     numberText, stringOf, a const naming a writer, or a function in React's source whose body
+//     calls one so. Inside styleOf's write callback a call is trusted only when each such argument
+//     is the callback's own parameter, the finite number styleOf hands it; styleOf leaves a
+//     property whose number is not finite out whole;
+//   - styleOf written straight into style="…" (not inside styleAttr), which writes style="" when
+//     its number is not finite.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
 //   "May hold a number" adds `object`, `{}`, an array or tuple (at any depth) of a value that may be
 //   a number, and a type parameter whose constraint may hold one or that has no real constraint
@@ -33,9 +38,12 @@
 //   a method held in a variable, called with call or apply, or called by element access
 //   (`n['toFixed'](1)`).
 // - A number used as a computed key (`{ [n]: 1 }`) whose keys are then shown.
-// - A style value built without a template (string concatenation or join), or a number writer
-//   reached through a method or a value passed around. packages/text writes no HTML style, so the
-//   style rule reads React only; a style written there would go unseen.
+// - In a style: a value built without a template (string concatenation, or a join built outside
+//   it); a number writer reached through an object's or a class's method, or as a value passed
+//   around (its text made before the template); a writer whose number is not an argument
+//   (`() => numberText(n)`); a property named by a span and written with a space (`${k}: …`, read
+//   as a label). Each has a plant row that the scan must not name. packages/text writes no HTML
+//   style, so the style rules read React only; a style written there would go unseen.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
 // - packages/editor (written only by the sync from Barkpark's paper editor), React's dist (built
@@ -269,13 +277,15 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<b>${numberText(n)}</b>`', null],
       // Listed limits (the header's "What it cannot see"): each is a number in a style that the
       // scan does not name. Concatenation; a join built outside the template; an object's method;
-      // a class's method; a value passed around; a writer whose number is not an argument.
+      // a class's method; a value passed around; a writer whose number is not an argument; a
+      // property named by a span and written with a space.
       ['\'<i style="width:\' + numberText(n) + \'%">\'', null],
       ['`<i style="${css}">`', null],
       ['`<i style="width:${W.w(n)}%">`', null],
       ['`<i style="width:${k.w(n)}%">`', null],
       ['`<i style="width:${t}%">`', null],
       ['`<i style="width:${wn()}%">`', null],
+      ['`${s}: ${numberText(n)}px`', null],
     ];
     const head = [
       "import { escapeHtml as eh, escapeAttr as ea } from '../inline'",
