@@ -15,6 +15,7 @@ import { playgroundExamples } from './playground/examples.mjs';
 import { parseJson, prettyBytes, tidyJson } from './playground/parse.js';
 import { decodeShare, encodeShare, MAX_DOC_BYTES, overCap, utf8Length } from './playground/share.js';
 import { docFromMarkdown, outputsOf } from './playground/outputs.js';
+import { enter, WAYS_IN } from './playground/ways-in.js';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -263,3 +264,37 @@ test('the "last good render" note sits outside the tablist, which holds only tab
   assert.ok(html.includes('last good render'), 'the note is still shown');
   assert.ok(!render({ html: '', markdown: '', text: '', stale: false }).includes('last good render'));
 });
+
+// One row per way text enters the editor: an input over the cap, the message it is refused
+// with, and an input that goes in. A refused input leaves the editor's doc as it was.
+const over = (bytes) => JSON.stringify({ blocks: [{ type: 'paragraph', text: 'a'.repeat(bytes) }] });
+const hugeExample = { id: 'huge', group: 'Block types', label: 'A huge example', doc: JSON.parse(over(MAX_DOC_BYTES)) };
+const WAYS_IN_ROWS = {
+  typed: { over: over(MAX_DOC_BYTES), message: 'The doc is too big for the editor (over 2 MB)', fits: async () => ['{"blocks":[]}'] },
+  markdown: { over: 'a'.repeat(MAX_DOC_BYTES + 1), message: 'The Markdown makes a doc too big for the editor (over 2 MB)', fits: async () => ['# A heading\n\nA paragraph.'] },
+  link: { over: `#doc=json.${Buffer.from(over(MAX_DOC_BYTES)).toString('base64url')}`, message: 'This link holds a doc too big to open (over 2 MB)', fits: async () => [await encodeShare('{"blocks":[]}')] },
+  // Every built-in example goes in: none passes the cap.
+  example: { over: hugeExample, message: 'A huge example is too big for the editor (over 2 MB)', fits: async () => playgroundExamples() },
+};
+
+test('every way text enters the playground refuses a doc over the cap, says so, and keeps the editor\'s doc', async () => {
+  assert.deepEqual(Object.keys(WAYS_IN_ROWS).sort(), Object.keys(WAYS_IN).sort(), 'one row per way in ways-in.js, and no row without one');
+  const kept = '{"blocks":[{"type":"paragraph","text":"the editor\'s doc"}]}';
+  for (const [way, row] of Object.entries(WAYS_IN_ROWS)) {
+    const refused = await enter(way, row.over, kept);
+    assert.deepEqual(refused, { text: kept, entered: false, error: row.message, status: `${row.message}. The editor still holds your doc.` }, way);
+    for (const input of await row.fits()) {
+      const taken = await enter(way, input, kept);
+      assert.ok(taken.entered && taken.text !== kept && !overCap(taken.text), `${way}: ${JSON.stringify(input).slice(0, 80)} goes in`);
+    }
+  }
+});
+
+test('main.jsx takes new text only through the ways in, and names each one', () => {
+  const source = fs.readFileSync(path.join(root, 'scripts', 'playground', 'main.jsx'), 'utf8');
+  const named = new Set([...source.matchAll(/\b(?:take|enter)\('([a-z]+)'/g)].map((m) => m[1]));
+  assert.deepEqual([...named].sort(), Object.keys(WAYS_IN).sort(), 'every way in is wired, and nothing else is');
+  assert.equal(source.match(/\bsetText\(/g)?.length, 1, 'the editor text is set in one place');
+  for (const name of ['decodeShare', 'docFromMarkdown', 'tidyJson', 'fromMarkdown']) assert.ok(!new RegExp(`import[^;]*\\b${name}\\b`).test(source), `main.jsx imports no ${name}: text comes in through ways-in.js`);
+});
+

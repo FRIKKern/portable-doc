@@ -9,10 +9,11 @@ import { fieldBlocks } from '../../packages/react/src/field-blocks.ts';
 import { embedBlocks } from '../../packages/react/src/embed.ts';
 import { explainWith, readCodes } from '../../packages/mcp/explain-words.js';
 import codesMarkdown from '../../packages/validate/CODES.md';
-import { blocksOf, parseJson, tidyJson } from './parse.js';
-import { decodeShare, encodeShare, MAX_DOC_BYTES } from './share.js';
+import { blocksOf, parseJson } from './parse.js';
+import { encodeShare } from './share.js';
 import { copyText, shiftLines } from './editing.js';
-import { docFromMarkdown, outputsOf } from './outputs.js';
+import { outputsOf } from './outputs.js';
+import { enter } from './ways-in.js';
 import { MarkdownBox, Outputs } from './panes.jsx';
 
 const explain = explainWith(readCodes(codesMarkdown));
@@ -20,8 +21,6 @@ const renderOptions = { blocks: { ...fieldBlocks, ...embedBlocks() } };
 const DEBOUNCE_MS = 200;
 const LONG_LINK = 8000;
 const pretty = (value) => JSON.stringify(value, null, 2);
-// A doc from a link is laid out like the examples, unless that would pass the link cap.
-const tidy = (text) => tidyJson(text, MAX_DOC_BYTES);
 // Engine messages for a blown stack differ by browser and mean nothing to a reader.
 const plainWords = (error) => (error instanceof RangeError && /call stack|recursion/i.test(error.message) ? 'the doc nests too deep to draw' : error.message);
 
@@ -91,47 +90,44 @@ function App({ examples, initial }) {
     return () => clearTimeout(timer);
   }, [text]);
   useEffect(() => setView((previous) => viewOf(settled, previous)), [settled]);
+
+  // New text enters the editor only here, by one of the ways in ways-in.js; a refused
+  // input leaves the doc as it was and says why. Typing settles after DEBOUNCE_MS.
+  const apply = (next, now) => {
+    if (next.status !== undefined) setStatus(next.status);
+    if (!next.entered) return false;
+    setText(next.text);
+    if (now) setSettled(next.text);
+    return true;
+  };
+  const take = (way, input, now = true) => {
+    const next = enter(way, input, text);
+    return next instanceof Promise ? next.then((n) => apply(n, now)) : apply(next, now);
+  };
   useEffect(() => {
-    const onHash = () => decodeShare(location.hash).then((shared) => {
-      if (shared === null) return;
-      const next = tidy(shared);
-      setText(next);
-      setSettled(next);
-      setExampleId('');
-      setStatus('Opened the doc from the link.');
-    }, (error) => setStatus(`${error.message}. The editor still holds your doc.`));
+    const onHash = () => take('link', location.hash).then((entered) => entered && setExampleId(''));
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const load = (next) => {
-    setText(next);
-    setSettled(next);
-  };
   const pick = (event) => {
     const example = examples.find((candidate) => candidate.id === event.target.value);
-    if (!example) return;
+    if (!example || !take('example', example)) return;
     setExampleId(example.id);
-    load(pretty(example.doc));
     setLink('');
-    setStatus(`Loaded ${example.label}.`);
     dropHash();
   };
   const fromMarkdown = (markdown) => {
-    const made = docFromMarkdown(markdown);
-    if (made.error) return setStatus(`${made.error}. The editor still holds your doc.`);
-    load(made.text);
+    if (!take('markdown', markdown)) return;
     setExampleId('');
     setLink('');
     setPasting(false);
-    setStatus(`Made a doc of ${made.blocks} ${made.blocks === 1 ? 'block' : 'blocks'} from the Markdown.`);
     dropHash();
   };
   const format = () => {
     const parsed = parseJson(text);
     if (!parsed.ok) return setStatus(`Cannot format: line ${parsed.error.line}, column ${parsed.error.column}: ${parsed.error.message}.`);
-    load(pretty(parsed.value));
-    setStatus('Formatted.');
+    if (take('typed', pretty(parsed.value))) setStatus('Formatted.');
   };
   const share = async () => {
     const parsed = parseJson(text);
@@ -215,8 +211,7 @@ function App({ examples, initial }) {
               aria-label="PortableDoc JSON"
               aria-describedby="pg-keys"
               onChange={(event) => {
-                setText(event.target.value);
-                setExampleId('');
+                if (take('typed', event.target.value, false)) setExampleId('');
               }}
               onKeyDown={onKeyDown}
             />
@@ -246,12 +241,11 @@ async function start() {
   followTheme();
   const examples = JSON.parse(document.getElementById('pd-examples').textContent);
   const first = examples[0];
-  let initial = { text: pretty(first.doc), exampleId: first.id };
-  try {
-    const shared = await decodeShare(location.hash);
-    if (shared !== null) initial = { text: tidy(shared), exampleId: '', status: 'Opened the doc from the link.' };
-  } catch (error) {
-    initial.status = `${error.message}. Showing ${first.label} instead.`;
+  let initial = { text: enter('example', first, '').text, exampleId: first.id };
+  const shared = await enter('link', location.hash, initial.text);
+  if (shared.entered) initial = { text: shared.text, exampleId: '', status: shared.status };
+  else if (shared.error) {
+    initial.status = `${shared.error}. Showing ${first.label} instead.`;
     dropHash(); // a reload then opens the page, not the same broken link
   }
   createRoot(document.getElementById('playground')).render(<App examples={examples} initial={initial} />);
