@@ -81,6 +81,18 @@ test('render markdown and text match @portable-doc/text, and an invalid doc is r
   assert.equal((await call(['render', '--format', 'text', '--force'], JSON.stringify(broken.doc))).stdout, toPlainText(broken.doc));
 });
 
+test('render --lossless writes what import reads back; a block it cannot keep is listed on stderr and exits 3', async () => {
+  const kept = [{ type: 'heading', level: 1, text: 'Hi', id: 'h' }];
+  const ok = await call(['render', '--lossless'], JSON.stringify(kept));
+  assert.deepEqual([ok.status, ok.stdout, ok.stderr], [0, toMarkdown(kept, { mode: 'lossless' }).markdown, '']);
+  const doc = [...kept, { type: 'image', src: 'https://example.com/a.png', alt: 'A', id: 'cover' }];
+  const lossy = await call(['render', '--lossless', '-o', path.join(tmp, 'lossless.md')], JSON.stringify(doc));
+  assert.equal(lossy.status, 3);
+  assert.equal(fs.readFileSync(path.join(tmp, 'lossless.md'), 'utf8'), toMarkdown(doc, { mode: 'lossless' }).markdown);
+  assert.equal(lossy.stderr, '<stdin>: /blocks/1 image id cover: not kept, written readably: a portabledoc fence may not hold its type, or a block in it\n');
+  assert.equal((await call(['render', '--lossless', '--format', 'text'], JSON.stringify(doc))).status, 2);
+});
+
 test('render html is the React renderer\'s markup, field and embed blocks included', () => {
   const doc = [{ type: 'heading', level: 2, text: 'Hello' }, { type: 'field-color', label: 'Accent', value: '#1e5347' }, { type: 'embed', target: 'Notes' }];
   const r = run(['render', '--format', 'html'], JSON.stringify(doc));
