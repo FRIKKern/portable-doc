@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 import { main } from './index.js';
 
@@ -162,6 +162,38 @@ test('--help and --version print and exit 0', async () => {
   assert.equal(run(['--version']).stdout, '0.0.0\n');
   assert.match((await call(['--help'])).stdout, /Commands:/);
   assert.match((await call(['render', '--help'])).stdout, /--format/);
+});
+
+test('README.md\'s command sections are what node packages/cli/readme.mjs writes today', async () => {
+  const { readme } = await import('./readme.mjs');
+  assert.equal(fs.readFileSync(path.join(here, 'README.md'), 'utf8'), await readme(), 'stale: run node packages/cli/readme.mjs');
+});
+
+test('a command file dropped into commands/ is in the usage, the dispatch and the README, with no other file changed', async () => {
+  // A copy of the package, so the real commands/ holds only real commands. Its
+  // node_modules link resolves the workspace packages as the real one does.
+  const copy = path.join(tmp, 'pkg', 'cli');
+  fs.cpSync(here, copy, { recursive: true });
+  fs.symlinkSync(path.join(root, 'node_modules'), path.join(tmp, 'pkg', 'node_modules'), 'dir');
+  fs.mkdirSync(path.join(copy, 'commands'), { recursive: true });
+  fs.writeFileSync(path.join(copy, 'commands', 'hello.js'), `export const order = 99;
+export const synopsis = '[name]';
+export const summary = 'say hello (a test fixture)';
+export const usage = 'Usage: portable-doc hello [name]';
+export const readme = '## Hello\\n\\nSays hello.';
+export async function run(args, io) {
+  io.stdout(\`hello \${args[0] ?? 'world'}\\n\`);
+  return 0;
+}
+`);
+  const copyBin = (args) => spawnSync(process.execPath, [path.join(copy, 'bin', 'portable-doc.mjs'), ...args], { input: '', encoding: 'utf8' });
+  assert.match(copyBin(['--help']).stdout, /\n {2}import \[file\] +turn a Markdown file into a doc\n {2}hello \[name\] +say hello \(a test fixture\)\n/);
+  assert.deepEqual([copyBin(['hello', 'Ada']).stdout, copyBin(['hello', 'Ada']).status], ['hello Ada\n', 0]);
+  assert.equal(copyBin(['hello', '--help']).stdout, 'Usage: portable-doc hello [name]\n');
+  const { readme } = await import(pathToFileURL(path.join(copy, 'readme.mjs')).href);
+  const fresh = await readme();
+  assert.notEqual(fs.readFileSync(path.join(copy, 'README.md'), 'utf8'), fresh, 'the README check misses the new command');
+  assert.match(fresh, /\| \[`hello \[name\]`\]\(#hello\) \| say hello \(a test fixture\) \|\n\n## Validate[\s\S]*## Import[\s\S]*\n\n## Hello\n\nSays hello\.\n<!-- commands:end -->/);
 });
 
 test('import turns Markdown from a file or stdin into a doc that validate accepts', async () => {
