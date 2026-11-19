@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
+import { parse } from 'acorn';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
+import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
+import { MAX_NEST } from './from-markdown-inline.js';
+import { readPlan } from './from-markdown.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
-import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
+import { planText } from './import-work.js';
+import { IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 import { safeUrl } from './util.js';
 
+const here = fileURLToPath(new URL('.', import.meta.url));
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
 
 const t = (value) => ({ type: 'text', value });
@@ -129,6 +137,114 @@ test('a nested list reads back as a list in its item, not as text: fromMarkdown(
   const back = fromMarkdown(toMarkdown(doc));
   assert.deepEqual(back, doc);
   valid(back);
+});
+
+/**
+ * Markdown with one item, at `depth`, that holds text, then a nested list two deep, then
+ * more text; each word a token t0, t1, … in source order, the items above it included.
+ */
+function textAroundNestedList(depth) {
+  const lines = [];
+  let n = 0;
+  const line = (indent, body) => lines.push(`${'  '.repeat(indent)}${body}`);
+  for (let i = 0; i < depth; i++) line(i, `- t${n++}`);
+  line(depth, `- t${n++}`);
+  line(depth + 1, `- t${n++}`);
+  line(depth + 2, `- t${n++}`);
+  lines.push('');
+  line(depth + 1, `t${n++} after the nested list`);
+  return { markdown: lines.join('\n'), tokens: Array.from({ length: n }, (_, i) => `t${i}`) };
+}
+const tokensOf = (text) => text.match(/\bt\d+\b/g) ?? [];
+
+test('a list item\'s text after its nested list stays after it, in source order, at every depth, and the round trip keeps the order', () => {
+  // Below MAX_NEST the text splits off as the next item, with a notice; at MAX_NEST and past it
+  // the item's nested list is its text, and the text after it follows in place.
+  for (const depth of [0, 2, MAX_NEST - 1, MAX_NEST, MAX_NEST + 1]) {
+    const { markdown, tokens } = textAroundNestedList(depth);
+    const { blocks, notices } = readMarkdown(markdown);
+    valid(blocks);
+    assert.deepEqual(tokensOf(toPlainText(blocks)), tokens, `depth ${depth}: the import, as plain text`);
+    const split = depth < MAX_NEST ? [{ code: LIST_ITEM_SPLIT, path: `/blocks/0${'/items/0/children/0'.repeat(depth)}/items/1`, line: markdown.split('\n').length, lines: 1 }] : [];
+    assert.deepEqual(notices, split, `depth ${depth}: the notices`);
+    const written = toMarkdown(blocks);
+    assert.deepEqual(tokensOf(written), tokens, `depth ${depth}: the import, written back as Markdown`);
+    assert.deepEqual(tokensOf(toPlainText(fromMarkdown(written))), tokens, `depth ${depth}: the round trip`);
+  }
+});
+
+test('a split list item reads as fixtures/list-split/ pins it, writes back as one list item per split, and the round trip splits nothing more', () => {
+  // The blocks and notices of each case are pinned in fixtures/list-split/ (the shared-cases test).
+  const written = {
+    'list-item-text-after-nested-list': '- w0\n  - w1\n    - w2\n- w3 after the nested list\n',
+    'list-item-text-around-nested-list': '- a b\n  - c\n- d\n',
+    'list-item-text-after-nested-list-numbered': '1. w0\n   1. w1\n      1. w2\n2. w3 after the nested list\n3. w4\n',
+    'list-item-text-after-two-nested-lists': '- a\n  - b\n- c more c\n  - d\n- e\n',
+    'list-item-split-inside-then-outside-nested-list': '- x\n  - y\n    - z\n  - z2\n- x2\n',
+  };
+  for (const [name, out] of Object.entries(written)) {
+    const read = readMarkdown(LIST_SPLIT[name]);
+    assert.ok(read.notices.length, `${name}: no split`);
+    assert.equal(toMarkdown(read.blocks), out, name);
+    assert.deepEqual(readMarkdown(out), { blocks: read.blocks, notices: [], work: readMarkdown(out).work }, `${name}: the round trip splits nothing more`);
+  }
+});
+
+test('a split\'s notice names its place in a callout\'s body, and its line in the whole text after a line kept as text', () => {
+  const split = (path, line, lines) => ({ code: LIST_ITEM_SPLIT, path, line, lines });
+  assert.deepEqual(readMarkdown('> [!info] Note\n>\n> - a\n>   - b\n>\n>   c').notices, [split('/blocks/0/slots/body/0/items/1', 6, 1)]);
+  // The long line is read apart, so the list after it is a fresh parse; its lines still count from the text's top.
+  const long = 'x'.repeat(50);
+  const limits = { ...IMPORT_WORK, lineBytes: 40 };
+  const notices = (md) => readMarkdown(md, limits).notices.filter((n) => n.code === LIST_ITEM_SPLIT);
+  assert.deepEqual(notices(`${long}\n\n- a\n  - b\n\n  c`), [split('/blocks/1/items/1', 6, 1)]);
+  assert.deepEqual(notices(`- p\n\n${long}\n\n- a\n  - b\n\n  c\n\n  more`), [split('/blocks/2/items/1', 8, 3)]);
+});
+
+test('a split-off item never opens a task: its `[ ]` or `[x]` stays text, in a checklist or a plain list', () => {
+  const t1 = (value) => [{ type: 'text', value }];
+  const b = { type: 'list', ordered: false, items: [t1('b')] };
+  assert.deepEqual(fromMarkdown('- [ ] a\n  - b\n\n  [ ] c'), [{ type: 'list', ordered: false, task: true, items: [{ content: t1('a'), checked: false, children: [b] }, { content: t1('[ ] c'), checked: false }] }]);
+  assert.deepEqual(fromMarkdown('- a\n  - b\n\n  [x] c'), [{ type: 'list', ordered: false, items: [{ content: t1('a'), children: [b] }, t1('[x] c')] }]);
+});
+
+test('notices come by kind, not by line: the cut ones (`budget`, `line`), then the splits in source order, then `net`', () => {
+  // A split at line 4, a long line at 6, then deep quotes read with a plan whose count is planted short, so the net fires.
+  const md = `- a\n  - b\n\n  c\n\n${'x'.repeat(500)}\n\n${'> '.repeat(150)}w0 w1\n${'> '.repeat(150)}w2`;
+  const read = readPlan(planText(md, { ...IMPORT_WORK, budget: Infinity, lineBytes: 400 }), { ...IMPORT_WORK, budget: 20_000, lineBytes: 400 });
+  assert.deepEqual(read.notices.map((n) => [n.rule ?? n.code, n.line]), [['line', 6], [LIST_ITEM_SPLIT, 4], ['net', 8]]);
+});
+
+test('many split-off items, more than a spread of arguments holds on a small stack, still import as one list with a notice each', () => {
+  // The shared 120,000-item case's shape: on a 60 kB stack a spread of 20,000 notices overflows,
+  // as the full size does on the default stack; the whole text then fell back to one code block.
+  const items = 20_000;
+  const script = `const { readMarkdown } = await import('./index.js');
+const { splitItems } = await import('../../fixtures/text-work/cases.mjs');
+const { blocks, notices } = readMarkdown(splitItems(${items}));
+console.log(JSON.stringify([blocks.map((b) => b.type), blocks[0].items.length, notices.length]));`;
+  const run = spawnSync(process.execPath, ['--stack-size=60', '--input-type=module', '-e', script], { cwd: here, encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(run.stdout), [['list'], 2 * items, items], run.stderr);
+});
+
+test('the import spreads no array into a call: an array as long as the text overflows the stack as arguments', () => {
+  const source = fs.readFileSync(new URL('./from-markdown.js', import.meta.url), 'utf8');
+  const spreads = [];
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node.type !== 'string') return;
+    if ((node.type === 'CallExpression' || node.type === 'NewExpression') && node.arguments.some((a) => a.type === 'SpreadElement')) spreads.push(`line ${node.loc.start.line}: ${source.slice(node.start, node.end)}`);
+    for (const [key, value] of Object.entries(node)) if (key !== 'loc' && value && typeof value === 'object') walk(value);
+  };
+  walk(parse(source, { ecmaVersion: 'latest', sourceType: 'module', locations: true }));
+  assert.deepEqual(spreads, []);
+});
+
+test('when the read fails, the import keeps the whole text as one code block and always says so', () => {
+  const planted = { ...IMPORT_WORK, get budget() { throw new Error('a planted throw'); } };
+  const md = '# Title\n\nsome text\n';
+  assert.deepEqual(readMarkdown(md, planted), { blocks: [{ type: 'code', value: md }], notices: [{ code: IMPORT_FELL_BACK, path: '/blocks/0', line: 1, lines: 3 }], work: 0 });
+  assert.deepEqual(readMarkdown('  \n', planted).notices, [{ code: IMPORT_FELL_BACK, path: '/blocks', line: 1, lines: 1 }]);
 });
 
 test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {

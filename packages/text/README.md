@@ -133,6 +133,16 @@ Where it differs from Barkpark, on purpose:
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
+- An item's text always comes before its children, so text after an item's
+  nested list starts a new item at the same level, keeping the words in source
+  order; more text after a later nested list splits again. In an ordered list
+  the new item takes the next number, and the numbers after it continue from
+  there. Each split adds a `list_item_split` notice (`LIST_ITEM_SPLIT`). The
+  notices come by kind: any `budget` or `line` notice, then the splits in
+  source order, then a `net` one.
+- Should reading the text fail, `readMarkdown` keeps the whole text as one code
+  block and says so with one `import_fell_back` notice (`IMPORT_FELL_BACK`),
+  its `lines` the text's line count. That is a bug to report.
 - A callout's blocks after its first paragraph are its `slots.body`, read as
   blocks: lists, code, fences, callouts in callouts, to `MAX_NEST` (50)
   callouts deep; a callout deeper keeps its body as text, as a list that deep
@@ -181,6 +191,10 @@ Where it differs from Barkpark, on purpose:
   level, the top one included, are kept as plain text, every word, with one
   notice of rule `net`. The shared cases never fire it; one
   in the wild means the text's count is wrong, and is a bug to report.
+- Each list item split off at text after its nested list adds a notice
+  `{ code: 'list_item_split', path, line, lines }`: the new item's path, its
+  text's first source line (from 1) and how many lines it spans. These come in
+  source order, after any `budget` or `line` notice and before a `net` one.
 
 ## Round trip
 

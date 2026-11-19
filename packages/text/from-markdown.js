@@ -38,29 +38,60 @@ function textOf(node, count = undefined) {
 
 // ── lists ───────────────────────────────────────────────────────────────
 
+export const LIST_ITEM_SPLIT = 'list_item_split';
+/** The code of the notice that the import fell back to keeping the whole text as one code block. */
+export const IMPORT_FELL_BACK = 'import_fell_back';
+
+// A token's line in the whole text, from 0: its parse starts at `base`. An item's own blocks
+// are read in one tokenize call, at one level, so none after a kept nested list is deep source
+// (whose map is the whole text's already).
+const lineOf = (tok, i, base) => (tok.map ? base + tok.map[i] : undefined);
+
 /**
- * A list item: its blocks joined by a space as one inline run, and its nested lists kept as
- * lists. In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
+ * A list item as one or more items: its blocks joined by a space as one inline run, and its
+ * nested lists kept as lists. Text after a kept nested list starts a new item at the same
+ * level, so the words stay in source order: an item's text always comes before its children.
+ * Each new item carries `moved`, the source lines of its text: [first, end), from 0.
+ * In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
  * @max_nest rule): its items and their blocks one space apart, joined to the item's own
- * text by one space; a list with no text adds nothing.
+ * text by one space, in place; a list with no text adds nothing. `base` is the line the
+ * parse starts at.
  */
-function listItem(item, depth) {
-  const out = [];
-  const children = [];
+function listItem(item, depth, base) {
+  const parts = [];
+  let part = { out: [], children: [], notes: [] };
+  let after; // the line after the last kept nested list, while the part has one
+  const close = () => parts.push({ content: merge(part.out), children: part.children, notes: part.notes, moved: part.moved });
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
-      if (depth < MAX_NEST) children.push(...list(child, depth + 1));
-      else {
+      if (depth < MAX_NEST) {
+        const notes = [];
+        const kept = list(child, depth + 1, notes, base);
+        for (const n of notes) part.notes.push({ ...n, path: `/children/${part.children.length}${n.path}` });
+        for (const block of kept) part.children.push(block);
+        if (kept.length) after = lineOf(child.tok, 1, base) ?? after;
+      } else {
         const flat = flattenText([child]).trim();
-        if (flat) out.push(...(out.length ? [text(' ')] : []), text(flat));
+        if (flat) {
+          if (part.out.length) part.out.push(text(' '));
+          part.out.push(text(flat));
+        }
       }
       continue;
     }
-    if (out.length) out.push(text(' '));
-    if (child.type === 'fence' || child.type === 'code_block') out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
-    else out.push(...textOf(child));
+    if (part.children.length) {
+      close();
+      const first = lineOf(child.tok, 0, base) ?? after ?? base;
+      part = { out: [], children: [], notes: [], moved: [first, first] };
+      after = undefined;
+    }
+    if (part.moved) part.moved[1] = lineOf(child.tok, 1, base) ?? lineOf(item.tok, 1, base) ?? part.moved[1];
+    if (part.out.length) part.out.push(text(' '));
+    if (child.type === 'fence' || child.type === 'code_block') part.out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
+    else for (const node of textOf(child)) part.out.push(node);
   }
-  return { content: merge(out), children };
+  close();
+  return parts;
 }
 
 // `[ ] rest` / `[x] rest` at the head of an item: { content, checked }, else null.
@@ -74,15 +105,23 @@ function taskItem(content) {
 
 const withChildren = (item, children) => (children.length ? { ...item, children } : item);
 
-/** A list as [block], or [] when no item has text or a nested list left. */
-function list(node, depth = 0) {
+/**
+ * A list as [block], or [] when no item has text or a nested list left. Each item split off
+ * adds a LIST_ITEM_SPLIT notice to `notes`, its path from the list block, in source order.
+ */
+function list(node, depth = 0, notes = [], base = 0) {
   const ordered = node.type === 'ordered_list';
   const items = node.children
     .filter((c) => c.type === 'list_item')
-    .map((li) => listItem(li, depth))
-    .map((it) => ({ ...it, task: ordered ? null : taskItem(it.content) }))
+    .flatMap((li) => listItem(li, depth, base))
+    // `[ ]` opens a task only at the head of an item in the source, never of a split-off one
+    .map((it) => ({ ...it, task: ordered || it.moved ? null : taskItem(it.content) }))
     .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
   if (!items.length) return [];
+  items.forEach((it, i) => {
+    if (it.moved) notes.push({ code: LIST_ITEM_SPLIT, path: `/items/${i}`, line: it.moved[0] + 1, lines: it.moved[1] - it.moved[0] });
+    for (const n of it.notes) notes.push({ ...n, path: `/items/${i}${n.path}` });
+  });
   // GitHub task syntax (`- [ ] `, `- [x] `) makes the whole bullet list a checklist.
   if (items.some((it) => it.task)) {
     return [{
@@ -129,8 +168,11 @@ function quote(node, state) {
   const first = children.length ? textOf(children[0], state.count) : [];
   const marker = calloutMarker(first);
   if (marker && state.depth < MAX_NEST) {
+    const { at, blocks } = state;
     state.depth++;
+    state.blocks = `${at}/slots/body`;
     const body = convert(children.slice(1), state);
+    state.blocks = blocks;
     state.depth--;
     const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
     return [body.length ? { ...callout, slots: { body } } : callout];
@@ -232,7 +274,12 @@ function block(node, state) {
       return blank(content) ? [] : [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), content }];
     }
     case 'paragraph': return paragraph(inline(node.children));
-    case 'bullet_list': case 'ordered_list': return list(node);
+    case 'bullet_list': case 'ordered_list': {
+      const notes = [];
+      const out = list(node, 0, notes, state.base);
+      for (const n of notes) state.splits.push({ ...n, path: `${state.at}${n.path}` });
+      return out;
+    }
     case 'fence': case 'code_block': return code(node, state);
     case 'blockquote': return quote(node, state);
     case 'table': return [table(node)];
@@ -258,8 +305,10 @@ function caption(node) {
 /**
  * A read's state: the ids fences used, how many callouts deep the read is (quote()), and its
  * count: the tokens markdown-it made and the nodes read, so a test sees no part read twice.
+ * `splits` holds a LIST_ITEM_SPLIT notice per list item split off; `blocks` is the path of the
+ * blocks being read, `at` the block's, and `base` the line the parse starts at.
  */
-const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 } });
+const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 }, splits: [], blocks: '/blocks', at: '/blocks', base: 0 });
 
 // Each block of `nodes` onto `out`, sharing `state`: the ids fences used, and how many callouts
 // deep they are. Where the net first fires, its path is the block's place.
@@ -267,6 +316,7 @@ function convert(nodes, state, out = [], net = undefined) {
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     state.count.visits++;
+    state.at = `${state.blocks}/${out.length}`;
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
     if (net?.fired && net.path === undefined) net.path = `/blocks/${out.length}`;
@@ -285,7 +335,12 @@ export { IMPORT_WORK };
  * 'budget'): the first such paragraph, the first line cut (from 1) and how many. Should
  * markdown-it's own count still pass the budget (the net), the rest of the deep text is kept as
  * plain text, with a notice of the same shape and rule 'net': `line` the first source line
- * kept so, `lines` how many. Never throws.
+ * kept so, `lines` how many. Each list item split off at text after its nested list adds one
+ * { code: LIST_ITEM_SPLIT, path, line, lines }: the new item, and its text's source lines (the
+ * first from 1, and how many). The notices come by kind: 'budget' and 'line', then the splits
+ * in source order, then 'net'. Should the read throw or give blocks that do not validate, the
+ * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
+ * notice and no other. Never throws.
  */
 export function readMarkdown(markdown, limits = IMPORT_WORK) {
   const md = typeof markdown === 'string' ? markdown : '';
@@ -297,7 +352,10 @@ export function readMarkdown(markdown, limits = IMPORT_WORK) {
   } catch {
     // fall through: the text as one code block
   }
-  return { blocks: md.trim() === '' ? [] : [codeBlock(md)], notices: [], work: plan.work };
+  // The last resort keeps the text whole, and always says so.
+  const blocks = md.trim() === '' ? [] : [codeBlock(md)];
+  const notice = { code: IMPORT_FELL_BACK, path: blocks.length ? '/blocks/0' : '/blocks', line: 1, lines: md.replace(/\n$/, '').split('\n').length };
+  return { blocks, notices: [notice], work: plan.work };
 }
 
 /**
@@ -312,6 +370,7 @@ export function readPlan(plan, limits) {
   const blocks = [];
   const paths = {};
   for (const part of plan.parts) {
+    state.base = part.line;
     if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line }), state.count), state, blocks, net);
     else {
       paths[part.rule] ??= `/blocks/${blocks.length}`;
@@ -320,6 +379,7 @@ export function readPlan(plan, limits) {
   }
   if (!validate({ blocks }).ok) return null;
   const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
+  for (const split of state.splits) notices.push(split); // a loop: a spread of this many arguments overflows the stack
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
   return { blocks, notices, parsed: net.work, count: state.count };
 }

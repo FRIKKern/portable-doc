@@ -104,11 +104,15 @@ const markdownCases = async (folder) => Object.entries((await import(new URL(`${
 const READERS = {
   nesting: () => markdownCases('nesting'),
   headings: () => markdownCases('headings'),
+  'list-split': () => markdownCases('list-split'),
   'text-work': async () => {
-    const { CUT, CUT_GENERATED, WORK, WORK_GENERATED } = await import(new URL('text-work/cases.mjs', FIXTURES).href);
+    const { CUT, CUT_GENERATED, SPLIT_ITEMS, WORK, WORK_GENERATED, splitItems } = await import(new URL('text-work/cases.mjs', FIXTURES).href);
+    // The 120,000-item case is read here at 1,000 items, its shape word-checked through every
+    // writer; the import tests read it at 20,000 on a small stack.
+    const generated = { ...WORK_GENERATED, [SPLIT_ITEMS]: splitItems(1_000) };
     const cut = [...Object.entries(CUT), [CUT_GENERATED.name, [CUT_GENERATED.markdown, CUT_GENERATED.limits]]];
     return [
-      ...Object.entries({ ...WORK, ...WORK_GENERATED }).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]),
+      ...Object.entries({ ...WORK, ...generated }).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]),
       ...cut.map(([name, [markdown, limits]]) => [name, readMarkdown(markdown, limits).blocks]),
     ];
   },

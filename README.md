@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 43 changes · text, react: item fields and inline nodes read through the one alias table ([#109](https://github.com/FRIKKern/portable-doc/pull/109))
+- **Today** · 44 changes · text: a list item's text after its nested list keeps its place, as the next item, with a notice ([#111](https://github.com/FRIKKern/portable-doc/pull/111))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
