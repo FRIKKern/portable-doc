@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// toMarkdown's lossless mode: Markdown that fromMarkdown reads back as the same blocks.
+// toMarkdown's round-trip mode: Markdown that fromMarkdown reads back as the same blocks,
+// for every block import accepts.
 // Decided by doing, never by a list of types: each block is written, read back and
 // compared, so a new block type is kept the day import can read it back.
 
@@ -29,7 +30,7 @@ const fenced = (block) => ({ type: 'code', lang: 'portabledoc', value: JSON.stri
  * second is fenced. Fences are counted in order, as import counts them, so one that reuses
  * an earlier fence's id is lost. Never throws for a lost block.
  */
-export function lossless(doc, write) {
+export function roundTrip(doc, write) {
   const entries = doc.map((block, at) => ({ at, block }));
   const lost = new Map();
   for (const { at, block } of entries) if (!isMap(block)) lost.set(at, 'not-a-block');

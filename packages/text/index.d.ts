@@ -11,15 +11,15 @@ export interface TextOptions {
    */
   embeds?: Record<string, Doc>;
   /**
-   * toMarkdown only. 'lossless' writes Markdown that fromMarkdown reads back as the same
-   * blocks, and returns { markdown, lost } instead of a string. The default is readable
+   * toMarkdown only. 'round-trip' writes Markdown that fromMarkdown reads back as the same
+   * blocks, for each block import accepts, and returns { markdown, lost } instead of a string. The default is readable
    * Markdown, one way.
    */
-  mode?: 'readable' | 'lossless';
+  mode?: 'readable' | 'round-trip';
 }
 
 /**
- * A block lossless mode could not keep, in the shape of the importer's kept-back fences: its
+ * A block round-trip mode could not keep, in the shape of the importer's kept-back fences: its
  * path in the doc ("/blocks/3"), its id and type (null when it has none), and why. The
  * reason is the fence's (`type`: a type a fence may not hold, here or nested; `address`: an
  * address import does not allow; `invalid`; `depth`; `id`: an id an earlier fence used;
@@ -41,7 +41,7 @@ export const BLOCK_TYPES: readonly string[];
  * Returns '' for a document with nothing to show, else text ending in exactly
  * one newline. Never throws.
  */
-export function toMarkdown(doc: Doc | unknown, options: TextOptions & { mode: 'lossless' }): { markdown: string; lost: LostBlock[] };
+export function toMarkdown(doc: Doc | unknown, options: TextOptions & { mode: 'round-trip' }): { markdown: string; lost: LostBlock[] };
 export function toMarkdown(doc: Doc | unknown, options?: TextOptions): string;
 
 /**

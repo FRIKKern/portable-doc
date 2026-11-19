@@ -76,9 +76,12 @@ $ cat notes.json | npx portable-doc render --format text
   with `@portable-doc/react/paper-surface.css`. It loads the built package, so
   run `npm run react:build` once first; without it, or without `react`
   installed, the command exits 2 and says what to run.
-- `--lossless` writes Markdown that `import` reads back as the same blocks.
-  Each block it cannot keep that way is written readably and listed on stderr
-  with its path, type, id and reason. The exit is then 3, and no flag hides it.
+- `--round-trip` writes Markdown that `import` reads back as the same blocks,
+  for each block import accepts (the types are listed in the text package's
+  README). Each block it cannot keep that way is written readably and listed on
+  stderr with its path, type, id and reason, and the exit is then 3. stderr ends
+  with `kept N of M blocks`, or `kept every block, M of M blocks`. No flag
+  hides it.
 - `-o -` writes to stdout. `-o` never replaces the input file, by any path,
   symlink or hard link to it.
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.

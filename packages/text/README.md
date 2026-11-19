@@ -33,9 +33,10 @@ its target instead.
 `toMarkdown` has two modes:
 
 - **Readable**, the default, writes Markdown for people and reads one way.
-- **Lossless**, `toMarkdown(doc, { mode: 'lossless' })`, returns `{ markdown, lost }`.
-  Every block import accepts comes back the same, and the rest are written
-  readably and reported in `lost`.
+- **Round trip**, `toMarkdown(doc, { mode: 'round-trip' })`, returns
+  `{ markdown, lost }`. Every block import accepts comes back the same, and the
+  rest are written readably and reported in `lost`. The types it keeps are
+  listed under [Round trip](#round-trip).
 
 ## The rules
 
@@ -91,10 +92,10 @@ is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:
 
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
-  every block in it is a heading, paragraph, list, code, table, callout,
-  divider, diagram, chart, stat, stats, heatmap, pullquote or eyebrow: at the
-  top, and nested wherever the schema puts blocks (a list item's `children`,
-  a callout's `slots.body`, …). Otherwise the fence stays a code block.
+  every block in it is of a fence type (`FENCE_TYPES`, listed under
+  [Round trip](#round-trip)): at the top, and nested wherever the schema puts
+  blocks (a list item's `children`, a callout's `slots.body`, …). Otherwise the
+  fence stays a code block.
 
 It never throws. The result always passes `@portable-doc/validate`; if the
 parser or the walk ever fails, the whole input comes back as one code block.
@@ -123,14 +124,16 @@ Where it differs from Barkpark, on purpose:
   input and caps nesting at 100: quotes or lists nested deeper than that are
   left out.
 
-**Round trip.** In readable mode, heading, paragraph, list, code, table,
+## Round trip
+
+In readable mode, heading, paragraph, list, code, table,
 blockquote, divider and diagram come back from `fromMarkdown(toMarkdown(doc))`
 as an equivalent doc: the same blocks once ids are dropped, and inline content
 compared as text runs with their marks. Every other type comes back as whatever
 its Markdown reads as: an image as a link, a callout or pullquote as a quote, an
 equation as a `math` code block.
 
-Lossless mode decides per block by trying it: it writes the block, reads it
+Round-trip mode decides per block by trying it: it writes the block, reads it
 back and compares, never by a list of types.
 
 - A block is written in its own Markdown when that reads back as exactly the
@@ -143,7 +146,15 @@ back and compares, never by a list of types.
   paragraph right after a diagram, is fenced.
 - A fence reusing an earlier fence's id is lost, as import would keep it back.
 
-Lossless mode reads the Markdown back once per block and once for the whole.
+<!-- round-trip-types:start -->
+<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/readme.mjs`; `npm run check` fails when this part is stale. -->
+The round trip is lossless only for blocks of these types, and only where import accepts the block:
+
+- in their own Markdown or a portabledoc fence: `callout`, `chart`, `code`, `diagram`, `divider`, `eyebrow`, `heading`, `heatmap`, `list`, `paragraph`, `pullquote`, `stat`, `stats`, `table`;
+- in their own Markdown only, for the forms that read back as themselves: `blockquote`.
+<!-- round-trip-types:end -->
+
+Round-trip mode reads the Markdown back once per block and once for the whole.
 On the block goldens that is about 0.3 ms of CPU a block, some 12 to 14 times
 readable mode.
 

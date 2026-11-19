@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 import { validate } from '@portable-doc/validate';
@@ -6,16 +7,18 @@ import { SCHEMA_TYPES, allForms, contexts, formsOf } from './block-forms.mjs';
 import { FENCE_TYPES, checkFence } from './from-markdown.js';
 import { READ_ALIASES } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown } from './index.js';
+import { keptTypes, readme } from './readme.mjs';
 
 // The rule: a block the author made survives a round trip, empty or not. In lossless mode,
 // toMarkdown then fromMarkdown gives back exactly the block (ids, inline shapes, every
 // field) when import accepts it: its own Markdown reads back as it, or import splices a
 // portabledoc fence of it (checkFence, the importer's own rule). Any other block is written
-// readably and reported in `lost`, never dropped in silence. No list of exceptions: the
+// readably and reported in `lost`, never dropped in silence. The mode is named round-trip,
+// since it keeps only the blocks import accepts; lossless is the test's own word for that rule. No list of exceptions: the
 // forms come from every type the schema names (block-forms.mjs), and which can be kept is
 // derived, so a new type is checked the day it is added.
 
-const LOSSLESS = { mode: 'lossless' };
+const LOSSLESS = { mode: 'round-trip' };
 const FORMS = allForms();
 const native = (block) => isDeepStrictEqual(fromMarkdown(toMarkdown([block])), [block]);
 /** Can import bring `block` back: its readable Markdown reads back as it, or import splices a fence of it? */
@@ -62,6 +65,12 @@ test('lossless mode keeps a whole doc of every keepable form, in order, and fenc
   const out = toMarkdown(pair, LOSSLESS);
   assert.deepEqual([out.lost, fromMarkdown(out.markdown)], [[], pair]);
   assert.match(out.markdown, /```portabledoc\n\[\{"type":"paragraph"/);
+});
+
+test('the README lists the types round-trip mode keeps as node packages/text/readme.mjs writes them today: the fence types and blockquote', () => {
+  assert.equal(fs.readFileSync(new URL('README.md', import.meta.url), 'utf8'), readme(), 'stale: run node packages/text/readme.mjs');
+  assert.deepEqual(keptTypes().fenced, [...FENCE_TYPES].sort());
+  assert.ok(keptTypes().ownOnly.includes('blockquote'));
 });
 
 test('lossless mode reports a fence import would keep back for a reused id, and anything that is not a block; readable mode is unchanged', () => {

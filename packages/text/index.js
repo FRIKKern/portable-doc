@@ -7,7 +7,7 @@ import { proseHandlers, unknown } from './blocks-prose.js';
 import { layoutHandlers } from './blocks-layout.js';
 import { dataHandlers } from './blocks-data.js';
 import { appHandlers } from './blocks-apps.js';
-import { lossless } from './lossless.js';
+import { roundTrip } from './round-trip.js';
 
 const HANDLERS = { ...proseHandlers, ...layoutHandlers, ...dataHandlers, ...appHandlers };
 
@@ -104,11 +104,11 @@ export { fromMarkdown } from './from-markdown.js';
 
 /**
  * The document as CommonMark with GFM tables, task lists and strikethrough: readable, one way.
- * With `{ mode: 'lossless' }`, { markdown, lost }: Markdown that fromMarkdown reads back as the
- * same blocks, and the blocks it could not keep that way (lossless.js).
+ * With `{ mode: 'round-trip' }`, { markdown, lost }: Markdown that fromMarkdown reads back as the
+ * same blocks, for each block import accepts, and the blocks it could not keep that way (round-trip.js).
  */
 export const toMarkdown = (doc, options) =>
-  isMap(options) && options.mode === 'lossless' ? lossless(blocksOf(doc), (blocks) => render(blocks, true, options)) : render(doc, true, options);
+  isMap(options) && options.mode === 'round-trip' ? roundTrip(blocksOf(doc), (blocks) => render(blocks, true, options)) : render(doc, true, options);
 
 /** The document as readable plain text: no markup, links as "text (url)". */
 export const toPlainText = (doc, options) => render(doc, false, options);

@@ -81,16 +81,17 @@ test('render markdown and text match @portable-doc/text, and an invalid doc is r
   assert.equal((await call(['render', '--format', 'text', '--force'], JSON.stringify(broken.doc))).stdout, toPlainText(broken.doc));
 });
 
-test('render --lossless writes what import reads back; a block it cannot keep is listed on stderr and exits 3', async () => {
+test('render --round-trip writes what import reads back; a block it cannot keep is listed on stderr, with the count kept, and exits 3', async () => {
   const kept = [{ type: 'heading', level: 1, text: 'Hi', id: 'h' }];
-  const ok = await call(['render', '--lossless'], JSON.stringify(kept));
-  assert.deepEqual([ok.status, ok.stdout, ok.stderr], [0, toMarkdown(kept, { mode: 'lossless' }).markdown, '']);
+  const ok = await call(['render', '--round-trip'], JSON.stringify(kept));
+  assert.deepEqual([ok.status, ok.stdout, ok.stderr], [0, toMarkdown(kept, { mode: 'round-trip' }).markdown, '<stdin>: kept every block, 1 of 1 block\n']);
   const doc = [...kept, { type: 'image', src: 'https://example.com/a.png', alt: 'A', id: 'cover' }];
-  const lossy = await call(['render', '--lossless', '-o', path.join(tmp, 'lossless.md')], JSON.stringify(doc));
+  const lossy = await call(['render', '--round-trip', '-o', path.join(tmp, 'round-trip.md')], JSON.stringify(doc));
   assert.equal(lossy.status, 3);
-  assert.equal(fs.readFileSync(path.join(tmp, 'lossless.md'), 'utf8'), toMarkdown(doc, { mode: 'lossless' }).markdown);
-  assert.equal(lossy.stderr, '<stdin>: /blocks/1 image id cover: not kept, written readably: a portabledoc fence may not hold its type, or a block in it\n');
-  assert.equal((await call(['render', '--lossless', '--format', 'text'], JSON.stringify(doc))).status, 2);
+  assert.equal(fs.readFileSync(path.join(tmp, 'round-trip.md'), 'utf8'), toMarkdown(doc, { mode: 'round-trip' }).markdown);
+  assert.equal(lossy.stderr, '<stdin>: /blocks/1 image id cover: not kept, written readably: a portabledoc fence may not hold its type, or a block in it\n<stdin>: kept 1 of 2 blocks\n');
+  assert.equal((await call(['render', '--round-trip', '--format', 'text'], JSON.stringify(doc))).status, 2);
+  assert.equal((await call(['render', '--lossless'], JSON.stringify(doc))).status, 2, 'there is no --lossless');
 });
 
 test('render html is the React renderer\'s markup, field and embed blocks included', () => {

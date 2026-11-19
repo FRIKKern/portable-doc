@@ -143,7 +143,7 @@ function scan(value) {
 
 /**
  * Whether a fence's parsed value is spliced, given the ids earlier fences used: { ids } (the
- * block ids it adds) or { reason }, why it stays a code block. toMarkdown's lossless mode asks
+ * block ids it adds) or { reason }, why it stays a code block. toMarkdown's round-trip mode asks
  * the same question, so writer and reader share one rule.
  */
 export function checkFence(blocks, usedIds) {
