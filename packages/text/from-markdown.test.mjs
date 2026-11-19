@@ -150,13 +150,16 @@ function textAroundNestedList(depth) {
 }
 const tokensOf = (text) => text.match(/\bt\d+\b/g) ?? [];
 
-test('a list item\'s text after its nested list stays after it, in source order, and the round trip keeps the order', () => {
-  // depth 0 and 2; MAX_NEST - 1, where the deepest list is kept as its item's text; MAX_NEST, all text
-  for (const depth of [0, 2, MAX_NEST - 1, MAX_NEST]) {
+test('a list item\'s text after its nested list stays after it, in source order, at every depth, and the round trip keeps the order', () => {
+  // Below MAX_NEST the text splits off as the next item, with a notice; at MAX_NEST and past it
+  // the item's nested list is its text, and the text after it follows in place.
+  for (const depth of [0, 2, MAX_NEST - 1, MAX_NEST, MAX_NEST + 1]) {
     const { markdown, tokens } = textAroundNestedList(depth);
-    const blocks = fromMarkdown(markdown);
+    const { blocks, notices } = readMarkdown(markdown);
     valid(blocks);
     assert.deepEqual(tokensOf(toPlainText(blocks)), tokens, `depth ${depth}: the import, as plain text`);
+    const split = depth < MAX_NEST ? [{ code: LIST_ITEM_SPLIT, path: `/blocks/0${'/items/0/children/0'.repeat(depth)}/items/1`, line: markdown.split('\n').length, lines: 1 }] : [];
+    assert.deepEqual(notices, split, `depth ${depth}: the notices`);
     const written = toMarkdown(blocks);
     assert.deepEqual(tokensOf(written), tokens, `depth ${depth}: the import, written back as Markdown`);
     assert.deepEqual(tokensOf(toPlainText(fromMarkdown(written))), tokens, `depth ${depth}: the round trip`);
