@@ -11,8 +11,10 @@ import { MAX_HTML_BYTES, render } from './render.js';
 import { MAX_MESSAGE_BYTES } from './stdio.js';
 import { MAX_OPS } from './tools.js';
 import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs';
+import { withinBudget } from '../../scripts/lib/cpu-budget.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
+const CPU_REPORT = fileURLToPath(new URL('test/cpu-report.mjs', import.meta.url));
 const TIMEOUT = { timeout: 20_000 };
 const brokenDir = new URL('../../fixtures/broken/', import.meta.url);
 const broken = fs.readdirSync(brokenDir).filter((file) => file.endsWith('.json')).sort()
@@ -31,6 +33,49 @@ function deepDoc(levels) {
 async function connect(env = {}) {
   const client = new Client({ name: 'test', version: '0.0.0' });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env, stderr: 'pipe' }));
+  return client;
+}
+
+/**
+ * A client whose server reports its CPU time after each reply (test/cpu-report.mjs).
+ * `client.underBudget(limitMs, what, work)` holds the server's CPU, from its last reply
+ * to its reply to `work`, under `limitMs`: the work runs in the child, where this
+ * process's cpuUsage cannot see it.
+ */
+async function connectTimed(env = {}) {
+  const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', CPU_REPORT, BIN], env, stderr: 'pipe' });
+  const cpu = [];
+  let rest = '';
+  transport.stderr.on('data', (chunk) => {
+    const lines = (rest + chunk).split('\n');
+    rest = lines.pop();
+    for (const line of lines) if (/^cpu-us \d+$/.test(line)) cpu.push(Number(line.slice(7)));
+  });
+  const client = new Client({ name: 'test', version: '0.0.0' });
+  await client.connect(transport);
+  // Each message the server writes is followed by one report, on another pipe. Count the
+  // messages (the initialize reply so far) so a report is never matched to the wrong one.
+  let messages = 1;
+  const onmessage = transport.onmessage;
+  transport.onmessage = (message, extra) => {
+    messages++;
+    onmessage(message, extra);
+  };
+  const reportsIn = async () => {
+    const deadline = Date.now() + 10_000; // hang deadline: a report follows each message at once
+    while (cpu.length < messages) {
+      if (Date.now() > deadline) throw new Error('the server sent no CPU report'); // hang deadline
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  };
+  client.underBudget = async (limitMs, what, work) => {
+    await reportsIn();
+    const from = cpu.at(-1);
+    const result = await work();
+    await reportsIn();
+    withinBudget(limitMs, cpu.at(-1) - from, what);
+    return result;
+  };
   return client;
 }
 
@@ -55,7 +100,7 @@ describe('over stdio with the SDK client', () => {
   let reader;
   before(async () => {
     reader = await startFakeReader();
-    client = await connect({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: FAKE_TOKEN });
+    client = await connectTimed({ BARKPARK_URL: reader.base, BARKPARK_TOKEN: FAKE_TOKEN });
   });
   after(async () => {
     await client.close();
@@ -142,22 +187,17 @@ describe('over stdio with the SDK client', () => {
   test(`a doc past ${MAX_NODES} JSON values is InvalidParams, quickly`, async () => {
     const blocks = Array.from({ length: 70_000 }, (_, i) => ({ id: `p${i}`, type: 'divider' }));
     for (const name of ['validate', 'apply_ops', 'render']) {
-      const started = Date.now();
-      await protocolError(call(client, name, { ...ARGS[name], doc: { blocks } }), new RegExp(`more than ${MAX_NODES} JSON values`));
-      assert.ok(Date.now() - started < 5000, `${name} took ${Date.now() - started} ms`);
+      await client.underBudget(5000, name, () => protocolError(call(client, name, { ...ARGS[name], doc: { blocks } }), new RegExp(`more than ${MAX_NODES} JSON values`)));
     }
   });
 
   test('the largest doc allowed answers in time: validate, a full batch of ops, render', async () => {
     const blocks = Array.from({ length: 49_000 }, (_, i) => ({ id: `p${i}`, type: 'divider' }));
     const ops = Array.from({ length: MAX_OPS }, (_, i) => ({ op: 'patch-block', id: `p${48_999 - i}`, patch: { tone: 'x' } }));
-    let started = Date.now();
-    assert.deepEqual((await call(client, 'validate', { doc: { blocks } })).structuredContent, { ok: true });
-    assert.ok(Date.now() - started < 10_000, `validate took ${Date.now() - started} ms`);
-    started = Date.now();
-    const applied = (await call(client, 'apply_ops', { doc: { blocks }, ops })).structuredContent;
+    const checked = await client.underBudget(10_000, 'validate', () => call(client, 'validate', { doc: { blocks } }));
+    assert.deepEqual(checked.structuredContent, { ok: true });
+    const applied = (await client.underBudget(15_000, 'apply_ops', () => call(client, 'apply_ops', { doc: { blocks }, ops }))).structuredContent;
     assert.equal(applied.doc.blocks.at(-1).tone, 'x');
-    assert.ok(Date.now() - started < 15_000, `apply_ops took ${Date.now() - started} ms`);
     toolError(await call(client, 'render', { doc: { blocks: [{ type: 'divider', tone: 'x' }] } }), /answered 422/);
   });
 
@@ -268,11 +308,13 @@ describe('render failures are tool errors, never a hang', () => {
     const gone = await startFakeReader();
     await gone.close();
     toolError(await renderWith({ BARKPARK_URL: gone.base }), /failed: connect ECONNREFUSED/);
-    const slow = await startFakeReader({ delayMs: 3000 });
+    // A reader that never answers while the test runs: only BARKPARK_TIMEOUT_MS can end the
+    // call, and the error names it. No clock is read; if the timeout did not fire, the call
+    // would hang until the SDK request timeout (TIMEOUT) and fail.
+    const slow = await startFakeReader({ delayMs: 600_000 });
     try {
-      const started = Date.now();
       toolError(await renderWith({ BARKPARK_URL: slow.base, BARKPARK_TIMEOUT_MS: '300' }), /no answer within 300 ms/);
-      assert.ok(Date.now() - started < 2500, `took ${Date.now() - started} ms`);
+      assert.equal(slow.requests.length, 1, 'the reader got the request and never answered it');
     } finally {
       await slow.close();
     }

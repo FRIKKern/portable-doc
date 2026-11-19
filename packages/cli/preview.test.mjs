@@ -67,9 +67,9 @@ async function nextEvent(url, name, ms = 4000) {
 }
 
 const waitFor = async (check, ms = 4000) => {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms; // hang deadline: only stops a wait that would never end
   while (!(await check())) {
-    if (Date.now() > end) throw new Error('timed out');
+    if (Date.now() > end) throw new Error('timed out'); // hang deadline
     await new Promise((r) => setTimeout(r, 50));
   }
 };

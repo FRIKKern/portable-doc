@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: Apache-2.0
+// `portable-doc render`: print a doc as html, markdown or text.
+
+import fs from 'node:fs';
+import { toMarkdown, toPlainText } from '@portable-doc/text';
+import { validate } from '@portable-doc/validate';
+import { UsageError, errorLine, isRenderable, load, moreLine, parseArgs, renderHtml, sameFile } from '../shared.js';
+import { shown } from '../words.js';
+
+export const order = 3;
+export const synopsis = '[file]';
+export const summary = 'print a doc as html, markdown or text';
+export const usage = `Usage: portable-doc render [file] [--format html|markdown|text] [-o out] [--force]
+
+  --format <f>          html, markdown (the default) or text
+  -o, --output <file>   write there instead of stdout ("-" is stdout); never the input file
+  --force               render a doc that fails validation
+Exit: 0 rendered, 1 the doc is invalid (without --force), 2 usage error, unreadable file, bad JSON,
+or html asked for before @portable-doc/react is built.`;
+
+const flags = { '--format': 'format=', '--output': 'output=', '-o': 'output=', '--force': 'force' };
+const FORMATS = ['html', 'markdown', 'text'];
+
+export async function run(args, io) {
+  const { files, opts } = parseArgs(flags, args);
+  if (files.length > 1) throw new UsageError('render takes one file');
+  const format = opts.format ?? 'markdown';
+  if (!FORMATS.includes(format)) throw new UsageError(`--format must be html, markdown or text, not "${shown(format)}"`);
+  if (!files.length && io.stdinIsTTY) throw new UsageError('give a file, or pipe a doc to stdin');
+  const output = opts.output === '-' ? undefined : opts.output;
+  if (output !== undefined && sameFile(files[0] ?? '-', output)) throw new UsageError('-o would overwrite the input file');
+  const input = await load(files[0] ?? '-', io);
+  if (input.failure) return io.stderr(`${input.name}: ${input.failure.message}\n`), 2;
+  const result = validate(input.doc);
+  if (!result.ok) {
+    io.stderr(result.errors.map((e) => `${errorLine(input.name, e)}\n`).join('') + moreLine(input.name, result.more));
+    if (!opts.force) return io.stderr(`${input.name}: not rendered, the doc is invalid (--force renders it anyway)\n`), 1;
+  }
+  let out;
+  if (format === 'html') {
+    const r = await renderHtml(isRenderable(input.doc) ? input.doc : []);
+    if (r.missing) return io.stderr(`portable-doc: ${r.missing}\n`), 2;
+    out = r.html;
+  } else out = format === 'markdown' ? toMarkdown(input.doc) : toPlainText(input.doc);
+  if (output === undefined) return io.stdout(out), 0;
+  try {
+    fs.writeFileSync(output, out);
+  } catch (error) {
+    return io.stderr(`${shown(output)}: cannot write: ${shown(error.message)}\n`), 2;
+  }
+  return 0;
+}
+
+export const readme = `## Render
+
+\`\`\`console
+$ npx portable-doc render notes.json --format markdown -o notes.md
+$ cat notes.json | npx portable-doc render --format text
+\`\`\`
+
+- \`--format markdown\` (the default) and \`--format text\` use \`@portable-doc/text\`.
+- \`--format html\` prints the React renderer's markup inside
+  \`<div class="bp-paper-surface">\`, with field and embed blocks on. Style it
+  with \`@portable-doc/react/paper-surface.css\`. It loads the built package, so
+  run \`npm run react:build\` once first; without it, or without \`react\`
+  installed, the command exits 2 and says what to run.
+- \`-o -\` writes to stdout. \`-o\` never replaces the input file, by any path,
+  symlink or hard link to it.
+- An invalid doc is not rendered: its errors go to stderr and the exit is 1.
+  \`--force\` renders it anyway, after printing the errors.`;

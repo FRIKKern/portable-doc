@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Compare two PortableDoc docs block by block: match the blocks, then name
 // what was added, removed, moved and changed, down to the word or field.
-// Pure: no I/O, no escaping. diff.js prints the result.
+// Pure: no I/O, no escaping. commands/diff.js prints the result.
 
 import { toMarkdown } from '@portable-doc/text';
 import { inOrder, matchBlocks } from './diff-match.js';
