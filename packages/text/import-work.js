@@ -2,7 +2,7 @@
 // The import's work, counted from the Markdown text alone, before any parse, so every
 // importer that reads the same text cuts it at the same line.
 //
-// Per line (lines split on "\n"; a "\r" is an ordinary character):
+// Per line (lines split as markdown-it splits them: at "\r\n", "\r" or "\n"):
 //   blank   = empty, or only spaces and tabs;
 //   prefix  = its leading container markers (`>`, `-` `+` `*` or 1 to 9 digits and `.` or `)`,
 //             a list marker followed by a space, a tab or the line end) and the spaces and
@@ -126,7 +126,7 @@ function closes(line, at, fence) {
  * (the lines from where the work passed the budget), `line` counted from 1.
  */
 export function planText(markdown, limits = IMPORT_WORK) {
-  const lines = markdown.split('\n');
+  const lines = markdown.split(/\r\n?|\n/);
   const parts = [];
   const notices = new Map();
   const note = (rule, n, count) => {
@@ -179,7 +179,7 @@ export function planText(markdown, limits = IMPORT_WORK) {
     if (spent) continue;
     if (long) {
       flush();
-      parts.push({ plain: line.replace(/\r$/, ''), rule: 'line' });
+      parts.push({ plain: line, rule: 'line' });
       note('line', n, 1);
       if (fence) {
         // The code goes on after the line: read it as if the fence opened again there.

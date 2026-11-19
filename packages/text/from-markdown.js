@@ -222,12 +222,13 @@ function caption(node) {
   return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-function convert(nodes, state) {
-  const out = [];
+// Each block of `nodes` onto `out`. Where the net first fires, its path is the block's place.
+function convert(nodes, state, out = [], net = undefined) {
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
+    if (net?.fired && net.path === undefined) net.path = `/blocks/${out.length}`;
     for (const b of blocks) out.push(b);
   }
   return out;
@@ -240,31 +241,44 @@ export { IMPORT_WORK };
  * import's work counted from the text (import-work.js). A line longer than limits.lineBytes, and
  * every line from where the work passes limits.budget, is kept as a top-level paragraph of plain
  * text, every word; `notices` then hold one { code, rule, path, line, lines } per rule ('line' or
- * 'budget'): the first such paragraph, the first line cut (from 1) and how many. Never throws.
+ * 'budget'): the first such paragraph, the first line cut (from 1) and how many. Should
+ * markdown-it's own count still pass the budget (the net), the rest of the deep text is kept as
+ * plain text and `notices` hold { code, rule: 'net', path, work }. Never throws.
  */
 export function readMarkdown(markdown, limits = IMPORT_WORK) {
   const md = typeof markdown === 'string' ? markdown : '';
   let plan = { work: 0, parts: [], notices: [] };
   try {
     plan = planText(md, limits);
-    const state = { ids: new Set() };
-    const blocks = [];
-    const paths = {};
-    for (const part of plan.parts) {
-      if (part.read !== undefined) blocks.push(...convert(tree(parser.parse(part.read, {})), state));
-      else {
-        paths[part.rule] ??= `/blocks/${blocks.length}`;
-        blocks.push({ type: 'paragraph', content: [text(part.plain)] });
-      }
-    }
-    if (validate({ blocks }).ok) {
-      const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
-      return { blocks, notices, work: plan.work };
-    }
+    const read = readPlan(plan, limits);
+    if (read) return { ...read, work: plan.work };
   } catch {
     // fall through: the text as one code block
   }
   return { blocks: md.trim() === '' ? [] : [codeBlock(md)], notices: [], work: plan.work };
+}
+
+/**
+ * A plan from planText as { blocks, notices }, or null when the blocks do not validate. Each
+ * part read is a fresh document for markdown-it; the net's count runs across them all. The
+ * import-work test also reads a plan made with a wrong count here, to see the net catch it.
+ */
+export function readPlan(plan, limits) {
+  const state = { ids: new Set() };
+  const net = { work: 0, budget: limits.budget };
+  const blocks = [];
+  const paths = {};
+  for (const part of plan.parts) {
+    if (part.read !== undefined) convert(tree(parser.parse(part.read, { net })), state, blocks, net);
+    else {
+      paths[part.rule] ??= `/blocks/${blocks.length}`;
+      blocks.push({ type: 'paragraph', content: [text(part.plain)] });
+    }
+  }
+  if (!validate({ blocks }).ok) return null;
+  const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
+  if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, work: net.work });
+  return { blocks, notices };
 }
 
 /** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */

@@ -29,9 +29,12 @@ parser.normalizeLink = (url) => url;
 
 // What markdown-it re-scans, counted as it parses (env.work): each tokenize call adds the
 // lines it took and their characters, so a line nested d deep counts d + 1 times, in
-// whichever parse reaches it. Nothing is decided by it: the import's budget is counted from
-// the text before parsing (import-work.js), and the test checks that count is never below
-// this one.
+// whichever parse reaches it. The import's budget is counted from the text before parsing
+// (import-work.js), and the test checks that count is never below this one. This count is
+// the net behind it (env.net, shared by the import's parses): should it still pass the
+// budget, containers below the top level are not parsed any more, their text is kept as
+// plain text, every word (flattenText), and the import gives a notice with rule 'net'.
+// It fires only where the text's count is wrong, so a notice from it is a bug to report.
 
 // markdown-it's own tokenize, except that where it would skip the lines too deep to
 // parse (from the first non-blank line in this container to its end) they are kept.
@@ -40,22 +43,32 @@ const tokenize = parser.block.tokenize.bind(parser.block);
 parser.block.tokenize = (state, startLine, endLine) => {
   const env = state.env;
   env.work ??= 0;
-  if (state.level < state.md.options.maxNesting) {
+  if (state.level < state.md.options.maxNesting && !(state.level > 0 && spent(env))) {
     tokenize(state, startLine, endLine);
     // The lines this container took, and their characters: a list item or quote is given
     // the outer end and stops early.
     // bMarks keeps a last entry at the source's end; lineMax is no guide, as a quote shrinks it to its own end.
     const end = state.bMarks[state.line] ?? state.src.length;
-    env.work += Math.max(0, state.line - startLine) + Math.max(0, end - state.bMarks[startLine]);
+    const work = Math.max(0, state.line - startLine) + Math.max(0, end - state.bMarks[startLine]);
+    env.work += work;
+    if (env.net) env.net.work += work;
     return;
   }
   const line = state.skipEmptyLines(startLine);
   if (line >= endLine || state.sCount[line] < state.blkIndent) return void (state.line = line);
+  // This container's lines only: a list item is given the outer end, and its own lines stop
+  // at the first line indented less than it, as markdown-it's own tokenize stops there. A
+  // quote's lazy lines (sCount -1, markdown-it's mark) are its own.
+  let end = line;
+  while (end < endLine && (state.isEmpty(end) || state.sCount[end] < 0 || state.sCount[end] >= state.blkIndent)) end++;
   const tok = state.push('deep_source', '', 0);
-  tok.content = state.getLines(line, endLine, state.blkIndent, false);
-  tok.meta = env; // the parse's count, shared by every parse of its deep source
-  state.line = endLine;
+  tok.content = state.getLines(line, end, state.blkIndent, false);
+  tok.meta = env; // the parse's count and net, shared by every parse of its deep source
+  state.line = end;
 };
+
+/** Whether the parse's net is past its budget. */
+const spent = (env) => env.net !== undefined && env.net.work > env.net.budget;
 
 /** Flat open/close tokens as nodes: { type, tok, children }. Iterative. */
 export function tree(tokens) {
@@ -178,6 +191,12 @@ export function flattenText(nodes) {
     if (node.type === 'deep_source') {
       const { content, meta: env } = node.tok;
       stack.push(SEP);
+      if (spent(env)) {
+        // The net: the rest as plain text, and the import says so.
+        env.net.fired = true;
+        if (!skipping) out += `${out === '' || /\s$/.test(out) ? '' : ' '}${content.replace(/\s+/g, ' ').trim()}`;
+        continue;
+      }
       const nodes = tree(parser.parse(content, env));
       for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
       continue;
