@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { CASES as HEADINGS } from '../fixtures/headings/cases.mjs';
 import { CASES as NESTING } from '../fixtures/nesting/cases.mjs';
 import { CUT, CUT_GENERATED, WORK, WORK_GENERATED } from '../fixtures/text-work/cases.mjs';
 import { depthsOf, linesOf } from '../fixtures/text-work/rule-reader.mjs';
@@ -83,7 +84,9 @@ function roundTripCases() {
 /** Every generated shared-case file: { "<folder>/<file>": text }. */
 export function sharedCases() {
   const files = {};
-  for (const [name, markdown] of Object.entries(NESTING)) files[`nesting/${name}.json`] = pretty({ markdown, blocks: fromMarkdown(markdown) });
+  for (const [folder, cases] of [['nesting', NESTING], ['headings', HEADINGS]]) {
+    for (const [name, markdown] of Object.entries(cases)) files[`${folder}/${name}.json`] = pretty({ markdown, blocks: fromMarkdown(markdown) });
+  }
   files['text-work/work-cases.json'] = workCases();
   files['text-work/cut-cases.json'] = cutCases();
   files['round-trip/round-trip-cases.json'] = roundTripCases();

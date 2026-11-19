@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { FIXTURES, kept, sharedCases } from '../../scripts/write-shared-cases.mjs';
+import { CASES as HEADINGS } from '../../fixtures/headings/cases.mjs';
 import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
 import { CUT, CUT_GENERATED, FIRST, WORK, WORK_GENERATED } from '../../fixtures/text-work/cases.mjs';
 import { plan } from '../../fixtures/text-work/rule-reader.mjs';
@@ -23,7 +24,7 @@ test('each generated case file is kept in fixtures/ exactly as scripts/write-sha
     if (kept(text)) assert.equal(fs.existsSync(at) && fs.readFileSync(at, 'utf8'), text, `stale: run node scripts/write-shared-cases.mjs (${file})`);
     else assert.ok(!fs.existsSync(at), `${file} is over the size kept in the repository; the script writes it on request`);
   }
-  for (const folder of ['nesting', 'text-work', 'round-trip']) {
+  for (const folder of ['nesting', 'headings', 'text-work', 'round-trip']) {
     const stray = fs.readdirSync(path.join(FIXTURES, folder)).filter((f) => f.endsWith('.json') && !(`${folder}/${f}` in FILES));
     assert.deepEqual(stray, [], `${folder}: a case file no input builds`);
   }
@@ -32,6 +33,7 @@ test('each generated case file is kept in fixtures/ exactly as scripts/write-sha
 test('one name, one case: no two shared cases share a name, in any folder or across folders', () => {
   const names = [
     ...Object.keys(NESTING),
+    ...Object.keys(HEADINGS),
     ...Object.keys(FIRST),
     ...Object.keys(HOSTILE),
     ...Object.keys(WORK_GENERATED),
