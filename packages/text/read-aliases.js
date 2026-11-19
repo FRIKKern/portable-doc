@@ -7,12 +7,15 @@
 //
 // The rule, for one field of one block:
 // - A name is absent when its value is undefined, null, a string that is empty or only
-//   whitespace, or an empty array.
+//   whitespace, or an empty array; or when its value is not of a type spec/blocks.schema.json
+//   gives that name on that block type. A name the schema does not declare takes the types
+//   the schema gives the other names of its field.
 // - The first name that is not absent wins: the field's own (current) name first, then its
 //   old names in TABLE's order.
 // - When every name is absent, the current name's stored value is read as it is: nothing is
 //   invented, so a code block of only spaces stays one.
 
+import schema from '../../spec/blocks.schema.json' with { type: 'json' };
 import { isMap } from './util.js';
 
 const deepFreeze = (value) => {
@@ -52,9 +55,70 @@ for (const [from, { to }] of Object.entries(TABLE.aliases)) {
   CURRENT.set(from, field);
 }
 
-/** Whether a name holding `value` counts as absent: undefined, null, a blank string, or an empty array. */
+// The JSON types the schema allows for a node, or null when it does not constrain the type.
+function schemaTypes(node, seen = new Set()) {
+  if (node === undefined || node === true) return null;
+  if (node.$ref === '#') return ['object'];
+  if (node.$ref) {
+    if (seen.has(node.$ref)) return null;
+    seen.add(node.$ref);
+    return schemaTypes(node.$ref.split('/').slice(1).reduce((at, key) => at?.[key], schema), seen);
+  }
+  const options = node.anyOf ?? node.oneOf;
+  if (options) {
+    const all = options.map((option) => schemaTypes(option, new Set(seen)));
+    return all.includes(null) ? null : [...new Set(all.flat())];
+  }
+  if (node.type !== undefined) return Array.isArray(node.type) ? node.type : [node.type];
+  const constants = node.const !== undefined ? [node.const] : node.enum;
+  if (constants) return [...new Set(constants.map((v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)))];
+  if (node.properties) return ['object'];
+  if (node.items) return ['array'];
+  return null;
+}
+
+// "type.name" → the JSON types a name of an aliased field may hold (null: any), from the schema.
+const TYPES = new Map();
+for (const [key, names] of NAMES) {
+  const type = key.slice(0, key.indexOf('.'));
+  const properties = derefBlock(type)?.properties;
+  const declared = names.map((name) => (properties && Object.hasOwn(properties, name) ? schemaTypes(properties[name]) : undefined));
+  const known = declared.filter((t) => t !== undefined);
+  const fallback = known.length === 0 || known.includes(null) ? null : [...new Set(known.flat())];
+  names.forEach((name, i) => TYPES.set(`${type}.${name}`, declared[i] === undefined ? fallback : declared[i]));
+}
+
+function derefBlock(type) {
+  let node = schema.definitions?.blocks?.[type];
+  while (node?.$ref) node = node.$ref.split('/').slice(1).reduce((at, key) => at?.[key], schema);
+  return node;
+}
+
+const OF_TYPE = {
+  string: (v) => typeof v === 'string',
+  number: (v) => typeof v === 'number',
+  integer: (v) => Number.isInteger(v),
+  boolean: (v) => typeof v === 'boolean',
+  array: (v) => Array.isArray(v),
+  object: (v) => isMap(v),
+  null: (v) => v === null,
+};
+
+/** The JSON types the schema gives name `name` on a block of `type`, or null when any type is allowed. */
+export function typesOf(type, name) {
+  return TYPES.get(`${type}.${name}`) ?? null;
+}
+
+/** Whether a name holding `value` counts as absent by blankness alone: undefined, null, a blank string, or an empty array. */
 export function absent(value) {
   return value === undefined || value === null || (typeof value === 'string' && value.trim() === '') || (Array.isArray(value) && value.length === 0);
+}
+
+/** Whether name `name` of a block of `type` holding `value` counts as absent: blank, or not of a type the schema gives it. */
+export function absentAs(type, name, value) {
+  if (absent(value)) return true;
+  const types = typesOf(type, name);
+  return types !== null && !types.some((t) => OF_TYPE[t]?.(value));
 }
 
 /** The names `field` of a block of `type` is read under: its own first, then its old names. */
@@ -78,8 +142,8 @@ export function convertOf(type, key) {
  */
 export function readField(block, field) {
   if (!isMap(block)) return { name: field, value: undefined };
-  const names = typeof block.type === 'string' ? namesOf(block.type, field) : [field];
-  for (const name of names) if (!absent(block[name])) return { name, value: block[name] };
+  const type = typeof block.type === 'string' ? block.type : '';
+  for (const name of namesOf(type, field)) if (!absentAs(type, name, block[name])) return { name, value: block[name] };
   return { name: field, value: block[field] };
 }
 

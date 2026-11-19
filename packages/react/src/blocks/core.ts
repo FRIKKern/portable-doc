@@ -28,7 +28,7 @@ import {
 } from '../inline'
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
-import { fieldOf, namesOf } from '../../../text/read-aliases.js'
+import { fieldOf, namesOf, readField } from '../../../text/read-aliases.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
 import type { RenderCtx } from './chrome'
 
@@ -38,12 +38,18 @@ type Emit = (block: Block, ctx: RenderCtx) => string
 
 // On a block type whose `text` is an old name for `content`, the body is that field read
 // through the alias table (packages/text/read-aliases.js); on any other, a non-empty
-// `content` array, else `text`.
+// `content` array, else `text`. A `content` that is not an array (read only when no name
+// holds a value of its type) shows nothing.
 function paragraphInline(b: Block): unknown {
-  const aliased = typeof b.type === 'string' && namesOf(b.type, 'content').length > 1
-  const body = aliased ? fieldOf(b, 'content') : Array.isArray(b.content) && b.content.length ? b.content : b.text
-  if (Array.isArray(body)) return body
-  const text = str(body)
+  let text: string
+  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) {
+    const { name, value } = readField(b, 'content')
+    if (Array.isArray(value)) return value
+    text = name === 'content' ? '' : str(value)
+  } else {
+    if (Array.isArray(b.content) && b.content.length) return b.content
+    text = str(b.text)
+  }
   return text !== '' ? text : []
 }
 

@@ -2,18 +2,21 @@
 // Prose blocks: headings, paragraphs, lists, quotes, callouts, code, media,
 // buttons. Each handler takes (block, ctx) and returns a string ('' = nothing).
 
-import { fieldOf, namesOf } from './read-aliases.js';
+import { fieldOf, namesOf, readField } from './read-aliases.js';
 import { asList, capitalize, fence, isMap, nonblank, paras, quote, safeUrl, str } from './util.js';
 
 /**
  * A block's inline body. On a block type whose `text` is an old name for `content`, the field
  * read through read-aliases.js; on any other (a list item, a quote), a non-empty `content`
- * array, else its `text`. An inline array as it is; anything else as a string.
+ * array, else its `text`. An inline array as it is, a `text` as a string; a `content` that is
+ * not an array (read only when no name holds a value of its type) shows nothing.
  */
 export function body(b) {
-  const aliased = typeof b.type === 'string' && namesOf(b.type, 'content').length > 1;
-  const v = aliased ? fieldOf(b, 'content') : Array.isArray(b.content) && b.content.length ? b.content : b.text;
-  return Array.isArray(v) ? v : str(v);
+  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) {
+    const { name, value } = readField(b, 'content');
+    return Array.isArray(value) ? value : name === 'content' ? '' : str(value);
+  }
+  return Array.isArray(b.content) && b.content.length ? b.content : str(b.text);
 }
 
 function heading(b, ctx) {

@@ -55,8 +55,8 @@ its target instead.
   a table's `header` for `head`, and the other rows of the one alias table in
   `read-aliases.js` (the pack's `spec/read-aliases.json`, until it is synced
   here). Every renderer reads such a field through that table: a name is absent
-  when it is undefined, null, blank or an empty array; the first name not
-  absent wins, the current name first, then the old names in the table's
+  when it is undefined, null, blank or an empty array, or holds a value of a
+  type the schema does not give it; the first name not absent wins, the current name first, then the old names in the table's
   order; when all are absent, the current name is read as stored. A table's
   `cols` gives only each column's type, beside or in place of `columns`.
 - **Links.** Only the schemes the renderer allows become links: `http`,
