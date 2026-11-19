@@ -287,6 +287,35 @@ test('a Markdown image with an unsafe address and no alt text leaves no text: th
   assert.deepEqual(fromMarkdown('![](https://example.com/a.png)'), [{ type: 'paragraph', content: [{ type: 'link', href: 'https://example.com/a.png', children: [{ type: 'text', value: 'https://example.com/a.png' }] }] }]);
 });
 
+test('a heading, paragraph, list item or quote that import leaves with no text is dropped, never kept empty; a list with no items left goes too', () => {
+  const t = (value) => ({ type: 'text', value });
+  const cases = [
+    ['# ![](javascript:x)', []],
+    ['# <script>x</script>', []],
+    ['# &nbsp;', []],
+    ['&nbsp;', []],
+    ['` `', []],
+    ['[ ](https://x.example)', []],
+    ['> ![](javascript:x)', []],
+    ['- ![](javascript:x)', []],
+    ['- [ ] ![](javascript:x)', []],
+    ['1. ![](javascript:x)\n   - ![](javascript:x)', []],
+    ['- ![](javascript:x)\n- b', [{ type: 'list', ordered: false, items: [[t('b')]] }]],
+    ['- [x] ![](javascript:x)\n- b', [{ type: 'list', ordered: false, items: [[t('b')]] }]],
+    // An item with no text but a nested list keeps its place, as the list's parent.
+    ['- ![](javascript:x)\n  - a', [{ type: 'list', ordered: false, items: [{ content: [], children: [{ type: 'list', ordered: false, items: [[t('a')]] }] }] }]],
+    // A table cell is not a block: it stays, empty.
+    ['| a |\n|---|\n| ![](javascript:x) |', [{ type: 'table', head: [[t('a')]], rows: [[[]]] }]],
+    ['# a\n\n![](javascript:x)\n\nb', [{ type: 'heading', level: 1, text: 'a' }, { type: 'paragraph', content: [t('b')] }]],
+  ];
+  for (const [md, blocks] of cases) {
+    const got = fromMarkdown(md);
+    assert.deepEqual(got, blocks, md);
+    // "No text" is toMarkdown's measure: every block kept writes something back.
+    for (const b of got) assert.notEqual(toMarkdown([b]).trim(), '', `${md}: ${JSON.stringify(b)}`);
+  }
+});
+
 test('an empty code block is a real block: toMarkdown writes its empty fence, with its language, and import gives the same block back', () => {
   for (const md of ['```\n```', '```js\n```', '````\n````', '```\n   \n```']) {
     const blocks = fromMarkdown(md);

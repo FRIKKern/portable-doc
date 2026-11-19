@@ -95,11 +95,16 @@ parser or the walk ever fails, the whole input comes back as one code block.
 Where it differs from Barkpark, on purpose:
 
 - Only URLs the renderer allows become links; any other link or image keeps
-  its text, and an image with no alt text leaves none. A portabledoc fence must also validate, hold only allowed URLs in
-  every address field (`href`, `src`, `poster`, `url`, at any depth), reuse no
-  `id` from an earlier fence, and may nest no deeper than
-  `MAX_VALUE_DEPTH` from `@portable-doc/validate` (1000 JSON levels, counted
-  in the doc), or it stays a code block.
+  its text, and an image with no alt text leaves none. A portabledoc fence
+  must also validate, hold only allowed URLs in every address field (`href`,
+  `src`, `poster`, `url`, at any depth), reuse no `id` from an earlier fence,
+  and may nest no deeper than `MAX_VALUE_DEPTH` from `@portable-doc/validate`
+  (1000 JSON levels, counted in the doc), or it stays a code block.
+- A heading, paragraph, list item or quote that import leaves with no text
+  (say, an unsafe image, a script or a blank code span) is dropped, never kept
+  empty. "No text" is `toMarkdown`'s measure: it would write nothing for it. A
+  list whose items all drop goes too; an item with a nested list stays. Table
+  cells stay as they are.
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
