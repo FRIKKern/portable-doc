@@ -91,7 +91,6 @@ test('render --round-trip writes what import reads back; a block it cannot keep 
   assert.equal(fs.readFileSync(path.join(tmp, 'round-trip.md'), 'utf8'), toMarkdown(doc, { mode: 'round-trip' }).markdown);
   assert.equal(lossy.stderr, '<stdin>: /blocks/1 image id cover: not kept, written readably: a portabledoc fence may not hold its type, or a block in it\n<stdin>: kept 1 of 2 blocks\n');
   assert.equal((await call(['render', '--round-trip', '--format', 'text'], JSON.stringify(doc))).status, 2);
-  assert.equal((await call(['render', '--lossless'], JSON.stringify(doc))).status, 2, 'there is no --lossless');
 });
 
 test('render html is the React renderer\'s markup, field and embed blocks included', () => {

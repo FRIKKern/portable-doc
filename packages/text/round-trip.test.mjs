@@ -9,16 +9,15 @@ import { READ_ALIASES } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown } from './index.js';
 import { keptTypes, readme } from './readme.mjs';
 
-// The rule: a block the author made survives a round trip, empty or not. In lossless mode,
+// The rule: a block the author made survives a round trip, empty or not. In round-trip mode,
 // toMarkdown then fromMarkdown gives back exactly the block (ids, inline shapes, every
 // field) when import accepts it: its own Markdown reads back as it, or import splices a
 // portabledoc fence of it (checkFence, the importer's own rule). Any other block is written
-// readably and reported in `lost`, never dropped in silence. The mode is named round-trip,
-// since it keeps only the blocks import accepts; lossless is the test's own word for that rule. No list of exceptions: the
+// readably and reported in `lost`, never dropped in silence. No list of exceptions: the
 // forms come from every type the schema names (block-forms.mjs), and which can be kept is
 // derived, so a new type is checked the day it is added.
 
-const LOSSLESS = { mode: 'round-trip' };
+const ROUND_TRIP = { mode: 'round-trip' };
 const FORMS = allForms();
 const native = (block) => isDeepStrictEqual(fromMarkdown(toMarkdown([block])), [block]);
 /** Can import bring `block` back: its readable Markdown reads back as it, or import splices a fence of it? */
@@ -37,32 +36,32 @@ test('the forms cover every schema type, vary values past the golden, write no a
   assert.deepEqual(Object.keys(contexts), ['in a list item', 'in a quote']);
 });
 
-test('lossless mode: each form import accepts comes back exactly; any other is written readably and reported with its reason', () => {
+test('round-trip mode: each form import accepts comes back exactly; any other is written readably and reported with its reason', () => {
   for (const [name, block] of FORMS) {
     assert.deepEqual(validate({ blocks: [block] }), { ok: true }, `${name}: the form is not a valid block`);
-    const { markdown, lost } = toMarkdown([block], LOSSLESS);
+    const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
     // The allowlist rule, asserted on its own: a type a fence may not hold is kept only by its own Markdown.
     if (!FENCE_TYPES.has(block.type) && !native(block)) assert.equal(lost[0]?.reason, 'type', `${name}: a type outside the allowlist must not pass as kept`);
     if (keepable(block)) {
       assert.deepEqual(lost, [], `${name}: import accepts it, yet it is reported lost`);
-      assert.deepEqual(fromMarkdown(markdown), [block], `${name}: not the same block after a lossless round trip`);
+      assert.deepEqual(fromMarkdown(markdown), [block], `${name}: not the same block after a round trip`);
     } else {
       const reason = checkFence([block], new Set()).reason;
       assert.deepEqual(lost, [{ path: '/blocks/0', id: block.id ?? null, type: block.type, reason }], `${name}: import cannot bring it back, so it is reported with the fence's reason`);
-      assert.equal(markdown, toMarkdown([block]), `${name}: a block lossless mode cannot keep is written readably`);
+      assert.equal(markdown, toMarkdown([block]), `${name}: a block round-trip mode cannot keep is written readably`);
     }
   }
 });
 
-test('lossless mode keeps a whole doc of every keepable form, in order, and fences a block its neighbour would change', () => {
+test('round-trip mode keeps a whole doc of every keepable form, in order, and fences a block its neighbour would change', () => {
   const ids = new Set();
   const blocks = FORMS.map(([, block]) => block).filter((block) => keepable(block) && (block.id === undefined || (!ids.has(block.id) && ids.add(block.id))));
-  const { markdown, lost } = toMarkdown({ blocks }, LOSSLESS);
+  const { markdown, lost } = toMarkdown({ blocks }, ROUND_TRIP);
   assert.deepEqual(lost, []);
   assert.deepEqual(fromMarkdown(markdown), blocks);
   // Alone, each reads back; together, the emphasised paragraph reads as the diagram's caption.
   const pair = [{ type: 'diagram', source: 'graph TD; A-->B' }, { type: 'paragraph', content: [{ type: 'em', children: [{ type: 'text', value: 'Not a caption' }] }] }];
-  const out = toMarkdown(pair, LOSSLESS);
+  const out = toMarkdown(pair, ROUND_TRIP);
   assert.deepEqual([out.lost, fromMarkdown(out.markdown)], [[], pair]);
   assert.match(out.markdown, /```portabledoc\n\[\{"type":"paragraph"/);
 });
@@ -73,9 +72,9 @@ test('the README lists the types round-trip mode keeps as node packages/text/rea
   assert.ok(keptTypes().ownOnly.includes('blockquote'));
 });
 
-test('lossless mode reports a fence import would keep back for a reused id, and anything that is not a block; readable mode is unchanged', () => {
+test('round-trip mode reports a fence import would keep back for a reused id, and anything that is not a block; readable mode is unchanged', () => {
   const doc = [{ type: 'heading', level: 1, text: 'a', id: 'x' }, 'not a block', { type: 'heading', level: 1, text: 'b', id: 'x' }];
-  const { markdown, lost } = toMarkdown(doc, LOSSLESS);
+  const { markdown, lost } = toMarkdown(doc, ROUND_TRIP);
   assert.deepEqual(lost, [
     { path: '/blocks/1', id: null, type: null, reason: 'not-a-block' },
     { path: '/blocks/2', id: 'x', type: 'heading', reason: 'id' },
