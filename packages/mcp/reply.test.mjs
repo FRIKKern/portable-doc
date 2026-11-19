@@ -4,19 +4,19 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { FAKE_TOKEN, startFakeReader } from './test/fake-reader.mjs';
+import { READER_WAIT, REQUEST } from './test/hang.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
-const TIMEOUT = { timeout: 30_000 };
 const MiB = 1024 * 1024;
 const SMALL = { blocks: [{ id: 'd', type: 'divider' }] };
 
 async function connect(env) {
   const client = new Client({ name: 'test', version: '0.0.0' });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env, stderr: 'pipe' }));
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...READER_WAIT, ...env }, stderr: 'pipe' }), REQUEST);
   return client;
 }
 
-const call = (client, name, args) => client.callTool({ name, arguments: args }, undefined, TIMEOUT);
+const call = (client, name, args) => client.callTool({ name, arguments: args }, undefined, REQUEST);
 const answer = (result) => JSON.parse(result.content[0].text);
 
 async function stillWorks(client) {
