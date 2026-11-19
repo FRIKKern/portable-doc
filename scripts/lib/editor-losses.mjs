@@ -18,14 +18,14 @@ export const EDITOR_LOSSES = [
   ['editor export', 'an old-named field', 10, EXPORT_FIELDS],
   ['editor export', 'a chart label', 32, 'the export writes every chart label'],
   ['editor source', 'a callout body', 1830, CALLOUT_BODY],
-  ['editor source', 'a list nested in a list item', 1972, SOURCE_ROUND_TRIP],
+  ['editor source', 'a list nested in a list item', 1974, SOURCE_ROUND_TRIP],
   ['editor source', 'another block in a list item', 101, SOURCE_ROUND_TRIP],
   ['editor source', "a heading's text", 53, SOURCE_ROUND_TRIP],
   ['editor source', 'a link address', 8, SOURCE_ROUND_TRIP],
   ['editor source', "a block's old text name", 40, SOURCE_ROUND_TRIP],
   ['editor source', 'a block setting', 20, SOURCE_ROUND_TRIP],
   ['editor source', 'an open field', 2, SOURCE_ROUND_TRIP],
-  ['editor source', 'an old-named field', 4, SOURCE_ROUND_TRIP],
+  ['editor source', 'an old-named field', 5, SOURCE_ROUND_TRIP],
 ];
 
 const SETTINGS = ['id', 'role', 'tone', 'source', 'sourceDefault', 'kind', 'lang'];

@@ -7,11 +7,10 @@ import { BUILT_ELSEWHERE, NOT_A_WRITER, WRITERS } from './lib/writers.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-// The module file a package.json `exports` value names for an import, or null for none.
-const moduleOf = (value) => {
-  if (typeof value === 'string') return /\.m?js$/.test(value) ? value : null;
-  return value && typeof value === 'object' ? (moduleOf(value.import) ?? moduleOf(value.default)) : null;
-};
+// Every file a package.json `exports` value names, under any condition (import, require, node,
+// default, nested ones). Code is a .js, .mjs or .cjs file; a stylesheet, JSON or types file is not.
+const filesOf = (value) => (typeof value === 'string' ? [value] : value && typeof value === 'object' ? Object.values(value).flatMap(filesOf) : []);
+const isCode = (file) => /\.[cm]?js$/.test(file);
 
 /** Every function each package exports, as `<package> <export>`, and the problems met on the way. */
 async function exportedFunctions() {
@@ -23,19 +22,26 @@ async function exportedFunctions() {
     if (!fs.existsSync(at)) continue;
     const { name, exports = {} } = JSON.parse(fs.readFileSync(at, 'utf8'));
     for (const [entry, value] of Object.entries(exports)) {
-      const file = moduleOf(value);
-      if (!file) continue;
+      const files = [...new Set(filesOf(value).filter(isCode))];
+      if (!files.length) continue;
       const key = `${name} ${entry}`;
-      let source = path.join(root, 'packages', dir, file);
+      let sources = files.map((file) => [file, path.join(root, 'packages', dir, file)]);
       if (key in BUILT_ELSEWHERE) {
         elsewhere.add(key);
-        if (!BUILT_ELSEWHERE[key].source) continue;
-        source = path.join(root, BUILT_ELSEWHERE[key].source);
-      } else if (!fs.existsSync(source)) {
-        problems.push(`${key}: ${file} is not here to import; name it in BUILT_ELSEWHERE with why`);
-        continue;
+        const { source } = BUILT_ELSEWHERE[key];
+        sources = source ? [[source, path.join(root, source)]] : [];
       }
-      for (const [k, v] of Object.entries(await import(pathToFileURL(source).href))) if (typeof v === 'function') found.add(`${name} ${k}`);
+      for (const [file, at] of sources) {
+        if (!fs.existsSync(at)) {
+          problems.push(`${key}: ${file} is not here to read; name the entry in BUILT_ELSEWHERE with why`);
+          continue;
+        }
+        try {
+          for (const [k, v] of Object.entries(await import(pathToFileURL(at).href))) if (typeof v === 'function') found.add(`${name} ${k}`);
+        } catch (error) {
+          problems.push(`${key}: ${file} cannot be read: ${error.message.split('\n')[0]}`);
+        }
+      }
     }
   }
   for (const key of Object.keys(BUILT_ELSEWHERE)) if (!elsewhere.has(key)) problems.push(`${key}: in BUILT_ELSEWHERE, but no package exports it`);
@@ -51,8 +57,16 @@ test('every function a package exports is a writer in the registry, or named wit
   assert.deepEqual([...writers].filter((k) => k in NOT_A_WRITER), [], 'both a writer and not one');
 });
 
-test('each writer in the registry has its own name and writes a string of its kind', () => {
-  assert.equal(new Set(WRITERS.map((w) => w.name)).size, WRITERS.length);
+test('the registry holds these seven writers, each writing a string of its kind', () => {
+  assert.deepEqual(WRITERS.map((w) => w.name), [
+    'readable Markdown',
+    'plain text',
+    'round-trip Markdown',
+    'HTML',
+    'HTML with field and embed blocks',
+    'editor export',
+    'editor source',
+  ]);
   const blocks = [{ type: 'paragraph', content: [{ type: 'text', value: 'one word' }] }];
   for (const w of WRITERS) {
     assert.ok(['markdown', 'text', 'html'].includes(w.writes), w.name);

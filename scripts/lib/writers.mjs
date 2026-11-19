@@ -3,7 +3,8 @@
 // or HTML is a writer here, and the word test (packages/text/writers-keep-words.test.mjs) runs each
 // one over every shared case in fixtures/. scripts/writer-registry.test.mjs fails when a package
 // exports a function that is neither a writer here nor named in NOT_A_WRITER, so a new writer
-// cannot go unseen by the word test.
+// cannot go unseen by the word test. A writer exported as a property of an exported object is not
+// seen: fieldBlocks is the one known, and the field-and-embed HTML writer below covers it.
 import { renderPortableDocument } from '@portable-doc/react';
 import { embedBlocks } from '@portable-doc/react/embed';
 import { fieldBlocks } from '@portable-doc/react/field-blocks';

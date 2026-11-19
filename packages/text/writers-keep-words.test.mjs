@@ -82,11 +82,36 @@ const htmlText = (html) =>
     .replace(/<[^>]*>/g, ' ')
     .replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ENTITIES[e]);
 
-/** A writer's words: those of its output (an HTML writer's text content), and of the blocks its output reads back as. */
+/** Every `id` string anywhere in `x`. */
+function idsIn(x, out = new Set()) {
+  if (Array.isArray(x)) for (const y of x) idsIn(y, out);
+  else if (x && typeof x === 'object') {
+    for (const [k, v] of Object.entries(x)) {
+      if (k === 'id' && typeof v === 'string') out.add(v);
+      idsIn(v, out);
+    }
+  }
+  return out;
+}
+
+/** `x` without each `id` that is not in `carried`. */
+const withoutIdsBut = (x, carried) =>
+  Array.isArray(x)
+    ? x.map((y) => withoutIdsBut(y, carried))
+    : x && typeof x === 'object'
+      ? Object.fromEntries(Object.entries(x).filter(([k, v]) => !(k === 'id' && typeof v === 'string' && !carried.has(v))).map(([k, v]) => [k, withoutIdsBut(v, carried)]))
+      : x;
+
+/**
+ * A writer's words: those of its output (an HTML writer's text content), and of the blocks its
+ * output reads back as. A reader mints an id for a block the Markdown carries none for, at random
+ * (the editor's markdownToBlocks does), so a read-back id the input did not carry is left out: its
+ * letters are no word the writer wrote, and would make the counts move from run to run.
+ */
 function writtenWords(writer, blocks) {
   const { output, lost = [], readBack } = writer.write(blocks);
   const words = new Set(wordsIn(writer.writes === 'html' ? htmlText(output) : output));
-  if (readBack) for (const [w] of textWords(readBack)) words.add(w);
+  if (readBack) for (const [w] of textWords(withoutIdsBut(readBack, idsIn(blocks)))) words.add(w);
   return { words, lost };
 }
 
@@ -144,7 +169,10 @@ async function cases() {
 test('every writer keeps every word of every shared case, or lists where it lost it', async () => {
   const excused = new Set();
   const drops = [];
+  // Rows only shrink or go: a row at 0 measures nothing, so it is refused, as is a second row of one kind.
+  assert.deepEqual(EDITOR_LOSSES.filter(([, , count]) => !(count > 0)).map(([writer, kind]) => `${writer}: ${kind}`), [], 'editor-losses.mjs: a row at 0; take it out');
   const counted = new Map(EDITOR_LOSSES.map(([writer, kind]) => [`${writer}: ${kind}`, 0]));
+  assert.equal(counted.size, EDITOR_LOSSES.length, 'editor-losses.mjs: two rows of one writer and kind');
   let seen = 0;
   let bigSeen = 0;
   for (const [name, blocks, words = textWords(blocks)] of await cases()) {
