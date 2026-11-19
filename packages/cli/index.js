@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-// The `portable-doc` command: validate, explain, render and import PortableDoc files.
+// The `portable-doc` command: validate, explain, render, diff, preview and import PortableDoc files.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { validate } from '@portable-doc/validate';
 import { fromMarkdown, toMarkdown, toPlainText } from '@portable-doc/text';
+import { diff } from './diff.js';
 import { parseJson } from './json.js';
 import { explainError, refusedWhen, shown } from './words.js';
 
@@ -17,6 +18,7 @@ Commands:
   validate [file...]   check docs against the PortableDoc schema
   explain [file...]    the same, with each error explained in full
   render [file]        print a doc as html, markdown or text
+  diff <a> <b>         compare two docs block by block
   preview <file>       serve a doc on 127.0.0.1 and reload it as the file changes
   import [file]        turn a Markdown file into a doc
 
@@ -259,7 +261,7 @@ async function importMarkdown(files, opts, io) {
 const isRenderable = (doc) => Array.isArray(doc) || (typeof doc === 'object' && doc !== null && Array.isArray(doc.blocks));
 
 /**
- * Run the command line. `io` is { stdout(text), stderr(text), readStdin(): Promise<string>, stdinIsTTY }.
+ * Run the command line. `io` is { stdout(text), stderr(text), readStdin(): Promise<string>, stdinIsTTY, stdoutIsTTY }.
  * Resolves to the exit code.
  */
 export async function main(argv, io) {
@@ -269,6 +271,7 @@ export async function main(argv, io) {
     return command === undefined ? 2 : 0;
   }
   if (command === '--version' || command === '-v') return io.stdout(`${VERSION}\n`), 0;
+  if (command === 'diff') return diff(args, io);
   if (!Object.hasOwn(FLAGS, command)) {
     io.stderr(`portable-doc: unknown command "${shown(command)}"\n\n${USAGE.main}\n`);
     return 2;

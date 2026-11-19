@@ -1,8 +1,9 @@
 # @portable-doc/cli
 
 The `portable-doc` command: check PortableDoc files against the schema, explain
-what is wrong, render them as HTML, Markdown or plain text, preview one in
-the browser as you edit it, and import Markdown. Plain JavaScript; it uses
+what is wrong, render them as HTML, Markdown or plain text, compare two of
+them block by block, preview one in the browser as you edit it, and import
+Markdown. Plain JavaScript; it uses
 [`@portable-doc/validate`](../validate/CODES.md),
 [`@portable-doc/text`](../text/README.md) and, for HTML,
 [`@portable-doc/react`](../react/README.md).
@@ -70,6 +71,87 @@ $ cat notes.json | npx portable-doc render --format text
 - An invalid doc is not rendered: its errors go to stderr and the exit is 1.
   `--force` renders it anyway, after printing the errors.
 
+## Diff
+
+```console
+$ npx portable-doc diff old.json new.json
+old.json → new.json: 1 added, 0 removed, 1 moved, 2 changed
+> paragraph m: moved [3] → [0]
+~ heading h: level: 2 → 3
+~ paragraph p1: text: The quick [-brown-]{+red+} fox jumps.
++ callout c at [4]
+```
+
+The first line counts the changes. Then one line per block that differs: `+`
+added, `-` removed, `>` moved, `~` changed, with the block's type and id, or
+its position (`paragraph at [2]`, 0-based, in the new doc; in the old one for
+a removed block) when it has no id. Text gets a word diff, `[-old-]{+new+}`,
+with long unchanged runs cut to a few words around each change. Inline
+`content` is compared as Markdown at the block's own `content`, so marks and
+links show (`**bold**`, a Markdown link). Other fields show
+`path: old → new`, with `(none)` for a side that does not have the field; a
+`null` is a value, not an absent field. A string prints bare unless it would
+read as another JSON value: `"2"` prints quoted, `2` does not. Changes to the
+doc's own keys (`title`, …) come first, as `~ doc:`. Every string from a doc, and every file name, has its
+control characters escaped, as in `validate`.
+
+Color: `--color auto` (the default) colors only on a terminal, and not when
+`NO_COLOR` is set; `always` and `never` force it. `--json` is never colored
+and prints `{ equal, from, to, summary: { added, removed, moved, changed },
+changes }`. Each change is `{ kind, type, id, from, to, fields }`: `kind` is
+`doc`, `added`, `removed`, `moved` or `changed`; `from` and `to` are 0-based
+positions or `null`; `id` is `null` without one. A field is `{ path, words }`
+for text, with `words` a list of `{ op: "=" | "-" | "+", text }`, or
+`{ path, from, to }`, with `from` or `to` left out for a side that lacks it.
+A moved block that also changed is `moved` and carries its fields. The order
+is stable: doc keys, then blocks by position.
+
+Exit: 0 the docs are the same, 1 they differ, 2 a usage error, a file that
+cannot be read, bad JSON, JSON nested deeper than `MAX_VALUE_DEPTH` (1,000)
+levels of arrays and objects, counted as `validate` counts them, or JSON that
+is not a doc. Docs that differ only in
+key order or layout are the same.
+
+How blocks are matched, so that a move never shows as a remove plus an add:
+
+1. By `id`: a non-empty string id pairs the first block with it on each side.
+2. The blocks left without an id (or with an id already taken on their side),
+   in order: first with the first equal block, then with the most similar
+   block of the same type that shares at least half its words. Scoring stops
+   after a fixed amount of work (20 million pairs looked at and words
+   compared), and blocks not reached by then show as removed and added.
+3. A block with an id never pairs with one without, so a block that gains or
+   changes its id shows as removed and added.
+4. Of the pairs, the longest run that keeps its order stays in place; the
+   others are moved. Nested blocks (`blocks`, `children`, `items`) are
+   compared by position inside their block, as field changes.
+
+### In git
+
+Two ways, one per path. A textconv driver lets git's own line diff run on the
+rendered text, and on the raw file when it does not parse:
+
+```sh
+echo '*.pd.json diff=portable-doc-text' >> .gitattributes
+git config diff.portable-doc-text.textconv "sh -c 'npx portable-doc render --format text --force \"\$1\" 2>/dev/null || cat \"\$1\"' -"
+```
+
+An external diff driver prints this command's block diff instead:
+
+```sh
+echo '*.pd.json diff=portable-doc' >> .gitattributes
+git config diff.portable-doc.command 'npx portable-doc diff --git'
+```
+
+git runs a driver command with seven arguments (`path old-file old-hex
+old-mode new-file new-hex new-mode`, `/dev/null` for a side that does not
+exist), and two more for a rename (`new-path` and git's rename message).
+`--git` takes both forms and names the sides `a/<path>` and `b/<new-path>`.
+It exits 0 when the docs differ, and also when a side cannot be read or is
+not a doc, printing why in the diff, since git stops at a driver that exits
+non-zero. `git diff` uses the driver; `git log -p` and `git show` need
+`--ext-diff`.
+
 ## Preview
 
 ```console
@@ -127,4 +209,4 @@ git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
 - run: npx portable-doc validate --json -- content/*.json > validate.json
 ```
 
-`node --test packages/cli/cli.test.mjs packages/cli/preview.test.mjs` runs the bin against the fixtures and a live preview.
+`node --test packages/cli/*.test.mjs` runs the bin against the fixtures and a live preview.
