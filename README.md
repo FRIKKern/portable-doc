@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 47 changes · react, text: one door from a number to shown text, so no writer shows NaN or Infinity ([#119](https://github.com/FRIKKern/portable-doc/pull/119))
+- **Today** · 48 changes · Check the editor element's string methods against the writer registry ([#120](https://github.com/FRIKKern/portable-doc/pull/120))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
