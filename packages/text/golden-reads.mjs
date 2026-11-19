@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// Test helper: which keys do the renderers read on a block that the block leaves out?
+// Test helpers: which keys do the renderers read on a block that the block leaves out,
+// and when two docs are the same doc (canon, at the end).
 // Each block is wrapped in a Proxy that records every get of an absent string key, with
 // its path, on the block and on every object and array inside it. Shared by the tests
 // that ask what a doc could fill that the goldens do not.
@@ -231,4 +232,33 @@ export function filledNames(block) {
     }
   }
   return names;
+}
+
+// Equivalent: the same blocks once ids are dropped and inline content is
+// compared as its text runs, each with its set of marks. A mark is a mark
+// whether written as a node (`{ type: 'strong', children }`, a link node) or
+// on a text leaf (`marks: [{ type: 'bold' }]`, a link mark), and neighbouring
+// runs with the same marks are one run.
+const MARK = { strong: 'strong', bold: 'strong', em: 'em', italic: 'em', strikethrough: 'strike', strike: 'strike', s: 'strike' };
+const INLINE = new Set(['text', 'link', 'code', ...Object.keys(MARK)]);
+function runs(nodes, marks = [], out = []) {
+  for (const n of nodes) {
+    const own = (n.marks ?? []).map((m) => (m.type === 'link' ? `link:${m.href}` : MARK[m.type] ?? m.type));
+    if (n.type === 'text') out.push({ text: n.value ?? n.text, marks: [...marks, ...own] });
+    else if (n.type === 'code') out.push({ text: n.value, marks: [...marks, 'code'] });
+    else runs(n.children, [...marks, n.type === 'link' ? `link:${n.href}` : MARK[n.type]], out);
+  }
+  return out.reduce((acc, r) => {
+    const key = [...new Set(r.marks)].sort().join(' ');
+    if (acc.at(-1)?.marks === key) acc.at(-1).text += r.text;
+    else acc.push({ text: r.text, marks: key });
+    return acc;
+  }, []);
+}
+const isInline = (v) => Array.isArray(v) && v.length > 0 && v.every((n) => n && INLINE.has(n.type));
+export function canon(v) {
+  if (isInline(v)) return runs(v);
+  if (Array.isArray(v)) return v.map(canon);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'id').map(([k, x]) => [k, canon(x)]));
+  return v;
 }
