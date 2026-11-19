@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
-import { fromMarkdown, toMarkdown } from './index.js';
+import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 import { safeUrl } from './util.js';
 
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
@@ -301,4 +301,21 @@ test('a heading, paragraph, list item or quote that import leaves with no text i
     // "No text" is toMarkdown's measure: every block kept writes something back.
     for (const b of got) assert.notEqual(toMarkdown([b]).trim(), '', `${md}: ${JSON.stringify(b)}`);
   }
+});
+
+test('an empty code block is a real block: toMarkdown writes its empty fence, with its language, and import gives the same block back', () => {
+  for (const md of ['```\n```', '```js\n```', '````\n````', '```\n   \n```']) {
+    const blocks = fromMarkdown(md);
+    assert.equal(blocks.length, 1, md);
+    assert.equal(blocks[0].type, 'code', md);
+    assert.deepEqual(fromMarkdown(toMarkdown(blocks)), blocks, md);
+  }
+  for (const md of ['```mermaid\n```', '```mermaid\n```\n\n*A caption*']) {
+    const blocks = fromMarkdown(md);
+    assert.equal(blocks[0].type, 'diagram', md);
+    assert.deepEqual(fromMarkdown(toMarkdown(blocks)), blocks, md);
+  }
+  assert.equal(toMarkdown([{ type: 'code', code: '   ' }]), toMarkdown([{ type: 'code', value: '   ' }]), 'whitespace kept whichever field holds it');
+  assert.equal(toMarkdown([{ type: 'code', value: '', lang: 'py' }]).trim(), '```py\n```');
+  assert.equal(toPlainText([{ type: 'code', value: '' }]).trim(), '');
 });
