@@ -102,7 +102,7 @@ function form(b, ctx) {
 
 /* ── schema fields: "Label: value" ── */
 
-const stringish = (v) => (typeof v === 'string' ? v : (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean' ? String(v) : '');
+const stringish = (v) => (typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : typeof v === 'boolean' ? (v ? 'true' : 'false') : '');
 const dash = (s) => (s.trim() === '' ? '—' : s);
 
 function row(b, ctx, value) {

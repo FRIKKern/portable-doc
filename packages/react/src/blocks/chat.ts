@@ -11,6 +11,7 @@
 
 import type { RenderCtx } from './chrome'
 import { type Block, escapeHtml, str, asList, isMap } from '../inline'
+import { numberText } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -193,8 +194,8 @@ const chatToolDiff: Emit = (block) => {
 
   const counts =
     `<div class="text-dim" style="font-size: 11px; margin-bottom: 4px;">` +
-    `<span style="color: var(--ok);">+${added}</span> ` +
-    `<span style="color: var(--danger);">−${removed}</span></div>`
+    `<span style="color: var(--ok);">+${numberText(added)}</span> ` +
+    `<span style="color: var(--danger);">−${numberText(removed)}</span></div>`
 
   let body: string
   if (drawable > CHAT_DIFF_BUDGET) {
@@ -204,7 +205,7 @@ const chatToolDiff: Emit = (block) => {
     body =
       `<details><summary style="cursor: pointer; list-style: none;">` +
       diffRowsHtml(head) +
-      `<div class="text-dim" style="font-size: 11px; padding: 1px 0;">… +${overflow} more lines</div>` +
+      `<div class="text-dim" style="font-size: 11px; padding: 1px 0;">… +${numberText(overflow)} more lines</div>` +
       `</summary>${diffRowsHtml(rest)}</details>`
   } else {
     body = diffRowsHtml(head)
@@ -240,7 +241,7 @@ function textStyle(status: string): string {
 
 function todoProgress(todos: unknown[]): string {
   const done = todos.filter((t) => isMap(t) && t.status === 'completed').length
-  return `${done}/${todos.length} done`
+  return `${numberText(done)}/${numberText(todos.length)} done`
 }
 
 function todoItemHtml(todo: unknown): string {
@@ -279,7 +280,7 @@ const chatTodo: Emit = (block) => {
 
 const chatThinking: Emit = (block) => {
   const tokens = block.tokens
-  const label = typeof tokens === 'number' && Number.isInteger(tokens) ? `thought for ~${tokens} tokens` : 'thought'
+  const label = typeof tokens === 'number' && Number.isInteger(tokens) ? `thought for ~${numberText(tokens)} tokens` : 'thought'
   return (
     `<div class="bp-chat-thinking text-xs text-dim" style="font-family: var(--font-mono);">` +
     `<span aria-hidden="true">✻</span> ${escapeHtml(label)}</div>`

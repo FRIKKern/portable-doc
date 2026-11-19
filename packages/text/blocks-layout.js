@@ -2,6 +2,7 @@
 // Containers and composed blocks: sections, columns, tabs, steps, cards,
 // notes, pipelines, tables of contents, file trees, diffs, embeds.
 
+import { stringOf } from './number-text.js';
 import { asList, codeSpan, fence, isMap, maxOf, nonblank, paras, parasOf, str, tableOut } from './util.js';
 import { body, bodyOf, linked } from './blocks-prose.js';
 import { fieldOf, itemOf } from './read-aliases.js';
@@ -45,7 +46,7 @@ function apiEndpoint(b, ctx) {
   const rows = asList(b.params)
     .filter(isMap)
     .map((p) => {
-      const required = p.required === true || String(p.required).trim().toLowerCase() === 'true';
+      const required = p.required === true || stringOf(p.required).trim().toLowerCase() === 'true';
       return [...['name', 'in', 'type'].map((k) => ctx.text(str(p[k]), { oneLine: true })), required ? 'Yes' : 'No'];
     });
   const table = rows.length ? tableOut(['Name', 'In', 'Type', 'Required'], rows, ctx.md) : '';

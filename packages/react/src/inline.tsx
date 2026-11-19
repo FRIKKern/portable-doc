@@ -32,7 +32,7 @@ export type Block = { type: string } & Record<string, unknown>
  * Infinity and any other non-string → "" (fail-soft twin), as the text renderers
  * write them. */
 export function escapeHtml(s: unknown): string {
-  if (typeof s === 'number') s = Number.isFinite(s) ? String(s) : ''
+  if (typeof s === 'number') s = numberText(s)
   if (typeof s !== 'string') return ''
   return s
     .replace(/&/g, '&amp;')
@@ -82,7 +82,7 @@ export function safeUrl(href: unknown): string {
 
 export function str(v: unknown): string {
   if (typeof v === 'string') return v
-  if (typeof v === 'number' && Number.isFinite(v)) return String(v)
+  if (typeof v === 'number') return numberText(v)
   return ''
 }
 
@@ -185,6 +185,7 @@ import {
 } from './status-vocab.gen'
 import type { RenderCtx } from './blocks/chrome'
 import { inlineObjectText } from './inline-object'
+import { numberText } from '../../text/number-text.js'
 export { inlineObjectText } from './inline-object'
 
 /** The fail-open sentinel (D11): an UNRECOGNIZED non-empty status renders here —
@@ -426,7 +427,8 @@ export function inlineText(nodes: unknown): string {
   const stack: Array<[unknown, boolean]> = [[nodes, false]]
   while (stack.length) {
     const [n, inList] = stack.pop()!
-    if (typeof n === 'string' || (typeof n === 'number' && Number.isFinite(n))) text += String(n)
+    if (typeof n === 'string') text += n
+    else if (typeof n === 'number') text += numberText(n)
     else if (Array.isArray(n)) for (let i = n.length - 1; i >= 0; i--) stack.push([n[i], true])
     else if (inList && isMap(n)) {
       const leaf = textLeafValue(n)
@@ -513,7 +515,8 @@ function isBlockWrapper(n: unknown): n is Record<string, unknown> {
 /** Render one inline node to an HTML string. */
 export function renderInline(node: Inline, depth = 0, insideLink = false): string {
   if (depth >= MAX_DEPTH) return escapeHtml(tooDeepNotice)
-  if (typeof node === 'string' || typeof node === 'number') return escapeHtml(node)
+  if (typeof node === 'string') return escapeHtml(node)
+  if (typeof node === 'number') return numberText(node)
   // A bare ARRAY where an inline node was expected (`content: [[{text…}]]` —
   // flattened one level too shallow by an upstream author path). This is the
   // js-only divergence from the Elixir twin: inline.ex `compose_inline(l) when
@@ -681,7 +684,8 @@ export function withWikilinkRenderer<T>(renderer: WikilinkRenderer | undefined, 
  * `InlineRenderer.Inline`, and the ONE place the block-wrapper unwrap above
  * applies. */
 export function renderInlines(nodes: unknown, depth = 0): string {
-  if (typeof nodes === 'string' || typeof nodes === 'number') return escapeHtml(nodes)
+  if (typeof nodes === 'string') return escapeHtml(nodes)
+  if (typeof nodes === 'number') return numberText(nodes)
   if (!Array.isArray(nodes)) return ''
   return unwrapBlockWrappers(nodes)
     .map((n) => renderInline(n as Inline, depth))
@@ -694,7 +698,8 @@ export function renderInlines(nodes: unknown, depth = 0): string {
  * than routing them back through `compose_inline_children/1`, and this leg is
  * bounded exactly as that one. */
 function renderInlineChildren(nodes: unknown, depth: number, insideLink: boolean): string {
-  if (typeof nodes === 'string' || typeof nodes === 'number') return escapeHtml(nodes)
+  if (typeof nodes === 'string') return escapeHtml(nodes)
+  if (typeof nodes === 'number') return numberText(nodes)
   if (!Array.isArray(nodes)) return ''
   return nodes.map((n) => renderInline(n as Inline, depth, insideLink)).join('')
 }
@@ -709,7 +714,7 @@ export function renderCell(cell: unknown): string {
   return nodes
     .map((n) => {
       if (typeof n === 'string') return `<span>${escapeHtml(n)}</span>`
-      if (typeof n === 'number') return Number.isFinite(n) ? `<span>${escapeHtml(n)}</span>` : ''
+      if (typeof n === 'number') return Number.isFinite(n) ? `<span>${numberText(n)}</span>` : ''
       if (!isMap(n)) return ''
       if (str(n.type) === 'text') {
         const marks = asList(n.marks)
