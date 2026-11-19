@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 20 changes · cli preview: close() takes its grace; the close tests no longer race the machine ([#95](https://github.com/FRIKKern/portable-doc/pull/95))
+- **Today** · 21 changes · Markdown import keeps every word nested past its list limit ([#88](https://github.com/FRIKKern/portable-doc/pull/88))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
