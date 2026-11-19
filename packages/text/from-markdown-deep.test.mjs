@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
 import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
+import { parsedWork } from './from-markdown.js';
 import { IMPORT_WORK, fromMarkdown, readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
@@ -71,21 +72,23 @@ test('100,000 levels of nesting import in under 1.5 s of CPU, with every word ke
 });
 
 // The worst shape review found: lazy continuation lines under a deep quote. markdown-it checks
-// every quote level on each line, so the import's work counts lines × depth as well as characters.
+// every quote level on each line, so the import's work counts lines × depth as well as bytes.
 const lazyUnderDeepQuote = () => {
   let md = `${'> '.repeat(300)}l0`;
   for (let i = 1; md.length < 500_000; i++) md += `\n> l${i}`;
   return md;
 };
 
-test('the work budget stops lines nested deep at a stated count, keeps every word as plain text, and says so', () => {
+test('the work budget cuts lines nested deep at a stated line, keeps every word as plain text, and says so', () => {
   const md = lazyUnderDeepQuote();
   // A hang guard only, far above the real cost; the budget itself is counted in work.
   const { blocks, notices, work } = underBudget(20_000, () => readMarkdown(md));
-  assert.deepEqual(notices, [{ code: 'import_work_spent', path: '/blocks/0', work: 57_888_896 }]);
+  // Lines 1 to 3,998 are read; from line 3,999 on, the 52,726 lines left are one plain paragraph.
+  assert.deepEqual(notices, [{ code: 'import_work_spent', rule: 'budget', path: '/blocks/1', line: 3_999, lines: 52_726 }]);
   assert.equal(IMPORT_WORK.notice, 'import_work_spent');
-  assert.equal(work, 57_888_896);
-  assert.ok(work > IMPORT_WORK.budget);
+  assert.equal(work, 251_084_328);
+  assert.deepEqual(blocks.map((b) => b.type), ['blockquote', 'paragraph']);
+  assert.match(blocks[1].content[0].value, /^> l3998 > l3999 /);
   assert.deepEqual(blocks, keepsEveryWord(md, 'lazy lines under a deep quote'));
   // One long line, thousands of levels deep, runs out of the same budget by its characters.
   const line = readMarkdown(`${'- '.repeat(100_000)}end0`);
@@ -95,14 +98,14 @@ test('the work budget stops lines nested deep at a stated count, keeps every wor
   assert.deepEqual(readMarkdown(words(60).map((w, i) => `${'  '.repeat(i)}- ${w}`).join('\n')).notices, []);
 });
 
-test('a quote is charged its own lines, not the rest of the source, and lazy lines under a quote past the parse levels are charged once per level', () => {
+test('markdown-it\'s own count charges a quote its own lines, not the rest of the source, and lazy lines under a quote past the parse levels once per level', () => {
   const rest = 'x '.repeat(5_000);
   // The quote's line, its two characters and its line end; the 10 kB paragraph after it is the top level's.
-  assert.equal(readMarkdown(`> a\n# h\n\n${rest}`).work - readMarkdown(`a\n# h\n\n${rest}`).work, 5);
+  assert.equal(parsedWork(`> a\n# h\n\n${rest}`) - parsedWork(`a\n# h\n\n${rest}`), 5);
   // 150 quotes deep, past the levels one parse builds: each lazy line `lxxx` is 151 tokenize calls,
   // each charged the line and its 5 characters with the line end.
   const lazy = (n) => `${'>'.repeat(150)}l0${'\nlxxx'.repeat(n)}`;
-  assert.equal((readMarkdown(lazy(200)).work - readMarkdown(lazy(100)).work) / 100, 151 * 6);
+  assert.equal((parsedWork(lazy(200)) - parsedWork(lazy(100))) / 100, 151 * 6);
 });
 
 test('an ordinary 500 kB document of mixed blocks uses at most an eighth of the work budget', () => {

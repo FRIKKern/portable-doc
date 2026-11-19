@@ -27,17 +27,11 @@ export const parser = new MarkdownIt('default', { html: true, linkify: true, typ
 parser.validateLink = () => true;
 parser.normalizeLink = (url) => url;
 
-// The import's work: what markdown-it re-scans. It tokenizes each container's lines
-// again one level down, so every tokenize call adds the lines it took and their
-// characters: a line nested d deep counts d + 1 times, in whichever parse reaches it.
-// Lines, because markdown-it checks every open container on each line (lazy lines under
-// a deep quote); characters, because on one long line (`- - - - …`) its thematic-break
-// rule rescans the rest of the line at each level. Past IMPORT_WORK.budget, containers
-// below the top level are not parsed any more: their text is kept as plain text, every
-// word (flattenText), with the IMPORT_WORK.notice notice. An ordinary document uses at
-// most an eighth of it. Only hostile input, deep with many lines or thousands of levels
-// on one line, gets past it.
-export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, notice: 'import_work_spent' });
+// What markdown-it re-scans, counted as it parses (env.work): each tokenize call adds the
+// lines it took and their characters, so a line nested d deep counts d + 1 times, in
+// whichever parse reaches it. Nothing is decided by it: the import's budget is counted from
+// the text before parsing (import-work.js), and the test checks that count is never below
+// this one.
 
 // markdown-it's own tokenize, except that where it would skip the lines too deep to
 // parse (from the first non-blank line in this container to its end) they are kept.
@@ -46,7 +40,7 @@ const tokenize = parser.block.tokenize.bind(parser.block);
 parser.block.tokenize = (state, startLine, endLine) => {
   const env = state.env;
   env.work ??= 0;
-  if ((env.work <= IMPORT_WORK.budget || state.level === 0) && state.level < state.md.options.maxNesting) {
+  if (state.level < state.md.options.maxNesting) {
     tokenize(state, startLine, endLine);
     // The lines this container took, and their characters: a list item or quote is given
     // the outer end and stops early.
@@ -59,7 +53,7 @@ parser.block.tokenize = (state, startLine, endLine) => {
   if (line >= endLine || state.sCount[line] < state.blkIndent) return void (state.line = line);
   const tok = state.push('deep_source', '', 0);
   tok.content = state.getLines(line, endLine, state.blkIndent, false);
-  tok.meta = env; // the import's budget, shared by every parse of its deep source
+  tok.meta = env; // the parse's count, shared by every parse of its deep source
   state.line = endLine;
 };
 
@@ -184,14 +178,8 @@ export function flattenText(nodes) {
     if (node.type === 'deep_source') {
       const { content, meta: env } = node.tok;
       stack.push(SEP);
-      if (env.work <= IMPORT_WORK.budget) {
-        const nodes = tree(parser.parse(content, env));
-        for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
-      } else {
-        // Past the budget: the rest as plain text, and the import says so.
-        env.spent ??= { work: env.work };
-        if (!skipping) out += `${out === '' || /\s$/.test(out) ? '' : ' '}${content.replace(/\s+/g, ' ').trim()}`;
-      }
+      const nodes = tree(parser.parse(content, env));
+      for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
       continue;
     }
     if (BLOCK.has(node.type)) stack.push(SEP);

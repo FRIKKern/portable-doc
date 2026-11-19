@@ -6,7 +6,8 @@
 
 import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
-import { IMPORT_WORK, MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
+import { IMPORT_WORK, planText } from './import-work.js';
+import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 
@@ -221,16 +222,12 @@ function caption(node) {
   return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-// `env` is the parse's: when its work budget ran out while reading a top-level block,
-// that block's place is where the plain-text rest starts.
-function convert(nodes, env) {
-  const state = { ids: new Set() };
+function convert(nodes, state) {
   const out = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
-    if (env.spent && env.spent.path === undefined) env.spent.path = `/blocks/${out.length}`;
     for (const b of blocks) out.push(b);
   }
   return out;
@@ -239,26 +236,43 @@ function convert(nodes, env) {
 export { IMPORT_WORK };
 
 /**
- * GFM Markdown as { blocks, notices, work }. `blocks` pass @portable-doc/validate. `work` is
- * the import's count of lines × nesting depth re-scanned. Past IMPORT_WORK.budget the rest
- * of the deeply nested text is kept as plain text, every word, and `notices` holds one
- * { code: IMPORT_WORK.notice, path, work }: the block where that starts, and the count when
- * it did. Never throws.
+ * GFM Markdown as { blocks, notices, work }. `blocks` pass @portable-doc/validate. `work` is the
+ * import's work counted from the text (import-work.js). A line longer than limits.lineBytes, and
+ * every line from where the work passes limits.budget, is kept as a top-level paragraph of plain
+ * text, every word; `notices` then hold one { code, rule, path, line, lines } per rule ('line' or
+ * 'budget'): the first such paragraph, the first line cut (from 1) and how many. Never throws.
  */
-export function readMarkdown(markdown) {
+export function readMarkdown(markdown, limits = IMPORT_WORK) {
   const md = typeof markdown === 'string' ? markdown : '';
-  const env = {};
+  let plan = { work: 0, parts: [], notices: [] };
   try {
-    const blocks = convert(tree(parser.parse(md, env)), env);
+    plan = planText(md, limits);
+    const state = { ids: new Set() };
+    const blocks = [];
+    const paths = {};
+    for (const part of plan.parts) {
+      if (part.read !== undefined) blocks.push(...convert(tree(parser.parse(part.read, {})), state));
+      else {
+        paths[part.rule] ??= `/blocks/${blocks.length}`;
+        blocks.push({ type: 'paragraph', content: [text(part.plain)] });
+      }
+    }
     if (validate({ blocks }).ok) {
-      const notices = env.spent ? [{ code: IMPORT_WORK.notice, path: env.spent.path, work: env.spent.work }] : [];
-      return { blocks, notices, work: env.work ?? 0 };
+      const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
+      return { blocks, notices, work: plan.work };
     }
   } catch {
     // fall through: the text as one code block
   }
-  return { blocks: md.trim() === '' ? [] : [codeBlock(md)], notices: [], work: env.work ?? 0 };
+  return { blocks: md.trim() === '' ? [] : [codeBlock(md)], notices: [], work: plan.work };
 }
 
 /** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */
 export const fromMarkdown = (markdown) => readMarkdown(markdown).blocks;
+
+/** For the import-work test: what markdown-it re-scans to read `markdown` whole, deep source included. */
+export function parsedWork(markdown) {
+  const env = {};
+  convert(tree(parser.parse(markdown, env)), { ids: new Set() });
+  return env.work ?? 0;
+}

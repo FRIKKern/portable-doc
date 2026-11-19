@@ -38,21 +38,33 @@ export function toPlainText(doc: Doc | unknown, options?: TextOptions): string;
 export function fromMarkdown(markdown: string): Block[];
 
 /**
- * The import's work budget, counted in lines × nesting depth plus characters re-scanned,
- * and the notice it gives past it.
+ * The import's limits, counted from the text before it parses: `budget` for the work (each
+ * line (depth + 1) × (2 + its UTF-8 bytes)), `lineBytes` for one line (null until the shared
+ * pack sets it), and the notice it gives past either.
  */
-export const IMPORT_WORK: { readonly budget: number; readonly notice: 'import_work_spent' };
+export interface ImportLimits {
+  readonly budget: number;
+  readonly lineBytes: number | null;
+  readonly notice: 'import_work_spent';
+}
+export const IMPORT_WORK: ImportLimits;
 
-/** A note from the import: past the work budget, the rest of the deep text from `path` on was kept as plain text. */
+/**
+ * A note from the import: text it kept as plain text, by `rule` ('budget': every line from
+ * `line` on; 'line': each line past lineBytes, `lines` of them), the first such paragraph at
+ * `path`. At most one per rule. `line` counts from 1.
+ */
 export interface ImportNotice {
   code: 'import_work_spent';
+  rule: 'budget' | 'line';
   path: string;
-  work: number;
+  line: number;
+  lines: number;
 }
 
 /**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
- * of lines × nesting depth plus characters re-scanned; `notices` is empty unless the budget ran
- * out. Never throws.
+ * from the text; `notices` is empty unless a limit cut some text. `limits` defaults to
+ * IMPORT_WORK. Never throws.
  */
-export function readMarkdown(markdown: string): { blocks: Block[]; notices: ImportNotice[]; work: number };
+export function readMarkdown(markdown: string, limits?: ImportLimits): { blocks: Block[]; notices: ImportNotice[]; work: number };
