@@ -40,9 +40,10 @@ function textOf(node, count = undefined) {
 
 export const LIST_ITEM_SPLIT = 'list_item_split';
 
-// A token's line in the whole text, from 0: a deep source's map is already the whole text's,
-// any other token's is its parse's, which starts at `base`.
-const lineOf = (tok, i, base) => (tok.map ? (tok.type === 'deep_source' ? 0 : base) + tok.map[i] : undefined);
+// A token's line in the whole text, from 0: its parse starts at `base`. An item's own blocks
+// are read in one tokenize call, at one level, so none after a kept nested list is deep source
+// (whose map is the whole text's already).
+const lineOf = (tok, i, base) => (tok.map ? base + tok.map[i] : undefined);
 
 /**
  * A list item as one or more items: its blocks joined by a space as one inline run, and its
