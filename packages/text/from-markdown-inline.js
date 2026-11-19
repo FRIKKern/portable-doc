@@ -7,14 +7,61 @@
 import MarkdownIt from 'markdown-it';
 import { asList, isMap, safeUrl, str } from './util.js';
 
-/** Inline nesting deeper than this is kept as its plain text. */
+/**
+ * Lists inside lists, and inline marks inside marks, deeper than this are kept as
+ * their plain text. A list past it becomes the text of the deepest item kept: its
+ * items and their blocks one space apart, after the item's own text.
+ */
 export const MAX_NEST = 50;
 
+// markdown-it builds tokens to `maxNesting` levels (each list, list item and quote
+// is one) and skips the lines deeper than that. The limit is set just past what
+// MAX_NEST lists inside lists need, and the skipped lines are kept as one
+// `deep_source` token: their source, with the outer quote and list markers already
+// taken off, which flattenText parses when it reaches it. So no words are lost, and
+// depth costs no stack: each parse goes PARSE_LEVELS deep at most.
+const PARSE_LEVELS = 2 * (MAX_NEST + 2);
 /** GFM: tables, strikethrough, bare-URL links; raw HTML read so its text can be kept. */
-export const parser = new MarkdownIt('default', { html: true, linkify: true, typographer: false });
+export const parser = new MarkdownIt('default', { html: true, linkify: true, typographer: false, maxNesting: PARSE_LEVELS });
 // Every link is parsed, and its URL kept as written; util.js safeUrl decides which become links.
 parser.validateLink = () => true;
 parser.normalizeLink = (url) => url;
+
+// The import's work: what markdown-it re-scans. It tokenizes each container's lines
+// again one level down, so every tokenize call adds the lines it took and their
+// characters: a line nested d deep counts d + 1 times, in whichever parse reaches it.
+// Lines, because markdown-it checks every open container on each line (lazy lines under
+// a deep quote); characters, because on one long line (`- - - - …`) its thematic-break
+// rule rescans the rest of the line at each level. Past IMPORT_WORK.budget, containers
+// below the top level are not parsed any more: their text is kept as plain text, every
+// word (flattenText), with the IMPORT_WORK.notice notice. An ordinary document uses at
+// most an eighth of it. Only hostile input, deep with many lines or thousands of levels
+// on one line, gets past it.
+export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, notice: 'import_work_spent' });
+
+// markdown-it's own tokenize, except that where it would skip the lines too deep to
+// parse (from the first non-blank line in this container to its end) they are kept.
+// Within one call the level does not change, so checking it once on entry is the same.
+const tokenize = parser.block.tokenize.bind(parser.block);
+parser.block.tokenize = (state, startLine, endLine) => {
+  const env = state.env;
+  env.work ??= 0;
+  if ((env.work <= IMPORT_WORK.budget || state.level === 0) && state.level < state.md.options.maxNesting) {
+    tokenize(state, startLine, endLine);
+    // The lines this container took, and their characters: a list item or quote is given
+    // the outer end and stops early.
+    // bMarks keeps a last entry at the source's end; lineMax is no guide, as a quote shrinks it to its own end.
+    const end = state.bMarks[state.line] ?? state.src.length;
+    env.work += Math.max(0, state.line - startLine) + Math.max(0, end - state.bMarks[startLine]);
+    return;
+  }
+  const line = state.skipEmptyLines(startLine);
+  if (line >= endLine || state.sCount[line] < state.blkIndent) return void (state.line = line);
+  const tok = state.push('deep_source', '', 0);
+  tok.content = state.getLines(line, endLine, state.blkIndent, false);
+  tok.meta = env; // the import's budget, shared by every parse of its deep source
+  state.line = endLine;
+};
 
 /** Flat open/close tokens as nodes: { type, tok, children }. Iterative. */
 export function tree(tokens) {
@@ -118,7 +165,10 @@ function leafText(node) {
   }
 }
 
-/** The plain text of some nodes, block siblings joined by a space. Iterative, so depth costs no stack. */
+/**
+ * The plain text of some nodes, block siblings joined by a space. Iterative, so depth costs no
+ * stack; a deep_source is parsed here and its nodes read in its place.
+ */
 export function flattenText(nodes) {
   let out = '';
   let skipping = null;
@@ -131,6 +181,19 @@ export function flattenText(nodes) {
       continue;
     }
     if (!isMap(node)) continue;
+    if (node.type === 'deep_source') {
+      const { content, meta: env } = node.tok;
+      stack.push(SEP);
+      if (env.work <= IMPORT_WORK.budget) {
+        const nodes = tree(parser.parse(content, env));
+        for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
+      } else {
+        // Past the budget: the rest as plain text, and the import says so.
+        env.spent ??= { work: env.work };
+        if (!skipping) out += `${out === '' || /\s$/.test(out) ? '' : ' '}${content.replace(/\s+/g, ' ').trim()}`;
+      }
+      continue;
+    }
     if (BLOCK.has(node.type)) stack.push(SEP);
     if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     else if (node.type === 'html_inline') skipping = rawTag(node, skipping);
