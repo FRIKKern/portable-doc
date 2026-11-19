@@ -4,9 +4,15 @@
 // Decided by doing, never by a list of types: each block is written, read back and
 // compared, so a new block type is kept the day import can read it back.
 
+import { QUOTED } from './blocks-prose.js';
 import { checkFence, fromMarkdown } from './from-markdown.js';
 import { MAX_NEST } from './from-markdown-inline.js';
 import { isMap } from './util.js';
+
+/** A copy of a callout that the writer writes in its `> [!tone]` form. */
+const quoted = (block) => ({ ...block, [QUOTED]: true });
+/** Whether a plan entry is its block in its own Markdown: the block, or a callout's quoted copy. */
+const ownForm = (entry, block) => entry === block || entry[QUOTED] === true;
 
 const sortKeys = (_key, value) =>
   value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, value[k]])) : value;
@@ -63,18 +69,22 @@ function planLevel(list, base, write, levels, depth = 0) {
     return readsBack(write([f]), [blocks[i]]) ? f : (lost.set(kept[i].at, 'changed'), blocks[i]);
   };
   // A callout with a body, in its own Markdown, its body planned as a level of its own: each
-  // block in it is itself, a fence, or listed under its own path. When part of the body cannot
-  // be kept, a fence of the whole callout is used instead where import splices it. Only to
-  // MAX_NEST callouts deep, as far as import reads quotes in quotes.
+  // block in it is itself, a fence, or listed under its own path. Only to MAX_NEST callouts
+  // deep, as far as import reads quotes in quotes. A block of the body that cannot be kept is in
+  // a fence of the whole callout too, so no such fence is tried for it.
   const nest = (i) => {
-    if (!readsBack(write([head(blocks[i])]), [head(blocks[i])])) return fence(i);
+    const line = quoted(head(blocks[i]));
+    if (!readsBack(write([line]), [head(blocks[i])])) return fence(i);
     const inner = planLevel(blocks[i].slots.body, `${base}/${kept[i].at}/slots/body`, write, levels, depth + 1);
-    if (inner.lossy && !checkFence([blocks[i]], new Set()).reason) return fence(i);
-    const entry = { ...blocks[i], slots: { ...blocks[i].slots, body: inner.plan } };
+    const entry = { ...line, slots: { ...blocks[i].slots, body: inner.plan } };
     levels.set(entry, inner);
     return entry;
   };
-  const own = (i) => (readsBack(write([blocks[i]]), [blocks[i]]) ? blocks[i] : fence(i));
+  // Any other block in its own Markdown, a callout in its `> [!tone]` form, else a fence.
+  const own = (i) => {
+    const entry = blocks[i].type === 'callout' ? quoted(blocks[i]) : blocks[i];
+    return readsBack(write([entry]), [blocks[i]]) ? entry : fence(i);
+  };
   level.plan = blocks.map((block, i) => (calloutBody(block) && depth + calloutDepth(block) <= MAX_NEST ? nest(i) : own(i)));
   const { plan } = level;
   // A planned callout stands in as its line alone, and is never fenced for its neighbours.
@@ -83,7 +93,7 @@ function planLevel(list, base, write, levels, depth = 0) {
   const lossyAt = (i) => lost.has(kept[i].at) || levels.get(plan[i])?.lossy === true;
   if (!readsBack(write(plan.map(shown)), blocks.map((_, i) => wanted(i)))) {
     for (let i = 1; i < plan.length; i++) {
-      if (plan[i] !== blocks[i] || lossyAt(i) || lossyAt(i - 1)) continue;
+      if (!ownForm(plan[i], blocks[i]) || levels.has(plan[i]) || lossyAt(i) || lossyAt(i - 1)) continue;
       if (!readsBack(write([shown(plan[i - 1]), plan[i]]), [wanted(i - 1), blocks[i]])) plan[i] = fence(i);
     }
   }
@@ -98,8 +108,8 @@ const lossy = (level, levels) => level.lost.size > 0 || level.plan.some((entry) 
 // one that reuses an earlier fence's id is lost, and written as its block.
 function claimIds(level, used, levels) {
   level.plan.forEach((entry, i) => {
-    if (entry === level.blocks[i]) return;
     if (levels.has(entry)) return claimIds(levels.get(entry), used, levels);
+    if (ownForm(entry, level.blocks[i])) return;
     const check = checkFence([level.blocks[i]], used);
     if (check.reason) return level.lost.set(level.kept[i].at, check.reason), (level.plan[i] = level.blocks[i]);
     for (const id of check.ids) used.add(id);
@@ -149,6 +159,6 @@ export function roundTrip(doc, write) {
   // Never silently lossy: if the whole still does not come back and no block is listed, list
   // every block written in its own form and every callout written so, the only ones a neighbour
   // can have changed.
-  if (!lossy(top, levels) && !readsBack(markdown, top.blocks)) top.plan.forEach((entry, i) => (entry === top.blocks[i] || levels.has(entry)) && top.lost.set(top.kept[i].at, 'neighbours'));
+  if (!lossy(top, levels) && !readsBack(markdown, top.blocks)) top.plan.forEach((entry, i) => ownForm(entry, top.blocks[i]) && top.lost.set(top.kept[i].at, 'neighbours'));
   return { markdown, lost: collect(top, levels) };
 }

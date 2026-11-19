@@ -79,6 +79,19 @@ test('a callout its own line cannot hold (a title, an unknown tone, no content) 
   }
 });
 
+test('a callout round-trip mode cannot keep is written as the readable writer writes it, at the top and in a body', () => {
+  const image = { type: 'image', src: 'https://example.com/a.png' };
+  for (const block of [{ ...callout([image]), title: 'T' }, callout([image], 'loss')]) {
+    const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
+    assert.deepEqual(lost, [{ path: '/blocks/0', id: null, type: 'callout', reason: 'type' }]);
+    assert.equal(markdown, toMarkdown([block]));
+  }
+  const inner = callout([image], 'loss', [t('In')]);
+  const { markdown, lost } = toMarkdown([callout([inner])], ROUND_TRIP);
+  assert.deepEqual(lost, [{ path: '/blocks/0/slots/body/0', id: null, type: 'callout', reason: 'type' }]);
+  assert.equal(markdown, `> [!info] Note\n>\n${toMarkdown([inner]).trimEnd().split('\n').map((l) => `> ${l}`).join('\n')}\n`);
+});
+
 test('callouts in callouts are kept in their own Markdown to 50 deep; deeper ones are kept by a fence, or lost when import keeps no fence of them', () => {
   const nested = (n, leaf) => {
     let block = leaf;

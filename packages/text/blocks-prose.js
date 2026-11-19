@@ -85,10 +85,13 @@ const orderedList = (b, ctx) => list({ ...b, ordered: true }, ctx);
 
 /* ── callout, code, divider ── */
 
+/** Set by round-trip mode on a callout it keeps in its own `> [!tone]` Markdown. */
+export const QUOTED = Symbol('a callout written as a > [!tone] quote');
+
 const CALLOUT_TONES = ['success', 'warning', 'danger', 'neutral', 'loss', 'peace'];
 
 function callout(b, ctx) {
-  if (ctx.md && ctx.options.mode === 'round-trip' && !nonblank(b.title)) return marked(b, ctx);
+  if (ctx.md && b[QUOTED] === true) return marked(b, ctx);
   const tone = CALLOUT_TONES.includes(str(b.tone)) ? str(b.tone) : 'info';
   const label = ctx.text(nonblank(b.title) || capitalize(tone), { oneLine: true });
   const inner = ctx.inline(body(b)) || ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : []);
@@ -98,9 +101,9 @@ function callout(b, ctx) {
 }
 
 /**
- * A callout in round-trip mode, in the form import reads: `> [!tone] content`, then each block
- * of its body inside the quote. round-trip.js keeps it only where it reads back as the block.
- * A callout with a title, which that line cannot hold, is written as in readable mode.
+ * A callout as import reads it: `> [!tone] content`, then each block of its body inside the
+ * quote. Only round-trip mode writes it so, for a callout it marks with QUOTED where that reads
+ * back as the block; any other callout is written as in readable mode.
  */
 function marked(b, ctx) {
   const tone = /^\w+$/.test(str(b.tone)) ? str(b.tone) : 'info';
