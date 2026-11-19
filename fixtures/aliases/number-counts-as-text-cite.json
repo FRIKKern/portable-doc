@@ -1,0 +1,16 @@
+{
+  "block": {
+    "type": "blockquote",
+    "content": [
+      {
+        "type": "text",
+        "value": "q"
+      }
+    ],
+    "cite": 7,
+    "attribution": "Ann"
+  },
+  "reads": {
+    "cite": 7
+  }
+}

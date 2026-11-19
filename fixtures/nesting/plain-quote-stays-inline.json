@@ -1,0 +1,14 @@
+{
+  "markdown": "> a\n>\n> - b\n> - c",
+  "blocks": [
+    {
+      "type": "blockquote",
+      "content": [
+        {
+          "type": "text",
+          "value": "a b c"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "block": {
+    "type": "code",
+    "code": "a",
+    "text": "b"
+  },
+  "reads": {
+    "value": "a"
+  }
+}
