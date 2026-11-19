@@ -53,8 +53,8 @@ export const ADDRESS_KEYS = Object.freeze(['href', 'src', 'poster', 'url']);
  * fence needs no check on them. Each names its rule. `source` is a ref, not an address:
  * on ADDRESS_KEYS its commit:, paper: and task: refs would turn the fence into code. */
 export const LINKED_BY_RULE = Object.freeze({
-  source: 'linked only when it starts with https://',
-  sourceDefault: 'the source for items without one: linked only when it starts with https://',
+  source: 'linked only when, trimmed, it starts with https://',
+  sourceDefault: 'the source for items without one: linked only when, trimmed, it starts with https://',
 });
 
 /** A URL as a Markdown link destination: spaces, brackets and controls
