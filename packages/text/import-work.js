@@ -43,7 +43,20 @@ const isBlank = (line) => {
   for (let i = 0; i < line.length; i++) if (!SP(line.charCodeAt(i))) return false;
   return true;
 };
-const bytes = (line) => Buffer.byteLength(line);
+/** UTF-8 bytes of `line`, as TextEncoder makes them (a lone surrogate is U+FFFD, 3 bytes); no Node global, so it runs in a browser. */
+function bytes(line) {
+  let n = 0;
+  for (let i = 0; i < line.length; i++) {
+    const c = line.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c < 0xdc00 && i + 1 < line.length && (line.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      n += 4;
+      i++;
+    } else n += 3;
+  }
+  return n;
+}
 
 /** The text as markdown-it's core rule 'normalize' leaves it. */
 export const normalize = (markdown) => markdown.replace(/\r\n?/g, '\n').replace(/\0/g, '\uFFFD');
