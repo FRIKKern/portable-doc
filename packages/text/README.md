@@ -177,8 +177,9 @@ The round trip is lossless only for blocks of these types, and only where import
 <!-- round-trip-types:end -->
 
 Round-trip mode reads the Markdown back once per block and once for the whole.
-On the block goldens that is about 0.3 ms of CPU a block, some 12 to 14 times
-readable mode.
+On the block goldens that is about 0.1 to 0.2 ms of CPU a block once warm, and
+under about 1 ms a block on a cold first call. Readable mode takes a few
+microseconds a block, so round-trip costs some 20 to 30 times as much.
 
 The round-trip test checks this on every block type the schema names, with
 forms read from the schema and the goldens, not a hand list:
