@@ -10,7 +10,11 @@
 //   - encodeURIComponent or encodeURI given a value that may hold a number;
 //   - a template span, or an operand of + or += beside a string, that may hold a number;
 //   - concat on a string given a value that may hold a number;
-//   - join on an array or tuple that may hold a number.
+//   - join on an array or tuple that may hold a number;
+//   - in a style value (after an open style=" in the template, or after a CSS `name:` in a
+//     fragment with no markup), a template span that calls a number writer outside styleOf. A
+//     number writer is numberText, stringOf, or a function in React's source whose body calls one
+//     outside styleOf. styleOf leaves a property whose number is not finite out whole.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
 //   "May hold a number" adds `object`, `{}`, an array or tuple (at any depth) of a value that may be
 //   a number, and a type parameter whose constraint may hold one or that has no real constraint
@@ -29,6 +33,9 @@
 //   a method held in a variable, called with call or apply, or called by element access
 //   (`n['toFixed'](1)`).
 // - A number used as a computed key (`{ [n]: 1 }`) whose keys are then shown.
+// - A style value built without a template (string concatenation or join), or a number writer
+//   reached through a method or a value passed around. packages/text writes no HTML style, so the
+//   style rule reads React only; a style written there would go unseen.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
 // - packages/editor (written only by the sync from Barkpark's paper editor), React's dist (built
@@ -48,6 +55,13 @@ const ESCAPES = new Set(['escapeHtml', 'escapeAttr']);
 // An encoder writes an array through String, so a number array's NaN reaches it as "NaN".
 const ENCODES = new Set(['encodeURIComponent', 'encodeURI']);
 const DOOR = 'packages/text/number-text.js';
+/** The template text before a span leaves it inside a style value: an open style="…", or a CSS
+ * declaration (`width:`, `--i:`) in a fragment with no markup. */
+const styleValue = (text) => {
+  const open = text.lastIndexOf('style="');
+  if (open >= 0 && !text.includes('"', open + 7)) return true;
+  return !text.includes('<') && /(?:^|;)\s*(?:--)?[a-z][a-z-]*:[^;"]*$/.test(text);
+};
 
 /** Each route in React's source files (or the given ones), as "file:line: why: code". */
 function reactRoutes(only) {
@@ -74,6 +88,37 @@ function reactRoutes(only) {
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
     return sym?.getName();
   };
+  // A number writer is numberText or stringOf, or a function in React's source whose body calls a
+  // number writer outside a styleOf call. In a style value, a number writer may be called only
+  // inside styleOf, which leaves a property whose number is not finite out whole.
+  const inStyleOf = (node) => {
+    for (let p = node.parent; p; p = p.parent) if (ts.isCallExpression(p) && calleeName(p.expression) === 'styleOf') return true;
+    return false;
+  };
+  const numberWriters = new Set(['numberText', 'stringOf']);
+  const callsWriter = (node) => {
+    let hit = false;
+    const look = (n) => {
+      if (hit) return;
+      if (ts.isCallExpression(n) && numberWriters.has(calleeName(n.expression)) && !inStyleOf(n)) hit = true;
+      else ts.forEachChild(n, look);
+    };
+    look(node);
+    return hit;
+  };
+  const bodies = [];
+  for (const s of program.getSourceFiles().filter((s) => s.fileName.startsWith(path.join(react, 'src') + path.sep))) {
+    const collect = (n) => {
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) bodies.push([n.name.text, n.body]);
+      else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) bodies.push([n.name.text, n.initializer.body]);
+      ts.forEachChild(n, collect);
+    };
+    collect(s);
+  }
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, body] of bodies) if (!numberWriters.has(name) && callsWriter(body)) grew = !!numberWriters.add(name);
+  }
   const found = [];
   for (const sf of program.getSourceFiles().filter((s) => files.includes(s.fileName))) {
     const rel = path.relative(root, sf.fileName);
@@ -93,7 +138,14 @@ function reactRoutes(only) {
           if (callee.name.text === 'concat' && isString(recv) && node.arguments.some((a) => mayHold(typeOf(a)))) at(node, 'concat of a number');
         }
         for (const a of node.arguments) if (ts.isIdentifier(a) && a.text === 'String') at(a, 'String passed as a function');
-      } else if (ts.isTemplateSpan(node) && mayHold(typeOf(node.expression))) {
+      } else if (ts.isTemplateExpression(node)) {
+        let text = node.head.text;
+        for (const span of node.templateSpans) {
+          if (styleValue(text) && callsWriter(span.expression)) at(span.expression, 'a number in a style value outside styleOf');
+          text += '\u0000' + span.literal.text;
+        }
+      }
+      if (ts.isTemplateSpan(node) && mayHold(typeOf(node.expression))) {
         at(node.expression, 'a template span that may hold a number');
       } else if (ts.isBinaryExpression(node) && (node.operatorToken.kind === ts.SyntaxKind.PlusToken || node.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken)) {
         const [l, r] = [typeOf(node.left), typeOf(node.right)];
@@ -161,11 +213,20 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ["'a'.concat(String(s))", null],
       ['String(s)', null],
       ['`${s}`', null],
+      ['`<i style="width:${numberText(n)}%">`', 'a number in a style value outside styleOf'],
+      ['`<i style="--i:${fmt(n)}">`', 'a number in a style value outside styleOf'],
+      ['`padding-left:${fmt(n)}px`', 'a number in a style value outside styleOf'],
+      ['`a;order:${numberText(n)}`', 'a number in a style value outside styleOf'],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${fmt(x)}%`)])}>`', null],
+      ['`<i style="color:${s}">`', null],
+      ['`<b>${numberText(n)}</b>`', null],
     ];
     fs.writeFileSync(
       plant,
       [
         "import { escapeHtml as eh } from '../inline'",
+        "import { numberText, styleAttr, styleOf } from '../../../text/number-text.js'",
+        'const fmt = (x: number) => numberText(x, 1)',
         "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
         "  if (typeof b.count !== 'number') return []",
         '  const n = b.count',
@@ -176,7 +237,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
         '',
       ].join('\n'),
     );
-    const found = reactRoutes([plant]).map((r) => { const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/); return `${rows[line - 6][0]} -> ${why}`; });
+    const found = reactRoutes([plant]).map((r) => { const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/); return `${rows[line - 8][0]} -> ${why}`; });
     assert.deepEqual(found.sort(), rows.filter(([, why]) => why).map(([code, why]) => `${code} -> ${why}`).sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

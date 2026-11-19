@@ -1511,7 +1511,7 @@ const roadmap: Emit = (b, ctx) => {
         (truthy(m.phase_row) ? ' bp-rm__lane--phase' : '') +
         (placed ? '' : ' bp-rm__lane--unplaced')
       const body = placed
-        ? `<span class="bp-rm__bar bp-rm__bar--${role}" ${styleAttr([pct('left', left), pct('width', width)])}></span>`
+        ? `<span class="bp-rm__bar bp-rm__bar--${role}"${styleAttr([pct('left', left), pct('width', width)])}></span>`
         : `<span class="bp-rm__unplaced">${ctx.t(ROADMAP_LANE_UNPLACED_COPY)}</span>`
       return `<div class="${cls}"><span class="bp-rm__lbl">${draftHtml(m, ctx)}${title}</span><div class="bp-rm__track">${body}${today}</div></div>`
     })

@@ -985,7 +985,7 @@ const route: Emit = (block, ctx) => {
   const [fx, fy] = last
 
   const svg =
-    `<svg class="bp-route__map" viewBox="0 0 ${numberText(ROUTE_W)} ${numberText(h)}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}" ${styleAttr(['display:block', 'width:100%', styleOf('max-width', ROUTE_W, (w) => `${numberText(w)}px`), 'height:auto;'])}>` +
+    `<svg class="bp-route__map" viewBox="0 0 ${numberText(ROUTE_W)} ${numberText(h)}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}"${styleAttr(['display:block', 'width:100%', styleOf('max-width', ROUTE_W, (w) => `${numberText(w)}px`), 'height:auto;'])}>` +
     `<path d="${d}" fill="none" stroke="${ROUTE_TRACK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>` +
     `<circle cx="${sx}" cy="${sy}" r="5.5" fill="none" stroke="${ROUTE_START}" stroke-width="3"/>` +
     `<circle cx="${fx}" cy="${fy}" r="5.5" fill="${ROUTE_FINISH}"/>` +
