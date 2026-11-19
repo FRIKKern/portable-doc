@@ -52,9 +52,12 @@ const byline = (b, ctx) =>
 
 const LIST_TYPES = ['list', 'bulletList', 'bullet_list', 'bulleted-list', 'bulleted_list', 'ordered-list', 'numbered_list'];
 
-/** Nested lists under an item: only list blocks occupy that slot. */
+/**
+ * The blocks under an item, in order: nested lists, and any other block (a heading, a callout,
+ * a code block). A list with no `items` array, or a child that is not a typed block, is skipped.
+ */
 const listChildren = (item) =>
-  isMap(item) ? asList(item.children).filter((c) => isMap(c) && Array.isArray(c.items) && LIST_TYPES.includes(c.type)) : [];
+  isMap(item) ? asList(item.children).filter((c) => isMap(c) && typeof c.type === 'string' && (Array.isArray(c.items) || !LIST_TYPES.includes(c.type))) : [];
 
 /** A list item stored as a JSON-encoded inline array decodes to that array. */
 function itemContent(item) {
