@@ -32,6 +32,10 @@ function bucket(d, list) {
 }
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+// A story is one line of Markdown whose `&` and `<` are written as entities, so a title holding
+// `<!--` or the block's own end marker reads as text on GitHub and can never open a comment or
+// end the block early. Links in it still work: an entity in a link's text or URL is decoded.
+const storyText = (text) => String(text).replace(/\s+/g, ' ').trim().replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 /** The block's text: one line per period that has something, newest first, so at most
  * TIMELINE_LINES. A story goes on its period's own line. With nothing at all, one line says so. */
@@ -45,7 +49,7 @@ export function render(items, now = new Date()) {
     const changes = its.filter((i) => i.kind === 'change').length;
     const closed = its.length - changes;
     const counts = [changes && plural(changes, 'change'), closed && plural(closed, 'milestone') + ' closed'].filter(Boolean).join(', ');
-    const story = STORY.has(name) && its.length ? ` · ${String(its[0].text).replace(/\s+/g, ' ').trim()}` : '';
+    const story = STORY.has(name) ? ` · ${storyText(its[0].text)}` : '';
     lines.push(`- **${name}** · ${counts}${story}`);
   }
   return (lines.length ? lines : ['- No changes yet']).map((l) => l + '\n').join('');

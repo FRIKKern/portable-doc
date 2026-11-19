@@ -63,7 +63,12 @@ function git(...args) {
 function jobError() {
   const why = 'README.md: --timeline-from-job is only for the housekeeping job, on main at origin/main; here ';
   if (!checkout) return `${why}this is not a git checkout of this repo`;
-  const head = git('rev-parse', 'HEAD').trim();
+  let head;
+  try {
+    head = git('rev-parse', '--verify', '--quiet', 'HEAD^{commit}').trim();
+  } catch {
+    return `${why}HEAD has no commit`;
+  }
   let main;
   try {
     main = git('rev-parse', '--verify', '--quiet', 'origin/main^{commit}').trim();
