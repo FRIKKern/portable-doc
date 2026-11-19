@@ -12,7 +12,8 @@ import { renderPortableDocument } from '@portable-doc/react';
 import { validate } from '@portable-doc/validate';
 import { CASES as HEADINGS } from '../../fixtures/headings/cases.mjs';
 import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
-import { CUT, CUT_GENERATED, WORK, WORK_GENERATED } from '../../fixtures/text-work/cases.mjs';
+import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
+import { CUT, CUT_GENERATED, SPLIT_ITEMS, WORK, WORK_GENERATED, splitItems } from '../../fixtures/text-work/cases.mjs';
 import { KEEP_BYTES, sharedCases } from '../../scripts/write-shared-cases.mjs';
 import { fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 
@@ -100,20 +101,41 @@ const WRITERS = [
 // the other three writers only.
 const big = (blocks) => JSON.stringify(blocks).length > KEEP_BYTES;
 
-/** Every shared case as [name, blocks, words it must keep]. */
-function* cases() {
-  for (const [name, markdown] of Object.entries({ ...NESTING, ...HEADINGS, ...WORK, ...WORK_GENERATED })) yield [name, readMarkdown(markdown).blocks];
-  const cut = [...Object.entries(CUT), [CUT_GENERATED.name, [CUT_GENERATED.markdown, CUT_GENERATED.limits]]];
-  for (const [name, [markdown, limits]] of cut) yield [name, readMarkdown(markdown, limits).blocks];
-  for (const [name, { markdown }] of Object.entries(JSON.parse(sharedCases()[path.posix.join('round-trip', 'round-trip-cases.json')]))) yield [name, fromMarkdown(markdown)];
-  for (const [name, doc] of json('fixtures/valid')) yield [name, Array.isArray(doc) ? doc : doc.blocks];
-  for (const [name, { blocks }] of writerCases) yield [name, blocks];
+const fromText = (texts) => Object.entries(texts).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]);
+// The 120,000-item case is read here at 1,000 items, its shape word-checked through every writer;
+// the import tests read it at 20,000 on a small stack.
+const generated = { ...WORK_GENERATED, [SPLIT_ITEMS]: splitItems(1_000) };
+
+/** The shared cases of each folder under fixtures/, as [name, blocks, words it must keep?]. */
+const SOURCES = {
+  nesting: () => fromText(NESTING),
+  headings: () => fromText(HEADINGS),
+  'list-split': () => fromText(LIST_SPLIT),
+  'text-work': () => [
+    ...fromText({ ...WORK, ...generated }),
+    ...[...Object.entries(CUT), [CUT_GENERATED.name, [CUT_GENERATED.markdown, CUT_GENERATED.limits]]].map(([name, [markdown, limits]]) => [name, readMarkdown(markdown, limits).blocks]),
+  ],
+  'round-trip': () => Object.entries(JSON.parse(sharedCases()[path.posix.join('round-trip', 'round-trip-cases.json')])).map(([name, { markdown }]) => [name, fromMarkdown(markdown)]),
+  valid: () => json('fixtures/valid').map(([name, doc]) => [name, Array.isArray(doc) ? doc : doc.blocks]),
+  writers: () => writerCases.map(([name, { blocks }]) => [name, blocks]),
   // An alias case's block holds a field under two names; a writer reads the one `reads` names.
   // A block that does not validate pins only the alias reader: writers owe a valid doc's words.
-  for (const [name, { block, reads }] of json('fixtures/aliases').filter(([, c]) => validate({ blocks: [c.block] }).ok)) {
-    yield [name, [block], Object.entries(reads).flatMap(([key, v]) => (typeof v === 'string' ? wordsIn(v).map((w) => [w, key, `/blocks/0/${key}`]) : []))];
-  }
+  aliases: () =>
+    json('fixtures/aliases')
+      .filter(([, c]) => validate({ blocks: [c.block] }).ok)
+      .map(([name, { block, reads }]) => [name, [block], Object.entries(reads).flatMap(([key, v]) => (typeof v === 'string' ? wordsIn(v).map((w) => [w, key, `/blocks/0/${key}`]) : []))]),
+};
+// broken/ holds docs that do not validate: no writer owes their words.
+const NOT_READ = ['broken'];
+
+function* cases() {
+  for (const read of Object.values(SOURCES)) yield* read();
 }
+
+test('the word test reads every folder under fixtures/ but broken/', () => {
+  const folders = fs.readdirSync(new URL('../../fixtures/', import.meta.url), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  assert.deepEqual(Object.keys(SOURCES).sort(), folders.filter((f) => !NOT_READ.includes(f)).sort());
+});
 
 test('every writer keeps every word of every shared case, or lists where it lost it', () => {
   const excused = new Set();
