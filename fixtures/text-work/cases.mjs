@@ -11,9 +11,8 @@ const BUDGET = 16_000_000;
 const LINE = { budget: BUDGET, lineBytes: 40 };
 const NO_LINE = { budget: BUDGET, lineBytes: null };
 
-// Work cases kept from the first shared file. Three share a name with a hostile case in
-// import-work-cases.mjs and are its first, longer form (200 lazy lines, not 150).
-const FIRST = {
+/** Work cases kept from the first shared file: name → text. */
+export const FIRST = {
   'lazy lines under a deep quote': `${X(300, '> ')}l0\n${lines(200, (i) => `l${i + 1}`)}`,
   'quoted lines under a deep quote': `${X(300, '> ')}l0\n${lines(200, (i) => `> l${i + 1}`)}`,
   'lazy lines under quote markers with no spaces': `${X(300, '>')}l0${X(200, '\nlxxxxxxxxxxxxxxx')}`,
@@ -23,7 +22,7 @@ const FIRST = {
 };
 
 /** The work cases: name → text. Every hostile case of the import-work test, and the first file's own. */
-export const WORK = { ...FIRST, ...Object.fromEntries(Object.entries(HOSTILE).filter(([name]) => !(name in FIRST))) };
+export const WORK = { ...FIRST, ...HOSTILE };
 
 // Texts too big to store, each named by how it is built; the files give their counts only.
 const upTo = (head, line) => {

@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { FIXTURES, kept, sharedCases } from '../../scripts/write-shared-cases.mjs';
-import { CUT, WORK } from '../../fixtures/text-work/cases.mjs';
+import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
+import { CUT, CUT_GENERATED, FIRST, WORK, WORK_GENERATED } from '../../fixtures/text-work/cases.mjs';
 import { plan } from '../../fixtures/text-work/rule-reader.mjs';
 import { planText } from './import-work.js';
-import { seeded } from './import-work-cases.mjs';
+import { CASES as HOSTILE, seeded } from './import-work-cases.mjs';
 import { readMarkdown } from './index.js';
 import { readField } from './read-aliases.js';
 
@@ -26,6 +27,20 @@ test('each generated case file is kept in fixtures/ exactly as scripts/write-sha
     const stray = fs.readdirSync(path.join(FIXTURES, folder)).filter((f) => f.endsWith('.json') && !(`${folder}/${f}` in FILES));
     assert.deepEqual(stray, [], `${folder}: a case file no input builds`);
   }
+});
+
+test('one name, one case: no two shared cases share a name, in any folder or across folders', () => {
+  const names = [
+    ...Object.keys(NESTING),
+    ...Object.keys(FIRST),
+    ...Object.keys(HOSTILE),
+    ...Object.keys(WORK_GENERATED),
+    ...Object.keys(CUT),
+    CUT_GENERATED.name,
+    ...Object.keys(JSON.parse(FILES['round-trip/round-trip-cases.json'])),
+    ...fs.readdirSync(path.join(FIXTURES, 'aliases')).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)),
+  ];
+  assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), []);
 });
 
 test('callouts nest to 50 deep: in the 52-deep case the 51st keeps the 52nd as text, with no notice', () => {
