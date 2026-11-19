@@ -90,7 +90,7 @@ export function str(v: unknown): string {
  * agree or such a paper renders (or suppresses) as structure with zero prose.
  * Twins: inline.ex compose_inline, pdrender inline.go attrStrFirst. */
 export function textLeafValue(n: Record<string, unknown>): string {
-  return str(n.value) || str(n.text)
+  return str(itemOf(n, 'inline:text', 'value'))
 }
 
 /* ── THE code-block source-field contract (task-e9af9f95d290307d) ─────────────
@@ -177,7 +177,7 @@ export function isMap(v: unknown): v is Record<string, unknown> {
 
 export type { StatusRole } from './status-vocab.gen'
 import type { StatusRole } from './status-vocab.gen'
-import { fieldOf } from '../../text/read-aliases.js'
+import { fieldOf, itemOf, readItem } from '../../text/read-aliases.js'
 import {
   MANIFEST_DEFAULT_ROLE,
   MANIFEST_STATUS_ROLES,
@@ -457,7 +457,8 @@ export function inlineText(nodes: unknown): string {
  * `api/test/support/fixtures/inline-code-source.json`, read here by
  * `tests/inline-code-source.parity.test.ts`. */
 export function inlineCodeSource(node: Record<string, unknown>): string {
-  return str(node.value) || inlineText(node.children)
+  const { name, value } = readItem(node, 'inline:code', 'value')
+  return name === 'value' ? str(value) : inlineText(value)
 }
 
 /* ── THE BLOCK-WRAPPER-IN-AN-INLINE-ARRAY law (task-3fd604e7c89d6150) ─────────

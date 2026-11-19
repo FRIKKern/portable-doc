@@ -70,7 +70,7 @@ const NATIVE_IN_CONTEXT = ['list filled in a list item'];
 
 test('round-trip mode keeps a block in a list item or a callout by a portabledoc fence of the whole container, never in the container\'s own Markdown', () => {
   const contextual = FORMS.filter(([name]) => Object.keys(contexts).some((where) => name.endsWith(` ${where}`)));
-  assert.equal(contextual.length, 602, 'every base form in each context');
+  assert.equal(contextual.length, 604, 'every base form in each context');
   const native = [];
   let fenced = 0;
   for (const [name, block] of contextual) {

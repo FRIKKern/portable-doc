@@ -2,20 +2,25 @@
 // Prose blocks: headings, paragraphs, lists, quotes, callouts, code, media,
 // buttons. Each handler takes (block, ctx) and returns a string ('' = nothing).
 
-import { fieldOf, namesOf, readField } from './read-aliases.js';
+import { fieldOf, itemOf, namesOf, readItem } from './read-aliases.js';
 import { asList, capitalize, fence, isMap, nonblank, paras, quote, safeUrl, str } from './util.js';
 
 /**
- * A block's inline body. On a block type whose `text` is an old name for `content`, the field
- * read through read-aliases.js; on any other (a list item, a quote), a non-empty `content`
- * array, else its `text`. An inline array as it is, a `text` as a string; a `content` that is
- * not an array (read only when no name holds a value of its type) shows nothing.
+ * The inline body of a block or an item of `owner` whose `text` is an old name for `content`,
+ * read through read-aliases.js: an inline array as it is, a `text` as a string; a `content` that
+ * is not an array (read only when no name holds a value of its type) shows nothing.
+ */
+export function bodyOf(item, owner) {
+  const { name, value } = readItem(item, owner, 'content');
+  return Array.isArray(value) ? value : name === 'content' ? '' : str(value);
+}
+
+/**
+ * A block's inline body: bodyOf on a block type whose `text` is an old name for `content`; on any
+ * other, a non-empty `content` array, else its `text`.
  */
 export function body(b) {
-  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) {
-    const { name, value } = readField(b, 'content');
-    return Array.isArray(value) ? value : name === 'content' ? '' : str(value);
-  }
+  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) return bodyOf(b, b.type);
   return Array.isArray(b.content) && b.content.length ? b.content : str(b.text);
 }
 
@@ -66,7 +71,7 @@ function itemContent(item) {
       /* plain text */
     }
   }
-  return isMap(item) ? body(item) : item;
+  return isMap(item) ? bodyOf(item, 'list.items[]') : item;
 }
 
 function list(b, ctx) {
@@ -99,7 +104,7 @@ function callout(b, ctx) {
 /** A code block's source: its `value`, read through read-aliases.js; an inline array as its text. */
 export function codeSource(b) {
   const v = fieldOf(b, 'value');
-  return Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? n : isMap(n) ? str(n.value) || str(n.text) : '')).join('') : str(v);
+  return Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? n : isMap(n) ? str(itemOf(n, 'inline:text', 'value')) : '')).join('') : str(v);
 }
 
 // An empty code block is a real block: Markdown writes its empty fence (with its

@@ -28,7 +28,7 @@ import {
 } from '../inline'
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
-import { fieldOf, namesOf, readField } from '../../../text/read-aliases.js'
+import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
 import type { RenderCtx } from './chrome'
 
@@ -36,20 +36,22 @@ type Emit = (block: Block, ctx: RenderCtx) => string
 
 /* ── prose core (walk.ex) ─────────────────────────────────────────────────── */
 
-// On a block type whose `text` is an old name for `content`, the body is that field read
-// through the alias table (packages/text/read-aliases.js); on any other, a non-empty
-// `content` array, else `text`. A `content` that is not an array (read only when no name
-// holds a value of its type) shows nothing.
+// The body of a block or an item of `owner` whose `text` is an old name for `content`: that
+// field read through the alias table (packages/text/read-aliases.js). A `content` that is not
+// an array (read only when no name holds a value of its type) shows nothing.
+function inlineOf(item: Block, owner: string): unknown {
+  const { name, value } = readItem(item, owner, 'content')
+  if (Array.isArray(value)) return value
+  const text = name === 'content' ? '' : str(value)
+  return text !== '' ? text : []
+}
+
+// A block's body: inlineOf on a block type whose `text` is an old name for `content`; on any
+// other, a non-empty `content` array, else `text`.
 function paragraphInline(b: Block): unknown {
-  let text: string
-  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) {
-    const { name, value } = readField(b, 'content')
-    if (Array.isArray(value)) return value
-    text = name === 'content' ? '' : str(value)
-  } else {
-    if (Array.isArray(b.content) && b.content.length) return b.content
-    text = str(b.text)
-  }
+  if (typeof b.type === 'string' && namesOf(b.type, 'content').length > 1) return inlineOf(b, b.type)
+  if (Array.isArray(b.content) && b.content.length) return b.content
+  const text = str(b.text)
   return text !== '' ? text : []
 }
 
@@ -147,7 +149,7 @@ function codeTabEntries(b: Block): CodeTabEntry[] {
     .map((t) => ({
       label: str(t.label),
       language: str(t.language),
-      value: str(t.value ?? t.code),
+      value: str(itemOf(t, 'code-tabs.tabs[]', 'value')),
     }))
 }
 
@@ -277,7 +279,7 @@ const footnote: Emit = (b) => {
 function stepRowHtml(step: unknown, ctx: RenderCtx): string {
   if (!isMap(step)) return ''
   const title = str(step.title)
-  const blocks = asList(step.blocks ?? step.children)
+  const blocks = asList(itemOf(step, 'steps.steps[]', 'blocks'))
   if (title === '' && blocks.length === 0) return ''
 
   const body = renderBlocks(blocks, ctx)
@@ -588,7 +590,7 @@ const list: Emit = (b, ctx) => {
 // content[]-shape heading fix (289b46b1a / PR #6009), a different emitter.
 function itemInlines(item: unknown): unknown {
   const n = normalizeListItem(item)
-  return isMap(n) ? paragraphInline(n as Block) : n
+  return isMap(n) ? inlineOf(n as Block, 'list.items[]') : n
 }
 
 // Decode a list item persisted as a JSON-encoded inline array (the drifted
@@ -1174,13 +1176,13 @@ const statusLegend: Emit = (_b, ctx) => {
   return `<div class="bp-legend">${rows}</div>`
 }
 
-function noteItemHtml(item: unknown): string {
+function noteItemHtml(item: unknown, owner?: string): string {
   const m = isMap(item) ? item : {}
   const label = escapeHtml(str(m.label))
   // Swept sibling of the heading/list content[] defect: the note body read
   // `text` alone, blanking the live note persisted as `{content:[…]}`. The
   // `text` path is byte-identical, so notes.golden.json is untouched.
-  const text = renderInlines(paragraphInline(m as Block))
+  const text = renderInlines(owner ? inlineOf(m as Block, owner) : paragraphInline(m as Block))
   const lead = str(m.lead).trim()
   const leadHtml = lead === '' ? '' : `<b>${escapeHtml(lead)}</b> `
   return `<div class="bp-note"><span class="bp-note__k">${label}</span><div class="bp-note__d">${leadHtml}${text}</div></div>`
@@ -1189,7 +1191,7 @@ function noteItemHtml(item: unknown): string {
 const notes: Emit = (b) => {
   const items = asList(b.items)
   if (items.length === 0) return ''
-  return `<div class="bp-notes">${items.map(noteItemHtml).join('')}</div>`
+  return `<div class="bp-notes">${items.map((item) => noteItemHtml(item, 'notes.items[]')).join('')}</div>`
 }
 
 const note: Emit = (b) => noteItemHtml(b)
@@ -1299,6 +1301,7 @@ function priorityLabel(p: unknown): string | null {
 
 function taskDetail(b: Block, ctx: RenderCtx): string {
   const t = isMap(b.task) ? b.task : b
+  const critOwner = t === b ? 'task-detail.criteria[]' : 'task-detail.task.criteria[]'
   const title = str(t.title).trim()
   // Mirrors Render.Components.task_detail_html/1: an unresolved task-detail is
   // still a block, so it keeps its place with the same placeholder the sibling
@@ -1364,7 +1367,7 @@ function taskDetail(b: Block, ctx: RenderCtx): string {
           const m = isMap(c) ? c : {}
           const done = truthy(m.met)
           const g = done ? glyphHtml('done', ctx) : glyphHtml('ready', ctx)
-          const txtRaw = str(m.text) !== '' ? str(m.text) : str(m.criterion)
+          const txtRaw = str(itemOf(m, critOwner, 'text'))
           const txt = escapeHtml(txtRaw)
           const ev = str(m.evidence).trim()
           const evHtml = ev === '' ? '' : `<div class="bp-crit__ev">↳ ${escapeHtml(ev)}</div>`
