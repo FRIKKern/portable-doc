@@ -36,9 +36,10 @@ its target instead.
   exactly one newline, or is `''` when nothing shows. Same input, same output.
 - **Markdown** is CommonMark with GFM tables, task lists (`- [x]`) and
   strikethrough. Headings keep their level (1 to 6), code is fenced with the
-  first word of its language, quotes and callouts are `>` blocks, math is its
-  TeX in a ` ```math ` fence or a `` $`…`$ `` span, images are Markdown images
-  with their alt text, dividers `---`.
+  first word of its language (an empty code block is an empty fence), quotes
+  and callouts are `>` blocks, math is its TeX in a ` ```math ` fence or a
+  `` $`…`$ `` span, images are Markdown images with their alt text, dividers
+  `---`.
 - **Plain text** has no markup. Links read "text (url)", once; a link whose
   text is its URL, or that points inside the page (`#…`), shows the text only.
   Lists use `- ` and `1. `, tables are space-aligned columns under a dashed
@@ -100,7 +101,7 @@ Where it differs from Barkpark, on purpose:
   and may nest no deeper than `MAX_VALUE_DEPTH` from `@portable-doc/validate`
   (1000 JSON levels, counted in the doc), or it stays a code block.
 - A heading, paragraph, list item or quote that import leaves with no text
-  (only an unsafe image, a script or a blank code span) is dropped, never kept
+  (say, an unsafe image, a script or a blank code span) is dropped, never kept
   empty. "No text" is `toMarkdown`'s measure: it would write nothing for it. A
   list whose items all drop goes too; an item with a nested list stays. Table
   cells stay as they are.

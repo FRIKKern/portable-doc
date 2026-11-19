@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 import { parse as parseJs } from 'acorn';
 import { buildSync, transformSync } from 'esbuild';
+import { underBudget } from './lib/cpu-budget.mjs';
 import { validate } from '@portable-doc/validate';
 import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
@@ -78,9 +79,8 @@ test('a doc from a link is pretty-printed only while the laid-out text stays und
   const nest = (depth) => '['.repeat(depth) + ']'.repeat(depth);
   assert.equal(tidyJson(nest(1000), MAX_DOC_BYTES).length, 2_000_000, 'depth 1000 lays out to exactly the cap');
   assert.equal(tidyJson(nest(1001), MAX_DOC_BYTES), nest(1001));
-  const started = performance.now();
-  assert.equal(tidyJson(nest(50_000), MAX_DOC_BYTES), nest(50_000), 'deep nesting kept as sent, not 5 GB of spaces or a stack overflow');
-  assert.ok(performance.now() - started < 500, 'the size check is cheap');
+  // The size check is cheap: 500 ms of CPU.
+  assert.equal(underBudget(500, () => tidyJson(nest(50_000), MAX_DOC_BYTES)), nest(50_000), 'deep nesting kept as sent, not 5 GB of spaces or a stack overflow');
   assert.equal(tidyJson('{"blocks":[]}', MAX_DOC_BYTES), '{\n  "blocks": []\n}');
   assert.equal(tidyJson('{"blocks":', MAX_DOC_BYTES), '{"blocks":');
 });
@@ -102,27 +102,47 @@ test('the layout cap counts UTF-8 bytes, not characters, for pasted Markdown and
   assert.equal(tidyJson(compact, Buffer.byteLength(laid)), laid);
 });
 
-// The size guard finds every <, <=, > or >= with a size on one side (.length,
-// .byteLength, .size), and every comparison, == and != too, with a cap-like name
-// (cap, max, limit, bytes, size, ...) or a number of 100,000 or more. It parses, so
-// comments, strings and line breaks do not matter. A size rule belongs in overCap;
-// any other match must be listed in SIZE_COMPARES on purpose.
-const SIZE_WORDS = new Set(['cap', 'caps', 'max', 'limit', 'limits', 'stop', 'budget', 'bytes', 'byte', 'size', 'long', 'threshold']);
+// The size guard finds every <, <=, > or >= with a size on one side, and every
+// comparison, == and != too, with a cap-like name (cap, max, limit, quota, ...) or a
+// number of 100,000 or more. A size is .length, .byteLength or .size, written with a
+// dot or as ["length"], or a call to utf8Length or byteSize. A size compared with ==
+// or != counts too, unless the other side is 0 or 1. It parses, so comments, strings
+// and line breaks do not matter. A size rule belongs in overCap; any other match must
+// be listed in SIZE_COMPARES on purpose.
+const SIZE_WORDS = new Set(['cap', 'caps', 'max', 'limit', 'limits', 'stop', 'budget', 'bytes', 'byte', 'size', 'long', 'threshold', 'quota', 'ceiling', 'cutoff', 'allowance']);
+const SIZE_PROPS = new Set(['length', 'byteLength', 'size']);
+const SIZE_CALLS = new Set(['utf8Length', 'byteSize']);
 const isCapName = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').split('_').some((word) => SIZE_WORDS.has(word.toLowerCase()));
+// A member's property name: `.name`, or a string written as ["name"] or [`name`].
+const propName = (node) => {
+  if (!node.computed) return node.property.name;
+  const p = node.property;
+  if (p.type === 'Literal' && typeof p.value === 'string') return p.value;
+  if (p.type === 'TemplateLiteral' && p.expressions.length === 0) return p.quasis[0].value.cooked;
+  return null;
+};
+const calleeName = (node) => (node.callee.type === 'Identifier' ? node.callee.name : node.callee.type === 'MemberExpression' ? propName(node.callee) : null);
 
 function sizeMarks(node, found = { size: false, cap: false, big: false }) {
   if (Array.isArray(node)) node.forEach((child) => sizeMarks(child, found));
   else if (node && typeof node === 'object') {
     if (node.type === 'Literal' && typeof node.value === 'number' && Math.abs(node.value) >= 100_000) found.big = true;
     if (node.type === 'Identifier' && isCapName(node.name)) found.cap = true;
-    if (node.type === 'MemberExpression' && !node.computed) {
-      if (['length', 'byteLength', 'size'].includes(node.property.name)) found.size = true;
+    if (node.type === 'CallExpression' && SIZE_CALLS.has(calleeName(node))) found.size = true;
+    if (node.type === 'MemberExpression') {
+      const name = propName(node);
+      if (SIZE_PROPS.has(name)) found.size = true;
       sizeMarks(node.object, found);
-      if (!(node.object.type === 'Identifier' && node.object.name === 'Math')) sizeMarks(node.property, found);
+      // A property is a cap name too (opts.maxBytes), but a size property is only a size,
+      // and Math.max is a function.
+      if (node.computed) sizeMarks(node.property, found);
+      else if (!SIZE_PROPS.has(name) && !(node.object.type === 'Identifier' && node.object.name === 'Math')) sizeMarks(node.property, found);
     } else for (const [key, value] of Object.entries(node)) if (key !== 'type') sizeMarks(value, found);
   }
   return found;
 }
+
+const zeroOrOne = (node) => node.type === 'Literal' && (node.value === 0 || node.value === 1);
 
 function sizeCompares(source, loader = 'js') {
   const js = transformSync(source, { loader, format: 'esm' }).code;
@@ -132,7 +152,8 @@ function sizeCompares(source, loader = 'js') {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'BinaryExpression' && /^(<|>|<=|>=|==|===|!=|!==)$/.test(node.operator)) {
       const marks = sizeMarks([node.left, node.right]);
-      if (marks.cap || marks.big || (marks.size && /[<>]/.test(node.operator))) hits.push(js.slice(node.start, node.end));
+      const relational = /[<>]/.test(node.operator);
+      if (marks.cap || marks.big || (marks.size && (relational || !(zeroOrOne(node.left) || zeroOrOne(node.right))))) hits.push(js.slice(node.start, node.end));
     }
     for (const [key, value] of Object.entries(node)) if (key !== 'type') walk(value);
   };
@@ -164,9 +185,12 @@ test('every playground size rule counts UTF-8 bytes through overCap, and any oth
     'text.length > cap', 'text.length > 2_000_000', 'text.length > 2e6', 'MAX_DOC_BYTES - text.length < 0', '!(text.length <= max)',
     'Math.max(text.length, MAX_DOC_BYTES) !== MAX_DOC_BYTES', 'text.length < MAX', 'text.length >\n MAX_DOC_BYTES', 'text.length>MAX_DOC_BYTES',
     'bytes.length > LIMIT', 'text.length > maxBytes', 'url.length > LONG_LINK', 'blob.size > MAX_DOC_BYTES', 'text.length > limitBytes',
+    'text["length"] > n', 'text[`byteLength`] >= n', 'utf8Length(text) > QUOTA', 'byteSize(text) >= n', 'share.utf8Length(text) > n',
+    'text.length === n', 'text.length == 2', 'n !== text.length', 'text.length > ceiling', 'n > CUTOFF', 'text.length > dailyAllowance',
+    'opts.maxBytes < n', 'blob.size === n',
   ];
   for (const dodge of dodges) assert.equal(sizeCompares(`f(${dodge});`).length, 1, dodge);
-  assert.deepEqual(sizeCompares("// a doc over limit > 2 MB is refused\nconst msg = 'over the limit > cap';\nx.length === 0;"), []);
+  assert.deepEqual(sizeCompares("// a doc over limit > 2 MB is refused\nconst msg = 'over the limit > cap';\nx.length === 0;\nx.length !== 1;\n0 === x.size;\nx[key] > n;"), []);
   assert.equal(overCap('é'.repeat(3), 5), true);
   assert.equal(overCap('é'.repeat(3), 6), false);
   assert.equal(overCap(new Uint8Array(7), 6), true);
