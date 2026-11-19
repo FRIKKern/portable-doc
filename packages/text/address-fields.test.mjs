@@ -170,6 +170,7 @@ function probePaths(block, render) {
 const LINKED = 'linked markdown';
 const OWN = ['html', 'markdown']; // what the renderer itself linked
 const REFUSED = URL_CASES.filter((v) => safeUrl(v) === null);
+const JS = 'javascript:alert(1)';
 
 /** Probe every field of `blocks` through `render` (or only the field named `only`): for each, where a probe for a value is live and whether plain text holds it. */
 function survey(blocks, render = REAL, only = null) {
@@ -224,9 +225,10 @@ function problems({ fields }, rules = LINKED_BY_RULE) {
   const out = new Set();
   for (const f of fields) {
     const { field, key, probe } = f;
-    // A field no output writes, even an https:// address in it, is not probed further: the cost of
-    // probing every candidate key. (Out of reach: a renderer that writes a value only once refused.)
-    if (!probe(MARK).shown) continue;
+    // The CPU shortcut: a field no output writes, with an https:// address or with javascript:
+    // in it, gets no other refused values. Every field gets both of those probes. (Out of reach:
+    // a renderer that writes only some other refused value, and neither of these.)
+    if (!probe(MARK).shown && !probe(JS).shown) continue;
     const address = isAddress(field, key, rules);
     for (const base of REFUSED) {
       const { live, text } = probe(base);
@@ -327,10 +329,13 @@ test('plants: a renderer that puts a field in any live place is caught, a form n
 test('plants: a refused value is caught live in any reading, and in an address field\'s plain text at all', () => {
   // An address field: plain text writes a refused source as "site (…)".
   const text = plant('text', (b) => (b.type === 'stat' && typeof b.source === 'string' ? `\nsite (${b.source})\n` : ''));
-  assert.ok(caught('stat', text, ['stat.source', `refused value in plain text: stat.source = ${JSON.stringify('javascript:alert(1)')} (`], 'text'), 'site (javascript:…) in plain text');
+  assert.ok(caught('stat', text, ['stat.source', `refused value in plain text: stat.source = ${JSON.stringify(JS)} (`], 'text'), 'site (javascript:…) in plain text');
   // A label written as bare Markdown text without toMarkdown's escape, which a reader that links bare URLs links.
   const bare = plant('markdown', (b) => (b.type === 'stat' && typeof b.label === 'string' && b.label.startsWith('//') ? `\n\nsee ${b.label}\n` : ''));
   assert.ok(caught('stat', bare, refusedLive('stat.label', '//evil.example/x'), LINKED), 'a refused label the permissive reader links');
+  // A field linked only when it is not an https:// address, which a marker probe never sees.
+  const role = plant('html', (b) => (b.type === 'stat' && typeof b.role === 'string' && !https(b.role) ? `<a href="${attr(b.role)}">role</a>` : ''));
+  assert.ok(caught('stat', role, refusedLive('stat.role', JS), 'html'), 'stat.role linked only when not https://');
 });
 
 test('plants: a field written where text is inert (alt, title, aria-label, text, a code span, a link title) is let through', () => {
