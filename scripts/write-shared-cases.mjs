@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { CASES as HEADINGS } from '../fixtures/headings/cases.mjs';
+import { CASES as LIST_SPLIT } from '../fixtures/list-split/cases.mjs';
 import { CASES as NESTING } from '../fixtures/nesting/cases.mjs';
 import { CUT, CUT_GENERATED, WORK, WORK_GENERATED } from '../fixtures/text-work/cases.mjs';
 import { depthsOf, linesOf } from '../fixtures/text-work/rule-reader.mjs';
@@ -86,6 +87,10 @@ export function sharedCases() {
   const files = {};
   for (const [folder, cases] of [['nesting', NESTING], ['headings', HEADINGS]]) {
     for (const [name, markdown] of Object.entries(cases)) files[`${folder}/${name}.json`] = pretty({ markdown, blocks: fromMarkdown(markdown) });
+  }
+  for (const [name, markdown] of Object.entries(LIST_SPLIT)) {
+    const { blocks, notices } = readMarkdown(markdown);
+    files[`list-split/${name}.json`] = pretty({ markdown, blocks, notices });
   }
   files['text-work/work-cases.json'] = workCases();
   files['text-work/cut-cases.json'] = cutCases();

@@ -39,6 +39,8 @@ function textOf(node, count = undefined) {
 // ── lists ───────────────────────────────────────────────────────────────
 
 export const LIST_ITEM_SPLIT = 'list_item_split';
+/** The code of the notice that the import fell back to keeping the whole text as one code block. */
+export const IMPORT_FELL_BACK = 'import_fell_back';
 
 // A token's line in the whole text, from 0: its parse starts at `base`. An item's own blocks
 // are read in one tokenize call, at one level, so none after a kept nested list is deep source
@@ -66,11 +68,14 @@ function listItem(item, depth, base) {
         const notes = [];
         const kept = list(child, depth + 1, notes, base);
         for (const n of notes) part.notes.push({ ...n, path: `/children/${part.children.length}${n.path}` });
-        part.children.push(...kept);
+        for (const block of kept) part.children.push(block);
         if (kept.length) after = lineOf(child.tok, 1, base) ?? after;
       } else {
         const flat = flattenText([child]).trim();
-        if (flat) part.out.push(...(part.out.length ? [text(' ')] : []), text(flat));
+        if (flat) {
+          if (part.out.length) part.out.push(text(' '));
+          part.out.push(text(flat));
+        }
       }
       continue;
     }
@@ -83,7 +88,7 @@ function listItem(item, depth, base) {
     if (part.moved) part.moved[1] = lineOf(child.tok, 1, base) ?? lineOf(item.tok, 1, base) ?? part.moved[1];
     if (part.out.length) part.out.push(text(' '));
     if (child.type === 'fence' || child.type === 'code_block') part.out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
-    else part.out.push(...textOf(child));
+    else for (const node of textOf(child)) part.out.push(node);
   }
   close();
   return parts;
@@ -332,7 +337,10 @@ export { IMPORT_WORK };
  * plain text, with a notice of the same shape and rule 'net': `line` the first source line
  * kept so, `lines` how many. Each list item split off at text after its nested list adds one
  * { code: LIST_ITEM_SPLIT, path, line, lines }: the new item, and its text's source lines (the
- * first from 1, and how many), in source order. Never throws.
+ * first from 1, and how many). The notices come by kind: 'budget' and 'line', then the splits
+ * in source order, then 'net'. Should the read throw or give blocks that do not validate, the
+ * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
+ * notice and no other. Never throws.
  */
 export function readMarkdown(markdown, limits = IMPORT_WORK) {
   const md = typeof markdown === 'string' ? markdown : '';
@@ -344,7 +352,10 @@ export function readMarkdown(markdown, limits = IMPORT_WORK) {
   } catch {
     // fall through: the text as one code block
   }
-  return { blocks: md.trim() === '' ? [] : [codeBlock(md)], notices: [], work: plan.work };
+  // The last resort keeps the text whole, and always says so.
+  const blocks = md.trim() === '' ? [] : [codeBlock(md)];
+  const notice = { code: IMPORT_FELL_BACK, path: blocks.length ? '/blocks/0' : '/blocks', line: 1, lines: md.replace(/\n$/, '').split('\n').length };
+  return { blocks, notices: [notice], work: plan.work };
 }
 
 /**

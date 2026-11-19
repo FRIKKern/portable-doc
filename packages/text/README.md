@@ -134,7 +134,12 @@ Where it differs from Barkpark, on purpose:
   nested list starts a new item at the same level, keeping the words in source
   order; more text after a later nested list splits again. In an ordered list
   the new item takes the next number, and the numbers after it continue from
-  there. Each split adds a `list_item_split` notice (`LIST_ITEM_SPLIT`).
+  there. Each split adds a `list_item_split` notice (`LIST_ITEM_SPLIT`). The
+  notices come by kind: any `budget` or `line` notice, then the splits in
+  source order, then a `net` one.
+- Should reading the text fail, `readMarkdown` keeps the whole text as one code
+  block and says so with one `import_fell_back` notice (`IMPORT_FELL_BACK`),
+  its `lines` the text's line count. That is a bug to report.
 - A callout's blocks after its first paragraph are its `slots.body`, read as
   blocks: lists, code, fences, callouts in callouts, to `MAX_NEST` (50)
   callouts deep; a callout deeper keeps its body as text, as a list that deep

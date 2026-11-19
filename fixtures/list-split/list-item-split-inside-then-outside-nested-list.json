@@ -1,0 +1,75 @@
+{
+  "markdown": "- x\n  - y\n    - z\n\n    z2\n\n  x2",
+  "blocks": [
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ],
+          "children": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                {
+                  "content": [
+                    {
+                      "type": "text",
+                      "value": "y"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "list",
+                      "ordered": false,
+                      "items": [
+                        [
+                          {
+                            "type": "text",
+                            "value": "z"
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                [
+                  {
+                    "type": "text",
+                    "value": "z2"
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        [
+          {
+            "type": "text",
+            "value": "x2"
+          }
+        ]
+      ]
+    }
+  ],
+  "notices": [
+    {
+      "code": "list_item_split",
+      "path": "/blocks/0/items/0/children/0/items/1",
+      "line": 5,
+      "lines": 1
+    },
+    {
+      "code": "list_item_split",
+      "path": "/blocks/0/items/1",
+      "line": 7,
+      "lines": 1
+    }
+  ]
+}

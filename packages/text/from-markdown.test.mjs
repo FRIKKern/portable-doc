@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
+import { parse } from 'acorn';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
+import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
 import { MAX_NEST } from './from-markdown-inline.js';
 import { readPlan } from './from-markdown.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
 import { planText } from './import-work.js';
-import { IMPORT_WORK, LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
+import { IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 import { safeUrl } from './util.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -171,26 +173,20 @@ test('a list item\'s text after its nested list stays after it, in source order,
   }
 });
 
-test('a split list item says so: one list_item_split notice per new item, with its path and source lines; an ordered list numbers on', () => {
-  const ul = (...items) => ({ type: 'list', ordered: false, items });
-  const ol = (...items) => ({ type: 'list', ordered: true, items });
-  const item = (value, ...children) => (children.length ? { content: [t(value)], children } : [t(value)]);
-  const split = (path, line, lines) => ({ code: LIST_ITEM_SPLIT, path, line, lines });
-  const cases = [
-    ['- w0\n  - w1\n    - w2\n\n  w3 after the nested list', [ul(item('w0', ul(item('w1', ul(item('w2'))))), item('w3 after the nested list'))], [split('/blocks/0/items/1', 5, 1)], '- w0\n  - w1\n    - w2\n- w3 after the nested list\n'],
-    ['- a\n\n  b\n\n  - c\n\n  d', [ul(item('a b', ul(item('c'))), item('d'))], [split('/blocks/0/items/1', 7, 1)], '- a b\n  - c\n- d\n'],
-    // the item after the split takes the next number: w4, item 2 in the source, is item 3
-    ['1. w0\n   1. w1\n      1. w2\n\n   w3 after the nested list\n2. w4', [ol(item('w0', ol(item('w1', ol(item('w2'))))), item('w3 after the nested list'), item('w4'))], [split('/blocks/0/items/1', 5, 1)], '1. w0\n   1. w1\n      1. w2\n2. w3 after the nested list\n3. w4\n'],
-    // text after a later nested list splits again; the moved text spans its blank line
-    ['- a\n  - b\n\n  c\n\n  more c\n\n  - d\n\n  e', [ul(item('a', ul(item('b'))), item('c more c', ul(item('d'))), item('e'))], [split('/blocks/0/items/1', 4, 3), split('/blocks/0/items/2', 10, 1)], '- a\n  - b\n- c more c\n  - d\n- e\n'],
-    // a split inside a nested list, then one outside it, in source order
-    ['- x\n  - y\n    - z\n\n    z2\n\n  x2', [ul(item('x', ul(item('y', ul(item('z'))), item('z2'))), item('x2'))], [split('/blocks/0/items/0/children/0/items/1', 5, 1), split('/blocks/0/items/1', 7, 1)], '- x\n  - y\n    - z\n  - z2\n- x2\n'],
-  ];
-  for (const [markdown, blocks, notices, written] of cases) {
-    const read = readMarkdown(markdown);
-    assert.deepEqual([read.blocks, read.notices], [blocks, notices], markdown);
-    assert.equal(toMarkdown(read.blocks), written, markdown);
-    assert.deepEqual(readMarkdown(written), { blocks, notices: [], work: readMarkdown(written).work }, `${markdown}: the round trip splits nothing more`);
+test('a split list item reads as fixtures/list-split/ pins it, writes back as one list item per split, and the round trip splits nothing more', () => {
+  // The blocks and notices of each case are pinned in fixtures/list-split/ (the shared-cases test).
+  const written = {
+    'list-item-text-after-nested-list': '- w0\n  - w1\n    - w2\n- w3 after the nested list\n',
+    'list-item-text-around-nested-list': '- a b\n  - c\n- d\n',
+    'list-item-text-after-nested-list-numbered': '1. w0\n   1. w1\n      1. w2\n2. w3 after the nested list\n3. w4\n',
+    'list-item-text-after-two-nested-lists': '- a\n  - b\n- c more c\n  - d\n- e\n',
+    'list-item-split-inside-then-outside-nested-list': '- x\n  - y\n    - z\n  - z2\n- x2\n',
+  };
+  for (const [name, out] of Object.entries(written)) {
+    const read = readMarkdown(LIST_SPLIT[name]);
+    assert.ok(read.notices.length, `${name}: no split`);
+    assert.equal(toMarkdown(read.blocks), out, name);
+    assert.deepEqual(readMarkdown(out), { blocks: read.blocks, notices: [], work: readMarkdown(out).work }, `${name}: the round trip splits nothing more`);
   }
 });
 
@@ -228,6 +224,26 @@ const { blocks, notices } = readMarkdown(md);
 console.log(JSON.stringify([blocks.map((b) => b.type), blocks[0].items.length, notices.length]));`;
   const run = spawnSync(process.execPath, ['--stack-size=60', '--input-type=module', '-e', script], { cwd: here, encoding: 'utf8' });
   assert.deepEqual(JSON.parse(run.stdout), [['list'], 2 * items, items], run.stderr);
+});
+
+test('the import spreads no array into a call: an array as long as the text overflows the stack as arguments', () => {
+  const source = fs.readFileSync(new URL('./from-markdown.js', import.meta.url), 'utf8');
+  const spreads = [];
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node.type !== 'string') return;
+    if ((node.type === 'CallExpression' || node.type === 'NewExpression') && node.arguments.some((a) => a.type === 'SpreadElement')) spreads.push(`line ${node.loc.start.line}: ${source.slice(node.start, node.end)}`);
+    for (const [key, value] of Object.entries(node)) if (key !== 'loc' && value && typeof value === 'object') walk(value);
+  };
+  walk(parse(source, { ecmaVersion: 'latest', sourceType: 'module', locations: true }));
+  assert.deepEqual(spreads, []);
+});
+
+test('when the read fails, the import keeps the whole text as one code block and always says so', () => {
+  const planted = { ...IMPORT_WORK, get budget() { throw new Error('a planted throw'); } };
+  const md = '# Title\n\nsome text\n';
+  assert.deepEqual(readMarkdown(md, planted), { blocks: [{ type: 'code', value: md }], notices: [{ code: IMPORT_FELL_BACK, path: '/blocks/0', line: 1, lines: 3 }], work: 0 });
+  assert.deepEqual(readMarkdown('  \n', planted).notices, [{ code: IMPORT_FELL_BACK, path: '/blocks', line: 1, lines: 1 }]);
 });
 
 test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {

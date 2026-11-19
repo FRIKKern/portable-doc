@@ -1,0 +1,47 @@
+{
+  "markdown": "- a\n\n  b\n\n  - c\n\n  d",
+  "blocks": [
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "value": "a b"
+            }
+          ],
+          "children": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                [
+                  {
+                    "type": "text",
+                    "value": "c"
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        [
+          {
+            "type": "text",
+            "value": "d"
+          }
+        ]
+      ]
+    }
+  ],
+  "notices": [
+    {
+      "code": "list_item_split",
+      "path": "/blocks/0/items/1",
+      "line": 7,
+      "lines": 1
+    }
+  ]
+}

@@ -74,6 +74,9 @@ export const IMPORT_WORK: ImportLimits;
 /** The code of the notice for a list item split at text after its nested list. */
 export const LIST_ITEM_SPLIT: 'list_item_split';
 
+/** The code of the notice that the import fell back to keeping the whole text as one code block. */
+export const IMPORT_FELL_BACK: 'import_fell_back';
+
 /**
  * A note from the import: text it kept as plain text, by `rule` ('budget': every line from
  * `line` on; 'line': each line past lineBytes; 'net': markdown-it's own count passed the
@@ -101,11 +104,25 @@ export interface ListItemSplitNotice {
   lines: number;
 }
 
-export type ImportNotice = ImportWorkNotice | ListItemSplitNotice;
+/**
+ * A note from the import: reading the text failed, so the whole text was kept as one code
+ * block at `path` (`/blocks` when the text is blank and nothing was kept), every line of it:
+ * `line` is 1 and `lines` how many lines the text has. A bug to report.
+ */
+export interface ImportFallbackNotice {
+  code: 'import_fell_back';
+  path: string;
+  line: number;
+  lines: number;
+}
+
+export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice;
 
 /**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
- * from the text; `notices` says what a limit cut, and each list item split off, in source
- * order, and is empty when neither happened. `limits` defaults to IMPORT_WORK. Never throws.
+ * from the text. `notices` says what a limit cut and each list item split off, by kind: the
+ * `budget` and `line` notices, then the splits in source order, then a `net` one; it is empty
+ * when none happened. When the import falls back to one code block, its one notice is
+ * `import_fell_back`. `limits` defaults to IMPORT_WORK. Never throws.
  */
 export function readMarkdown(markdown: string, limits?: ImportLimits): { blocks: Block[]; notices: ImportNotice[]; work: number };
