@@ -101,7 +101,10 @@ export function codeSource(b) {
 function code(b, ctx) {
   const source = codeSource(b);
   const lang = str(b.lang) || str(b.language);
-  if (source.trim() === '') return ctx.md ? fence(typeof b.value === 'string' ? b.value : '', lang) : '';
+  if (source.trim() === '') {
+    const blank = ['value', 'code', 'content', 'text'].map((k) => b[k]).find((v) => typeof v === 'string') ?? '';
+    return ctx.md ? fence(blank, lang) : '';
+  }
   return ctx.md ? fence(source, lang) : source.replace(/\n+$/, '');
 }
 
@@ -133,7 +136,8 @@ const figure = (b, ctx) => paras(isMap(b.child) ? ctx.blocks([b.child]) : '', ca
 
 function diagram(b, ctx) {
   const source = str(b.source);
-  const src = source.trim() === '' ? '' : ctx.md ? fence(source, 'mermaid') : source.replace(/\n+$/, '');
+  // Like code, an empty diagram writes its empty fence in Markdown, so it round-trips.
+  const src = ctx.md ? fence(source, 'mermaid') : source.trim() === '' ? '' : source.replace(/\n+$/, '');
   return paras(src, caption(b, ctx));
 }
 

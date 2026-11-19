@@ -323,6 +323,12 @@ test('an empty code block is a real block: toMarkdown writes its empty fence, wi
     assert.equal(blocks[0].type, 'code', md);
     assert.deepEqual(fromMarkdown(toMarkdown(blocks)), blocks, md);
   }
+  for (const md of ['```mermaid\n```', '```mermaid\n```\n\n*A caption*']) {
+    const blocks = fromMarkdown(md);
+    assert.equal(blocks[0].type, 'diagram', md);
+    assert.deepEqual(fromMarkdown(toMarkdown(blocks)), blocks, md);
+  }
+  assert.equal(toMarkdown([{ type: 'code', code: '   ' }]), toMarkdown([{ type: 'code', value: '   ' }]), 'whitespace kept whichever field holds it');
   assert.equal(toMarkdown([{ type: 'code', value: '', lang: 'py' }]).trim(), '```py\n```');
   assert.equal(toPlainText([{ type: 'code', value: '' }]).trim(), '');
 });
