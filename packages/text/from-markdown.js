@@ -243,7 +243,8 @@ export { IMPORT_WORK };
  * text, every word; `notices` then hold one { code, rule, path, line, lines } per rule ('line' or
  * 'budget'): the first such paragraph, the first line cut (from 1) and how many. Should
  * markdown-it's own count still pass the budget (the net), the rest of the deep text is kept as
- * plain text and `notices` hold { code, rule: 'net', path, work }. Never throws.
+ * plain text, with a notice of the same shape and rule 'net': `line` the first source line
+ * kept so, `lines` how many. Never throws.
  */
 export function readMarkdown(markdown, limits = IMPORT_WORK) {
   const md = typeof markdown === 'string' ? markdown : '';
@@ -269,7 +270,7 @@ export function readPlan(plan, limits) {
   const blocks = [];
   const paths = {};
   for (const part of plan.parts) {
-    if (part.read !== undefined) convert(tree(parser.parse(part.read, { net })), state, blocks, net);
+    if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line })), state, blocks, net);
     else {
       paths[part.rule] ??= `/blocks/${blocks.length}`;
       blocks.push({ type: 'paragraph', content: [text(part.plain)] });
@@ -277,7 +278,7 @@ export function readPlan(plan, limits) {
   }
   if (!validate({ blocks }).ok) return null;
   const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
-  if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, work: net.work });
+  if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
   return { blocks, notices };
 }
 

@@ -31,7 +31,11 @@
 //   one top-level paragraph, whitespace collapsed.
 // Each rule gives at most one notice per document: its first line and how many lines it cut.
 
-/** The import's limits and the notice it gives past them. lineBytes is the pack's value; null until it lands. */
+/**
+ * The import's limits and the notice it gives past them. lineBytes is the pack's value; null
+ * until it lands. An ordinary 500 kB document uses at most a quarter of the budget
+ * (ordinary-work.test.mjs).
+ */
 export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, lineBytes: null, notice: 'import_work_spent' });
 
 const SP = (ch) => ch === 32 || ch === 9;
@@ -130,8 +134,9 @@ function closes(line, at, fence) {
 }
 
 /**
- * The text's plan: { work, parts, notices }. `parts` are, in order, { read: text } to parse as
- * a document, and { plain: text, rule } to keep as one top-level paragraph. `notices` are
+ * The text's plan: { work, parts, notices }. `parts` are, in order, { read: text, line } to parse
+ * as a document, `line` the source line (from 0) its first line stands for, and
+ * { plain: text, rule } to keep as one top-level paragraph. `notices` are
  * { rule, line, lines }, at most one per rule: 'line' (a line past lineBytes) and 'budget'
  * (the lines from where the work passed the budget), `line` counted from 1.
  */
@@ -145,8 +150,9 @@ export function planText(markdown, limits = IMPORT_WORK) {
     else notices.set(rule, { rule, line: n + 1, lines: count });
   };
   let read = [];
+  let start = 0;
   const flush = () => {
-    if (read.length) parts.push({ read: read.join('\n') });
+    if (read.length) parts.push({ read: read.join('\n'), line: start });
     read = [];
   };
   let work = 0;
@@ -193,12 +199,17 @@ export function planText(markdown, limits = IMPORT_WORK) {
       note('line', n, 1);
       if (fence) {
         // The code goes on after the line: read it as if the fence opened again there.
-        // Its opening line is read twice, and charged twice, at its own depth.
+        // Its opening line is read twice, and charged twice, at its own depth. It stands at
+        // the long line's place, so the lines after it keep their numbers.
+        start = n;
         read.push(fence.line);
         const p = prefix(fence.line);
         work += (p.m + Math.floor(p.w / 2) + 1) * (2 + bytes(fence.line));
       }
-    } else read.push(line);
+    } else {
+      if (!read.length) start = n;
+      read.push(line);
+    }
   }
   flush();
   return { work, parts, notices: [...notices.values()] };

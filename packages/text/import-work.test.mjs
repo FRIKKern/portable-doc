@@ -118,8 +118,9 @@ test('the net: where the text\'s count was wrong and markdown-it\'s own count pa
   const limits = { ...IMPORT_WORK, budget: 20_000 };
   assert.ok(parsedWork(md) > limits.budget);
   const read = readPlan(planText(md, NO_LIMIT), limits);
-  assert.deepEqual(netNotices(read).map(({ code, rule, path }) => ({ code, rule, path })), [{ code: 'import_work_spent', rule: 'net', path: '/blocks/0' }]);
-  assert.ok(read.notices[0].work > limits.budget);
+  assert.deepEqual(read.notices, [{ code: 'import_work_spent', rule: 'net', path: '/blocks/0', line: 1, lines: 5 }]);
+  // The same shape after a top-level paragraph: the path and line move with it.
+  assert.deepEqual(netNotices(readPlan(planText(`top\n\n${md}`, NO_LIMIT), limits)), [{ code: 'import_work_spent', rule: 'net', path: '/blocks/1', line: 3, lines: 5 }]);
   assert.deepEqual(words(read.blocks), ['w0', 'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7']);
   assert.deepEqual(read.blocks.at(-1), p('w7 end'), 'the top level is still read');
   // With the text's own count the plan cuts first, and the net stays quiet.

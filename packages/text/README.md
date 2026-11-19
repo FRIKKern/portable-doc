@@ -127,11 +127,13 @@ Where it differs from Barkpark, on purpose:
   depth before it, and a line right after a non-blank line keeps at least that
   line's depth, as it may be lazy. The count is never below what markdown-it
   does to read the same lines. The budget is 16,000,000 (`IMPORT_WORK`); an
-  ordinary 500 kB document of mixed blocks uses at most an eighth of it.
+  ordinary 500 kB document uses at most a quarter of it
+  (`ordinary-work.test.mjs`, seven shapes).
 - Two rules keep text as plain text, every word, with Markdown syntax and tags
-  in it shown as literal text, and `readMarkdown` returns one
-  `import_work_spent` notice per rule, with the first line it cut, how many,
-  and the path of the first plain paragraph:
+  in it shown as literal text, and `readMarkdown` returns one notice per
+  rule, `{ code: 'import_work_spent', rule, path, line, lines }`: the path
+  of the first plain paragraph, the first line kept as text (from 1), and how
+  many:
   - From the line where the work passes the budget, the rest of the text is
     one top-level paragraph, whitespace collapsed. Containers open at that
     line close there.
@@ -145,7 +147,7 @@ Where it differs from Barkpark, on purpose:
 - Behind the text's count, markdown-it's own count runs as a net. Should it
   pass the budget where the text's count said it would not, the rest of the
   text below the top level is kept as plain text, every word, with one
-  notice `{ rule: 'net', path, work }`. The shared cases never fire it; one
+  notice of rule `net`. The shared cases never fire it; one
   in the wild means the text's count is wrong, and is a bug to report.
 
 **Round trip.** For heading, paragraph, list, code, table, blockquote, divider
@@ -156,7 +158,7 @@ stats, heatmap, pullquote and eyebrow travel only inside a portabledoc fence.
 Every other type comes back as whatever its Markdown reads as: an image as a
 link, a callout or pullquote as a quote, an equation as a `math` code block.
 
-`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/import-work.test.mjs`
+`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/import-work.test.mjs packages/text/ordinary-work.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
 text, and the import rules, round trip and hostile input. The import-work
 test sweeps 300 seeded documents; `IMPORT_WORK_SWEEP=20000` runs a longer

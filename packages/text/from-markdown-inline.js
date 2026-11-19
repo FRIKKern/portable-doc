@@ -64,6 +64,7 @@ parser.block.tokenize = (state, startLine, endLine) => {
   const tok = state.push('deep_source', '', 0);
   tok.content = state.getLines(line, end, state.blkIndent, false);
   tok.meta = env; // the parse's count and net, shared by every parse of its deep source
+  tok.map = [(env.base ?? 0) + line, (env.base ?? 0) + end]; // its lines in the whole text, from 0
   state.line = end;
 };
 
@@ -192,12 +193,18 @@ export function flattenText(nodes) {
       const { content, meta: env } = node.tok;
       stack.push(SEP);
       if (spent(env)) {
-        // The net: the rest as plain text, and the import says so.
-        env.net.fired = true;
+        // The net: the rest as plain text, and the import says so: from which line, and how many.
+        const { net } = env;
+        net.fired = true;
+        net.line = Math.min(net.line ?? Infinity, node.tok.map[0] + 1);
+        net.lines = (net.lines ?? 0) + content.replace(/\n+$/, '').split('\n').length;
         if (!skipping) out += `${out === '' || /\s$/.test(out) ? '' : ' '}${content.replace(/\s+/g, ' ').trim()}`;
         continue;
       }
+      const base = env.base;
+      env.base = node.tok.map[0]; // the deep source's lines count from its first line
       const nodes = tree(parser.parse(content, env));
+      env.base = base;
       for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
       continue;
     }

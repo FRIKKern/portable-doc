@@ -51,30 +51,18 @@ export const IMPORT_WORK: ImportLimits;
 
 /**
  * A note from the import: text it kept as plain text, by `rule` ('budget': every line from
- * `line` on; 'line': each line past lineBytes, `lines` of them), the first such paragraph at
- * `path`. At most one per rule. `line` counts from 1.
+ * `line` on; 'line': each line past lineBytes; 'net': markdown-it's own count passed the
+ * budget where the text's count said it would not, so the deep text from `line` on was kept,
+ * a sign the text's count is wrong and a bug to report), the first such paragraph at `path`.
+ * At most one per rule. `line` counts from 1; `lines` is how many lines were kept as text.
  */
-export interface ImportCutNotice {
+export interface ImportNotice {
   code: 'import_work_spent';
-  rule: 'budget' | 'line';
+  rule: 'budget' | 'line' | 'net';
   path: string;
   line: number;
   lines: number;
 }
-
-/**
- * The net: markdown-it's own count passed the budget where the text's count said it would
- * not, so the rest of the deep text, from the block at `path`, was kept as plain text, every
- * word. `work` is markdown-it's count then. It means the text's count is wrong: a bug to report.
- */
-export interface ImportNetNotice {
-  code: 'import_work_spent';
-  rule: 'net';
-  path: string;
-  work: number;
-}
-
-export type ImportNotice = ImportCutNotice | ImportNetNotice;
 
 /**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count

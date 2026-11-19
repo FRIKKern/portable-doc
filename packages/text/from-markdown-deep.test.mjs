@@ -108,21 +108,13 @@ test('markdown-it\'s own count charges a quote its own lines, not the rest of th
   assert.equal((parsedWork(lazy(200)) - parsedWork(lazy(100))) / 100, 151 * 6);
 });
 
-test('an ordinary 500 kB document of mixed blocks uses at most an eighth of the work budget', () => {
-  const section = (n) => [
-    `## Section ${n}`, '',
-    `A paragraph with **bold**, *emphasis*, \`code\` and [a link](https://example.com/${n}). It runs on, as prose does.`, '',
-    '- Point one', '  - A nested point', '    - Deeper still, with *marks*', '- Point two', '',
-    '1. First step', '2. Second step', '   1. A sub-step', '',
-    `> A quote about ${n}, with a list:`, '>', '> - inside the quote', '>   - nested in it', '>', '> — Someone', '',
-    '```js', `const x${n} = ${n};`, '```', '',
-    '| Name | Value |', '| --- | --- |', `| a${n} | 1 |`, '',
-    `> [!note] A callout ${n}`, '', '---', '',
-  ].join('\n');
-  let md = '';
-  for (let n = 0; md.length < 500_000; n++) md += section(n);
-  const { blocks, notices, work } = underBudget(20_000, () => readMarkdown(md));
-  assert.deepEqual(notices, []);
-  assert.ok(work <= IMPORT_WORK.budget / 8, `work ${work}, an eighth of the budget is ${IMPORT_WORK.budget / 8}`);
-  assert.ok(blocks.length > 10_000);
+test('a list item past the parse levels reads only its own lines: each later item stays its own, and the reading stays within the text\'s count', () => {
+  // Each line opens a new top-level item, 300 lists deep. markdown-it once re-read every later
+  // line at each item past the levels, and every later item landed inside the first.
+  const items = Array.from({ length: 20 }, (_, i) => `${'- '.repeat(300)}a${i}`).join('\n');
+  const [list, ...rest] = readMarkdown(items, { ...IMPORT_WORK, budget: Infinity }).blocks;
+  assert.deepEqual(rest, []);
+  assert.equal(list.items.length, 20);
+  list.items.forEach((item, i) => assert.match(JSON.stringify(item), new RegExp(`"a${i}"`)));
+  assert.ok(parsedWork(items) <= readMarkdown(items).work, `markdown-it ${parsedWork(items)}, the text's count ${readMarkdown(items).work}`);
 });
