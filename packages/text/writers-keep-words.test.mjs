@@ -1,33 +1,35 @@
-// Every writer keeps every word: each shared case in fixtures/ is imported, then written by
-// readable Markdown, plain text, round-trip Markdown and the HTML of @portable-doc/react, and
-// each word of the imported doc's text is in each output, or named in a `lost` entry.
-// The import keeping the words of its Markdown is pinned by the import's own tests; this one
-// pins that no writer drops what the import kept. The HTML writer is @portable-doc/react's
-// built dist: the root test run builds it first.
+// Every writer keeps every word: each shared case in fixtures/ is imported, then written by every
+// writer in the registry (scripts/lib/writers.mjs), and each word of the imported doc's text is in
+// each output, or named in a `lost` entry. The import keeping the words of its Markdown is pinned by
+// the import's own tests; this one pins that no writer drops what the import kept. The HTML writers
+// are @portable-doc/react's built dist: the root test run builds it first. The synced editor's
+// writers lose words today; each kind of loss is counted against its row in
+// scripts/lib/editor-losses.mjs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
 import { validate } from '@portable-doc/validate';
-import { CASES as HEADINGS } from '../../fixtures/headings/cases.mjs';
-import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
-import { CUT, CUT_GENERATED, WORK, WORK_GENERATED } from '../../fixtures/text-work/cases.mjs';
+import { EDITOR_LOSSES, lossKind } from '../../scripts/lib/editor-losses.mjs';
+import { WRITERS } from '../../scripts/lib/writers.mjs';
 import { KEEP_BYTES, sharedCases } from '../../scripts/write-shared-cases.mjs';
 import { fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 
+const FIXTURES = new URL('../../fixtures/', import.meta.url);
 const json = (dir) =>
-  fs.readdirSync(new URL(`../../${dir}/`, import.meta.url)).filter((f) => f.endsWith('.json')).sort().map((f) => [`${dir}/${f}`, JSON.parse(fs.readFileSync(new URL(`../../${dir}/${f}`, import.meta.url), 'utf8'))]);
-const writerCases = json('fixtures/writers');
+  fs.readdirSync(new URL(`${dir}/`, FIXTURES)).filter((f) => f.endsWith('.json')).sort().map((f) => [`fixtures/${dir}/${f}`, JSON.parse(fs.readFileSync(new URL(`${dir}/${f}`, FIXTURES), 'utf8'))]);
+const writerCases = json('writers');
 
 const wordsIn = (s) => s.match(/\p{L}[\p{L}\p{N}]*/gu) ?? [];
 
-const READABLE = ['readable Markdown', 'plain text', 'HTML'];
+const HTML = ['HTML', 'HTML with field and embed blocks'];
+const READABLE = ['readable Markdown', 'plain text', ...HTML, 'editor export'];
 const PLAIN_STRING = 'the schema types it as a plain string, so the test cannot tell its kind';
 // The fields a writer may write short or not at all, each with the writers it excuses and why.
 // This list only shrinks. Each row must excuse a word in this run, so a stale row turns the test red.
 const LISTED = [
-  ['xLabels', ['HTML'], "the chart's HTML draws only the first and last label; a later change gives the chart a text alternative carrying every label"],
+  ['xLabels', HTML, "the chart's HTML draws only the first and last label; a later change gives the chart a text alternative carrying every label"],
   ['tone', READABLE, `a setting, written as its label; ${PLAIN_STRING}`],
   ['verdict', READABLE, `a setting, written as the colour of the digits; ${PLAIN_STRING}`],
   ['lang', READABLE, `a setting, written only as a fence's first word; ${PLAIN_STRING}`],
@@ -38,8 +40,8 @@ const LISTED = [
   ['id', READABLE, `a block's name; ${PLAIN_STRING}`],
   ['source', READABLE, `a reference, written as an address or a short commit; ${PLAIN_STRING}`],
   ['sourceDefault', READABLE, `a reference, written only when it is an address; ${PLAIN_STRING}`],
-  ['href', ['HTML'], 'an address, written in an attribute; the schema does not specify inline fields'],
-  ['src', ['HTML'], `an address, written in an attribute; ${PLAIN_STRING}`],
+  ['href', HTML, 'an address, written in an attribute; the schema does not specify inline fields'],
+  ['src', HTML, `an address, written in an attribute; ${PLAIN_STRING}`],
   ['posterAt', READABLE, 'a setting, the frame a player shows before it plays; the schema does not name it'],
   ['style', READABLE, 'a field the schema does not name: blocks are open, and writers read only what it names'],
 ];
@@ -80,64 +82,94 @@ const htmlText = (html) =>
     .replace(/<[^>]*>/g, ' ')
     .replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ENTITIES[e]);
 
-/** Each writer: its name, and given the blocks, the words it wrote and the paths it lists as lost. */
-const WRITERS = [
-  ['readable Markdown', (blocks) => ({ words: new Set(wordsIn(toMarkdown(blocks))) })],
-  ['plain text', (blocks) => ({ words: new Set(wordsIn(toPlainText(blocks))) })],
-  [
-    'round-trip Markdown',
-    (blocks) => {
-      const { markdown, lost } = toMarkdown(blocks, { mode: 'round-trip' });
-      // A portabledoc fence holds its blocks as JSON: what it writes is what reads back.
-      return { words: new Set([...wordsIn(markdown), ...textWords(fromMarkdown(markdown)).map(([w]) => w)]), lost: lost.map((l) => l.path) };
-    },
-  ],
-  ['HTML', (blocks) => ({ words: new Set(wordsIn(htmlText(renderPortableDocument(blocks)))) })],
-];
-
-// Round-trip Markdown checks that each block reads back, which takes seconds on the few
-// generated inputs over KEEP_BYTES (a 2 MB text of callouts 1000 deep); those run through
-// the other three writers only.
-const big = (blocks) => JSON.stringify(blocks).length > KEEP_BYTES;
-
-/** Every shared case as [name, blocks, words it must keep]. */
-function* cases() {
-  for (const [name, markdown] of Object.entries({ ...NESTING, ...HEADINGS, ...WORK, ...WORK_GENERATED })) yield [name, readMarkdown(markdown).blocks];
-  const cut = [...Object.entries(CUT), [CUT_GENERATED.name, [CUT_GENERATED.markdown, CUT_GENERATED.limits]]];
-  for (const [name, [markdown, limits]] of cut) yield [name, readMarkdown(markdown, limits).blocks];
-  for (const [name, { markdown }] of Object.entries(JSON.parse(sharedCases()[path.posix.join('round-trip', 'round-trip-cases.json')]))) yield [name, fromMarkdown(markdown)];
-  for (const [name, doc] of json('fixtures/valid')) yield [name, Array.isArray(doc) ? doc : doc.blocks];
-  for (const [name, { blocks }] of writerCases) yield [name, blocks];
-  // An alias case's block holds a field under two names; a writer reads the one `reads` names.
-  // A block that does not validate pins only the alias reader: writers owe a valid doc's words.
-  for (const [name, { block, reads }] of json('fixtures/aliases').filter(([, c]) => validate({ blocks: [c.block] }).ok)) {
-    yield [name, [block], Object.entries(reads).flatMap(([key, v]) => (typeof v === 'string' ? wordsIn(v).map((w) => [w, key, `/blocks/0/${key}`]) : []))];
-  }
+/** A writer's words: those of its output (an HTML writer's text content), and of the blocks its output reads back as. */
+function writtenWords(writer, blocks) {
+  const { output, lost = [], readBack } = writer.write(blocks);
+  const words = new Set(wordsIn(writer.writes === 'html' ? htmlText(output) : output));
+  if (readBack) for (const [w] of textWords(readBack)) words.add(w);
+  return { words, lost };
 }
 
-test('every writer keeps every word of every shared case, or lists where it lost it', () => {
+// Round-trip Markdown checks that each block reads back, which takes seconds on the few
+// generated inputs over KEEP_BYTES (a 2 MB text of callouts 1000 deep); those skip the
+// writers named here.
+const big = (blocks) => JSON.stringify(blocks).length > KEEP_BYTES;
+const SLOW = ['round-trip Markdown'];
+
+// Each folder under fixtures/ and how its cases are read, as [name, blocks, words it must keep?].
+// broken/ holds docs that fail validation: writers owe a valid doc's words. A folder with no
+// reader here, or one that gives no case, fails the test.
+const NOT_READ = { broken: 'docs that fail validation; writers owe only a valid doc its words' };
+const markdownCases = async (folder) => Object.entries((await import(new URL(`${folder}/cases.mjs`, FIXTURES).href)).CASES).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]);
+const READERS = {
+  nesting: () => markdownCases('nesting'),
+  headings: () => markdownCases('headings'),
+  'text-work': async () => {
+    const { CUT, CUT_GENERATED, WORK, WORK_GENERATED } = await import(new URL('text-work/cases.mjs', FIXTURES).href);
+    const cut = [...Object.entries(CUT), [CUT_GENERATED.name, [CUT_GENERATED.markdown, CUT_GENERATED.limits]]];
+    return [
+      ...Object.entries({ ...WORK, ...WORK_GENERATED }).map(([name, markdown]) => [name, readMarkdown(markdown).blocks]),
+      ...cut.map(([name, [markdown, limits]]) => [name, readMarkdown(markdown, limits).blocks]),
+    ];
+  },
+  'round-trip': () => Object.entries(JSON.parse(sharedCases()[path.posix.join('round-trip', 'round-trip-cases.json')])).map(([name, { markdown }]) => [name, fromMarkdown(markdown)]),
+  valid: () => json('valid').map(([name, doc]) => [name, Array.isArray(doc) ? doc : doc.blocks]),
+  writers: () => writerCases.map(([name, { blocks }]) => [name, blocks]),
+  // An alias case's block holds a field under two names; a writer reads the one `reads` names.
+  // A block that does not validate pins only the alias reader: writers owe a valid doc's words.
+  aliases: () =>
+    json('aliases')
+      .filter(([, c]) => validate({ blocks: [c.block] }).ok)
+      .map(([name, { block, reads }]) => [name, [block], Object.entries(reads).flatMap(([key, v]) => (typeof v === 'string' ? wordsIn(v).map((w) => [w, key, `/blocks/0/${key}`]) : []))]),
+};
+
+/** Every shared case as [name, blocks, words it must keep?], read from each folder under fixtures/. */
+async function cases() {
+  const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  const unread = folders.filter((f) => !(f in READERS) && !(f in NOT_READ));
+  assert.deepEqual(unread, [], 'a folder under fixtures/ that the word test has no reader for');
+  const all = [];
+  for (const folder of folders.filter((f) => f in READERS)) {
+    const got = await READERS[folder]();
+    assert.ok(got.length > 0, `fixtures/${folder}: no case read`);
+    all.push(...got);
+  }
+  return all;
+}
+
+test('every writer keeps every word of every shared case, or lists where it lost it', async () => {
   const excused = new Set();
   const drops = [];
+  const counted = new Map(EDITOR_LOSSES.map(([writer, kind]) => [`${writer}: ${kind}`, 0]));
   let seen = 0;
   let bigSeen = 0;
-  for (const [name, blocks, words = textWords(blocks)] of cases()) {
+  for (const [name, blocks, words = textWords(blocks)] of await cases()) {
     seen++;
-    for (const [writer, write] of WRITERS) {
-      if (writer === 'round-trip Markdown' && big(blocks)) {
+    for (const writer of WRITERS) {
+      if (big(blocks) && SLOW.includes(writer.name)) {
         bigSeen++;
         continue;
       }
-      const { words: written, lost = [] } = write(blocks);
+      const { words: written, lost } = writtenWords(writer, blocks);
       const missing = words.filter(([w, key, path]) => {
         if (written.has(w) || lost.some((l) => path === l || path.startsWith(`${l}/`))) return false;
-        const row = LISTED.find(([field, writers]) => field === key && writers.includes(writer));
-        if (row) excused.add(`${row[0]} ${writer}`);
+        const row = LISTED.find(([field, writers]) => field === key && writers.includes(writer.name));
+        if (row) excused.add(`${row[0]} ${writer.name}`);
         return !row;
       });
-      if (missing.length) drops.push(`${writer} drops ${missing.map(([w, , path]) => `${w} at ${path}`).join(', ')} of ${name}`);
+      const uncounted = missing.filter(([, key, path]) => {
+        const row = `${writer.name}: ${lossKind(writer.name, name, key, path, blocks)}`;
+        if (!counted.has(row)) return true;
+        counted.set(row, counted.get(row) + 1);
+        return false;
+      });
+      if (uncounted.length) drops.push(`${writer.name} drops ${uncounted.map(([w, , path]) => `${w} at ${path}`).join(', ')} of ${name}`);
     }
   }
+  if (process.env.WORDS_DUMP) fs.writeFileSync(process.env.WORDS_DUMP, drops.join('\n'));
   assert.deepEqual(drops, []);
+  // Each listed loss is the exact count of words lost: a new loss and a fix both move it.
+  assert.deepEqual(Object.fromEntries(counted), Object.fromEntries(EDITOR_LOSSES.map(([writer, kind, count]) => [`${writer}: ${kind}`, count])), 'editor-losses.mjs: a count moved; a fix brings its row down or out, a new loss is a bug');
   assert.ok(seen > 390, `${seen} cases`);
   assert.ok(bigSeen > 0, 'no case is big enough to skip round-trip Markdown: drop that rule');
   const stale = LISTED.flatMap(([field, writers]) => writers.map((w) => `${field} ${w}`)).filter((r) => !excused.has(r));
