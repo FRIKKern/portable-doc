@@ -17,7 +17,7 @@ const SHAPE = {
   run: 'function', // run(args, io): the exit code; may throw UsageError
 };
 
-const COMMAND_FILE = /^[a-z][a-z0-9-]*\.js$/;
+export const COMMAND_FILE = /^[a-z][a-z0-9-]*\.js$/;
 
 // The words index.js answers itself, before any command lookup. A command file may not take
 // one: its command could never run. The pattern above already keeps out every dashed one.
