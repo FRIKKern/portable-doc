@@ -329,9 +329,9 @@ test('plants: a refused value is caught live in any reading, and in an address f
   // An address field: plain text writes a refused source as "site (…)".
   const text = plant('text', (b) => (b.type === 'stat' && typeof b.source === 'string' ? `\nsite (${b.source})\n` : ''));
   assert.ok(caught('stat', text, ['stat.source', `refused value in plain text: stat.source = ${JSON.stringify('javascript:alert(1)')} (`], 'text'), 'site (javascript:…) in plain text');
-  // A words field written as bare Markdown text, which a reader that links bare URLs links.
-  const bare = plant('markdown', (b) => (b.type === 'stat' && typeof b.denom === 'string' && b.denom.startsWith('//') ? `\n\nsee ${b.denom}\n` : ''));
-  assert.ok(caught('stat', bare, refusedLive('stat.denom', '//evil.example/x'), LINKED), 'a refused value the permissive reader links');
+  // A label written as bare Markdown text without toMarkdown's escape, which a reader that links bare URLs links.
+  const bare = plant('markdown', (b) => (b.type === 'stat' && typeof b.label === 'string' && b.label.startsWith('//') ? `\n\nsee ${b.label}\n` : ''));
+  assert.ok(caught('stat', bare, refusedLive('stat.label', '//evil.example/x'), LINKED), 'a refused label the permissive reader links');
 });
 
 test('plants: a field written where text is inert (alt, title, aria-label, text, a code span, a link title) is let through', () => {

@@ -82,10 +82,13 @@ export function maxOf(list, floor = -Infinity) {
 /* ── Markdown escaping ── */
 
 /** Escape the characters that start inline markup anywhere in a line. An
- * underscore inside a word cannot start emphasis, so it stays bare. */
+ * underscore inside a word cannot start emphasis, so it stays bare. A `//`
+ * before a letter or digit, and not after one (nor after `_`, `:` or `/`), is
+ * written `/\/`: a reader that links bare URLs would link it as an address. */
 export function escInline(s) {
   const word = (c) => c !== undefined && /[\p{L}\p{N}]/u.test(c);
-  return s.replace(/[\\`*[\]~_<&]/g, (c, i) => {
+  return s.replace(/[\\`*[\]~_<&]|\/(?=\/)/g, (c, i) => {
+    if (c === '/') return word(s[i + 2]) && !word(s[i - 1]) && !/[_:/]/.test(s[i - 1] ?? '') ? '/\\' : c;
     if (c === '_') return word(s[i - 1]) && word(s[i + 1]) ? c : '\\_';
     if (c === '<') return /[A-Za-z/!?]/.test(s[i + 1] ?? '') ? '\\<' : c;
     if (c === '&') return /^&#?[A-Za-z0-9]+;/.test(s.slice(i, i + 34)) ? '\\&' : c;
