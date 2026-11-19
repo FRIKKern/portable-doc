@@ -18,6 +18,8 @@ describe('a number that is not finite renders nothing', () => {
       expect(html({ type: 'paragraph', content: [t('Left'), { type: 'code', children: bad }, t('Right')] } as Block), label).toBe('<p>Left<code></code>Right</p>')
       expect(html({ type: 'paragraph', content: [{ type: 'code', children: [bad] }] } as Block), label).toBe('<p><code></code></p>')
       expect(html({ type: 'paragraph', content: [t('a'), bad, t('b')] } as Block), label).toBe('<p>ab</p>')
+      // A paragraph of only whitespace and such a number is blank, as one of only whitespace is: it renders nothing.
+      expect(html({ type: 'paragraph', content: [' ', bad, ' '] } as Block), label).toBe('')
       expect(html({ type: 'table', columns: [{ key: 'kk', text: 'K' }], rows: [{ kk: bad }] } as Block), label).toContain('<td></td>')
     }
   })
