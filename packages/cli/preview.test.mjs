@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
-import { preview, startPreview } from './preview.js';
+import { CLOSE_GRACE_MS, preview, startPreview } from './preview.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
@@ -214,4 +214,54 @@ test('when the default port and the fallback both fail, the message names the de
   const code = await preview([docFile(heading('Busy'))], {}, io, { ...fakes, UsageError: Error, start });
   assert.equal(code, 2);
   assert.equal(err, 'portable-doc preview: cannot listen on 127.0.0.1:4317 or on any free port: listen EACCES: permission denied\n');
+});
+
+/** GET /events on a raw request; resolves once `hello` is in, to { res, text(), outcome }. */
+function openStream(url) {
+  return new Promise((resolve, reject) => {
+    http.get(new URL('/events', url), (res) => {
+      let text = '';
+      const outcome = new Promise((done) => {
+        res.on('end', () => done('end'));
+        res.on('aborted', () => done('aborted'));
+        res.on('error', (error) => done(`error ${error.code}`));
+        res.on('close', () => setImmediate(() => done('closed without an end')));
+      });
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        if (!text) resolve({ res, text: () => text, outcome });
+        text += chunk;
+      });
+    }).on('error', reject);
+  });
+}
+
+test('stopping the server ends each open /events stream cleanly, even one far behind on reading: it gets every event, then the end', async () => {
+  const watcher = Object.assign(new EventEmitter(), { close() {} });
+  const session = await startPreview({ ...fakes, file: docFile(heading('Stops')), port: 0, watch: () => watcher });
+  const reading = await openStream(session.url);
+  const behind = await openStream(session.url);
+  behind.res.pause();
+  // Each watcher error sends one reload. 50,000 of them are far more than the socket buffers hold,
+  // so the paused stream's end waits behind data the server has not sent yet.
+  const events = 50_000;
+  for (let i = 0; i < events; i++) watcher.emit('error', new Error('gone'));
+  const closed = session.close();
+  behind.res.resume();
+  await closed;
+  for (const stream of [reading, behind]) {
+    assert.equal(await stream.outcome, 'end');
+    assert.equal(stream.text().split('event: reload\n').length - 1, events);
+  }
+});
+
+test(`a client that never reads cannot hold the stop: close() gives up waiting on it after CLOSE_GRACE_MS (${CLOSE_GRACE_MS} ms) and cuts it`, { timeout: CLOSE_GRACE_MS * 10 }, async () => {
+  const watcher = Object.assign(new EventEmitter(), { close() {} });
+  const session = await startPreview({ ...fakes, file: docFile(heading('Stuck')), port: 0, watch: () => watcher });
+  const stuck = await openStream(session.url);
+  stuck.res.pause();
+  for (let i = 0; i < 50_000; i++) watcher.emit('error', new Error('gone'));
+  await session.close();
+  stuck.res.resume();
+  assert.notEqual(await stuck.outcome, 'end');
 });
