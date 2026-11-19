@@ -58,9 +58,12 @@ const byline = (b, ctx) =>
 // Every spelling of a list block; an item of any of them reads its fields as list.items[].
 export const LIST_TYPES = ['list', 'bulletList', 'bullet_list', 'bulleted-list', 'bulleted_list', 'ordered-list', 'numbered_list'];
 
-/** Nested lists under an item: only list blocks occupy that slot. */
+/**
+ * The blocks under an item, in order: nested lists, and any other block (a heading, a callout,
+ * a code block). A list with no `items` array, or a child that is not a typed block, is skipped.
+ */
 const listChildren = (item) =>
-  isMap(item) ? asList(item.children).filter((c) => isMap(c) && Array.isArray(c.items) && LIST_TYPES.includes(c.type)) : [];
+  isMap(item) ? asList(item.children).filter((c) => isMap(c) && typeof c.type === 'string' && (Array.isArray(c.items) || !LIST_TYPES.includes(c.type))) : [];
 
 /** A list item stored as a JSON-encoded inline array decodes to that array. */
 function itemContent(item) {
@@ -100,9 +103,12 @@ function callout(b, ctx) {
   if (ctx.md && b[QUOTED] === true) return marked(b, ctx);
   const tone = CALLOUT_TONES.includes(str(b.tone)) ? str(b.tone) : 'info';
   const label = ctx.text(nonblank(b.title) || capitalize(tone), { oneLine: true });
-  const inner = ctx.inline(body(b)) || ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : []);
+  const content = ctx.inline(body(b));
+  const rest = ctx.blocks(isMap(b.slots) ? asList(b.slots.body) : []);
   const head = ctx.md ? `**${label}:**` : `${label}:`;
-  const out = inner === '' ? head.replace(/:(\**)$/, '$1') : /\n/.test(inner) ? `${head}\n\n${inner}` : `${head} ${inner}`;
+  const after = (inner) => (inner === '' ? head.replace(/:(\**)$/, '$1') : /\n/.test(inner) ? `${head}\n\n${inner}` : `${head} ${inner}`);
+  // Its content after the label, then each block of its body: a callout imported from Markdown carries both.
+  const out = content === '' ? after(rest) : paras(after(content), rest);
   return ctx.md ? quote(out) : out;
 }
 

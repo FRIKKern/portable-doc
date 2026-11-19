@@ -22,6 +22,17 @@ export const READ_ALIASES = Object.freeze(Object.fromEntries(Object.entries(alia
 
 const asArray = (v) => (Array.isArray(v) ? v : []);
 
+const WRITER_CASES = new URL('../../fixtures/writers/', import.meta.url);
+
+/** Every top-level block of a pinned-output case in fixtures/writers/ whose type is in `types`, as { file, block }. */
+export function writerCaseBlocks(types) {
+  return fs
+    .readdirSync(WRITER_CASES)
+    .filter((f) => f.endsWith('.json'))
+    .sort()
+    .flatMap((file) => JSON.parse(fs.readFileSync(new URL(file, WRITER_CASES), 'utf8')).blocks.filter((b) => types.has(b?.type)).map((block) => ({ file, block })));
+}
+
 /** Every golden block whose type is in `types`, as { file, block }, in file order. */
 export function goldenBlocks(types) {
   const out = [];

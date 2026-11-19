@@ -1,0 +1,52 @@
+{
+  "blocks": [
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "value": "Before you start"
+            }
+          ],
+          "children": [
+            {
+              "type": "callout",
+              "tone": "info",
+              "content": [
+                {
+                  "type": "text",
+                  "value": "Heads up"
+                }
+              ],
+              "slots": {
+                "body": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "value": "Read the guide first."
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        [
+          {
+            "type": "text",
+            "value": "Then begin"
+          }
+        ]
+      ]
+    }
+  ],
+  "markdown": "- Before you start\n  > **Info:** Heads up\n  >\n  > Read the guide first.\n- Then begin\n",
+  "text": "- Before you start\n  Info: Heads up\n\n  Read the guide first.\n- Then begin\n",
+  "html": "<ul><li><span>Before you start</span><div class=\"bp-callout bp-callout--info\"><span>Heads up</span><div class=\"bp-callout__body\"><p>Read the guide first.</p></div></div></li><li><span>Then begin</span></li></ul>"
+}

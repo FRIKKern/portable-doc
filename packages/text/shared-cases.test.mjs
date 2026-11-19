@@ -109,12 +109,13 @@ test('each alias case reads as its file says: each key in reads gives its value,
   assert.deepEqual([...owners].sort(), ['columns', 'content', 'criteria', 'items', 'steps', 'tabs', 'task.criteria']);
 });
 
-// Each folder under fixtures/ is read in this file: broken/ and valid/ here by validation (the
-// validator's own test pins their codes and paths), the rest by the tests above. A folder not
-// named here fails, so none sits unread.
+// Each folder under fixtures/ is read in this file: broken/, valid/ and writers/ here by
+// validation (the validator's own test pins the codes and paths, and writers-keep-words.test.mjs
+// the writers' bytes), the rest by the tests above. A folder not named here fails, so none sits unread.
 const READ = {
   broken: () => fs.readdirSync(path.join(FIXTURES, 'broken')).filter((f) => f.endsWith('.json')).map((f) => !validate(json(`broken/${f}`).doc).ok),
   valid: () => fs.readdirSync(path.join(FIXTURES, 'valid')).filter((f) => f.endsWith('.json')).map((f) => validate(json(`valid/${f}`)).ok),
+  writers: () => fs.readdirSync(path.join(FIXTURES, 'writers')).filter((f) => f.endsWith('.json')).map((f) => validate({ blocks: json(`writers/${f}`).blocks }).ok),
 };
 
 test('every folder under fixtures/ is one a test in this repository reads', () => {

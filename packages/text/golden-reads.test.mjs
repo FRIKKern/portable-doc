@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
 import { FENCE_TYPES } from './from-markdown.js';
 import { SCHEMA_TYPES } from './block-forms.mjs';
-import { READ_ALIASES, behaviourReads, changesRender, filledNames, goldenBlocks, pathName, reads, readsMissing } from './golden-reads.mjs';
+import { READ_ALIASES, behaviourReads, changesRender, filledNames, goldenBlocks, pathName, reads, readsMissing, writerCaseBlocks } from './golden-reads.mjs';
 import { toMarkdown, toPlainText } from './index.js';
 
 const RENDERS = { html: (blocks) => renderPortableDocument(blocks, {}), markdown: toMarkdown, text: toPlainText };
@@ -39,6 +39,7 @@ const inlineNodes = (block) => {
 // fills every renderer-read key in the fence-type goldens. This list may only shrink. A key filled by some golden, or no longer read,
 // must leave it; a new read key that no golden fills fails until a golden fills it.
 // Its length is pinned, so adding a key is an edit a reviewer sees.
+// A key counts as filled when a pinned-output case fills it: a golden of the synced pack, or a case in fixtures/writers/.
 const NOT_FILLED_YET = [
   'callout.collapsed',
   'callout.collapsible',
@@ -85,6 +86,7 @@ function survey() {
   const read = new Set();
   const missing = new Set();
   const filled = new Set();
+  for (const { block } of writerCaseBlocks(FENCE_TYPES)) for (const name of filledNames(block)) filled.add(name);
   for (const { file, block } of goldenBlocks(FENCE_TYPES)) {
     for (const name of filledNames(block)) filled.add(name);
     let seen;

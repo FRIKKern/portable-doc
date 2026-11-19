@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 39 changes · react: a non-finite number in inline content or a table cell renders nothing ([#112](https://github.com/FRIKKern/portable-doc/pull/112))
+- **Today** · 40 changes · fixtures: shared cases live here, and this repository's tests read every one ([#113](https://github.com/FRIKKern/portable-doc/pull/113))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
