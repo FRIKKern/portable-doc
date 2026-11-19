@@ -7,9 +7,10 @@
 const PREFIX = '#doc=';
 export const MAX_DOC_BYTES = 2_000_000;
 
-// The one size rule. byteSize is how many UTF-8 bytes a text is, as TextEncoder
-// would make it (a lone surrogate is 3 bytes, as U+FFFD), without building them;
-// bytes and byte counts pass through. overCap is the only place a size meets a cap.
+// The one size rule. utf8Length counts the UTF-8 bytes of a text as TextEncoder
+// would make them (a lone surrogate is 3 bytes, as U+FFFD), without building them.
+// byteSize also passes bytes and byte counts through. overCap is the only place a
+// size meets a cap.
 export function utf8Length(text) {
   let n = 0;
   for (let i = 0; i < text.length; i++) {

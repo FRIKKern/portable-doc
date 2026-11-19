@@ -6,7 +6,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
-import { buildSync } from 'esbuild';
+import { parse as parseJs } from 'acorn';
+import { buildSync, transformSync } from 'esbuild';
 import { validate } from '@portable-doc/validate';
 import { bundlePlayground } from './playground/build.mjs';
 import { playgroundExamples } from './playground/examples.mjs';
@@ -101,16 +102,71 @@ test('the layout cap counts UTF-8 bytes, not characters, for pasted Markdown and
   assert.equal(tidyJson(compact, Buffer.byteLength(laid)), laid);
 });
 
-test('every playground size rule counts UTF-8 bytes through overCap, the one place a size meets a cap', () => {
-  const dir = new URL('./playground/', import.meta.url);
-  const hits = [];
-  for (const name of fs.readdirSync(dir).filter((f) => /\.(js|jsx|mjs)$/.test(f))) {
-    fs.readFileSync(new URL(name, dir), 'utf8').split('\n').forEach((line, i) => {
-      if (/[<>]=?\s*(MAX_DOC_BYTES|limit|stop)\b|\b(MAX_DOC_BYTES|limit|stop)\s*[<>]/.test(line) || /\.length\s*[<>]=?\s*[A-Z_]*BYTES/.test(line)) hits.push(`${name}:${i + 1}`);
-    });
+// The size guard finds every <, <=, > or >= with a size on one side (.length,
+// .byteLength, .size), and every comparison, == and != too, with a cap-like name
+// (cap, max, limit, bytes, size, ...) or a number of 100,000 or more. It parses, so
+// comments, strings and line breaks do not matter. A size rule belongs in overCap;
+// any other match must be listed in SIZE_COMPARES on purpose.
+const SIZE_WORDS = new Set(['cap', 'caps', 'max', 'limit', 'limits', 'stop', 'budget', 'bytes', 'byte', 'size', 'long', 'threshold']);
+const isCapName = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').split('_').some((word) => SIZE_WORDS.has(word.toLowerCase()));
+
+function sizeMarks(node, found = { size: false, cap: false, big: false }) {
+  if (Array.isArray(node)) node.forEach((child) => sizeMarks(child, found));
+  else if (node && typeof node === 'object') {
+    if (node.type === 'Literal' && typeof node.value === 'number' && Math.abs(node.value) >= 100_000) found.big = true;
+    if (node.type === 'Identifier' && isCapName(node.name)) found.cap = true;
+    if (node.type === 'MemberExpression' && !node.computed) {
+      if (['length', 'byteLength', 'size'].includes(node.property.name)) found.size = true;
+      sizeMarks(node.object, found);
+      if (!(node.object.type === 'Identifier' && node.object.name === 'Math')) sizeMarks(node.property, found);
+    } else for (const [key, value] of Object.entries(node)) if (key !== 'type') sizeMarks(value, found);
   }
-  assert.equal(hits.length, 1, hits.join(', '));
-  assert.match(hits[0], /^share\.js:/);
+  return found;
+}
+
+function sizeCompares(source, loader = 'js') {
+  const js = transformSync(source, { loader, format: 'esm' }).code;
+  const hits = [];
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'BinaryExpression' && /^(<|>|<=|>=|==|===|!=|!==)$/.test(node.operator)) {
+      const marks = sizeMarks([node.left, node.right]);
+      if (marks.cap || marks.big || (marks.size && /[<>]/.test(node.operator))) hits.push(js.slice(node.start, node.end));
+    }
+    for (const [key, value] of Object.entries(node)) if (key !== 'type') walk(value);
+  };
+  walk(parseJs(js, { ecmaVersion: 'latest', sourceType: 'module' }));
+  return hits;
+}
+
+// Each compare the guard allows, by file and code, with how often it appears and why.
+const SIZE_COMPARES = {
+  'share.js: byteSize(x) > limit': [1, 'overCap itself, the one place a size meets a cap'],
+  'share.js: i < text.length': [1, 'utf8Length walks the text'],
+  'share.js: i + 1 < text.length': [1, 'utf8Length looks one unit ahead for a surrogate pair'],
+  'share.js: i < bytes.length': [1, 'the base64 encoder walks the bytes in chunks'],
+  'share.js: at >= bytes.length': [1, 'the inflate stream ends at the end of its input'],
+  'share.js: packed.length < plain.length': [1, 'picks the shorter of two links to the same doc'],
+  'parse.js: i < text.length': [2, "the JSON reader's cursor against the end of the text"],
+  'main.jsx: url.length > LONG_LINK': [1, 'a note that a share link is long; a URL is ASCII and nothing is refused'],
+};
+
+test('every playground size rule counts UTF-8 bytes through overCap, and any other size compare is listed with a reason', () => {
+  const dir = new URL('./playground/', import.meta.url);
+  const found = {};
+  for (const name of fs.readdirSync(dir).filter((f) => /\.(js|jsx|mjs)$/.test(f))) {
+    for (const code of sizeCompares(fs.readFileSync(new URL(name, dir), 'utf8'), name.endsWith('.jsx') ? 'jsx' : 'js')) found[`${name}: ${code}`] = (found[`${name}: ${code}`] ?? 0) + 1;
+  }
+  const listed = Object.fromEntries(Object.entries(SIZE_COMPARES).map(([key, [count]]) => [key, count]));
+  assert.deepEqual(found, listed, 'a size is compared outside overCap: route it through overCap, or list it in SIZE_COMPARES with a reason');
+  const dodges = [
+    'text.length > cap', 'text.length > 2_000_000', 'text.length > 2e6', 'MAX_DOC_BYTES - text.length < 0', '!(text.length <= max)',
+    'Math.max(text.length, MAX_DOC_BYTES) !== MAX_DOC_BYTES', 'text.length < MAX', 'text.length >\n MAX_DOC_BYTES', 'text.length>MAX_DOC_BYTES',
+    'bytes.length > LIMIT', 'text.length > maxBytes', 'url.length > LONG_LINK', 'blob.size > MAX_DOC_BYTES', 'text.length > limitBytes',
+  ];
+  for (const dodge of dodges) assert.equal(sizeCompares(`f(${dodge});`).length, 1, dodge);
+  assert.deepEqual(sizeCompares("// a doc over limit > 2 MB is refused\nconst msg = 'over the limit > cap';\nx.length === 0;"), []);
   assert.equal(overCap('é'.repeat(3), 5), true);
   assert.equal(overCap('é'.repeat(3), 6), false);
   assert.equal(overCap(new Uint8Array(7), 6), true);
