@@ -32,14 +32,18 @@ const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ?
 // ── lists ───────────────────────────────────────────────────────────────
 
 /**
- * A list item: its blocks joined by a space as one inline run, and its nested lists kept as
- * lists. In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
+ * A list item as one or more items: its blocks joined by a space as one inline run, and its
+ * nested lists kept as lists. Text after a kept nested list starts a new item at the same
+ * level, so the words stay in source order: an item's text always comes before its children.
+ * In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
  * @max_nest rule): its items and their blocks one space apart, joined to the item's own
- * text by one space; a list with no text adds nothing.
+ * text by one space, in place; a list with no text adds nothing.
  */
 function listItem(item, depth) {
-  const out = [];
-  const children = [];
+  const parts = [];
+  let out = [];
+  let children = [];
+  const close = () => parts.push({ content: merge(out), children, split: parts.length > 0 });
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
       if (depth < MAX_NEST) children.push(...list(child, depth + 1));
@@ -49,11 +53,17 @@ function listItem(item, depth) {
       }
       continue;
     }
+    if (children.length) {
+      close();
+      out = [];
+      children = [];
+    }
     if (out.length) out.push(text(' '));
     if (child.type === 'fence' || child.type === 'code_block') out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
     else out.push(...textOf(child));
   }
-  return { content: merge(out), children };
+  close();
+  return parts;
 }
 
 // `[ ] rest` / `[x] rest` at the head of an item: { content, checked }, else null.
@@ -72,8 +82,9 @@ function list(node, depth = 0) {
   const ordered = node.type === 'ordered_list';
   const items = node.children
     .filter((c) => c.type === 'list_item')
-    .map((li) => listItem(li, depth))
-    .map((it) => ({ ...it, task: ordered ? null : taskItem(it.content) }))
+    .flatMap((li) => listItem(li, depth))
+    // `[ ]` opens a task only at the head of an item in the source, never of a split-off one
+    .map((it) => ({ ...it, task: ordered || it.split ? null : taskItem(it.content) }))
     .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
   if (!items.length) return [];
   // GitHub task syntax (`- [ ] `, `- [x] `) makes the whole bullet list a checklist.

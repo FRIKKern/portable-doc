@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
+import { MAX_NEST } from './from-markdown-inline.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 import { ADDRESS_KEYS, safeUrl } from './util.js';
@@ -129,6 +130,37 @@ test('a nested list reads back as a list in its item, not as text: fromMarkdown(
   const back = fromMarkdown(toMarkdown(doc));
   assert.deepEqual(back, doc);
   valid(back);
+});
+
+/**
+ * Markdown with one item, at `depth`, that holds text, then a nested list two deep, then
+ * more text; each word a token t0, t1, … in source order, the items above it included.
+ */
+function textAroundNestedList(depth) {
+  const lines = [];
+  let n = 0;
+  const line = (indent, body) => lines.push(`${'  '.repeat(indent)}${body}`);
+  for (let i = 0; i < depth; i++) line(i, `- t${n++}`);
+  line(depth, `- t${n++}`);
+  line(depth + 1, `- t${n++}`);
+  line(depth + 2, `- t${n++}`);
+  lines.push('');
+  line(depth + 1, `t${n++} after the nested list`);
+  return { markdown: lines.join('\n'), tokens: Array.from({ length: n }, (_, i) => `t${i}`) };
+}
+const tokensOf = (text) => text.match(/\bt\d+\b/g) ?? [];
+
+test('a list item\'s text after its nested list stays after it, in source order, and the round trip keeps the order', () => {
+  // depth 0 and 2; MAX_NEST - 1, where the deepest list is kept as its item's text; MAX_NEST, all text
+  for (const depth of [0, 2, MAX_NEST - 1, MAX_NEST]) {
+    const { markdown, tokens } = textAroundNestedList(depth);
+    const blocks = fromMarkdown(markdown);
+    valid(blocks);
+    assert.deepEqual(tokensOf(toPlainText(blocks)), tokens, `depth ${depth}: the import, as plain text`);
+    const written = toMarkdown(blocks);
+    assert.deepEqual(tokensOf(written), tokens, `depth ${depth}: the import, written back as Markdown`);
+    assert.deepEqual(tokensOf(toPlainText(fromMarkdown(written))), tokens, `depth ${depth}: the round trip`);
+  }
 });
 
 test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {
