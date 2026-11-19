@@ -197,10 +197,16 @@ test('a null is not an absent value: docs that differ only by a null in a row, a
     [{ blocks: [{ type: 'table', rows: [['x', null, null]] }] }, { blocks: [{ type: 'table', rows: [['x']] }] }, ['rows[0][1]', 'rows[0][2]']],
     [{ blocks: [{ id: 'p', type: 'paragraph', text: 'a', note: null }] }, { blocks: [{ id: 'p', type: 'paragraph', text: 'a' }] }, ['note']],
     [{ title: null, blocks: [] }, { blocks: [] }, ['title']],
+    // Without an id the block is matched by similarity, which reads only words: still one changed block, not a remove and an add.
+    [{ blocks: [{ type: 'paragraph', text: 'a b', note: null }] }, { blocks: [{ type: 'paragraph', text: 'a b' }] }, ['note']],
+    // Inline content that reads the same as Markdown is compared part by part, so a null in it still shows.
+    [{ blocks: [{ id: 'q', type: 'paragraph', content: [{ type: 'text', value: 'a', marks: null }] }] }, { blocks: [{ id: 'q', type: 'paragraph', content: [{ type: 'text', value: 'a' }] }] }, ['content[0].marks']],
   ];
   for (const [a, b, paths] of cases) {
     const r = await call(['diff', '--json', write(a), write(b)]);
     assert.equal(r.status, 1, JSON.stringify(a));
-    assert.deepEqual(JSON.parse(r.stdout).changes.flatMap((c) => c.fields), paths.map((path) => ({ path, from: null })));
+    const { summary, changes } = JSON.parse(r.stdout);
+    assert.deepEqual(changes.flatMap((c) => c.fields), paths.map((path) => ({ path, from: null })));
+    assert.deepEqual([summary.added, summary.removed, summary.moved], [0, 0, 0]);
   }
 });

@@ -181,7 +181,7 @@ test('import turns Markdown from a file or stdin into a doc that validate accept
   assert.equal(fs.readFileSync(file, 'utf8'), md);
 });
 
-test('a reader that stops early (| head -1) ends the command quietly with its own exit code: render 0, validate of a bad doc 1', () => {
+test('a reader that stops early (| head -1) ends the command quietly with its own exit code: render 0, validate of a bad doc 1, diff of different docs 1', () => {
   const quote = (s) => `'${s.replaceAll("'", "'\\''")}'`;
   const headOne = (args) => {
     const code = path.join(tmp, `exit-code-${args[0]}`);
@@ -195,6 +195,9 @@ test('a reader that stops early (| head -1) ends the command quietly with its ow
   const bad = write('bad-many.json', { blocks: Array(1003).fill(5) });
   const checked = headOne(['validate', bad]);
   assert.deepEqual([checked.stdout.split('\n').length, checked.stderr, checked.code], [2, '', '1']);
+  const doc = (word) => ({ blocks: Array.from({ length: 20_000 }, (_, i) => ({ id: `p${i}`, type: 'paragraph', text: `Paragraph ${i} says ${word}.` })) });
+  const diffed = headOne(['diff', write('diff-a.json', doc('one')), write('diff-b.json', doc('two'))]);
+  assert.deepEqual([diffed.stdout.split('\n').length, diffed.stderr, diffed.code], [2, '', '1']);
 });
 
 test('validate, explain and render list the first MAX_ERRORS errors and say how many more there were', async () => {
