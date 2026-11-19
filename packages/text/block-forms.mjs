@@ -107,7 +107,8 @@ export function formsOf(type) {
 /** A block as a list item's child, and inside a quote: a callout's body, written as `> [!info]`. */
 export const contexts = {
   'in a list item': (block) => ({ type: 'list', ordered: false, items: [{ content: [{ type: 'text', value: 'Item' }], children: [block] }] }),
-  'in a quote': (block) => ({ type: 'callout', tone: 'info', content: [{ type: 'text', value: 'Note' }], slots: { body: [block] } }),
+  // A callout is what Markdown writes as a quote (`> [!tone]`); a blockquote holds inline content only.
+  'in a callout (a Markdown quote)': (block) => ({ type: 'callout', tone: 'info', content: [{ type: 'text', value: 'Note' }], slots: { body: [block] } }),
 };
 
 /** Every form of every schema type, bare and in each context, as [name, block]; contexts only for the base forms. */

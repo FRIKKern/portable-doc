@@ -23,17 +23,17 @@ const native = (block) => isDeepStrictEqual(fromMarkdown(toMarkdown([block])), [
 /** Can import bring `block` back: its readable Markdown reads back as it, or import splices a fence of it? */
 const keepable = (block) => native(block) || !checkFence([block], new Set()).reason;
 
-test('the forms cover every schema type, vary values past the golden, write no alias, and sit bare, in a list item and in a quote', () => {
+test('the forms cover every schema type, vary values past the golden, write no alias, and sit bare, in a list item and in a callout (a Markdown quote)', () => {
   const types = new Set(FORMS.map(([, block]) => block.type));
   for (const type of SCHEMA_TYPES) assert.ok(types.has(type), `${type}: no form`);
   const names = new Set(FORMS.map(([name]) => name));
   for (const level of [1, 3, 4, 5, 6]) assert.ok(names.has(`heading value level=${level}`), `heading level ${level} is a form`);
-  for (const name of ['heading filled', 'heading filled with an alias', 'paragraph empty content', 'paragraph whitespace', 'list empty items', 'callout whitespace in a quote', 'code filled in a list item']) assert.ok(names.has(name), `${name} is a form`);
+  for (const name of ['heading filled', 'heading filled with an alias', 'paragraph empty content', 'paragraph whitespace', 'list empty items', 'callout whitespace in a callout (a Markdown quote)', 'code filled in a list item']) assert.ok(names.has(name), `${name} is a form`);
   for (const type of SCHEMA_TYPES) for (const [form, block] of formsOf(type)) {
     if (form === 'filled with an alias') continue;
     for (const key of Object.keys(block)) assert.ok(!Object.hasOwn(READ_ALIASES, `${type}.${key}`), `${type} ${form}: writes the alias ${key}`);
   }
-  assert.deepEqual(Object.keys(contexts), ['in a list item', 'in a quote']);
+  assert.deepEqual(Object.keys(contexts), ['in a list item', 'in a callout (a Markdown quote)']);
 });
 
 test('round-trip mode: each form import accepts comes back exactly; any other is written readably and reported with its reason', () => {
@@ -51,6 +51,32 @@ test('round-trip mode: each form import accepts comes back exactly; any other is
       assert.equal(markdown, toMarkdown([block]), `${name}: a block round-trip mode cannot keep is written readably`);
     }
   }
+});
+
+// The one context row whose container reads back in its own Markdown; every other kept one
+// comes back only by a fence of the whole container.
+const NATIVE_IN_CONTEXT = ['list filled in a list item'];
+
+test('round-trip mode keeps a block in a list item or a callout by a portabledoc fence of the whole container, never in the container\'s own Markdown', () => {
+  const contextual = FORMS.filter(([name]) => Object.keys(contexts).some((where) => name.endsWith(` ${where}`)));
+  assert.equal(contextual.length, 584, 'every base form in each context');
+  const native = [];
+  let fenced = 0;
+  for (const [name, block] of contextual) {
+    if (!keepable(block)) continue;
+    const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
+    assert.deepEqual(lost, [], name);
+    if (NATIVE_IN_CONTEXT.includes(name)) {
+      native.push(name);
+      assert.equal(markdown, toMarkdown([block]), `${name}: written in its own Markdown`);
+      continue;
+    }
+    // The route: exactly one fence holding the whole container, as the readable writer writes it.
+    assert.equal(markdown, toMarkdown([{ type: 'code', lang: 'portabledoc', value: JSON.stringify([block]) }]), `${name}: not one fence of the whole container`);
+    fenced++;
+  }
+  assert.deepEqual(native, NATIVE_IN_CONTEXT);
+  assert.equal(fenced, 115, 'context rows kept by a fence of the whole container');
 });
 
 test('round-trip mode keeps a whole doc of every keepable form, in order, and fences a block its neighbour would change', () => {
