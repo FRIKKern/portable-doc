@@ -7,6 +7,7 @@ import { proseHandlers, unknown } from './blocks-prose.js';
 import { layoutHandlers } from './blocks-layout.js';
 import { dataHandlers } from './blocks-data.js';
 import { appHandlers } from './blocks-apps.js';
+import { roundTrip } from './round-trip.js';
 
 const HANDLERS = { ...proseHandlers, ...layoutHandlers, ...dataHandlers, ...appHandlers };
 
@@ -90,16 +91,24 @@ function renderBlocks(list, ctx) {
   return chunks.join('\n\n');
 }
 
+/** A doc's blocks: the array itself, or `blocks` of an object. */
+const blocksOf = (doc) => (Array.isArray(doc) ? doc : isMap(doc) && Array.isArray(doc.blocks) ? doc.blocks : []);
+
 function render(doc, md, options) {
-  const blocks = Array.isArray(doc) ? doc : isMap(doc) && Array.isArray(doc.blocks) ? doc.blocks : [];
+  const blocks = blocksOf(doc);
   const out = renderBlocks(blocks, makeCtx(md, isMap(options) ? options : {}, 0, { open: [], expanded: 0 }));
   return out === '' ? '' : `${out}\n`;
 }
 
 export { IMPORT_WORK, fromMarkdown, readMarkdown } from './from-markdown.js';
 
-/** The document as CommonMark with GFM tables, task lists and strikethrough. */
-export const toMarkdown = (doc, options) => render(doc, true, options);
+/**
+ * The document as CommonMark with GFM tables, task lists and strikethrough: readable, one way.
+ * With `{ mode: 'round-trip' }`, { markdown, lost }: Markdown that fromMarkdown reads back as the
+ * same blocks, for each block import accepts, and the blocks it could not keep that way (round-trip.js).
+ */
+export const toMarkdown = (doc, options) =>
+  isMap(options) && options.mode === 'round-trip' ? roundTrip(blocksOf(doc), (blocks) => render(blocks, true, options)) : render(doc, true, options);
 
 /** The document as readable plain text: no markup, links as "text (url)". */
 export const toPlainText = (doc, options) => render(doc, false, options);

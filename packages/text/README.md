@@ -25,10 +25,18 @@ toMarkdown(doc);  // '## Release notes\n\nRead [the docs](https://example.com)\n
 toPlainText(doc); // 'Release notes\n\nRead the docs (https://example.com)\n'
 ```
 
-Both take the blocks array itself or `{ blocks: [...] }`. The one option,
-`embeds`, maps an `embed` block's `target` to the document shown in its place.
+Both take the blocks array itself or `{ blocks: [...] }`. The option
+`embeds` maps an `embed` block's `target` to the document shown in its place.
 An embed inside its own document, or past the first 100 in one render, shows
 its target instead.
+
+`toMarkdown` has two modes:
+
+- **Readable**, the default, writes Markdown for people and reads one way.
+- **Round trip**, `toMarkdown(doc, { mode: 'round-trip' })`, returns
+  `{ markdown, lost }`. Every block import accepts comes back the same, and the
+  rest are written readably and reported in `lost`. The types it keeps are
+  listed under [Round trip](#round-trip).
 
 ## The rules
 
@@ -85,10 +93,10 @@ is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:
 
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
-  every block in it is a heading, paragraph, list, code, table, callout,
-  divider, diagram, chart, stat, stats, heatmap, pullquote or eyebrow: at the
-  top, and nested wherever the schema puts blocks (a list item's `children`,
-  a callout's `slots.body`, …). Otherwise the fence stays a code block.
+  every block in it is of a fence type (`FENCE_TYPES`, listed under
+  [Round trip](#round-trip)): at the top, and nested wherever the schema puts
+  blocks (a list item's `children`, a callout's `slots.body`, …). Otherwise the
+  fence stays a code block.
 
 It never throws. The result always passes `@portable-doc/validate`; if the
 parser or the walk ever fails, the whole input comes back as one code block.
@@ -158,15 +166,54 @@ Where it differs from Barkpark, on purpose:
   notice of rule `net`. The shared cases never fire it; one
   in the wild means the text's count is wrong, and is a bug to report.
 
-**Round trip.** For heading, paragraph, list, code, table, blockquote, divider
-and diagram, `fromMarkdown(toMarkdown(doc))` gives back an equivalent doc:
-the same blocks once ids are dropped and inline content is compared as text
-runs with their marks, written as nodes or as marks. Callout, chart, stat,
-stats, heatmap, pullquote and eyebrow travel only inside a portabledoc fence.
-Every other type comes back as whatever its Markdown reads as: an image as a
-link, a callout or pullquote as a quote, an equation as a `math` code block.
+## Round trip
 
-`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/import-work.test.mjs packages/text/import-work-search.test.mjs packages/text/ordinary-work.test.mjs`
+In readable mode, heading, paragraph, list, code, table,
+blockquote, divider and diagram come back from `fromMarkdown(toMarkdown(doc))`
+as an equivalent doc: the same blocks once ids are dropped, and inline content
+compared as text runs with their marks. Every other type comes back as whatever
+its Markdown reads as: an image as a link, a callout or pullquote as a quote, an
+equation as a `math` code block.
+
+Round-trip mode decides per block by trying it: it writes the block, reads it
+back and compares, never by a list of types.
+
+- A block is written in its own Markdown when that reads back as exactly the
+  block, ids and all.
+- Otherwise it goes in a portabledoc fence, when import splices that fence
+  (`checkFence`, the importer's own rule).
+- Otherwise it is written readably and listed in `lost` as
+  `{ path, id, type, reason }`.
+- A block whose neighbour changes how it reads, such as an emphasised
+  paragraph right after a diagram, is fenced.
+- A fence reusing an earlier fence's id is lost, as import would keep it back.
+
+<!-- round-trip-types:start -->
+<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/readme.mjs`; `npm run check` fails when this part is stale. -->
+The round trip is lossless only for blocks of these types, and only where import accepts the block:
+
+- in their own Markdown or a portabledoc fence: `callout`, `chart`, `code`, `diagram`, `divider`, `eyebrow`, `heading`, `heatmap`, `list`, `paragraph`, `pullquote`, `stat`, `stats`, `table`;
+- in their own Markdown only, for the forms that read back as themselves: `blockquote`.
+<!-- round-trip-types:end -->
+
+Round-trip mode reads the Markdown back once per block and once for the whole.
+On the block goldens that is about 0.3 ms of CPU a block, some 12 to 14 times
+readable mode.
+
+The round-trip test checks this on every block type the schema names, with
+forms read from the schema and the goldens, not a hand list:
+
+- each golden, with canonical key names and as the pack writes it;
+- each value of a boolean or enum and of a small range (every heading level),
+  and a sample for the other keys;
+- the type empty, and with each array key empty;
+- every string as whitespace.
+
+Each form is tried bare, as a list item's child and inside a callout. A form of
+a type a fence may not hold must be reported lost, unless its own Markdown
+reads back as it, so a type is kept only once import accepts it.
+
+`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs packages/text/import-work.test.mjs packages/text/import-work-search.test.mjs packages/text/ordinary-work.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
 text, and the import rules, round trip and hostile input. The import-work
 test sweeps 300 seeded documents; `IMPORT_WORK_SWEEP=20000` runs a longer
