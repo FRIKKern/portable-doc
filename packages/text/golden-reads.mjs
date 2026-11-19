@@ -192,19 +192,19 @@ export function changesRender(block, path, key, renders, nodes = DECLARED.get(ke
 }
 
 /**
- * The paths of the keys `block` leaves out that change a render when given a valid value.
- * A key that changes nothing alone is tried again with each boolean the schema declares
- * beside it flipped, since a key can matter only under a flag (a list's start, once ordered).
+ * For each object in `block`, once per pathName, the keys a doc could fill there that the
+ * object leaves out: the keys the schema declares at it (every key the schema declares
+ * anywhere, where it leaves the object open) and the keys the Proxy sees `renders` read
+ * there. As { path, declared, keys: [{ key, nodes }] }, `nodes` being the schema nodes to
+ * draw sample values from.
  */
-export function behaviourReads(block, renders) {
+export function candidates(block, renders) {
   const seen = new Map();
   for (const { path } of reads(block, renders)) {
     const at = JSON.stringify(path.slice(0, -1));
     seen.set(at, new Set([...(seen.get(at) ?? []), path.at(-1)]));
   }
-  const copy = structuredClone(block);
-  const before = outputs([copy], renders);
-  const found = [];
+  const out = [];
   const done = new Set();
   const stack = [[block, []]];
   while (stack.length) {
@@ -215,10 +215,26 @@ export function behaviourReads(block, renders) {
     if (Array.isArray(value) || done.has(name)) continue;
     done.add(name);
     const declared = declaredAt(block.type, path);
-    const nodesOf = (key) => declared?.get(key) ?? DECLARED.get(key) ?? ANY_TYPE;
-    const candidates = [...new Set([...(declared ?? DECLARED).keys(), ...(seen.get(JSON.stringify(path)) ?? [])])].filter((key) => key !== 'type' && !NOT_FIELDS.has(key) && !Object.hasOwn(value, key));
-    const quiet = candidates.filter((key) => {
-      if (!probe(copy, path, key, nodesOf(key), renders, before)) return true;
+    const keys = [...new Set([...(declared ?? DECLARED).keys(), ...(seen.get(JSON.stringify(path)) ?? [])])]
+      .filter((key) => key !== 'type' && !NOT_FIELDS.has(key) && !Object.hasOwn(value, key))
+      .map((key) => ({ key, nodes: declared?.get(key) ?? DECLARED.get(key) ?? ANY_TYPE }));
+    out.push({ path, declared, keys });
+  }
+  return out;
+}
+
+/**
+ * The paths of the keys `block` leaves out that change a render when given a valid value.
+ * A key that changes nothing alone is tried again with each boolean the schema declares
+ * beside it flipped, since a key can matter only under a flag (a list's start, once ordered).
+ */
+export function behaviourReads(block, renders) {
+  const copy = structuredClone(block);
+  const before = outputs([copy], renders);
+  const found = [];
+  for (const { path, declared, keys } of candidates(block, renders)) {
+    const quiet = keys.filter(({ key, nodes }) => {
+      if (!probe(copy, path, key, nodes, renders, before)) return true;
       found.push([...path, key]);
       return false;
     });
@@ -229,7 +245,7 @@ export function behaviourReads(block, renders) {
       const kept = at[flag];
       at[flag] = !kept;
       const flipped = outputs([copy], renders);
-      for (const key of quiet) if (key !== flag && !found.some((p) => p.at(-1) === key && p.length === path.length + 1) && probe(copy, path, key, nodesOf(key), renders, flipped)) found.push([...path, key]);
+      for (const { key, nodes } of quiet) if (key !== flag && !found.some((p) => p.at(-1) === key && p.length === path.length + 1) && probe(copy, path, key, nodes, renders, flipped)) found.push([...path, key]);
       if (had) at[flag] = kept;
       else delete at[flag];
     }
