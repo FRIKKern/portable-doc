@@ -14,6 +14,9 @@ import { allForms } from '../packages/text/block-forms.mjs';
 import { WRITERS } from './lib/writers.mjs';
 
 const VALUES = [NaN, Infinity, -Infinity, 0, -0, [NaN], [Infinity]];
+// A form scale bound is read from a digit string too, so it also gets one too large for a number.
+const NINES = '9'.repeat(400);
+const valuesAt = (at) => (/(^|\.)scale\.(min|max)$/.test(at.join('.')) ? [...VALUES, NINES, `-${NINES}`] : VALUES);
 const WORD = /NaN|Infinity/;
 // A style attribute left empty, or a property whose number was dropped: `width:%`, `--i:`,
 // `padding-left:px`, `grid-column:span`, `repeat(,…)`.
@@ -22,7 +25,7 @@ const NUMBERLESS = /^$|^(%|px|em|rem)|[\s(,](%|px)|span$|repeat\(\s*,/;
 const numberlessStyles = (html) =>
   [...html.matchAll(/ style="([^"]*)"/g)].flatMap(([, css]) =>
     css.trim() === '' ? ['style=""'] : css.split(';').map((d) => d.trim()).filter((d) => d !== '' && NUMBERLESS.test(d.slice(d.indexOf(':') + 1).trim())));
-const shown = (v) => (Object.is(v, -0) ? '-0' : Array.isArray(v) ? `[${v}]` : String(v));
+const shown = (v) => (Object.is(v, -0) ? '-0' : Array.isArray(v) ? `[${v}]` : typeof v === 'string' && v.length > 20 ? `${v.slice(0, 4)}…(${v.length} chars)` : String(v));
 const writers = WRITERS.filter((w) => w.package !== '@portable-doc/editor');
 
 /** The path of every value in a block, `type` aside. */
@@ -50,7 +53,7 @@ test('no writer shows a number that is not finite, and no style property loses i
   const wrong = new Map();
   for (const [name, block] of forms) {
     for (const at of paths(block)) {
-      for (const value of VALUES) {
+      for (const value of valuesAt(at)) {
         const b = setAt(block, at, value);
         blocks++;
         for (const writer of writers) {
@@ -88,7 +91,15 @@ test('a digit string too large for a number is no number: a grid span or order i
   for (const shown of ['grid-column:span 3', 'order:2', '--bp-tracks:4']) assert.ok(html.includes(shown), `a digit string that fits is read: ${shown}`);
 });
 
-test('a form scale bound given as a digit string too large for a number shows no Infinity in text', { todo: 'the text writers parse it to -Infinity and write it; the forms-scale fix makes this a real test' }, () => {
-  const block = { type: 'form', questions: [{ prompt: 'How sure?', type: 'scale', scale: { min: `-${'9'.repeat(400)}` } }] };
-  for (const writer of writers.filter((w) => w.package === '@portable-doc/text')) assert.doesNotMatch(writer.write([block]).output, WORD, writer.name);
+test('a form scale bound given as a digit string too large for a number is no bound: every writer writes what it writes with that bound missing', () => {
+  const form = (scale) => [{ type: 'form', questions: [{ id: 'q', prompt: 'How sure?', type: 'scale', scale }] }];
+  for (const writer of writers) {
+    const out = (scale) => writer.write(form(scale)).output;
+    for (const key of ['min', 'max']) {
+      for (const bound of [NINES, `-${NINES}`]) {
+        const other = key === 'min' ? { max: 7 } : { min: 3 };
+        assert.equal(out({ ...other, [key]: bound }), out(other), `${writer.name}: ${key} ${bound.slice(0, 2)}… (${bound.length} chars)`);
+      }
+    }
+  }
 });
