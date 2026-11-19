@@ -2,11 +2,18 @@
 // The import's work, counted from the Markdown text alone, before any parse, so every
 // importer that reads the same text cuts it at the same line.
 //
-// Per line (lines split as markdown-it splits them: at "\r\n", "\r" or "\n"):
+// The text is first normalized as markdown-it 15 does before it parses (its core rule
+// 'normalize', src/rules_core/normalize.ts: /\r\n?/g to "\n", then /\0/g to U+FFFD), and
+// split at "\n" as its StateBlock does. So "\n", "\r\n" and a lone "\r" each end a line,
+// and a NUL counts as the three bytes of U+FFFD. The count, the long-line rule and the line
+// numbers in notices all see these lines.
+//
+// Per line:
 //   blank   = empty, or only spaces and tabs;
 //   prefix  = its leading container markers (`>`, `-` `+` `*` or 1 to 9 digits and `.` or `)`,
 //             a list marker followed by a space, a tab or the line end) and the spaces and
-//             tabs among them; m = the markers, w = the spaces and tabs in columns, a tab as 4;
+//             tabs among them; m = the markers, w = the spaces and tabs in columns, a tab
+//             to the next tab stop of 4, as markdown-it counts them;
 //   depth D = m + floor(w / 2). A blank line takes the depth before it, and a line right
 //             after a non-blank line takes at least that line's depth (it may be lazy);
 //   cost    = (D + 1) × (2 + its UTF-8 bytes): one scan of the line and its line end for
@@ -34,6 +41,9 @@ const isBlank = (line) => {
 };
 const bytes = (line) => Buffer.byteLength(line);
 
+/** The text as markdown-it's core rule 'normalize' leaves it. */
+export const normalize = (markdown) => markdown.replace(/\r\n?/g, '\n').replace(/\0/g, '\uFFFD');
+
 /** A list marker's end in `line` at `i` (the index after it), or -1. */
 function listMarker(line, i) {
   const end = (j) => j >= line.length || SP(line.charCodeAt(j));
@@ -46,7 +56,7 @@ function listMarker(line, i) {
 }
 
 /**
- * The prefix of `line`: m markers, w whitespace columns (a tab as 4), `at` where the text after
+ * The prefix of `line`: m markers, w whitespace columns (a tab to the next stop of 4), `at` where the text after
  * it starts, and its containers in order as `{ quote: true }` or `{ col }`, a list item's
  * least content column (its marker's end plus one), columns counted with tab stops of 4.
  */
@@ -58,9 +68,9 @@ export function prefix(line) {
   const containers = [];
   for (;;) {
     while (i < line.length && SP(line.charCodeAt(i))) {
-      const tab = line.charCodeAt(i++) === 9;
-      w += tab ? 4 : 1;
-      col = tab ? col + 4 - (col % 4) : col + 1;
+      const width = line.charCodeAt(i++) === 9 ? 4 - (col % 4) : 1;
+      w += width;
+      col += width;
     }
     if (line.charCodeAt(i) === 62) {
       m++;
@@ -126,7 +136,7 @@ function closes(line, at, fence) {
  * (the lines from where the work passed the budget), `line` counted from 1.
  */
 export function planText(markdown, limits = IMPORT_WORK) {
-  const lines = markdown.split(/\r\n?|\n/);
+  const lines = normalize(markdown).split('\n');
   const parts = [];
   const notices = new Map();
   const note = (rule, n, count) => {

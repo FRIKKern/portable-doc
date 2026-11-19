@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parsedWork } from './from-markdown.js';
-import { IMPORT_WORK, planText, prefix } from './import-work.js';
+import { parsedWork, readPlan } from './from-markdown.js';
+import { IMPORT_WORK, normalize, planText, prefix } from './import-work.js';
 import { readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
@@ -14,7 +14,7 @@ const lineNotice = (path, line, lines = 1) => ({ code: 'import_work_spent', rule
 
 test('the work is counted from the text: each line (depth + 1) × (2 + its bytes), the depth from its markers and indentation, carried over lazy lines', () => {
   assert.deepEqual(prefix('> - 1. x'), { m: 3, w: 3, at: 7, containers: [{ quote: true }, { col: 4 }, { col: 7 }] });
-  assert.deepEqual(prefix('\t-\tx'), { m: 1, w: 8, at: 3, containers: [{ col: 6 }] });
+  assert.deepEqual(prefix('\t-\tx'), { m: 1, w: 7, at: 3, containers: [{ col: 6 }] }, 'a tab runs to the next tab stop');
   assert.equal(prefix('-x').m, 0, 'a marker needs a space, a tab or the line end after it');
   assert.equal(prefix('1234567890. x').m, 0, 'at most 9 digits');
   const work = (md) => planText(md, NO_LIMIT).work;
@@ -24,6 +24,10 @@ test('the work is counted from the text: each line (depth + 1) × (2 + its bytes
   assert.equal(work('> > a\n\nb'), 4 * 7 + 4 * 2 + 1 * 3, 'a blank line keeps it; the line after a blank line starts again');
   assert.equal(work('- a\n\n    b'), 2 * 5 + 2 * 2 + 3 * 7, 'indentation counts a level per 2 columns');
   assert.equal(work('é'), 4, 'bytes, not characters');
+  // Lines and bytes as markdown-it sees them: its core rule 'normalize' first.
+  assert.equal(work('a\rb\r\nc\nd'), 4 * 3, '"\\n", "\\r\\n" and a lone "\\r" each end a line');
+  assert.equal(work('\0'), 5, 'a NUL is read as U+FFFD, three bytes');
+  assert.deepEqual(readMarkdown('a\r\rb\0', NO_LIMIT).blocks, [p('a'), p('b\uFFFD')]);
 });
 
 // markdown-it's own count (parsedWork) is what reading the text costs; the text's count may
@@ -48,6 +52,11 @@ const CASES = {
   'deep then shallow then deep': `${X(200, '- ')}a\nb\n\nc\n${X(200, '> ')}d`,
   'html and tables deep': ['<div>', 'x</div>', '| a | b |', '| - | - |', '| 1 | 2 |'].map((l) => `${X(120, '> ')}${l}`).join('\n'),
   'carriage returns': `${X(150, '> ')}a\r\n> b\r\n\r\n${X(100, '- ')}c\r\n`,
+  'lone carriage returns under deep quotes': `x\r${X(200, `${X(200, '> ')}y\r`)}`,
+  'lone carriage returns under deep list items': `x\r${X(200, `${X(200, '- ')}y\r`)}`,
+  'a carriage return inside each list prefix': X(100, `${X(10, '- \r- ')}y\n`),
+  'tabs after markers at every column': Array.from({ length: 120 }, (_, i) => `${X(i % 7, ' ')}${X(i, i % 2 ? '>\t' : '-\t')}t${i}`).join('\n'),
+  'NULs under a deep quote': `${X(150, '> ')}${X(300, '\0')}\n${X(150, '> ')}a`,
 };
 
 /** A seeded run of numbers in [0, n), the same on every machine. */
@@ -61,21 +70,33 @@ function seeded(seed) {
   };
 }
 
-test('the text\'s count is never below what markdown-it does, for each case and a seeded sweep, whole and for every run of first lines', () => {
+// The sweep's size: IMPORT_WORK_SWEEP=20000 runs a longer one (a few minutes) by hand.
+const SWEEP = Number(process.env.IMPORT_WORK_SWEEP) || 300;
+const netNotices = (r) => r.notices.filter((n) => n.rule === 'net');
+
+test('the text\'s count is never below what markdown-it does, for each case and a seeded sweep, whole and for every run of first lines; so the net never fires', () => {
   const below = [];
+  const nets = [];
   const check = (name, md) => {
-    const lines = md.split('\n');
+    const lines = normalize(md).split('\n');
     for (let n = 1; n <= lines.length; n += Math.max(1, Math.floor(lines.length / 6))) {
       const head = lines.slice(0, n).join('\n');
       if (planText(head, NO_LIMIT).work < parsedWork(head)) below.push(`${name}, first ${n} lines`);
     }
-    if (planText(md, NO_LIMIT).work < parsedWork(md)) below.push(name);
+    const work = planText(md, NO_LIMIT).work;
+    if (work < parsedWork(md)) below.push(name);
+    // markdown-it's own count behind the text's, at budgets that cut the text and at the bound.
+    for (const budget of [Math.floor(work / 3), Math.floor(work / 2), work]) {
+      for (const lineBytes of [null, 40]) {
+        if (netNotices(readMarkdown(md, { ...IMPORT_WORK, budget, lineBytes })).length) nets.push(`${name}, budget ${budget}, lineBytes ${lineBytes}`);
+      }
+    }
   };
   for (const [name, md] of Object.entries(CASES)) check(name, md);
   const PIECES = ['> ', '>', '>', '- ', '* ', '+ ', '1. ', '2) ', '10. ', '  ', '  ', ' ', '    ', '\t', '-\t', '>\t'];
   const TAILS = ['text', '', '```', '~~~', '---', '===', '- x', '# h', '| a | b |', '| - | - |', '<div>', '</div>', '***', '> ', '1. y', '    code', '[x]: /u', '\\', '**b**'];
   const rnd = seeded(825);
-  for (let d = 0; d < 300; d++) {
+  for (let d = 0; d < SWEEP; d++) {
     const deep = rnd(4) === 0 ? 150 : 25;
     const lines = Array.from({ length: 1 + rnd(30) }, () => {
       if (rnd(6) === 0) return '';
@@ -84,9 +105,25 @@ test('the text\'s count is never below what markdown-it does, for each case and 
       for (let i = rnd(deep); i > 0; i--) s += PIECES[rnd(PIECES.length)];
       return s + TAILS[rnd(TAILS.length)];
     });
-    check(`random ${d}`, lines.join(rnd(8) === 0 ? '\r\n' : '\n'));
+    check(`random ${d}`, lines.join(rnd(8) === 0 ? ['\r\n', '\r'][rnd(2)] : '\n'));
   }
   assert.deepEqual(below, []);
+  assert.deepEqual(nets, []);
+});
+
+test('the net: where the text\'s count was wrong and markdown-it\'s own count passes the budget, the rest of the deep text is plain text, every word, with one notice', () => {
+  // A plan made with no budget, read with a small one: the text's count planted short.
+  const md = `${X(150, '> ')}w0 w1\n${X(150, '> ')}w2\n\n${X(100, '- ')}w3 **w4**\n\n- w5\n  > w6\n\nw7 end`;
+  const words = (blocks) => JSON.stringify(blocks).match(/\bw\d\b/g);
+  const limits = { ...IMPORT_WORK, budget: 20_000 };
+  assert.ok(parsedWork(md) > limits.budget);
+  const read = readPlan(planText(md, NO_LIMIT), limits);
+  assert.deepEqual(netNotices(read).map(({ code, rule, path }) => ({ code, rule, path })), [{ code: 'import_work_spent', rule: 'net', path: '/blocks/0' }]);
+  assert.ok(read.notices[0].work > limits.budget);
+  assert.deepEqual(words(read.blocks), ['w0', 'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7']);
+  assert.deepEqual(read.blocks.at(-1), p('w7 end'), 'the top level is still read');
+  // With the text's own count the plan cuts first, and the net stays quiet.
+  assert.deepEqual(netNotices(readMarkdown(md, limits)), []);
 });
 
 test('a line past the line bound is one plain top-level paragraph, as typed, between the text before it and the text after it, each read as a document', () => {
