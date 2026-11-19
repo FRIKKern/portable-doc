@@ -1,7 +1,9 @@
 // Writes packages/text/alias-types.js: for every name of every field in the alias table
 // (packages/text/alias-table.js), the JSON types spec/blocks.schema.json gives it on its block
-// type. A name the schema does not declare takes the types of its field's other names. The
-// readers import the small module instead of the schema, so React does not bundle the schema.
+// type or item. A name the schema does not declare takes the types of its field's other names;
+// a field none of whose names the schema types takes the types in UNTYPED. It also writes, for
+// every field, the table's column 'a whitespace-only value under the current name wins'. The readers
+// import the small module instead of the schema, so React does not bundle the schema.
 // `npm run alias-types` writes it; read-aliases.test.mjs regenerates it and compares.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +13,16 @@ import { TABLE } from '../packages/text/alias-table.js';
 
 export const OUT = fileURLToPath(new URL('../packages/text/alias-types.js', import.meta.url));
 
-const at = (ref) => ref.split('/').slice(1).reduce((node, key) => node?.[key], schema);
+// The schema the helpers below read: the spec's, or a planted copy (setSchema) in a test.
+let SCHEMA = schema;
+/** Reads `s` in place of spec/blocks.schema.json until called again; returns the one it replaced. */
+export function setSchema(s) {
+  const was = SCHEMA;
+  SCHEMA = s;
+  return was;
+}
+
+const at = (ref) => ref.split('/').slice(1).reduce((node, key) => node?.[key], SCHEMA);
 
 // The JSON types a schema node allows, or null when it does not constrain the type.
 function schemaTypes(node, seen = new Set()) {
@@ -34,27 +45,105 @@ function schemaTypes(node, seen = new Set()) {
   return null;
 }
 
-function blockProperties(type) {
-  let node = schema.definitions?.blocks?.[type];
-  while (node?.$ref) node = at(node.$ref);
+const resolve = (node) => {
+  while (node?.$ref && node.$ref !== '#') node = at(node.$ref);
+  return node;
+};
+// Of a node that may be one of several (anyOf, oneOf), the object option with properties.
+const objectOf = (node) => {
+  node = resolve(node);
+  const options = node?.anyOf ?? node?.oneOf;
+  return options ? options.map(resolve).find((o) => o?.properties) : node;
+};
+
+/**
+ * The properties the schema gives an owner: a block type ("code"), a block type and a path to
+ * a list of items in it ("steps.steps[]", "task-detail.task.criteria[]"), or an inline node
+ * ("inline:text"): those definitions.inline gives every inline node, and those of its option
+ * whose `type` is that node's. An owner the schema gives no properties has none ({}).
+ */
+export function ownerProperties(owner) {
+  if (owner.startsWith('inline:')) {
+    const nodeType = owner.slice('inline:'.length);
+    const inline = resolve(SCHEMA.definitions?.inline);
+    const own = (inline?.anyOf ?? inline?.oneOf ?? []).map(resolve).find((o) => o?.properties?.type?.const === nodeType || o?.properties?.type?.enum?.includes(nodeType));
+    const { type: _, ...shared } = inline?.properties ?? {};
+    const { type: __, ...mine } = own?.properties ?? {};
+    return { ...shared, ...mine };
+  }
+  const [type, ...path] = owner.split('.');
+  let node = objectOf(SCHEMA.definitions?.blocks?.[type]);
+  for (const step of path) {
+    const list = step.endsWith('[]');
+    node = objectOf(node?.properties?.[list ? step.slice(0, -2) : step]);
+    if (list) node = objectOf(node?.items);
+  }
   return node?.properties ?? {};
 }
 
-/** "type.name" → the types that name may hold (null: any), for every name in the alias table. */
+/**
+ * The types of the names of each field the schema gives no types at all (an item or an inline
+ * node it leaves open): what main's reader accepted, so no value main shows is lost. A name
+ * enters this map only in the change that makes it an alias while the schema gives it no types;
+ * its type is what main's reader accepted. It leaves when the schema types it; the map only
+ * shrinks. "owner.name" → { types (null: any), why }.
+ */
+export const UNTYPED = Object.freeze({
+  'code-tabs.tabs[].code': { types: ['string'], why: 'main showed str(value ?? code): only text shows' },
+  'code-tabs.tabs[].value': { types: ['string'], why: 'main showed str(value ?? code): only text shows' },
+  'inline:code.children': { types: ['string', 'array', 'object'], why: 'main showed the flat text of children: a string, a number or an array of inlines' },
+  'inline:code.value': { types: ['string'], why: 'main read str(value) || the children: text, else the children' },
+  'inline:text.text': { types: ['string'], why: 'main read str(value) || str(text): text' },
+  'inline:text.value': { types: ['string'], why: 'main read str(value) || str(text): text' },
+  'notes.items[].content': { types: ['array'], why: 'main read a note\'s non-empty content array, else its text' },
+  'notes.items[].text': { types: ['string'], why: 'main read a note\'s non-empty content array, else str(text)' },
+  'table.columns[].label': { types: ['string', 'array', 'object'], why: 'main showed a column\'s text ?? label as text or as the words of an array' },
+  'table.columns[].text': { types: ['string', 'array', 'object'], why: 'main showed a column\'s text ?? label as text or as the words of an array' },
+  'task-detail.criteria[].criterion': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+  'task-detail.criteria[].text': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+  'task-detail.task.criteria[].criterion': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+  'task-detail.task.criteria[].text': { types: ['string'], why: 'main read str(text) || str(criterion): text' },
+});
+
+/** "owner.name" → the types that name may hold (null: any), for every name in the alias table. */
 export function aliasTypes() {
-  const fields = new Map();
+  const fields = new Map(); // "owner.field" → [[field], [old], ...]
   for (const [from, { to }] of Object.entries(TABLE.aliases)) {
-    if (!fields.has(to)) fields.set(to, [to.slice(to.indexOf('.') + 1)]);
-    fields.get(to).push(from.slice(from.indexOf('.') + 1));
+    if (!fields.has(to)) fields.set(to, [[to.slice(to.lastIndexOf('.') + 1)]]);
+    fields.get(to).push([from.slice(from.lastIndexOf('.') + 1)]);
   }
   const out = {};
   for (const [to, names] of fields) {
-    const type = to.slice(0, to.indexOf('.'));
-    const properties = blockProperties(type);
-    const declared = names.map((name) => (Object.hasOwn(properties, name) ? schemaTypes(properties[name]) : undefined));
+    const type = to.slice(0, to.lastIndexOf('.'));
+    const properties = ownerProperties(type);
+    const declared = names.map(([name]) => (Object.hasOwn(properties, name) ? schemaTypes(properties[name]) : undefined));
     const known = declared.filter((types) => types !== undefined);
-    const fallback = known.length === 0 || known.includes(null) ? null : [...new Set(known.flat())];
-    names.forEach((name, i) => { out[`${type}.${name}`] = declared[i] === undefined ? fallback : declared[i]; });
+    if (known.length === 0) {
+      for (const [name] of names) {
+        const key = `${type}.${name}`;
+        if (!Object.hasOwn(UNTYPED, key)) throw new Error(`${key}: the schema gives none of its field's names a type; add it to UNTYPED with what main's reader accepted`);
+        out[key] = UNTYPED[key].types;
+      }
+      continue;
+    }
+    const fallback = known.includes(null) ? null : [...new Set(known.flat())];
+    names.forEach(([name], i) => { out[`${type}.${name}`] = declared[i] === undefined ? fallback : declared[i]; });
+  }
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
+}
+
+/** The UNTYPED names the schema types: each must leave the map. Empty while the map is right. */
+export function untypedButTyped() {
+  return Object.keys(UNTYPED).filter((key) => Object.hasOwn(ownerProperties(key.slice(0, key.lastIndexOf('.'))), key.slice(key.lastIndexOf('.') + 1)));
+}
+
+/** "owner.field" → the table's column 'a whitespace-only value under the current name wins' for that field. */
+export function aliasCurrentWhitespaceWins() {
+  const out = {};
+  for (const [from, { to, currentWhitespaceWins: wins }] of Object.entries(TABLE.aliases)) {
+    if (typeof wins !== 'boolean') throw new Error(`${from}: currentWhitespaceWins is true or false`);
+    if (Object.hasOwn(out, to) && out[to] !== wins) throw new Error(`${from}: the rows of ${to} disagree on currentWhitespaceWins`);
+    out[to] = wins;
   }
   return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
@@ -62,14 +151,22 @@ export function aliasTypes() {
 /** The text of packages/text/alias-types.js. */
 export function aliasTypesSource() {
   const rows = Object.entries(aliasTypes()).map(([key, types]) => `  '${key}': ${types === null ? 'null' : JSON.stringify(types).replace(/"/g, "'")},`);
+  const spaces = Object.entries(aliasCurrentWhitespaceWins()).map(([key, wins]) => `  '${key}': ${wins},`);
   return `// SPDX-License-Identifier: Apache-2.0
 // Generated by scripts/generate-alias-types.mjs from spec/blocks.schema.json and alias-table.js:
 // do not edit. \`npm run alias-types\` writes it again.
-// "type.name" → the JSON types the schema gives that name (null: any type). A plain literal,
+// "owner.name" → the JSON types the schema gives that name (null: any type). A plain literal,
 // with no work at load; read-aliases.js freezes it on first use.
 
 export const ALIAS_TYPES = {
 ${rows.join('\n')}
+};
+
+// "owner.field" → the table's column 'a whitespace-only value under the current name wins': true,
+// the first name holding any character is read, whitespace included; false, the first holding a
+// non-whitespace character, else the first holding any character.
+export const ALIAS_CURRENT_WHITESPACE_WINS = {
+${spaces.join('\n')}
 };
 `;
 }

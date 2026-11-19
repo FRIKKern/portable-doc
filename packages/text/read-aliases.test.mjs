@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
-import { OUT, aliasTypesSource } from '../../scripts/generate-alias-types.mjs';
+import { OUT, UNTYPED, aliasTypesSource, ownerProperties, setSchema, untypedButTyped } from '../../scripts/generate-alias-types.mjs';
+import blockSchema from '../../spec/blocks.schema.json' with { type: 'json' };
 import { canon } from './golden-reads.mjs';
 import { toMarkdown, toPlainText } from './index.js';
-import { aliasTable, absent, namesOf, readField, typesOf } from './read-aliases.js';
+import { aliasTable, currentWhitespaceWins, holds, namesOf, readField, readItem, typesOf } from './read-aliases.js';
 
 const TABLE = aliasTable();
 
@@ -19,39 +20,56 @@ const text = (block) => toPlainText([block]);
 const t = (value) => [{ type: 'text', value }];
 const kid = [{ type: 'paragraph', content: t('kid') }];
 
-test('one table in the pack file\'s shape: 15 rows, sorted, each old name and its current name on one block type', () => {
+test('one table in the pack file\'s shape: 27 rows, sorted, each old name and its current name on one owner', () => {
   assert.deepEqual(Object.keys(TABLE), ['_comment', 'aliases']);
   const rows = Object.entries(TABLE.aliases);
-  assert.equal(rows.length, 15);
+  assert.equal(rows.length, 27);
   assert.deepEqual(rows.map(([from]) => from), rows.map(([from]) => from).sort());
+  const owner = (key) => key.slice(0, key.lastIndexOf('.'));
   for (const [from, row] of rows) {
-    assert.equal(row.to.split('.')[0], from.split('.')[0], from);
-    assert.deepEqual(Object.keys(row).filter((k) => !['to', 'reason', 'convert'].includes(k)), [], from);
-    assert.ok([undefined, 'inline-from-string', 'columns-from-cols', 'head-from-header'].includes(row.convert), from);
+    assert.equal(owner(row.to), owner(from), from);
+    // An owner is a block type, a block type and a path to its items, or an inline node type.
+    assert.match(owner(from), /^(?:[a-z][\w-]*(?:\.[a-z]\w*(?:\[\])?)*|inline:[a-z]\w*)$/i, from);
+    assert.deepEqual(Object.keys(row).filter((k) => !['to', 'reason', 'convert', 'currentWhitespaceWins'].includes(k)), [], from);
+    assert.equal(typeof row.currentWhitespaceWins, 'boolean', from);
+    assert.ok([undefined, 'inline-from-string', 'columns-from-cols', 'head-from-header', 'text-from-inline'].includes(row.convert), from);
   }
   assert.ok(Object.isFrozen(TABLE.aliases['code.code']));
 });
 
-test('the rule: absent is undefined, null, a blank string or an empty array; the first name not absent wins, current name first; all absent reads the current name as stored', () => {
-  for (const value of [undefined, null, '', '  \n\t', []]) assert.equal(absent(value), true, JSON.stringify(value));
-  for (const value of ['a', 0, false, {}, [''], t(' ')]) assert.equal(absent(value), false, JSON.stringify(value));
+test('the rule: skip missing, null and wrong-typed names; take the first holding a non-whitespace character (or, where the column says yes, any character); else the first holding any character; else the first remaining as stored; else empty', () => {
+  for (const [value, held] of [['', 0], [[], 0], [{}, 0], [false, 0], [' \n\t', 1], ['a', 2], [0, 2], [NaN, 2], [[''], 2], [t(' '), 2], [{ type: 'text' }, 2]]) assert.equal(holds(value), held, JSON.stringify(value));
   assert.deepEqual(readField({ type: 'code', value: 'v', code: 'c' }, 'value'), { name: 'value', value: 'v' });
+  // The column says no for a code block: whitespace gives way to a later name with a non-whitespace character.
+  assert.equal(currentWhitespaceWins('code', 'value'), false);
   assert.deepEqual(readField({ type: 'code', value: ' ', content: [], text: 't' }, 'value'), { name: 'text', value: 't' });
+  // None holds a non-whitespace character: the first holding any character, so whitespace written under an old name is kept.
   assert.deepEqual(readField({ type: 'code', value: '  ', code: '' }, 'value'), { name: 'value', value: '  ' });
-  assert.deepEqual(readField({ type: 'code', code: '  ' }, 'value'), { name: 'value', value: undefined });
+  assert.deepEqual(readField({ type: 'code', value: '', code: '  ' }, 'value'), { name: 'code', value: '  ' });
+  assert.deepEqual(readField({ type: 'code', code: '  ' }, 'value'), { name: 'code', value: '  ' });
+  // None holds any character: the first remaining name as stored.
+  assert.deepEqual(readField({ type: 'code', value: null, code: '' }, 'value'), { name: 'code', value: '' });
+  // No name remains: the field is empty. Null is skipped like a missing name.
+  assert.deepEqual(readField({ type: 'code', value: null }, 'value'), { name: 'value', value: undefined });
+  assert.deepEqual(readField({ type: 'code', code: true }, 'value'), { name: 'value', value: undefined });
   // A field with no old names, and a block type with none, read the field alone.
   assert.deepEqual(readField({ type: 'code', footer: ' ' }, 'footer'), { name: 'footer', value: ' ' });
-  assert.deepEqual(readField({ type: 'note', text: 't' }, 'content'), { name: 'content', value: undefined });
-  // A value of a type the schema does not give the name is absent too.
+  assert.deepEqual(readField({ type: 'divider', text: 't' }, 'content'), { name: 'content', value: undefined });
+  // A value of a type the schema does not give the name is skipped.
   assert.deepEqual(readField({ type: 'heading', content: 'Hi', text: 'Yo' }, 'content'), { name: 'text', value: 'Yo' });
-  assert.deepEqual(readField({ type: 'heading', content: 'Hi' }, 'content'), { name: 'content', value: 'Hi' });
+  assert.deepEqual(readField({ type: 'heading', content: 'Hi' }, 'content'), { name: 'content', value: undefined });
   assert.deepEqual(readField({ type: 'code', value: true, code: 'x' }, 'value'), { name: 'code', value: 'x' });
-  assert.deepEqual(readField({ type: 'code', code: true }, 'value'), { name: 'value', value: undefined });
-  // A field the schema types as text reads a string or a finite number; NaN and Infinity are absent.
+  // A field the schema types as text reads a string or a finite number; NaN and Infinity are skipped there.
   assert.deepEqual(readField({ type: 'blockquote', cite: 7, attribution: 'Ann' }, 'cite'), { name: 'cite', value: 7 });
   assert.deepEqual(readField({ type: 'heading', text: 7 }, 'content'), { name: 'text', value: 7 });
   assert.deepEqual(readField({ type: 'blockquote', cite: NaN, attribution: 'Ann' }, 'cite'), { name: 'attribution', value: 'Ann' });
   assert.deepEqual(readField({ type: 'blockquote', cite: Infinity, attribution: 'Ann' }, 'cite'), { name: 'attribution', value: 'Ann' });
+  // The column says yes for a text leaf: a whitespace-only value under the current name wins, as main showed it.
+  assert.equal(currentWhitespaceWins('inline:text', 'value'), true);
+  assert.deepEqual(readItem({ type: 'text', value: ' ', text: 'X' }, 'inline:text', 'value'), { name: 'value', value: ' ' });
+  assert.deepEqual(readItem({ type: 'text', value: '', text: ' ' }, 'inline:text', 'value'), { name: 'text', value: ' ' });
+  // A non-empty object holds a non-whitespace character where its type allows one: a column label that is one inline node.
+  assert.deepEqual(readItem({ text: '', label: { type: 'text', value: 'L' } }, 'table.columns[]', 'text'), { name: 'label', value: { type: 'text', value: 'L' } });
 });
 
 test('alias-types.js is what scripts/generate-alias-types.mjs makes from the schema and the table, byte for byte', () => {
@@ -60,8 +78,8 @@ test('alias-types.js is what scripts/generate-alias-types.mjs makes from the sch
 
 test('each name\'s types are read from spec/blocks.schema.json: every name of every aliased field has some, and a name the schema leaves out takes those of its field\'s other names', () => {
   for (const { to } of Object.values(TABLE.aliases)) {
-    const [type, field] = to.split('.');
-    for (const name of namesOf(type, field)) assert.ok(typesOf(type, name)?.length, `${type}.${name}`);
+    const [owner, field] = [to.slice(0, to.lastIndexOf('.')), to.slice(to.lastIndexOf('.') + 1)];
+    for (const name of namesOf(owner, field)) assert.ok(typesOf(owner, name)?.length || UNTYPED[`${owner}.${name}`]?.types === null, `${owner}.${name}`);
   }
   assert.deepEqual(typesOf('heading', 'content'), ['array']);
   assert.deepEqual(typesOf('heading', 'text'), ['string']);
@@ -69,6 +87,37 @@ test('each name\'s types are read from spec/blocks.schema.json: every name of ev
   // Not declared in the schema: posterAt (new) and language (never in the spec).
   assert.deepEqual(typesOf('asciicast', 'posterAt'), typesOf('asciicast', 'poster'));
   assert.deepEqual(typesOf('code', 'language'), typesOf('code', 'lang'));
+});
+
+test('UNTYPED holds only names of aliased fields the schema types none of the names of, each with why: a name leaves it when the schema types it, and it only shrinks', () => {
+  // A name enters this map only in the change that makes it an alias while the schema gives it no
+  // types; its type is what main's reader accepted. It leaves when the schema types it.
+  const names = new Set();
+  for (const [from, { to }] of Object.entries(TABLE.aliases)) names.add(from).add(to);
+  assert.equal(Object.keys(UNTYPED).length, 14, 'UNTYPED\'s length is pinned: it only shrinks');
+  for (const [key, { types, why }] of Object.entries(UNTYPED)) {
+    assert.ok(names.has(key), `${key}: not a name in the alias table`);
+    assert.ok(typeof why === 'string' && why.trim() !== '', `${key}: says why`);
+    assert.ok(types === null || (Array.isArray(types) && types.length), key);
+    const [owner, name] = [key.slice(0, key.lastIndexOf('.')), key.slice(key.lastIndexOf('.') + 1)];
+    // Used as it is: an entry whose field the schema types through another name would be ignored.
+    assert.deepEqual(typesOf(owner, name), types, `${key}: alias-types.js does not take its types from UNTYPED`);
+  }
+  assert.deepEqual(untypedButTyped(), [], 'a name in UNTYPED that the schema types leaves UNTYPED');
+});
+
+test('the UNTYPED guard fires when the schema types a mapped name: on an item, and on an inline node through definitions.inline', () => {
+  const plant = structuredClone(blockSchema);
+  plant.definitions.inline.properties.text = { type: 'string' };
+  plant.definitions.blocks['task-detail'].properties.criteria = { type: 'array', items: { type: 'object', properties: { criterion: { type: 'string' } } } };
+  const was = setSchema(plant);
+  try {
+    assert.deepEqual(ownerProperties('inline:text').text, { type: 'string' });
+    assert.deepEqual(untypedButTyped(), ['inline:text.text', 'task-detail.criteria[].criterion']);
+  } finally {
+    setSchema(was);
+  }
+  assert.deepEqual(untypedButTyped(), []);
 });
 
 test('a block with two old names for one field reads and compares as the first old name in table order: code { code: a, text: b } is a', () => {
@@ -94,8 +143,8 @@ const CHANGED = [
   // code: an inline array of blank text under value is not absent, so it wins over code: x,
   // which used to show; the block is blank now.
   [{ type: 'code', value: t('  '), code: 'x' }, '', '```\n  \n```\n', ''],
-  // code: spaces under an old name alone; the Markdown fence used to keep them, it is empty now.
-  [{ type: 'code', code: '   ' }, '', '```\n```\n', ''],
+  // code: a blank value used to win over code '  '; the fence keeps the spaces now.
+  [{ type: 'code', value: '', code: '  ' }, '', '```\n  \n```\n', ''],
   // code: a blank lang used to win over language; the fence names py now.
   [{ type: 'code', value: 'x', lang: '  ', language: 'py' }, '<pre class="bp-codeblock">x</pre>', '```py\nx\n```\n', 'x\n'],
   // blockquote: HTML showed a cite of spaces; Ann now, as Markdown and text already did.
@@ -109,14 +158,6 @@ const CHANGED = [
   [{ type: 'table', head: 'x', header: [t('H')], rows: [[t('r')]] }, '<th class="bp-table__th"><span>H</span></th>', '| H |\n| --- |\n| r |\n', 'H\n-\nr\n'],
   // asciicast: posterAt, the current name, is read before poster.
   [{ type: 'asciicast', src: 'https://e.example/c.cast', poster: 'npt:0:01', posterAt: 'npt:0:09' }, 'data-cast-poster="npt:0:09"', '[Terminal recording](https://e.example/c.cast)\n', 'Terminal recording: https://e.example/c.cast\n'],
-  // A blank old name alone is absent, so HTML no longer shows its spaces (Markdown and text
-  // already showed nothing): heading, eyebrow, pullquote, callout text '  '.
-  [{ type: 'heading', text: '  ' }, { whole: '<h2></h2>' }, '', ''],
-  [{ type: 'eyebrow', text: '  ' }, { whole: '<p class="bp-role-eyebrow"></p>' }, '', ''],
-  [{ type: 'pullquote', text: '  ' }, { whole: '<p class="bp-role-pullquote"></p>' }, '', ''],
-  [{ type: 'callout', text: '  ' }, { whole: '<div class="bp-callout bp-callout--info"><span></span></div>' }, '> **Info**\n', 'Info\n'],
-  // blockquote attribution '  ' alone: HTML used to show a cite of spaces (a lone dash); no cite now.
-  [{ type: 'blockquote', content: t('q'), attribution: '  ' }, { whole: '<blockquote class="bp-blockquote"><p>q</p></blockquote>' }, '> q\n', '“q”\n'],
   // table: a column's own type styles it with no cols present (cols folds into columns);
   // main took types from cols only and showed a plain 3.
   [{ type: 'table', columns: [{ key: 'a', text: 'A', type: 'delta' }], rows: [{ a: 3 }] }, '<th class="bp-table__th bp-table__th--num"><span>A</span></th></tr></thead><tbody><tr><td class="bp-table__td bp-table__td--num"><span>▲ 3</span></td>', '| A |\n| --- |\n| ▲ 3 |\n', 'A\n---\n▲ 3\n'],
@@ -128,6 +169,26 @@ test('each field whose behaviour changes under the rule shows the same winner in
     // A whole render ({ whole }) is compared whole; a fragment is looked for.
     if (fragment === '' || fragment.whole !== undefined) assert.equal(html(block), fragment.whole ?? '', label);
     else assert.ok(html(block).includes(fragment), `${label}\n${html(block)}`);
+    assert.equal(md(block), markdown, label);
+    assert.equal(text(block), plain, label);
+  }
+});
+
+// Whitespace written under an old name alone is kept: the first name holding any character is
+// read. Each shows what it showed before the one table, whole.
+const KEPT = [
+  [{ type: 'code', code: '   ' }, '', '```\n   \n```\n', ''],
+  [{ type: 'heading', text: '  ' }, '<h2>  </h2>', '', ''],
+  [{ type: 'eyebrow', text: '  ' }, '<p class="bp-role-eyebrow">  </p>', '', ''],
+  [{ type: 'pullquote', text: '  ' }, '<p class="bp-role-pullquote">  </p>', '', ''],
+  [{ type: 'callout', text: '  ' }, '<div class="bp-callout bp-callout--info"><span>  </span></div>', '> **Info**\n', 'Info\n'],
+  [{ type: 'blockquote', content: t('q'), attribution: '  ' }, '<blockquote class="bp-blockquote"><p>q</p><cite class="bp-blockquote__cite">  </cite></blockquote>', '> q\n', '“q”\n'],
+];
+
+test('whitespace under an old name alone shows as it did before the one table, in HTML, Markdown and text', () => {
+  for (const [block, h, markdown, plain] of KEPT) {
+    const label = JSON.stringify(block);
+    assert.equal(html(block), h, label);
     assert.equal(md(block), markdown, label);
     assert.equal(text(block), plain, label);
   }
@@ -148,7 +209,7 @@ test('a table\'s cols stands in for columns only as each column\'s type: beside 
   assert.deepEqual(canon(alone), { type: 'table', cols: [{ type: 'delta' }], rows: [[3]] });
 });
 
-test('a current name of a type the schema does not give it, read because no name holds a value of its type, shows what it showed before in every renderer and compares as it is', () => {
+test('a current name of a type the schema does not give it, and no other name, shows what it showed before in every renderer and compares as it is', () => {
   // HTML, Markdown and text as main renders them; canon keeps the block as it is.
   const term = (body) => `<div class="bp-term"><div class="bp-term__bar"><span class="bp-term__dots"><i></i><i></i><i></i></span><span class="bp-term__title">T</span></div><div class="bp-term__body">${body}</div></div>`;
   const BEFORE = [

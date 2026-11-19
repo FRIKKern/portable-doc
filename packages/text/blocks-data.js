@@ -4,7 +4,7 @@
 
 import { asList, fmtNum, isMap, maxOf, paras, str, tableOut } from './util.js';
 import { titled } from './blocks-layout.js';
-import { fieldOf, readField } from './read-aliases.js';
+import { fieldOf, itemOf, readField } from './read-aliases.js';
 
 const get = (m, k) => (isMap(m) ? m[k] : undefined);
 
@@ -274,7 +274,7 @@ function table(b, ctx) {
   const rowTotal = Array.isArray(b.rows) ? b.rows.length : b.rows == null ? 0 : 1;
   if (keyed && rowTotal * columns.length > TABLE_CELL_CAP) return 'Table too large to show';
   if (!head.length && maps) {
-    head = columns.map((c) => c.text ?? c.label ?? (typeof c.key === 'string' ? c.key : ''));
+    head = columns.map((c) => itemOf(c, 'table.columns[]', 'text') ?? (typeof c.key === 'string' ? c.key : ''));
     if (columns.every((c) => typeof c.key === 'string' && c.key !== '')) rows = rows.map((r) => (isMap(r) ? columns.map((c) => r[c.key] ?? '') : r));
   } else if (!head.length && rows.length && isMap(rows[0]) && (rows[0].header || rowCells(rows[0]).every((c) => isMap(c) && !!c.header))) {
     head = rowCells(rows[0]);

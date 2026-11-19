@@ -1,0 +1,35 @@
+{
+  "block": {
+    "type": "steps",
+    "steps": [
+      {
+        "title": "S",
+        "blocks": [],
+        "children": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "value": "kid"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "reads": {
+    "steps[0].blocks": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "value": "kid"
+          }
+        ]
+      }
+    ]
+  }
+}
