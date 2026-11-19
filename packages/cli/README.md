@@ -186,7 +186,9 @@ Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
   render, and the server keeps running.
 - `--open` opens the page with `open` (macOS) or `xdg-open`. Ctrl-C closes the
   watcher, ends each open tab's event stream cleanly (a tab that never reads is
-  cut after `CLOSE_GRACE_MS`, one second), and exits 0.
+  cut after a grace), and exits 0. The grace is `PORTABLE_DOC_CLOSE_GRACE_MS`
+  milliseconds, 1000 when it is unset or empty; any value but a whole number
+  from 0 to 2147483647 is refused with a message, and the exit is 2.
 - A second Ctrl-C while it stops ends the server at once: open streams are cut,
   not ended, and the process dies of the signal (exit 130 in a shell).
 

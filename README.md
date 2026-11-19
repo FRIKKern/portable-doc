@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 19 changes · test: round-trip matrix, one row per block type, filled and empty ([#92](https://github.com/FRIKKern/portable-doc/pull/92))
+- **Today** · 20 changes · cli preview: close() takes its grace; the close tests no longer race the machine ([#95](https://github.com/FRIKKern/portable-doc/pull/95))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
