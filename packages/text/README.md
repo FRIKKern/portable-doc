@@ -109,6 +109,11 @@ Where it differs from Barkpark, on purpose:
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
+- An item's text always comes before its children, so text after an item's
+  nested list starts a new item at the same level, keeping the words in source
+  order; more text after a later nested list splits again. In an ordered list
+  the new item takes the next number, and the numbers after it continue from
+  there. Each split adds a `list_item_split` notice (`LIST_ITEM_SPLIT`).
 - What `toMarkdown` writes reads back: a quote's last paragraph `— Name` is
   its `cite`, and an emphasised paragraph right after a mermaid fence is the
   diagram's `caption`.
@@ -126,6 +131,13 @@ Where it differs from Barkpark, on purpose:
   and tags in it show as literal text. No word is lost, the import stays linear
   in time with no deep stack, and `readMarkdown` returns an `import_work_spent`
   notice with the path where the plain text starts.
+- `readMarkdown` returns `{ blocks, notices, work }`. The notices, in source
+  order:
+  - `{ code: 'import_work_spent', path, work }`: past the work budget, the
+    rest from `path` on is plain text.
+  - `{ code: 'list_item_split', path, line, lines }`: text after a nested list
+    became the new item at `path`; `line` is its first source line (from 1)
+    and `lines` how many lines it spans.
 
 **Round trip.** For heading, paragraph, list, code, table, blockquote, divider
 and diagram, `fromMarkdown(toMarkdown(doc))` gives back an equivalent doc:

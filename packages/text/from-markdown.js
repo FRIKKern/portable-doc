@@ -31,36 +31,47 @@ const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ?
 
 // ── lists ───────────────────────────────────────────────────────────────
 
+export const LIST_ITEM_SPLIT = 'list_item_split';
+
 /**
  * A list item as one or more items: its blocks joined by a space as one inline run, and its
  * nested lists kept as lists. Text after a kept nested list starts a new item at the same
  * level, so the words stay in source order: an item's text always comes before its children.
+ * Each new item carries `moved`, the source lines of its text: [first, end), from 0.
  * In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
  * @max_nest rule): its items and their blocks one space apart, joined to the item's own
  * text by one space, in place; a list with no text adds nothing.
  */
 function listItem(item, depth) {
   const parts = [];
-  let out = [];
-  let children = [];
-  const close = () => parts.push({ content: merge(out), children, split: parts.length > 0 });
+  let part = { out: [], children: [], notes: [] };
+  let after = null; // the line after the last kept nested list, while the part has one
+  const close = () => parts.push({ content: merge(part.out), children: part.children, notes: part.notes, moved: part.moved });
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
-      if (depth < MAX_NEST) children.push(...list(child, depth + 1));
-      else {
+      if (depth < MAX_NEST) {
+        const notes = [];
+        const kept = list(child, depth + 1, notes);
+        for (const n of notes) part.notes.push({ ...n, path: `/children/${part.children.length}${n.path}` });
+        part.children.push(...kept);
+        if (kept.length) after = child.tok.map?.[1] ?? after;
+      } else {
         const flat = flattenText([child]).trim();
-        if (flat) out.push(...(out.length ? [text(' ')] : []), text(flat));
+        if (flat) part.out.push(...(part.out.length ? [text(' ')] : []), text(flat));
       }
       continue;
     }
-    if (children.length) {
+    if (part.children.length) {
       close();
-      out = [];
-      children = [];
+      // Deep source past the work budget has no line map: its text starts after the list.
+      const first = child.tok.map?.[0] ?? after ?? 0;
+      part = { out: [], children: [], notes: [], moved: [first, first] };
+      after = null;
     }
-    if (out.length) out.push(text(' '));
-    if (child.type === 'fence' || child.type === 'code_block') out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
-    else out.push(...textOf(child));
+    if (part.moved) part.moved[1] = child.tok.map?.[1] ?? item.tok.map?.[1] ?? part.moved[1];
+    if (part.out.length) part.out.push(text(' '));
+    if (child.type === 'fence' || child.type === 'code_block') part.out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
+    else part.out.push(...textOf(child));
   }
   close();
   return parts;
@@ -77,16 +88,23 @@ function taskItem(content) {
 
 const withChildren = (item, children) => (children.length ? { ...item, children } : item);
 
-/** A list as [block], or [] when no item has text or a nested list left. */
-function list(node, depth = 0) {
+/**
+ * A list as [block], or [] when no item has text or a nested list left. Each item split off
+ * adds a LIST_ITEM_SPLIT notice to `notes`, its path from the list block, in source order.
+ */
+function list(node, depth = 0, notes = []) {
   const ordered = node.type === 'ordered_list';
   const items = node.children
     .filter((c) => c.type === 'list_item')
     .flatMap((li) => listItem(li, depth))
     // `[ ]` opens a task only at the head of an item in the source, never of a split-off one
-    .map((it) => ({ ...it, task: ordered || it.split ? null : taskItem(it.content) }))
+    .map((it) => ({ ...it, task: ordered || it.moved ? null : taskItem(it.content) }))
     .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
   if (!items.length) return [];
+  items.forEach((it, i) => {
+    if (it.moved) notes.push({ code: LIST_ITEM_SPLIT, path: `/items/${i}`, line: it.moved[0] + 1, lines: it.moved[1] - it.moved[0] });
+    for (const n of it.notes) notes.push({ ...n, path: `/items/${i}${n.path}` });
+  });
   // GitHub task syntax (`- [ ] `, `- [x] `) makes the whole bullet list a checklist.
   if (items.some((it) => it.task)) {
     return [{
@@ -210,7 +228,7 @@ function block(node, state) {
       return blank(content) ? [] : [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), content }];
     }
     case 'paragraph': return paragraph(inline(node.children));
-    case 'bullet_list': case 'ordered_list': return list(node);
+    case 'bullet_list': case 'ordered_list': return list(node, 0, (state.notes = []));
     case 'fence': case 'code_block': return code(node, state);
     case 'blockquote': return quote(node);
     case 'table': return [table(node)];
@@ -243,6 +261,8 @@ function convert(nodes, env) {
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
     if (env.spent && env.spent.path === undefined) env.spent.path = `/blocks/${out.length}`;
+    for (const n of state.notes ?? []) (env.splits ??= []).push({ ...n, path: `/blocks/${out.length}${n.path}` });
+    state.notes = null;
     for (const b of blocks) out.push(b);
   }
   return out;
@@ -255,7 +275,9 @@ export { IMPORT_WORK };
  * the import's count of lines × nesting depth re-scanned. Past IMPORT_WORK.budget the rest
  * of the deeply nested text is kept as plain text, every word, and `notices` holds one
  * { code: IMPORT_WORK.notice, path, work }: the block where that starts, and the count when
- * it did. Never throws.
+ * it did. Each list item split off at text after a nested list adds one
+ * { code: LIST_ITEM_SPLIT, path, line, lines }: the new item, and its text's source lines
+ * (the first from 1, and how many), in source order. Never throws.
  */
 export function readMarkdown(markdown) {
   const md = typeof markdown === 'string' ? markdown : '';
@@ -263,7 +285,8 @@ export function readMarkdown(markdown) {
   try {
     const blocks = convert(tree(parser.parse(md, env)), env);
     if (validate({ blocks }).ok) {
-      const notices = env.spent ? [{ code: IMPORT_WORK.notice, path: env.spent.path, work: env.spent.work }] : [];
+      const spent = env.spent ? [{ code: IMPORT_WORK.notice, path: env.spent.path, work: env.spent.work }] : [];
+      const notices = [...spent, ...(env.splits ?? [])];
       return { blocks, notices, work: env.work ?? 0 };
     }
   } catch {

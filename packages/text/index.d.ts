@@ -43,16 +43,33 @@ export function fromMarkdown(markdown: string): Block[];
  */
 export const IMPORT_WORK: { readonly budget: number; readonly notice: 'import_work_spent' };
 
+/** The code of the notice for a list item split at text after its nested list. */
+export const LIST_ITEM_SPLIT: 'list_item_split';
+
 /** A note from the import: past the work budget, the rest of the deep text from `path` on was kept as plain text. */
-export interface ImportNotice {
+export interface ImportWorkNotice {
   code: 'import_work_spent';
   path: string;
   work: number;
 }
 
 /**
+ * A note from the import: text after a list item's nested list became the new item at `path`,
+ * the next at the same level (in an ordered list, the next number). `line` is the first source
+ * line of that text, from 1, and `lines` how many lines it spans.
+ */
+export interface ListItemSplitNotice {
+  code: 'list_item_split';
+  path: string;
+  line: number;
+  lines: number;
+}
+
+export type ImportNotice = ImportWorkNotice | ListItemSplitNotice;
+
+/**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
- * of lines × nesting depth plus characters re-scanned; `notices` is empty unless the budget ran
- * out. Never throws.
+ * of lines × nesting depth plus characters re-scanned; `notices` says where the budget ran out,
+ * and each list item split off, in source order. Never throws.
  */
 export function readMarkdown(markdown: string): { blocks: Block[]; notices: ImportNotice[]; work: number };
