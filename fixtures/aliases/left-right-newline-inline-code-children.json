@@ -1,0 +1,22 @@
+{
+  "block": {
+    "type": "paragraph",
+    "content": [
+      {
+        "type": "text",
+        "value": "Left"
+      },
+      {
+        "type": "code",
+        "children": "\n"
+      },
+      {
+        "type": "text",
+        "value": "Right"
+      }
+    ]
+  },
+  "reads": {
+    "content[1].value": "\n"
+  }
+}

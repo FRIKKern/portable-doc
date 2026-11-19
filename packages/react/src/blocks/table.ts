@@ -22,7 +22,7 @@
 import type { RenderCtx } from './chrome'
 import { type Block, asList, escapeHtml, isMap, renderCell } from '../inline'
 import { sparkSvg } from './dataviz'
-import { fieldOf, readField } from '../../../text/read-aliases.js'
+import { fieldOf, itemOf, readField } from '../../../text/read-aliases.js'
 import { coverSpans, spanAttr, type Span } from './spans'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
@@ -81,7 +81,7 @@ const table: Emit = (b, ctx) => {
   if (!head.length && columns.length && columns.every(isMap)) {
     const maps = columns as Array<Record<string, unknown>>
     const keys = maps.map((column) => (typeof column.key === 'string' ? column.key : ''))
-    head = maps.map((column, index) => column.text ?? column.label ?? keys[index])
+    head = maps.map((column, index) => itemOf(column, 'table.columns[]', 'text') ?? keys[index])
     if (keys.every(Boolean)) {
       body = body.map((row) =>
         isMap(row) ? keys.map((key) => row[key] ?? '') : row,

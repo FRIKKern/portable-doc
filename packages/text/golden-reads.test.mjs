@@ -2,14 +2,35 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
 import { FENCE_TYPES } from './from-markdown.js';
+import { SCHEMA_TYPES } from './block-forms.mjs';
 import { READ_ALIASES, behaviourReads, changesRender, filledNames, goldenBlocks, pathName, reads, readsMissing, writerCaseBlocks } from './golden-reads.mjs';
 import { toMarkdown, toPlainText } from './index.js';
 
 const RENDERS = { html: (blocks) => renderPortableDocument(blocks, {}), markdown: toMarkdown, text: toPlainText };
 
-// Aliases a golden still uses, until Barkpark's pack moves it to the canonical name. Only shrinks.
+// Old names a golden still uses, each with why. The goldens are synced from Barkpark's pack, never
+// edited here. Matched both ways: a stale entry fails, and so does an unlisted use.
+// An entry enters this list only in the same change that makes its name an old name (the golden
+// did not change, the name did). After that the list only shrinks; adding an entry is never the
+// fix for a golden that uses an old name. Its pinned length is a ceiling, lowered as the pack
+// moves each field. That an old
+// name still reads is the shared alias cases' job (read-aliases.test.mjs), not the goldens'.
 // Both lists have pinned lengths too.
-const GOLDENS_STILL_USE_ALIAS = ['asciicast.poster', 'eyebrow.text', 'heading.text'];
+const PACK = 'Barkpark\'s pack has not moved it to the current name yet';
+const GOLDENS_STILL_USE_ALIAS = { 'asciicast.poster': PACK, 'eyebrow.text': PACK, 'heading.text': PACK, 'note.text': PACK, 'notes.items[].text': PACK };
+
+/** Every inline-node-like object in `block`: each object with a string `type` inside it, the block itself left out. */
+const inlineNodes = (block) => {
+  const out = [];
+  const stack = Object.values(block);
+  while (stack.length) {
+    const v = stack.pop();
+    if (!v || typeof v !== 'object') continue;
+    if (!Array.isArray(v) && typeof v.type === 'string') out.push(v);
+    stack.push(...Object.values(v));
+  }
+  return out;
+};
 
 // Keys the HTML, Markdown or text renderer reads on a fence-type block that no golden
 // fills yet, as pathName writes them. A key is read when the Proxy sees a renderer read it,
@@ -100,14 +121,25 @@ test('every key a renderer reads on a fence-type golden is filled in some golden
 
 test('each READ_ALIASES alias is read in place of its canonical key, the canonical key is read, and no golden uses the alias but those listed', () => {
   assert.deepEqual(Object.keys(READ_ALIASES), Object.keys(READ_ALIASES).sort(), 'READ_ALIASES is sorted');
-  assert.equal(Object.keys(READ_ALIASES).length, 15, 'READ_ALIASES\'s length is pinned: change it in the same edit');
-  assert.equal(GOLDENS_STILL_USE_ALIAS.length, 3, 'GOLDENS_STILL_USE_ALIAS\'s length is pinned: change it in the same edit');
+  assert.equal(Object.keys(READ_ALIASES).length, 27, 'READ_ALIASES\'s length is pinned: change it in the same edit');
+  assert.equal(Object.keys(GOLDENS_STILL_USE_ALIAS).length, 5, 'GOLDENS_STILL_USE_ALIAS\'s length is pinned. An entry enters this list only in the same change that makes its name an old name (the golden did not change, the name did). After that the list only shrinks; adding an entry is never the fix for a golden that uses an old name.');
+  for (const [name, reason] of Object.entries(GOLDENS_STILL_USE_ALIAS)) assert.ok(typeof reason === 'string' && reason.trim() !== '', `${name}: a golden on an old name says why`);
   const inGoldens = [];
   for (const [alias, canonical] of Object.entries(READ_ALIASES)) {
-    const type = alias.split('.')[0];
-    assert.equal(canonical.split('.')[0], type, `${alias}: an alias and its key are on one block type`);
-    const goldens = goldenBlocks(new Set([type])).map(({ block }) => block);
+    const owner = alias.slice(0, alias.lastIndexOf('.'));
+    assert.equal(canonical.slice(0, canonical.lastIndexOf('.')), owner, `${alias}: an alias and its key have one owner`);
+    // An inline node's names are found on every block; an item's on its block type.
+    const type = owner.startsWith('inline:') ? null : owner.split('.')[0];
+    const goldens = type === null ? goldenBlocks(new Set(SCHEMA_TYPES)).map(({ block }) => block) : goldenBlocks(new Set([type])).map(({ block }) => block);
     assert.ok(goldens.length, `${alias}: no ${type} golden to check it on`);
+    if (type === null) {
+      const [nodeType, name] = [owner.slice('inline:'.length), alias.slice(alias.lastIndexOf('.') + 1)];
+      if (goldens.some((block) => inlineNodes(block).some((n) => n.type === nodeType && Object.hasOwn(n, name)))) inGoldens.push(alias);
+      continue;
+    }
+    if (goldens.some((block) => filledNames(block).has(alias))) inGoldens.push(alias);
+    // An item's names are read through every renderer in read-aliases.test.mjs, case by case.
+    if (owner !== type) continue;
     // Read by either net: the Proxy sees it read, or it changes a render (taken out, or given a value).
     const readOn = (blocks, name) => blocks.some((block) => reads(block, RENDERS).some((r) => pathName(type, r.path) === name) || changesRender(block, [], name.split('.')[1], RENDERS));
     assert.ok(readOn(goldens, canonical), `${canonical}, the key ${alias} stands for, is read by no renderer`);
@@ -115,9 +147,8 @@ test('each READ_ALIASES alias is read in place of its canonical key, the canonic
     const key = canonical.split('.').at(-1);
     const without = goldens.map((block) => Object.fromEntries(Object.entries(block).filter(([k]) => k !== key)));
     assert.ok(readOn(without, alias), `no renderer reads ${alias} when ${canonical} is empty: take it off READ_ALIASES`);
-    if (goldens.some((block) => filledNames(block).has(alias))) inGoldens.push(alias);
   }
-  assert.deepEqual(inGoldens, GOLDENS_STILL_USE_ALIAS, 'which goldens use an alias: a golden uses the canonical name, and GOLDENS_STILL_USE_ALIAS lists those not moved yet');
+  assert.deepEqual(inGoldens, Object.keys(GOLDENS_STILL_USE_ALIAS), 'which goldens use an old name. An entry enters this list only in the same change that makes its name an old name (the golden did not change, the name did). After that the list only shrinks; adding an entry is never the fix for a golden that uses an old name.');
 });
 
 test('the survey sees a read key a golden leaves out, by its path, and a key a golden fills; the behaviour net sees a read made on a copy', () => {

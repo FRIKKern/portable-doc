@@ -1,0 +1,15 @@
+{
+  "block": {
+    "type": "code-tabs",
+    "tabs": [
+      {
+        "label": "L",
+        "value": " ",
+        "code": "B"
+      }
+    ]
+  },
+  "reads": {
+    "tabs[0].value": " "
+  }
+}

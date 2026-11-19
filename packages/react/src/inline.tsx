@@ -92,7 +92,7 @@ export function str(v: unknown): string {
  * agree or such a paper renders (or suppresses) as structure with zero prose.
  * Twins: inline.ex compose_inline, pdrender inline.go attrStrFirst. */
 export function textLeafValue(n: Record<string, unknown>): string {
-  return str(n.value) || str(n.text)
+  return str(itemOf(n, 'inline:text', 'value'))
 }
 
 /* ── THE code-block source-field contract (task-e9af9f95d290307d) ─────────────
@@ -114,10 +114,8 @@ export function textLeafValue(n: Record<string, unknown>): string {
  *
  * WHICH KEY: `value` is the current name and `code`, `content`, `text` its old names, in that
  * order, all read through the one alias table (`packages/text/alias-table.js`, the shape of
- * the pack's `spec/read-aliases.json`) by `packages/text/read-aliases.js`: the first name not
- * absent wins (absent = undefined, null, a blank string, an empty array, or a value of a type
- * the schema does not give the name), else `value` as stored. `content` is an array of
- * inline nodes and flattens to its text. Anything non-stringish coerces to '' through `str`.
+ * the pack's `spec/read-aliases.json`) by `packages/text/read-aliases.js`, by the rule stated
+ * in the table's `_comment`. `content` is an array of inline nodes and flattens to its text. Anything non-stringish coerces to '' through `str`.
  *
  * The winning key is returned VERBATIM (untrimmed): a `<pre>` shows leading indentation and
  * trailing newlines exactly as authored. */
@@ -179,7 +177,7 @@ export function isMap(v: unknown): v is Record<string, unknown> {
 
 export type { StatusRole } from './status-vocab.gen'
 import type { StatusRole } from './status-vocab.gen'
-import { fieldOf } from '../../text/read-aliases.js'
+import { fieldOf, itemOf, readItem } from '../../text/read-aliases.js'
 import {
   MANIFEST_DEFAULT_ROLE,
   MANIFEST_STATUS_ROLES,
@@ -444,14 +442,13 @@ export function inlineText(nodes: unknown): string {
  * An inline code chip's body is a FLAT STRING, never inlines — but 66 published
  * paragraphs (2026-07-25 census) author it as `children` inline nodes with no
  * `value`, which rendered an empty `<code></code>` here and composed an empty
- * PdInlineCode in Elixir. THE LAW: `value` when it is a non-empty string, else
- * the flattened plain text of `children`.
+ * PdInlineCode in Elixir. THE LAW: `children` is `value`'s old name in the alias
+ * table (convert text-from-inline), read by the one rule every block and item
+ * field uses: `value` when it is text that is not blank, else the flattened plain
+ * text of `children` when that is a non-empty array, else `value` as stored.
  *
- * FIRST NON-EMPTY, not first-non-blank — a `value` of `' '` WINS and keeps its
- * space. That is deliberately the OPPOSITE of the BLOCK-level `code` contract
- * (`codeSource` above, which reads `value` and its old names through the alias table): a
- * block's source key is a choice among aliases, an inline chip's `value` is the
- * authored body verbatim.
+ * So a `value` of `' '` with nothing else keeps its space, and a `value` of `' '`
+ * beside filled `children` shows the children.
  *
  * Twins: `Render.Inline.inline_code_source/1`
  * (api/lib/barkpark/portable_doc/render/inline.ex) and `inlineCodeSource`
@@ -459,7 +456,8 @@ export function inlineText(nodes: unknown): string {
  * `api/test/support/fixtures/inline-code-source.json`, read here by
  * `tests/inline-code-source.parity.test.ts`. */
 export function inlineCodeSource(node: Record<string, unknown>): string {
-  return str(node.value) || inlineText(node.children)
+  const { name, value } = readItem(node, 'inline:code', 'value')
+  return name === 'value' ? str(value) : inlineText(value)
 }
 
 /* ── THE BLOCK-WRAPPER-IN-AN-INLINE-ARRAY law (task-3fd604e7c89d6150) ─────────
@@ -527,10 +525,10 @@ export function renderInline(node: Inline, depth = 0, insideLink = false): strin
 
   switch (str(node.type)) {
     case 'text': {
-      // Dual-read `value` || legacy `text`: raw mutate writers persisted text
-      // leaves keyed {"type":"text","text":…}; the Hollow predicate counts both
-      // spellings as content, so the renderers must agree or such a paper reads
-      // as structure with zero prose. Twins: inline.ex compose_inline,
+      // `value`, else its old name `text` through the alias table: raw mutate
+      // writers persisted text leaves keyed {"type":"text","text":…}; the Hollow
+      // predicate counts both spellings as content, so the renderers must agree
+      // or such a paper reads as structure with zero prose. Twins: inline.ex compose_inline,
       // pdrender inline.go attrStrFirst(n, "value", "text").
       const marks = asList(node.marks)
       if (depth + marks.length >= MAX_DEPTH) return escapeHtml(tooDeepNotice)

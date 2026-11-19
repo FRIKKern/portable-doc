@@ -11,7 +11,8 @@ import { plan } from '../../fixtures/text-work/rule-reader.mjs';
 import { planText } from './import-work.js';
 import { CASES as HOSTILE, seeded } from './import-work-cases.mjs';
 import { readMarkdown } from './index.js';
-import { readField } from './read-aliases.js';
+import { LIST_TYPES } from './blocks-prose.js';
+import { readField, readItem } from './read-aliases.js';
 
 // The shared cases in fixtures/ are for any reader or writer of Portable Doc to be tested against.
 // Each is checked here against this package, so a case and the code cannot drift apart.
@@ -80,13 +81,32 @@ test('the text-work rules, done from their words alone, give planText\'s work an
   assert.deepEqual(differ.slice(0, 3), [], `${differ.length} of ${docs.length} texts`);
 });
 
-test('each alias case reads as its file says: readField of each name gives the value, null for none', () => {
+// A key in an alias case's reads is a field of the block ("cite"), or a path to an item and its
+// field ("columns[0].text", "task.criteria[0].text"), or to an inline node in the block's content
+// ("content[1].value"). An item's owner is the block type and the path, as the alias table keys it,
+// a list of any spelling reading as list; an inline node's owner is its type.
+function readCase(block, key) {
+  const at = key.match(/^(.+)\[(\d+)\]\.([^.[\]]+)$/);
+  if (!at) return readField(block, key).value;
+  const [, path, index, field] = at;
+  const item = path.split('.').reduce((value, name) => value?.[name], block)?.[Number(index)];
+  const owner = path === 'content' ? `inline:${item?.type}` : `${LIST_TYPES.includes(block.type) ? 'list' : block.type}.${path}[]`;
+  return readItem(item, owner, field).value;
+}
+
+test('each alias case reads as its file says: each key in reads gives its value, null for none', () => {
   const files = fs.readdirSync(path.join(FIXTURES, 'aliases')).filter((f) => f.endsWith('.json'));
   assert.ok(files.length > 0);
+  const owners = new Set();
   for (const file of files) {
     const { block, reads } = json(`aliases/${file}`);
-    for (const [name, value] of Object.entries(reads)) assert.deepEqual(readField(block, name).value ?? null, value, `${file}: ${name}`);
+    for (const [key, value] of Object.entries(reads)) {
+      assert.deepEqual(readCase(block, key) ?? null, value, `${file}: ${key}`);
+      if (key.includes('[')) owners.add(key.replace(/\[\d+\]\.[^.]+$/, ''));
+    }
   }
+  // Item paths and inline nodes are covered, not only block fields.
+  assert.deepEqual([...owners].sort(), ['columns', 'content', 'criteria', 'items', 'steps', 'tabs', 'task.criteria']);
 });
 
 // Each folder under fixtures/ is read in this file: broken/, valid/ and writers/ here by

@@ -5,6 +5,7 @@
 // neighbouring leaves that share a mark share one `**…**` or one link.
 
 import { MAX_DEPTH, TOO_DEEP, asList, codeSpan, escInline, escLineStart, isMap, mdUrl, safeUrl, str } from './util.js';
+import { itemOf, readItem } from './read-aliases.js';
 
 const STRONG = { key: 'strong' };
 const EM = { key: 'em' };
@@ -14,8 +15,14 @@ const link = (href) => {
   return url === null ? null : { key: `link:${url}`, url };
 };
 
-/** A text leaf's payload: `value`, else the legacy `text`. */
-const leafValue = (n) => str(n.value) || str(n.text);
+/** A text leaf's payload: `value`, else its old name `text`, through the alias table. Any node flattened as text reads so. */
+export const leafValue = (n) => str(itemOf(n, 'inline:text', 'value'));
+
+/** An inline code node's text: `value`, else its old name `children` read as flat text, through the alias table. */
+export function codeValue(n) {
+  const { name, value } = readItem(n, 'inline:code', 'value');
+  return name === 'value' ? str(value) : inlineText(value);
+}
 
 /** The flat text of an inline tree, no marks. */
 export function inlineText(nodes, depth = 0) {
@@ -89,7 +96,7 @@ function flatten(nodes, marks, out, depth) {
     case 'em': case 'italic': return kids(EM);
     case 'strike': case 's': case 'strikethrough': return kids(STRIKE);
     case 'underline': return kids(null);
-    case 'code': return leaf(str(n.value) || inlineText(n.children), true);
+    case 'code': return leaf(codeValue(n), true);
     case 'link': return kids(hasLink(marks) ? null : link(str(n.href)));
     case 'wikilink': return leaf(str(n.alias) || inlineText(n.children) || str(n.target));
     case 'blockref': return leaf(`^${str(n.anchor)}`);

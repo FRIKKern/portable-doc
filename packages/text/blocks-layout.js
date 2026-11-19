@@ -3,8 +3,8 @@
 // notes, pipelines, tables of contents, file trees, diffs, embeds.
 
 import { asList, codeSpan, fence, isMap, maxOf, nonblank, paras, str, tableOut } from './util.js';
-import { body, linked } from './blocks-prose.js';
-import { fieldOf } from './read-aliases.js';
+import { body, bodyOf, linked } from './blocks-prose.js';
+import { fieldOf, itemOf } from './read-aliases.js';
 
 /** A bold title line (plain: the title alone). */
 export const titled = (ctx, raw) => {
@@ -32,7 +32,7 @@ function codeTabs(b, ctx) {
     ...asList(b.tabs)
       .filter(isMap)
       .map((t) => {
-        const source = str(t.value ?? t.code);
+        const source = str(itemOf(t, 'code-tabs.tabs[]', 'value'));
         const src = source.trim() === '' ? '' : ctx.md ? fence(source, str(t.language)) : source.replace(/\n+$/, '');
         return paras(titled(ctx, str(t.label)), src);
       }),
@@ -64,7 +64,7 @@ function footnote(b, ctx) {
 function steps(b, ctx) {
   const items = asList(b.steps)
     .filter(isMap)
-    .map((s) => ({ title: str(s.title), blocks: asList(s.blocks ?? s.children) }))
+    .map((s) => ({ title: str(s.title), blocks: asList(itemOf(s, 'steps.steps[]', 'blocks')) }))
     .filter((s) => s.title !== '' || s.blocks.length)
     .map((s) => ({ head: titled(ctx, s.title), body: ctx.blocks(s.blocks), loose: s.title !== '' }));
   return ctx.list(items, { ordered: true });
@@ -97,16 +97,16 @@ function toc(b, ctx) {
 
 /* ── notes and cards ── */
 
-function noteLine(m, ctx) {
+function noteLine(m, ctx, owner) {
   const label = ctx.text(str(m.label), { oneLine: true });
   const lead = ctx.text(nonblank(m.lead), { oneLine: true });
-  const text = ctx.inline(body(m));
+  const text = ctx.inline(owner ? bodyOf(m, owner) : body(m));
   const head = label && (ctx.md ? `**${label}:**` : `${label}:`);
   return [head, lead && ctx.bold(lead), lead && text ? `— ${text}` : text].filter(Boolean).join(' ');
 }
 
 const note = (b, ctx) => noteLine(b, ctx);
-const notes = (b, ctx) => ctx.list(asList(b.items).map((it) => ({ head: noteLine(isMap(it) ? it : {}, ctx) })));
+const notes = (b, ctx) => ctx.list(asList(b.items).map((it) => ({ head: noteLine(isMap(it) ? it : {}, ctx, 'notes.items[]') })));
 
 function cards(b, ctx) {
   const items = asList(b.items).map((it) => {
