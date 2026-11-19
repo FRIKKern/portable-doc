@@ -2,7 +2,7 @@
 // The `portable-doc` command. Each subcommand is one file in commands/ (see registry.js).
 
 import fs from 'node:fs';
-import { loadCommands } from './registry.js';
+import { BUILT_IN, loadCommands } from './registry.js';
 import { UsageError } from './shared.js';
 import { shown } from './words.js';
 
@@ -29,11 +29,11 @@ Options: --help, --version. Run "portable-doc <command> --help" for its options.
 export async function main(argv, io) {
   const commands = await loadCommands();
   const [name, ...args] = argv;
-  if (name === undefined || name === '--help' || name === '-h' || name === 'help') {
+  if (name === undefined || BUILT_IN.usage.includes(name)) {
     io[name === undefined ? 'stderr' : 'stdout'](`${mainUsage(commands)}\n`);
     return name === undefined ? 2 : 0;
   }
-  if (name === '--version' || name === '-v') return io.stdout(`${VERSION}\n`), 0;
+  if (BUILT_IN.version.includes(name)) return io.stdout(`${VERSION}\n`), 0;
   const command = commands.get(name);
   if (!command) {
     io.stderr(`portable-doc: unknown command "${shown(name)}"\n\n${mainUsage(commands)}\n`);

@@ -19,6 +19,11 @@ const SHAPE = {
 
 const COMMAND_FILE = /^[a-z][a-z0-9-]*\.js$/;
 
+// The words index.js answers itself, before any command lookup. A command file may not take
+// one: its command could never run. The pattern above already keeps out every dashed one.
+export const BUILT_IN = Object.freeze({ usage: Object.freeze(['help', '--help', '-h']), version: Object.freeze(['--version', '-v']) });
+const builtIn = (name) => Object.entries(BUILT_IN).find(([, words]) => words.includes(name))?.[0];
+
 const loaded = new Map();
 
 /** The commands in `dir`, as a Map from name to module, in order. Throws, naming the file, for a command file that does not load or has the wrong shape. */
@@ -32,6 +37,7 @@ async function load(dir) {
   const list = [];
   for (const file of fs.readdirSync(dir).filter((f) => COMMAND_FILE.test(f)).sort()) {
     const name = file.slice(0, -'.js'.length);
+    if (builtIn(name)) throw new Error(`commands/${file}: ${name} is the built-in ${builtIn(name)}, not a command name`);
     let command;
     try {
       command = await import(new URL(file, dir));
@@ -39,6 +45,7 @@ async function load(dir) {
       throw new Error(`commands/${file} does not load: ${error?.message ?? String(error)}`, { cause: error });
     }
     for (const [field, type] of Object.entries(SHAPE)) if (typeof command[field] !== type) throw new Error(`commands/${file} exports no ${field} (${type})`);
+    if (!Number.isFinite(command.order)) throw new Error(`commands/${file} exports order ${command.order}, not a finite number`);
     if (!command.readme.startsWith('## ')) throw new Error(`commands/${file}: readme starts with "## <Title>"`);
     list.push({ ...command, name });
   }
