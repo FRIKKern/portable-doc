@@ -1,0 +1,31 @@
+{
+  "block": {
+    "type": "expandable",
+    "summary": "S",
+    "blocks": [],
+    "children": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "value": "kid"
+          }
+        ]
+      }
+    ]
+  },
+  "reads": {
+    "blocks": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "value": "kid"
+          }
+        ]
+      }
+    ]
+  }
+}

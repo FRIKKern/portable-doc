@@ -1,0 +1,24 @@
+{
+  "block": {
+    "type": "paragraph",
+    "content": [
+      {
+        "type": "code",
+        "children": [
+          {
+            "type": "text",
+            "value": "f()"
+          }
+        ]
+      }
+    ]
+  },
+  "reads": {
+    "content[0].value": [
+      {
+        "type": "text",
+        "value": "f()"
+      }
+    ]
+  }
+}

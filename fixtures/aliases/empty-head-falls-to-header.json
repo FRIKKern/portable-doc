@@ -1,0 +1,34 @@
+{
+  "block": {
+    "type": "table",
+    "head": [],
+    "header": [
+      [
+        {
+          "type": "text",
+          "value": "H"
+        }
+      ]
+    ],
+    "rows": [
+      [
+        [
+          {
+            "type": "text",
+            "value": "r"
+          }
+        ]
+      ]
+    ]
+  },
+  "reads": {
+    "head": [
+      [
+        {
+          "type": "text",
+          "value": "H"
+        }
+      ]
+    ]
+  }
+}

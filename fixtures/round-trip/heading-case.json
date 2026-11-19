@@ -1,0 +1,1 @@
+{"heading-inline-marks-and-link":{"markdown":"# Hello **world** and [a link](https://example.com)","blocks":[{"type":"heading","level":1,"content":[{"type":"text","value":"Hello "},{"type":"strong","children":[{"type":"text","value":"world"}]},{"type":"text","value":" and "},{"type":"link","href":"https://example.com","children":[{"type":"text","value":"a link"}]}]}]}}

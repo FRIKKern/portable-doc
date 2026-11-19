@@ -1,0 +1,63 @@
+{
+  "markdown": "- w0\n  - w1\n    - w2\n\n  w3 after the nested list",
+  "blocks": [
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "value": "w0"
+            }
+          ],
+          "children": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                {
+                  "content": [
+                    {
+                      "type": "text",
+                      "value": "w1"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "list",
+                      "ordered": false,
+                      "items": [
+                        [
+                          {
+                            "type": "text",
+                            "value": "w2"
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        [
+          {
+            "type": "text",
+            "value": "w3 after the nested list"
+          }
+        ]
+      ]
+    }
+  ],
+  "notices": [
+    {
+      "code": "list_item_split",
+      "path": "/blocks/0/items/1",
+      "line": 5,
+      "lines": 1
+    }
+  ]
+}

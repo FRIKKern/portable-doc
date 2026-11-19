@@ -1,0 +1,9 @@
+{
+  "block": {
+    "type": "heading",
+    "content": "Hi"
+  },
+  "reads": {
+    "content": "Hi"
+  }
+}

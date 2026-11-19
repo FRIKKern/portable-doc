@@ -1,0 +1,42 @@
+{
+  "markdown": "> [!info] Outer\n>\n> > [!danger] Inner\n> >\n> > Deep.",
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "info",
+      "content": [
+        {
+          "type": "text",
+          "value": "Outer"
+        }
+      ],
+      "slots": {
+        "body": [
+          {
+            "type": "callout",
+            "tone": "danger",
+            "content": [
+              {
+                "type": "text",
+                "value": "Inner"
+              }
+            ],
+            "slots": {
+              "body": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "value": "Deep."
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

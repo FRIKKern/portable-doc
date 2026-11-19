@@ -1,0 +1,20 @@
+{
+  "block": {
+    "type": "table",
+    "columns": [
+      {
+        "key": "k",
+        "text": " ",
+        "label": "K"
+      }
+    ],
+    "rows": [
+      {
+        "k": 1
+      }
+    ]
+  },
+  "reads": {
+    "columns[0].text": "K"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "markdown": "> [!note] Heads up\n>\n> Second paragraph.",
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "info",
+      "content": [
+        {
+          "type": "text",
+          "value": "Heads up"
+        }
+      ],
+      "slots": {
+        "body": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "value": "Second paragraph."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

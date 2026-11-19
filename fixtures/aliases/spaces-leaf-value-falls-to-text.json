@@ -1,0 +1,15 @@
+{
+  "block": {
+    "type": "paragraph",
+    "content": [
+      {
+        "type": "text",
+        "value": " ",
+        "text": "a"
+      }
+    ]
+  },
+  "reads": {
+    "content[0].value": "a"
+  }
+}

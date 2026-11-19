@@ -1,0 +1,6653 @@
+{
+  "round-trip-blockquote-filled": {
+    "markdown": "> The best way to predict the future is to invent it.\n>\n> — Alan Kay\n",
+    "blocks": [
+      {
+        "cite": "Alan Kay",
+        "content": [
+          {
+            "type": "text",
+            "value": "The best way to predict the future is to invent it."
+          }
+        ],
+        "type": "blockquote"
+      }
+    ]
+  },
+  "round-trip-blockquote-value-cite-sample-text-str": {
+    "markdown": "> The best way to predict the future is to invent it.\n>\n> — Sample text\n",
+    "blocks": [
+      {
+        "cite": "Sample text",
+        "content": [
+          {
+            "type": "text",
+            "value": "The best way to predict the future is to invent it."
+          }
+        ],
+        "type": "blockquote"
+      }
+    ]
+  },
+  "round-trip-callout-filled": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout"
+      }
+    ]
+  },
+  "round-trip-callout-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "This is a warning callout body."
+                  }
+                ],
+                "title": "Heads up",
+                "tone": "warn",
+                "type": "callout"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-callout-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "content": [
+                {
+                  "type": "text",
+                  "value": "This is a warning callout body."
+                }
+              ],
+              "title": "Heads up",
+              "tone": "warn",
+              "type": "callout"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-callout-value-collapsed-true": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"collapsed\":true}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "collapsed": true
+      }
+    ]
+  },
+  "round-trip-callout-value-collapsed-false": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"collapsed\":false}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "collapsed": false
+      }
+    ]
+  },
+  "round-trip-callout-value-collapsible-true": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"collapsible\":true}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "collapsible": true
+      }
+    ]
+  },
+  "round-trip-callout-value-collapsible-false": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"collapsible\":false}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "collapsible": false
+      }
+    ]
+  },
+  "round-trip-callout-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-callout-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-callout-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-callout-value-title-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Sample text\",\"tone\":\"warn\",\"type\":\"callout\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Sample text",
+        "tone": "warn",
+        "type": "callout"
+      }
+    ]
+  },
+  "round-trip-callout-value-tone-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"Sample text\",\"type\":\"callout\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "Sample text",
+        "type": "callout"
+      }
+    ]
+  },
+  "round-trip-callout-id": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"This is a warning callout body.\"}],\"title\":\"Heads up\",\"tone\":\"warn\",\"type\":\"callout\",\"id\":\"callout-1\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "This is a warning callout body."
+          }
+        ],
+        "title": "Heads up",
+        "tone": "warn",
+        "type": "callout",
+        "id": "callout-1"
+      }
+    ]
+  },
+  "round-trip-callout-whitespace": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"title\":\" \\t \",\"tone\":\" \\t \",\"type\":\"callout\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": " \t "
+          }
+        ],
+        "title": " \t ",
+        "tone": " \t ",
+        "type": "callout"
+      }
+    ]
+  },
+  "round-trip-callout-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"title\":\" \\t \",\"tone\":\" \\t \",\"type\":\"callout\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ],
+                "title": " \t ",
+                "tone": " \t ",
+                "type": "callout"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-callout-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"title\":\" \\t \",\"tone\":\" \\t \",\"type\":\"callout\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "content": [
+                {
+                  "type": "text",
+                  "value": " \t "
+                }
+              ],
+              "title": " \t ",
+              "tone": " \t ",
+              "type": "callout"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-callout-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout"
+      }
+    ]
+  },
+  "round-trip-callout-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"callout\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "callout"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-callout-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"callout\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "callout"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-callout-empty-content": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"content\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "content": []
+      }
+    ]
+  },
+  "round-trip-callout-empty-content-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"callout\",\"content\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "callout",
+                "content": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-callout-empty-content-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"callout\",\"content\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "callout",
+              "content": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-chart-filled": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            "W1",
+            "W2",
+            "W3",
+            "W4"
+          ]
+        },
+        "caption": "Coverage over time",
+        "kind": "line",
+        "series": [
+          {
+            "label": "Covered",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart"
+      }
+    ]
+  },
+  "round-trip-chart-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "axes": {
+                  "xLabels": [
+                    "W1",
+                    "W2",
+                    "W3",
+                    "W4"
+                  ]
+                },
+                "caption": "Coverage over time",
+                "kind": "line",
+                "series": [
+                  {
+                    "label": "Covered",
+                    "points": [
+                      10,
+                      20,
+                      35,
+                      42
+                    ]
+                  }
+                ],
+                "type": "chart"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-chart-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "axes": {
+                "xLabels": [
+                  "W1",
+                  "W2",
+                  "W3",
+                  "W4"
+                ]
+              },
+              "caption": "Coverage over time",
+              "kind": "line",
+              "series": [
+                {
+                  "label": "Covered",
+                  "points": [
+                    10,
+                    20,
+                    35,
+                    42
+                  ]
+                }
+              ],
+              "type": "chart"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-chart-value-caption-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Sample text\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            "W1",
+            "W2",
+            "W3",
+            "W4"
+          ]
+        },
+        "caption": "Sample text",
+        "kind": "line",
+        "series": [
+          {
+            "label": "Covered",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart"
+      }
+    ]
+  },
+  "round-trip-chart-value-kind-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"Sample text\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            "W1",
+            "W2",
+            "W3",
+            "W4"
+          ]
+        },
+        "caption": "Coverage over time",
+        "kind": "Sample text",
+        "series": [
+          {
+            "label": "Covered",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart"
+      }
+    ]
+  },
+  "round-trip-chart-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            "W1",
+            "W2",
+            "W3",
+            "W4"
+          ]
+        },
+        "caption": "Coverage over time",
+        "kind": "line",
+        "series": [
+          {
+            "label": "Covered",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-chart-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            "W1",
+            "W2",
+            "W3",
+            "W4"
+          ]
+        },
+        "caption": "Coverage over time",
+        "kind": "line",
+        "series": [
+          {
+            "label": "Covered",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-chart-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            "W1",
+            "W2",
+            "W3",
+            "W4"
+          ]
+        },
+        "caption": "Coverage over time",
+        "kind": "line",
+        "series": [
+          {
+            "label": "Covered",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-chart-id": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\"W1\",\"W2\",\"W3\",\"W4\"]},\"caption\":\"Coverage over time\",\"kind\":\"line\",\"series\":[{\"label\":\"Covered\",\"points\":[10,20,35,42]}],\"type\":\"chart\",\"id\":\"chart-1\"}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            "W1",
+            "W2",
+            "W3",
+            "W4"
+          ]
+        },
+        "caption": "Coverage over time",
+        "kind": "line",
+        "series": [
+          {
+            "label": "Covered",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart",
+        "id": "chart-1"
+      }
+    ]
+  },
+  "round-trip-chart-whitespace": {
+    "markdown": "```portabledoc\n[{\"axes\":{\"xLabels\":[\" \\t \",\" \\t \",\" \\t \",\" \\t \"]},\"caption\":\" \\t \",\"kind\":\" \\t \",\"series\":[{\"label\":\" \\t \",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]\n```\n",
+    "blocks": [
+      {
+        "axes": {
+          "xLabels": [
+            " \t ",
+            " \t ",
+            " \t ",
+            " \t "
+          ]
+        },
+        "caption": " \t ",
+        "kind": " \t ",
+        "series": [
+          {
+            "label": " \t ",
+            "points": [
+              10,
+              20,
+              35,
+              42
+            ]
+          }
+        ],
+        "type": "chart"
+      }
+    ]
+  },
+  "round-trip-chart-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"axes\":{\"xLabels\":[\" \\t \",\" \\t \",\" \\t \",\" \\t \"]},\"caption\":\" \\t \",\"kind\":\" \\t \",\"series\":[{\"label\":\" \\t \",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "axes": {
+                  "xLabels": [
+                    " \t ",
+                    " \t ",
+                    " \t ",
+                    " \t "
+                  ]
+                },
+                "caption": " \t ",
+                "kind": " \t ",
+                "series": [
+                  {
+                    "label": " \t ",
+                    "points": [
+                      10,
+                      20,
+                      35,
+                      42
+                    ]
+                  }
+                ],
+                "type": "chart"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-chart-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"axes\":{\"xLabels\":[\" \\t \",\" \\t \",\" \\t \",\" \\t \"]},\"caption\":\" \\t \",\"kind\":\" \\t \",\"series\":[{\"label\":\" \\t \",\"points\":[10,20,35,42]}],\"type\":\"chart\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "axes": {
+                "xLabels": [
+                  " \t ",
+                  " \t ",
+                  " \t ",
+                  " \t "
+                ]
+              },
+              "caption": " \t ",
+              "kind": " \t ",
+              "series": [
+                {
+                  "label": " \t ",
+                  "points": [
+                    10,
+                    20,
+                    35,
+                    42
+                  ]
+                }
+              ],
+              "type": "chart"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-chart-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"chart\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "chart"
+      }
+    ]
+  },
+  "round-trip-chart-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"chart\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "chart"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-chart-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"chart\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "chart"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-chart-empty-series": {
+    "markdown": "```portabledoc\n[{\"type\":\"chart\",\"series\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "chart",
+        "series": []
+      }
+    ]
+  },
+  "round-trip-chart-empty-series-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"chart\",\"series\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "chart",
+                "series": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-chart-empty-series-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"chart\",\"series\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "chart",
+              "series": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-code-filled": {
+    "markdown": "```\ndef hello do\n  :world\nend\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": "def hello do\n  :world\nend"
+      }
+    ]
+  },
+  "round-trip-code-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"code\",\"value\":\"def hello do\\n  :world\\nend\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "code",
+                "value": "def hello do\n  :world\nend"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-code-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"code\",\"value\":\"def hello do\\n  :world\\nend\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "code",
+              "value": "def hello do\n  :world\nend"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-code-value-lang-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\",\"value\":\"def hello do\\n  :world\\nend\",\"lang\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": "def hello do\n  :world\nend",
+        "lang": "Sample text"
+      }
+    ]
+  },
+  "round-trip-code-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\",\"value\":\"def hello do\\n  :world\\nend\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": "def hello do\n  :world\nend",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-code-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\",\"value\":\"def hello do\\n  :world\\nend\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": "def hello do\n  :world\nend",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-code-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\",\"value\":\"def hello do\\n  :world\\nend\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": "def hello do\n  :world\nend",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-code-value-value-sample-text-str": {
+    "markdown": "```\nSample text\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": "Sample text"
+      }
+    ]
+  },
+  "round-trip-code-id": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\",\"value\":\"def hello do\\n  :world\\nend\",\"id\":\"code-1\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": "def hello do\n  :world\nend",
+        "id": "code-1"
+      }
+    ]
+  },
+  "round-trip-code-whitespace": {
+    "markdown": "```\n \t \n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": " \t "
+      }
+    ]
+  },
+  "round-trip-code-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"code\",\"value\":\" \\t \"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "code",
+                "value": " \t "
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-code-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"code\",\"value\":\" \\t \"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "code",
+              "value": " \t "
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-code-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "code"
+      }
+    ]
+  },
+  "round-trip-code-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"code\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "code"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-code-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"code\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "code"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-code-empty-emphasis": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\",\"emphasis\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "emphasis": []
+      }
+    ]
+  },
+  "round-trip-code-empty-emphasis-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"code\",\"emphasis\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "code",
+                "emphasis": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-code-empty-emphasis-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"code\",\"emphasis\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "code",
+              "emphasis": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-code-empty-value": {
+    "markdown": "```portabledoc\n[{\"type\":\"code\",\"value\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "code",
+        "value": []
+      }
+    ]
+  },
+  "round-trip-code-empty-value-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"code\",\"value\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "code",
+                "value": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-code-empty-value-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"code\",\"value\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "code",
+              "value": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-diagram-filled": {
+    "markdown": "```mermaid\ngraph TD; A[Ingest] --> B[Render] --> C[Publish]\n```\n\n*The three-stage pipeline*\n",
+    "blocks": [
+      {
+        "caption": "The three-stage pipeline",
+        "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+        "type": "diagram"
+      }
+    ]
+  },
+  "round-trip-diagram-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"caption\":\"The three-stage pipeline\",\"source\":\"graph TD; A[Ingest] --> B[Render] --> C[Publish]\",\"type\":\"diagram\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "caption": "The three-stage pipeline",
+                "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+                "type": "diagram"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-diagram-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"caption\":\"The three-stage pipeline\",\"source\":\"graph TD; A[Ingest] --> B[Render] --> C[Publish]\",\"type\":\"diagram\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "caption": "The three-stage pipeline",
+              "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+              "type": "diagram"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-diagram-value-caption-sample-text-str": {
+    "markdown": "```mermaid\ngraph TD; A[Ingest] --> B[Render] --> C[Publish]\n```\n\n*Sample text*\n",
+    "blocks": [
+      {
+        "caption": "Sample text",
+        "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+        "type": "diagram"
+      }
+    ]
+  },
+  "round-trip-diagram-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"caption\":\"The three-stage pipeline\",\"source\":\"graph TD; A[Ingest] --> B[Render] --> C[Publish]\",\"type\":\"diagram\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "caption": "The three-stage pipeline",
+        "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+        "type": "diagram",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-diagram-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"caption\":\"The three-stage pipeline\",\"source\":\"graph TD; A[Ingest] --> B[Render] --> C[Publish]\",\"type\":\"diagram\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "caption": "The three-stage pipeline",
+        "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+        "type": "diagram",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-diagram-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"caption\":\"The three-stage pipeline\",\"source\":\"graph TD; A[Ingest] --> B[Render] --> C[Publish]\",\"type\":\"diagram\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "caption": "The three-stage pipeline",
+        "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+        "type": "diagram",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-diagram-value-source-sample-text-str": {
+    "markdown": "```mermaid\nSample text\n```\n\n*The three-stage pipeline*\n",
+    "blocks": [
+      {
+        "caption": "The three-stage pipeline",
+        "source": "Sample text",
+        "type": "diagram"
+      }
+    ]
+  },
+  "round-trip-diagram-id": {
+    "markdown": "```portabledoc\n[{\"caption\":\"The three-stage pipeline\",\"source\":\"graph TD; A[Ingest] --> B[Render] --> C[Publish]\",\"type\":\"diagram\",\"id\":\"diagram-1\"}]\n```\n",
+    "blocks": [
+      {
+        "caption": "The three-stage pipeline",
+        "source": "graph TD; A[Ingest] --> B[Render] --> C[Publish]",
+        "type": "diagram",
+        "id": "diagram-1"
+      }
+    ]
+  },
+  "round-trip-diagram-whitespace": {
+    "markdown": "```portabledoc\n[{\"caption\":\" \\t \",\"source\":\" \\t \",\"type\":\"diagram\"}]\n```\n",
+    "blocks": [
+      {
+        "caption": " \t ",
+        "source": " \t ",
+        "type": "diagram"
+      }
+    ]
+  },
+  "round-trip-diagram-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"caption\":\" \\t \",\"source\":\" \\t \",\"type\":\"diagram\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "caption": " \t ",
+                "source": " \t ",
+                "type": "diagram"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-diagram-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"caption\":\" \\t \",\"source\":\" \\t \",\"type\":\"diagram\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "caption": " \t ",
+              "source": " \t ",
+              "type": "diagram"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-diagram-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"diagram\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "diagram"
+      }
+    ]
+  },
+  "round-trip-diagram-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"diagram\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "diagram"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-diagram-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"diagram\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "diagram"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-divider-filled": {
+    "markdown": "---\n",
+    "blocks": [
+      {
+        "type": "divider"
+      }
+    ]
+  },
+  "round-trip-divider-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"divider\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "divider"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-divider-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"divider\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "divider"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-divider-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"type\":\"divider\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "type": "divider",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-divider-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"type\":\"divider\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "type": "divider",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-divider-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"type\":\"divider\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "divider",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-divider-id": {
+    "markdown": "```portabledoc\n[{\"type\":\"divider\",\"id\":\"divider-1\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "divider",
+        "id": "divider-1"
+      }
+    ]
+  },
+  "round-trip-eyebrow-filled": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"Dispatches\"}],\"type\":\"eyebrow\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "Dispatches"
+          }
+        ],
+        "type": "eyebrow"
+      }
+    ]
+  },
+  "round-trip-eyebrow-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"content\":[{\"type\":\"text\",\"value\":\"Dispatches\"}],\"type\":\"eyebrow\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "Dispatches"
+                  }
+                ],
+                "type": "eyebrow"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-eyebrow-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"content\":[{\"type\":\"text\",\"value\":\"Dispatches\"}],\"type\":\"eyebrow\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "content": [
+                {
+                  "type": "text",
+                  "value": "Dispatches"
+                }
+              ],
+              "type": "eyebrow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-eyebrow-filled-with-an-alias": {
+    "markdown": "```portabledoc\n[{\"text\":\"Dispatches\",\"type\":\"eyebrow\"}]\n```\n",
+    "blocks": [
+      {
+        "text": "Dispatches",
+        "type": "eyebrow"
+      }
+    ]
+  },
+  "round-trip-eyebrow-filled-with-an-alias-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"text\":\"Dispatches\",\"type\":\"eyebrow\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "text": "Dispatches",
+                "type": "eyebrow"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-eyebrow-filled-with-an-alias-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"text\":\"Dispatches\",\"type\":\"eyebrow\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "text": "Dispatches",
+              "type": "eyebrow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-eyebrow-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"Dispatches\"}],\"type\":\"eyebrow\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "Dispatches"
+          }
+        ],
+        "type": "eyebrow",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-eyebrow-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"Dispatches\"}],\"type\":\"eyebrow\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "Dispatches"
+          }
+        ],
+        "type": "eyebrow",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-eyebrow-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"Dispatches\"}],\"type\":\"eyebrow\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "Dispatches"
+          }
+        ],
+        "type": "eyebrow",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-eyebrow-id": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"Dispatches\"}],\"type\":\"eyebrow\",\"id\":\"eyebrow-1\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "Dispatches"
+          }
+        ],
+        "type": "eyebrow",
+        "id": "eyebrow-1"
+      }
+    ]
+  },
+  "round-trip-eyebrow-whitespace": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"eyebrow\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": " \t "
+          }
+        ],
+        "type": "eyebrow"
+      }
+    ]
+  },
+  "round-trip-eyebrow-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"eyebrow\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ],
+                "type": "eyebrow"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-eyebrow-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"eyebrow\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "content": [
+                {
+                  "type": "text",
+                  "value": " \t "
+                }
+              ],
+              "type": "eyebrow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-eyebrow-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"eyebrow\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "eyebrow"
+      }
+    ]
+  },
+  "round-trip-eyebrow-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"eyebrow\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "eyebrow"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-eyebrow-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"eyebrow\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "eyebrow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-eyebrow-empty-content": {
+    "markdown": "```portabledoc\n[{\"type\":\"eyebrow\",\"content\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "eyebrow",
+        "content": []
+      }
+    ]
+  },
+  "round-trip-eyebrow-empty-content-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"eyebrow\",\"content\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "eyebrow",
+                "content": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-eyebrow-empty-content-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"eyebrow\",\"content\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "eyebrow",
+              "content": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heading-filled": {
+    "markdown": "## The render path\n",
+    "blocks": [
+      {
+        "level": 2,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "level": 2,
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "The render path"
+                  }
+                ],
+                "type": "heading"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heading-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "level": 2,
+              "content": [
+                {
+                  "type": "text",
+                  "value": "The render path"
+                }
+              ],
+              "type": "heading"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heading-filled-with-an-alias": {
+    "markdown": "```portabledoc\n[{\"level\":2,\"text\":\"The render path\",\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": 2,
+        "text": "The render path",
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-filled-with-an-alias-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"level\":2,\"text\":\"The render path\",\"type\":\"heading\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "level": 2,
+                "text": "The render path",
+                "type": "heading"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heading-filled-with-an-alias-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"level\":2,\"text\":\"The render path\",\"type\":\"heading\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "level": 2,
+              "text": "The render path",
+              "type": "heading"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heading-value-align-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\",\"align\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "level": 2,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading",
+        "align": "Sample text"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-1-str": {
+    "markdown": "```portabledoc\n[{\"level\":\"1\",\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": "1",
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-2-str": {
+    "markdown": "```portabledoc\n[{\"level\":\"2\",\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": "2",
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-3-str": {
+    "markdown": "```portabledoc\n[{\"level\":\"3\",\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": "3",
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-4-str": {
+    "markdown": "```portabledoc\n[{\"level\":\"4\",\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": "4",
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-5-str": {
+    "markdown": "```portabledoc\n[{\"level\":\"5\",\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": "5",
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-6-str": {
+    "markdown": "```portabledoc\n[{\"level\":\"6\",\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": "6",
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-1": {
+    "markdown": "# The render path\n",
+    "blocks": [
+      {
+        "level": 1,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-3": {
+    "markdown": "### The render path\n",
+    "blocks": [
+      {
+        "level": 3,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-4": {
+    "markdown": "#### The render path\n",
+    "blocks": [
+      {
+        "level": 4,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-5": {
+    "markdown": "##### The render path\n",
+    "blocks": [
+      {
+        "level": 5,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-level-6": {
+    "markdown": "###### The render path\n",
+    "blocks": [
+      {
+        "level": 6,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "level": 2,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-heading-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "level": 2,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-heading-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "level": 2,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-heading-id": {
+    "markdown": "```portabledoc\n[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\"The render path\"}],\"type\":\"heading\",\"id\":\"heading-1\"}]\n```\n",
+    "blocks": [
+      {
+        "level": 2,
+        "content": [
+          {
+            "type": "text",
+            "value": "The render path"
+          }
+        ],
+        "type": "heading",
+        "id": "heading-1"
+      }
+    ]
+  },
+  "round-trip-heading-whitespace": {
+    "markdown": "```portabledoc\n[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "level": 2,
+        "content": [
+          {
+            "type": "text",
+            "value": " \t "
+          }
+        ],
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"heading\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "level": 2,
+                "content": [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ],
+                "type": "heading"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heading-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"level\":2,\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"heading\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "level": 2,
+              "content": [
+                {
+                  "type": "text",
+                  "value": " \t "
+                }
+              ],
+              "type": "heading"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heading-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"heading\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "heading"
+      }
+    ]
+  },
+  "round-trip-heading-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"heading\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "heading"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heading-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"heading\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "heading"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heading-empty-content": {
+    "markdown": "```portabledoc\n[{\"type\":\"heading\",\"content\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "heading",
+        "content": []
+      }
+    ]
+  },
+  "round-trip-heading-empty-content-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"heading\",\"content\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "heading",
+                "content": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heading-empty-content-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"heading\",\"content\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "heading",
+              "content": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heatmap-filled": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\"}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap"
+      }
+    ]
+  },
+  "round-trip-heatmap-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "cells": [
+                  [
+                    0.1,
+                    0.4,
+                    0.9
+                  ],
+                  [
+                    0.6,
+                    0.2,
+                    0.5
+                  ]
+                ],
+                "type": "heatmap"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heatmap-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "cells": [
+                [
+                  0.1,
+                  0.4,
+                  0.9
+                ],
+                [
+                  0.6,
+                  0.2,
+                  0.5
+                ]
+              ],
+              "type": "heatmap"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heatmap-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-heatmap-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-heatmap-value-marginals-true": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"marginals\":true}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "marginals": true
+      }
+    ]
+  },
+  "round-trip-heatmap-value-marginals-false": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"marginals\":false}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "marginals": false
+      }
+    ]
+  },
+  "round-trip-heatmap-value-max-7-5": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"max\":7.5}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "max": 7.5
+      }
+    ]
+  },
+  "round-trip-heatmap-value-mode-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"mode\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "mode": "Sample text"
+      }
+    ]
+  },
+  "round-trip-heatmap-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-heatmap-value-values-true": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"values\":true}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "values": true
+      }
+    ]
+  },
+  "round-trip-heatmap-value-values-false": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"values\":false}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "values": false
+      }
+    ]
+  },
+  "round-trip-heatmap-id": {
+    "markdown": "```portabledoc\n[{\"cells\":[[0.1,0.4,0.9],[0.6,0.2,0.5]],\"type\":\"heatmap\",\"id\":\"heatmap-1\"}]\n```\n",
+    "blocks": [
+      {
+        "cells": [
+          [
+            0.1,
+            0.4,
+            0.9
+          ],
+          [
+            0.6,
+            0.2,
+            0.5
+          ]
+        ],
+        "type": "heatmap",
+        "id": "heatmap-1"
+      }
+    ]
+  },
+  "round-trip-heatmap-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"heatmap\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "heatmap"
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"heatmap\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "heatmap"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"heatmap\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "heatmap"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-cells": {
+    "markdown": "```portabledoc\n[{\"type\":\"heatmap\",\"cells\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "heatmap",
+        "cells": []
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-cells-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"heatmap\",\"cells\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "heatmap",
+                "cells": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-cells-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"heatmap\",\"cells\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "heatmap",
+              "cells": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-collabels": {
+    "markdown": "```portabledoc\n[{\"type\":\"heatmap\",\"colLabels\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "heatmap",
+        "colLabels": []
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-collabels-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"heatmap\",\"colLabels\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "heatmap",
+                "colLabels": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-collabels-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"heatmap\",\"colLabels\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "heatmap",
+              "colLabels": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-rowlabels": {
+    "markdown": "```portabledoc\n[{\"type\":\"heatmap\",\"rowLabels\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "heatmap",
+        "rowLabels": []
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-rowlabels-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"heatmap\",\"rowLabels\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "heatmap",
+                "rowLabels": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-heatmap-empty-rowlabels-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"heatmap\",\"rowLabels\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "heatmap",
+              "rowLabels": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-list-filled": {
+    "markdown": "- First point\n- Second point\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list"
+      }
+    ]
+  },
+  "round-trip-list-filled-in-a-list-item": {
+    "markdown": "- Item\n  - First point\n  - Second point\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "items": [
+                  [
+                    {
+                      "type": "text",
+                      "value": "First point"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": "Second point"
+                    }
+                  ]
+                ],
+                "ordered": false,
+                "type": "list"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-list-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "items": [
+                [
+                  {
+                    "type": "text",
+                    "value": "First point"
+                  }
+                ],
+                [
+                  {
+                    "type": "text",
+                    "value": "Second point"
+                  }
+                ]
+              ],
+              "ordered": false,
+              "type": "list"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-list-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-list-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-list-value-ordered-true": {
+    "markdown": "1. First point\n2. Second point\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": true,
+        "type": "list"
+      }
+    ]
+  },
+  "round-trip-list-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-list-value-start-3": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\",\"start\":3}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list",
+        "start": 3
+      }
+    ]
+  },
+  "round-trip-list-value-task-true": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\",\"task\":true}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list",
+        "task": true
+      }
+    ]
+  },
+  "round-trip-list-value-task-false": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\",\"task\":false}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list",
+        "task": false
+      }
+    ]
+  },
+  "round-trip-list-id": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\"First point\"}],[{\"type\":\"text\",\"value\":\"Second point\"}]],\"ordered\":false,\"type\":\"list\",\"id\":\"list-1\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": "First point"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Second point"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list",
+        "id": "list-1"
+      }
+    ]
+  },
+  "round-trip-list-whitespace": {
+    "markdown": "```portabledoc\n[{\"items\":[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],\"ordered\":false,\"type\":\"list\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          [
+            {
+              "type": "text",
+              "value": " \t "
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": " \t "
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list"
+      }
+    ]
+  },
+  "round-trip-list-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"items\":[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],\"ordered\":false,\"type\":\"list\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "items": [
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ]
+                ],
+                "ordered": false,
+                "type": "list"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-list-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"items\":[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],\"ordered\":false,\"type\":\"list\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "items": [
+                [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ],
+                [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ]
+              ],
+              "ordered": false,
+              "type": "list"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-list-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "list"
+      }
+    ]
+  },
+  "round-trip-list-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"list\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "list"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-list-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"list\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "list"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-list-empty-items": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"items\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "items": []
+      }
+    ]
+  },
+  "round-trip-list-empty-items-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"list\",\"items\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "list",
+                "items": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-list-empty-items-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"list\",\"items\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "list",
+              "items": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-paragraph-filled": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "A body paragraph with "
+          },
+          {
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "type": "text",
+            "value": "bold emphasis"
+          },
+          {
+            "type": "text",
+            "value": " inside it, "
+          },
+          {
+            "marks": [
+              {
+                "href": "https://example.com/mark",
+                "type": "link"
+              }
+            ],
+            "type": "text",
+            "value": "a marked link"
+          },
+          {
+            "type": "text",
+            "value": " and "
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "a link node"
+              }
+            ],
+            "href": "https://example.com/node",
+            "type": "link"
+          },
+          {
+            "type": "text",
+            "value": "."
+          }
+        ],
+        "type": "paragraph"
+      }
+    ]
+  },
+  "round-trip-paragraph-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "A body paragraph with "
+                  },
+                  {
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "type": "text",
+                    "value": "bold emphasis"
+                  },
+                  {
+                    "type": "text",
+                    "value": " inside it, "
+                  },
+                  {
+                    "marks": [
+                      {
+                        "href": "https://example.com/mark",
+                        "type": "link"
+                      }
+                    ],
+                    "type": "text",
+                    "value": "a marked link"
+                  },
+                  {
+                    "type": "text",
+                    "value": " and "
+                  },
+                  {
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "a link node"
+                      }
+                    ],
+                    "href": "https://example.com/node",
+                    "type": "link"
+                  },
+                  {
+                    "type": "text",
+                    "value": "."
+                  }
+                ],
+                "type": "paragraph"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-paragraph-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "content": [
+                {
+                  "type": "text",
+                  "value": "A body paragraph with "
+                },
+                {
+                  "marks": [
+                    {
+                      "type": "bold"
+                    }
+                  ],
+                  "type": "text",
+                  "value": "bold emphasis"
+                },
+                {
+                  "type": "text",
+                  "value": " inside it, "
+                },
+                {
+                  "marks": [
+                    {
+                      "href": "https://example.com/mark",
+                      "type": "link"
+                    }
+                  ],
+                  "type": "text",
+                  "value": "a marked link"
+                },
+                {
+                  "type": "text",
+                  "value": " and "
+                },
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "a link node"
+                    }
+                  ],
+                  "href": "https://example.com/node",
+                  "type": "link"
+                },
+                {
+                  "type": "text",
+                  "value": "."
+                }
+              ],
+              "type": "paragraph"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-paragraph-value-align-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\",\"align\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "A body paragraph with "
+          },
+          {
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "type": "text",
+            "value": "bold emphasis"
+          },
+          {
+            "type": "text",
+            "value": " inside it, "
+          },
+          {
+            "marks": [
+              {
+                "href": "https://example.com/mark",
+                "type": "link"
+              }
+            ],
+            "type": "text",
+            "value": "a marked link"
+          },
+          {
+            "type": "text",
+            "value": " and "
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "a link node"
+              }
+            ],
+            "href": "https://example.com/node",
+            "type": "link"
+          },
+          {
+            "type": "text",
+            "value": "."
+          }
+        ],
+        "type": "paragraph",
+        "align": "Sample text"
+      }
+    ]
+  },
+  "round-trip-paragraph-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "A body paragraph with "
+          },
+          {
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "type": "text",
+            "value": "bold emphasis"
+          },
+          {
+            "type": "text",
+            "value": " inside it, "
+          },
+          {
+            "marks": [
+              {
+                "href": "https://example.com/mark",
+                "type": "link"
+              }
+            ],
+            "type": "text",
+            "value": "a marked link"
+          },
+          {
+            "type": "text",
+            "value": " and "
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "a link node"
+              }
+            ],
+            "href": "https://example.com/node",
+            "type": "link"
+          },
+          {
+            "type": "text",
+            "value": "."
+          }
+        ],
+        "type": "paragraph",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-paragraph-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "A body paragraph with "
+          },
+          {
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "type": "text",
+            "value": "bold emphasis"
+          },
+          {
+            "type": "text",
+            "value": " inside it, "
+          },
+          {
+            "marks": [
+              {
+                "href": "https://example.com/mark",
+                "type": "link"
+              }
+            ],
+            "type": "text",
+            "value": "a marked link"
+          },
+          {
+            "type": "text",
+            "value": " and "
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "a link node"
+              }
+            ],
+            "href": "https://example.com/node",
+            "type": "link"
+          },
+          {
+            "type": "text",
+            "value": "."
+          }
+        ],
+        "type": "paragraph",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-paragraph-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "A body paragraph with "
+          },
+          {
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "type": "text",
+            "value": "bold emphasis"
+          },
+          {
+            "type": "text",
+            "value": " inside it, "
+          },
+          {
+            "marks": [
+              {
+                "href": "https://example.com/mark",
+                "type": "link"
+              }
+            ],
+            "type": "text",
+            "value": "a marked link"
+          },
+          {
+            "type": "text",
+            "value": " and "
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "a link node"
+              }
+            ],
+            "href": "https://example.com/node",
+            "type": "link"
+          },
+          {
+            "type": "text",
+            "value": "."
+          }
+        ],
+        "type": "paragraph",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-paragraph-id": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"A body paragraph with \"},{\"marks\":[{\"type\":\"bold\"}],\"type\":\"text\",\"value\":\"bold emphasis\"},{\"type\":\"text\",\"value\":\" inside it, \"},{\"marks\":[{\"href\":\"https://example.com/mark\",\"type\":\"link\"}],\"type\":\"text\",\"value\":\"a marked link\"},{\"type\":\"text\",\"value\":\" and \"},{\"children\":[{\"type\":\"text\",\"value\":\"a link node\"}],\"href\":\"https://example.com/node\",\"type\":\"link\"},{\"type\":\"text\",\"value\":\".\"}],\"type\":\"paragraph\",\"id\":\"paragraph-1\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "A body paragraph with "
+          },
+          {
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "type": "text",
+            "value": "bold emphasis"
+          },
+          {
+            "type": "text",
+            "value": " inside it, "
+          },
+          {
+            "marks": [
+              {
+                "href": "https://example.com/mark",
+                "type": "link"
+              }
+            ],
+            "type": "text",
+            "value": "a marked link"
+          },
+          {
+            "type": "text",
+            "value": " and "
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "a link node"
+              }
+            ],
+            "href": "https://example.com/node",
+            "type": "link"
+          },
+          {
+            "type": "text",
+            "value": "."
+          }
+        ],
+        "type": "paragraph",
+        "id": "paragraph-1"
+      }
+    ]
+  },
+  "round-trip-paragraph-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"paragraph\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "paragraph"
+      }
+    ]
+  },
+  "round-trip-paragraph-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"paragraph\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "paragraph"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-paragraph-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"paragraph\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-paragraph-empty-content": {
+    "markdown": "```portabledoc\n[{\"type\":\"paragraph\",\"content\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "content": []
+      }
+    ]
+  },
+  "round-trip-paragraph-empty-content-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"paragraph\",\"content\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "paragraph",
+                "content": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-paragraph-empty-content-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"paragraph\",\"content\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "paragraph",
+              "content": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-pullquote-filled": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"The best interface is no interface.\"}],\"type\":\"pullquote\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "The best interface is no interface."
+          }
+        ],
+        "type": "pullquote"
+      }
+    ]
+  },
+  "round-trip-pullquote-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"content\":[{\"type\":\"text\",\"value\":\"The best interface is no interface.\"}],\"type\":\"pullquote\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "value": "The best interface is no interface."
+                  }
+                ],
+                "type": "pullquote"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-pullquote-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"content\":[{\"type\":\"text\",\"value\":\"The best interface is no interface.\"}],\"type\":\"pullquote\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "content": [
+                {
+                  "type": "text",
+                  "value": "The best interface is no interface."
+                }
+              ],
+              "type": "pullquote"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-pullquote-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"The best interface is no interface.\"}],\"type\":\"pullquote\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "The best interface is no interface."
+          }
+        ],
+        "type": "pullquote",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-pullquote-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"The best interface is no interface.\"}],\"type\":\"pullquote\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "The best interface is no interface."
+          }
+        ],
+        "type": "pullquote",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-pullquote-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"The best interface is no interface.\"}],\"type\":\"pullquote\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "The best interface is no interface."
+          }
+        ],
+        "type": "pullquote",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-pullquote-id": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\"The best interface is no interface.\"}],\"type\":\"pullquote\",\"id\":\"pullquote-1\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": "The best interface is no interface."
+          }
+        ],
+        "type": "pullquote",
+        "id": "pullquote-1"
+      }
+    ]
+  },
+  "round-trip-pullquote-whitespace": {
+    "markdown": "```portabledoc\n[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"pullquote\"}]\n```\n",
+    "blocks": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "value": " \t "
+          }
+        ],
+        "type": "pullquote"
+      }
+    ]
+  },
+  "round-trip-pullquote-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"pullquote\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ],
+                "type": "pullquote"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-pullquote-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"content\":[{\"type\":\"text\",\"value\":\" \\t \"}],\"type\":\"pullquote\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "content": [
+                {
+                  "type": "text",
+                  "value": " \t "
+                }
+              ],
+              "type": "pullquote"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-pullquote-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"pullquote\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "pullquote"
+      }
+    ]
+  },
+  "round-trip-pullquote-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"pullquote\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "pullquote"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-pullquote-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"pullquote\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "pullquote"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-pullquote-empty-content": {
+    "markdown": "```portabledoc\n[{\"type\":\"pullquote\",\"content\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "pullquote",
+        "content": []
+      }
+    ]
+  },
+  "round-trip-pullquote-empty-content-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"pullquote\",\"content\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "pullquote",
+                "content": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-pullquote-empty-content-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"pullquote\",\"content\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "pullquote",
+              "content": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stat-filled": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "body": "Hver blokk består sine egne mekaniske porter.",
+                "denom": "118",
+                "dots": {
+                  "of": 10,
+                  "on": 2
+                },
+                "label": "Blocks covered",
+                "max": 118,
+                "source": "commit:591fdcd53",
+                "spark": [
+                  3,
+                  5,
+                  8,
+                  13,
+                  21
+                ],
+                "type": "stat",
+                "unit": "blokker",
+                "value": "71"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stat-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "body": "Hver blokk består sine egne mekaniske porter.",
+              "denom": "118",
+              "dots": {
+                "of": 10,
+                "on": 2
+              },
+              "label": "Blocks covered",
+              "max": 118,
+              "source": "commit:591fdcd53",
+              "spark": [
+                3,
+                5,
+                8,
+                13,
+                21
+              ],
+              "type": "stat",
+              "unit": "blokker",
+              "value": "71"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stat-value-body-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Sample text\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Sample text",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-value-denom-7-5": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":7.5,\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": 7.5,
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-value-denom-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"Sample text\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "Sample text",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-value-label-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Sample text\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Sample text",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-stat-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-stat-value-max-7-5": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":7.5,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 7.5,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-stat-value-source-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"Sample text\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "Sample text",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-value-unit-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"Sample text\",\"value\":\"71\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "Sample text",
+        "value": "71"
+      }
+    ]
+  },
+  "round-trip-stat-value-value-7-5": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":7.5}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": 7.5
+      }
+    ]
+  },
+  "round-trip-stat-value-value-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "Sample text"
+      }
+    ]
+  },
+  "round-trip-stat-value-verdict-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\",\"verdict\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71",
+        "verdict": "Sample text"
+      }
+    ]
+  },
+  "round-trip-stat-id": {
+    "markdown": "```portabledoc\n[{\"body\":\"Hver blokk består sine egne mekaniske porter.\",\"denom\":\"118\",\"dots\":{\"of\":10,\"on\":2},\"label\":\"Blocks covered\",\"max\":118,\"source\":\"commit:591fdcd53\",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\"blokker\",\"value\":\"71\",\"id\":\"stat-1\"}]\n```\n",
+    "blocks": [
+      {
+        "body": "Hver blokk består sine egne mekaniske porter.",
+        "denom": "118",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": "Blocks covered",
+        "max": 118,
+        "source": "commit:591fdcd53",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": "blokker",
+        "value": "71",
+        "id": "stat-1"
+      }
+    ]
+  },
+  "round-trip-stat-whitespace": {
+    "markdown": "```portabledoc\n[{\"body\":\" \\t \",\"denom\":\" \\t \",\"dots\":{\"of\":10,\"on\":2},\"label\":\" \\t \",\"max\":118,\"source\":\" \\t \",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\" \\t \",\"value\":\" \\t \"}]\n```\n",
+    "blocks": [
+      {
+        "body": " \t ",
+        "denom": " \t ",
+        "dots": {
+          "of": 10,
+          "on": 2
+        },
+        "label": " \t ",
+        "max": 118,
+        "source": " \t ",
+        "spark": [
+          3,
+          5,
+          8,
+          13,
+          21
+        ],
+        "type": "stat",
+        "unit": " \t ",
+        "value": " \t "
+      }
+    ]
+  },
+  "round-trip-stat-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"body\":\" \\t \",\"denom\":\" \\t \",\"dots\":{\"of\":10,\"on\":2},\"label\":\" \\t \",\"max\":118,\"source\":\" \\t \",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\" \\t \",\"value\":\" \\t \"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "body": " \t ",
+                "denom": " \t ",
+                "dots": {
+                  "of": 10,
+                  "on": 2
+                },
+                "label": " \t ",
+                "max": 118,
+                "source": " \t ",
+                "spark": [
+                  3,
+                  5,
+                  8,
+                  13,
+                  21
+                ],
+                "type": "stat",
+                "unit": " \t ",
+                "value": " \t "
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stat-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"body\":\" \\t \",\"denom\":\" \\t \",\"dots\":{\"of\":10,\"on\":2},\"label\":\" \\t \",\"max\":118,\"source\":\" \\t \",\"spark\":[3,5,8,13,21],\"type\":\"stat\",\"unit\":\" \\t \",\"value\":\" \\t \"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "body": " \t ",
+              "denom": " \t ",
+              "dots": {
+                "of": 10,
+                "on": 2
+              },
+              "label": " \t ",
+              "max": 118,
+              "source": " \t ",
+              "spark": [
+                3,
+                5,
+                8,
+                13,
+                21
+              ],
+              "type": "stat",
+              "unit": " \t ",
+              "value": " \t "
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stat-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"stat\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "stat"
+      }
+    ]
+  },
+  "round-trip-stat-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"stat\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "stat"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stat-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"stat\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "stat"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stat-empty-spark": {
+    "markdown": "```portabledoc\n[{\"type\":\"stat\",\"spark\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "stat",
+        "spark": []
+      }
+    ]
+  },
+  "round-trip-stat-empty-spark-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"stat\",\"spark\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "stat",
+                "spark": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stat-empty-spark-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"stat\",\"spark\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "stat",
+              "spark": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stats-filled": {
+    "markdown": "```portabledoc\n[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"paper:scaffy-benchmark\",\"type\":\"stats\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          {
+            "label": "In-scope types",
+            "value": "42"
+          },
+          {
+            "dots": {
+              "of": 5,
+              "on": 3
+            },
+            "label": "Renderers",
+            "source": "task:jdf-bl-historiene",
+            "value": "3"
+          }
+        ],
+        "sourceDefault": "paper:scaffy-benchmark",
+        "type": "stats"
+      }
+    ]
+  },
+  "round-trip-stats-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"paper:scaffy-benchmark\",\"type\":\"stats\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "items": [
+                  {
+                    "label": "In-scope types",
+                    "value": "42"
+                  },
+                  {
+                    "dots": {
+                      "of": 5,
+                      "on": 3
+                    },
+                    "label": "Renderers",
+                    "source": "task:jdf-bl-historiene",
+                    "value": "3"
+                  }
+                ],
+                "sourceDefault": "paper:scaffy-benchmark",
+                "type": "stats"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stats-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"paper:scaffy-benchmark\",\"type\":\"stats\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "items": [
+                {
+                  "label": "In-scope types",
+                  "value": "42"
+                },
+                {
+                  "dots": {
+                    "of": 5,
+                    "on": 3
+                  },
+                  "label": "Renderers",
+                  "source": "task:jdf-bl-historiene",
+                  "value": "3"
+                }
+              ],
+              "sourceDefault": "paper:scaffy-benchmark",
+              "type": "stats"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stats-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"paper:scaffy-benchmark\",\"type\":\"stats\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          {
+            "label": "In-scope types",
+            "value": "42"
+          },
+          {
+            "dots": {
+              "of": 5,
+              "on": 3
+            },
+            "label": "Renderers",
+            "source": "task:jdf-bl-historiene",
+            "value": "3"
+          }
+        ],
+        "sourceDefault": "paper:scaffy-benchmark",
+        "type": "stats",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-stats-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"paper:scaffy-benchmark\",\"type\":\"stats\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          {
+            "label": "In-scope types",
+            "value": "42"
+          },
+          {
+            "dots": {
+              "of": 5,
+              "on": 3
+            },
+            "label": "Renderers",
+            "source": "task:jdf-bl-historiene",
+            "value": "3"
+          }
+        ],
+        "sourceDefault": "paper:scaffy-benchmark",
+        "type": "stats",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-stats-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"paper:scaffy-benchmark\",\"type\":\"stats\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          {
+            "label": "In-scope types",
+            "value": "42"
+          },
+          {
+            "dots": {
+              "of": 5,
+              "on": 3
+            },
+            "label": "Renderers",
+            "source": "task:jdf-bl-historiene",
+            "value": "3"
+          }
+        ],
+        "sourceDefault": "paper:scaffy-benchmark",
+        "type": "stats",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-stats-value-sourcedefault-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"Sample text\",\"type\":\"stats\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          {
+            "label": "In-scope types",
+            "value": "42"
+          },
+          {
+            "dots": {
+              "of": 5,
+              "on": 3
+            },
+            "label": "Renderers",
+            "source": "task:jdf-bl-historiene",
+            "value": "3"
+          }
+        ],
+        "sourceDefault": "Sample text",
+        "type": "stats"
+      }
+    ]
+  },
+  "round-trip-stats-id": {
+    "markdown": "```portabledoc\n[{\"items\":[{\"label\":\"In-scope types\",\"value\":\"42\"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\"Renderers\",\"source\":\"task:jdf-bl-historiene\",\"value\":\"3\"}],\"sourceDefault\":\"paper:scaffy-benchmark\",\"type\":\"stats\",\"id\":\"stats-1\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          {
+            "label": "In-scope types",
+            "value": "42"
+          },
+          {
+            "dots": {
+              "of": 5,
+              "on": 3
+            },
+            "label": "Renderers",
+            "source": "task:jdf-bl-historiene",
+            "value": "3"
+          }
+        ],
+        "sourceDefault": "paper:scaffy-benchmark",
+        "type": "stats",
+        "id": "stats-1"
+      }
+    ]
+  },
+  "round-trip-stats-whitespace": {
+    "markdown": "```portabledoc\n[{\"items\":[{\"label\":\" \\t \",\"value\":\" \\t \"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\" \\t \",\"source\":\" \\t \",\"value\":\" \\t \"}],\"sourceDefault\":\" \\t \",\"type\":\"stats\"}]\n```\n",
+    "blocks": [
+      {
+        "items": [
+          {
+            "label": " \t ",
+            "value": " \t "
+          },
+          {
+            "dots": {
+              "of": 5,
+              "on": 3
+            },
+            "label": " \t ",
+            "source": " \t ",
+            "value": " \t "
+          }
+        ],
+        "sourceDefault": " \t ",
+        "type": "stats"
+      }
+    ]
+  },
+  "round-trip-stats-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"items\":[{\"label\":\" \\t \",\"value\":\" \\t \"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\" \\t \",\"source\":\" \\t \",\"value\":\" \\t \"}],\"sourceDefault\":\" \\t \",\"type\":\"stats\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "items": [
+                  {
+                    "label": " \t ",
+                    "value": " \t "
+                  },
+                  {
+                    "dots": {
+                      "of": 5,
+                      "on": 3
+                    },
+                    "label": " \t ",
+                    "source": " \t ",
+                    "value": " \t "
+                  }
+                ],
+                "sourceDefault": " \t ",
+                "type": "stats"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stats-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"items\":[{\"label\":\" \\t \",\"value\":\" \\t \"},{\"dots\":{\"of\":5,\"on\":3},\"label\":\" \\t \",\"source\":\" \\t \",\"value\":\" \\t \"}],\"sourceDefault\":\" \\t \",\"type\":\"stats\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "items": [
+                {
+                  "label": " \t ",
+                  "value": " \t "
+                },
+                {
+                  "dots": {
+                    "of": 5,
+                    "on": 3
+                  },
+                  "label": " \t ",
+                  "source": " \t ",
+                  "value": " \t "
+                }
+              ],
+              "sourceDefault": " \t ",
+              "type": "stats"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stats-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"stats\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "stats"
+      }
+    ]
+  },
+  "round-trip-stats-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"stats\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "stats"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stats-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"stats\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "stats"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-stats-empty-items": {
+    "markdown": "```portabledoc\n[{\"type\":\"stats\",\"items\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "stats",
+        "items": []
+      }
+    ]
+  },
+  "round-trip-stats-empty-items-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"stats\",\"items\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "stats",
+                "items": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-stats-empty-items-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"stats\",\"items\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "stats",
+              "items": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-table-filled": {
+    "markdown": "| Surface | Renderer |\n| --- | --- |\n| Phoenix | Elixir |\n| Next | React |\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": "Surface"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Renderer"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": "Phoenix"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "Elixir"
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": "Next"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "React"
+              }
+            ]
+          ]
+        ],
+        "type": "table"
+      }
+    ]
+  },
+  "round-trip-table-filled-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "head": [
+                  [
+                    {
+                      "type": "text",
+                      "value": "Surface"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": "Renderer"
+                    }
+                  ]
+                ],
+                "rows": [
+                  [
+                    [
+                      {
+                        "type": "text",
+                        "value": "Phoenix"
+                      }
+                    ],
+                    [
+                      {
+                        "type": "text",
+                        "value": "Elixir"
+                      }
+                    ]
+                  ],
+                  [
+                    [
+                      {
+                        "type": "text",
+                        "value": "Next"
+                      }
+                    ],
+                    [
+                      {
+                        "type": "text",
+                        "value": "React"
+                      }
+                    ]
+                  ]
+                ],
+                "type": "table"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-table-filled-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "head": [
+                [
+                  {
+                    "type": "text",
+                    "value": "Surface"
+                  }
+                ],
+                [
+                  {
+                    "type": "text",
+                    "value": "Renderer"
+                  }
+                ]
+              ],
+              "rows": [
+                [
+                  [
+                    {
+                      "type": "text",
+                      "value": "Phoenix"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": "Elixir"
+                    }
+                  ]
+                ],
+                [
+                  [
+                    {
+                      "type": "text",
+                      "value": "Next"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": "React"
+                    }
+                  ]
+                ]
+              ],
+              "type": "table"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-table-value-headcol-true": {
+    "markdown": "```portabledoc\n[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\",\"headCol\":true}]\n```\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": "Surface"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Renderer"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": "Phoenix"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "Elixir"
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": "Next"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "React"
+              }
+            ]
+          ]
+        ],
+        "type": "table",
+        "headCol": true
+      }
+    ]
+  },
+  "round-trip-table-value-headcol-false": {
+    "markdown": "```portabledoc\n[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\",\"headCol\":false}]\n```\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": "Surface"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Renderer"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": "Phoenix"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "Elixir"
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": "Next"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "React"
+              }
+            ]
+          ]
+        ],
+        "type": "table",
+        "headCol": false
+      }
+    ]
+  },
+  "round-trip-table-value-locked-true": {
+    "markdown": "```portabledoc\n[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\",\"locked\":true}]\n```\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": "Surface"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Renderer"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": "Phoenix"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "Elixir"
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": "Next"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "React"
+              }
+            ]
+          ]
+        ],
+        "type": "table",
+        "locked": true
+      }
+    ]
+  },
+  "round-trip-table-value-locked-false": {
+    "markdown": "```portabledoc\n[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\",\"locked\":false}]\n```\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": "Surface"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Renderer"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": "Phoenix"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "Elixir"
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": "Next"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "React"
+              }
+            ]
+          ]
+        ],
+        "type": "table",
+        "locked": false
+      }
+    ]
+  },
+  "round-trip-table-value-role-sample-text-str": {
+    "markdown": "```portabledoc\n[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\",\"role\":\"Sample text\"}]\n```\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": "Surface"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Renderer"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": "Phoenix"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "Elixir"
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": "Next"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "React"
+              }
+            ]
+          ]
+        ],
+        "type": "table",
+        "role": "Sample text"
+      }
+    ]
+  },
+  "round-trip-table-id": {
+    "markdown": "```portabledoc\n[{\"head\":[[{\"type\":\"text\",\"value\":\"Surface\"}],[{\"type\":\"text\",\"value\":\"Renderer\"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\"Phoenix\"}],[{\"type\":\"text\",\"value\":\"Elixir\"}]],[[{\"type\":\"text\",\"value\":\"Next\"}],[{\"type\":\"text\",\"value\":\"React\"}]]],\"type\":\"table\",\"id\":\"table-1\"}]\n```\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": "Surface"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": "Renderer"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": "Phoenix"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "Elixir"
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": "Next"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": "React"
+              }
+            ]
+          ]
+        ],
+        "type": "table",
+        "id": "table-1"
+      }
+    ]
+  },
+  "round-trip-table-whitespace": {
+    "markdown": "```portabledoc\n[{\"head\":[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]]],\"type\":\"table\"}]\n```\n",
+    "blocks": [
+      {
+        "head": [
+          [
+            {
+              "type": "text",
+              "value": " \t "
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "value": " \t "
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "type": "text",
+                "value": " \t "
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": " \t "
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "type": "text",
+                "value": " \t "
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "value": " \t "
+              }
+            ]
+          ]
+        ],
+        "type": "table"
+      }
+    ]
+  },
+  "round-trip-table-whitespace-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"head\":[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]]],\"type\":\"table\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "head": [
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ]
+                ],
+                "rows": [
+                  [
+                    [
+                      {
+                        "type": "text",
+                        "value": " \t "
+                      }
+                    ],
+                    [
+                      {
+                        "type": "text",
+                        "value": " \t "
+                      }
+                    ]
+                  ],
+                  [
+                    [
+                      {
+                        "type": "text",
+                        "value": " \t "
+                      }
+                    ],
+                    [
+                      {
+                        "type": "text",
+                        "value": " \t "
+                      }
+                    ]
+                  ]
+                ],
+                "type": "table"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-table-whitespace-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"head\":[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],\"rows\":[[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]],[[{\"type\":\"text\",\"value\":\" \\t \"}],[{\"type\":\"text\",\"value\":\" \\t \"}]]],\"type\":\"table\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "head": [
+                [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ],
+                [
+                  {
+                    "type": "text",
+                    "value": " \t "
+                  }
+                ]
+              ],
+              "rows": [
+                [
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ]
+                ],
+                [
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "value": " \t "
+                    }
+                  ]
+                ]
+              ],
+              "type": "table"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-table-empty": {
+    "markdown": "```portabledoc\n[{\"type\":\"table\"}]\n```\n",
+    "blocks": [
+      {
+        "type": "table"
+      }
+    ]
+  },
+  "round-trip-table-empty-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"table\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "table"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-table-empty-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"table\"}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "table"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-table-empty-columns": {
+    "markdown": "```portabledoc\n[{\"type\":\"table\",\"columns\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "table",
+        "columns": []
+      }
+    ]
+  },
+  "round-trip-table-empty-columns-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"table\",\"columns\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "table",
+                "columns": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-table-empty-columns-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"table\",\"columns\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "table",
+              "columns": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-table-empty-head": {
+    "markdown": "```portabledoc\n[{\"type\":\"table\",\"head\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "table",
+        "head": []
+      }
+    ]
+  },
+  "round-trip-table-empty-head-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"table\",\"head\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "table",
+                "head": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-table-empty-head-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"table\",\"head\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "table",
+              "head": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-table-empty-rows": {
+    "markdown": "```portabledoc\n[{\"type\":\"table\",\"rows\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "table",
+        "rows": []
+      }
+    ]
+  },
+  "round-trip-table-empty-rows-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"table\",\"rows\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "table",
+                "rows": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-table-empty-rows-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"table\",\"rows\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "table",
+              "rows": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-table-empty-spans": {
+    "markdown": "```portabledoc\n[{\"type\":\"table\",\"spans\":[]}]\n```\n",
+    "blocks": [
+      {
+        "type": "table",
+        "spans": []
+      }
+    ]
+  },
+  "round-trip-table-empty-spans-in-a-list-item": {
+    "markdown": "```portabledoc\n[{\"type\":\"list\",\"ordered\":false,\"items\":[{\"content\":[{\"type\":\"text\",\"value\":\"Item\"}],\"children\":[{\"type\":\"table\",\"spans\":[]}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "list",
+        "ordered": false,
+        "items": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "value": "Item"
+              }
+            ],
+            "children": [
+              {
+                "type": "table",
+                "spans": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "round-trip-table-empty-spans-in-a-quote": {
+    "markdown": "```portabledoc\n[{\"type\":\"callout\",\"tone\":\"info\",\"content\":[{\"type\":\"text\",\"value\":\"Note\"}],\"slots\":{\"body\":[{\"type\":\"table\",\"spans\":[]}]}}]\n```\n",
+    "blocks": [
+      {
+        "type": "callout",
+        "tone": "info",
+        "content": [
+          {
+            "type": "text",
+            "value": "Note"
+          }
+        ],
+        "slots": {
+          "body": [
+            {
+              "type": "table",
+              "spans": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "round-trip-emphasis-after-diagram": {
+    "markdown": "```mermaid\ngraph TD; A-->B\n```\n\n```portabledoc\n[{\"type\":\"paragraph\",\"content\":[{\"type\":\"em\",\"children\":[{\"type\":\"text\",\"value\":\"Not a caption\"}]}]}]\n```\n",
+    "blocks": [
+      {
+        "type": "diagram",
+        "source": "graph TD; A-->B"
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "em",
+            "children": [
+              {
+                "type": "text",
+                "value": "Not a caption"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
