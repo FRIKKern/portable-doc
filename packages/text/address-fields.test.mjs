@@ -7,6 +7,7 @@ import { blockSchema } from '@portable-doc/validate';
 import { JSDOM } from 'jsdom';
 import MarkdownIt from 'markdown-it';
 import { FENCE_TYPES } from './from-markdown.js';
+import { candidates, goldenBlocks, pathName, readsMissing } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 import { ADDRESS_KEYS, LINKED_BY_RULE, safeUrl } from './util.js';
 
@@ -19,7 +20,6 @@ import { ADDRESS_KEYS, LINKED_BY_RULE, safeUrl } from './util.js';
 // The search is inside out: it lists the few places where text is INERT, and every other place
 // counts as live, so a form of address no one has named is caught too.
 
-const goldens = new URL('../../goldens/blocks/', import.meta.url);
 const MARK = 'https://marker.example/p';
 // The first 13 rows are copied from packages/editor/src/canvas/__safe_url_paint.test.mjs, which
 // matches safe_url/1 row for row (a test below fails if they differ); the rest are more data:,
@@ -80,7 +80,12 @@ const reader = (linkify) => {
 };
 const STRICT = reader(false);
 const PERMISSIVE = reader(true);
-const mayHold = (out, token) => out.includes(token) || out.includes('&#');
+// Only an output holding the token, or a numeric character reference that decodes to it, is parsed.
+const decodeRefs = (out) => out.replace(/&#(x[0-9a-f]+|\d+);?/gi, (ref, n) => {
+  const code = n[0] === 'x' || n[0] === 'X' ? parseInt(n.slice(1), 16) : Number(n);
+  return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : ref;
+});
+const mayHold = (out, token) => out.includes(token) || (out.includes('&#') && decodeRefs(out).includes(token));
 
 /** Is `token` live in this Markdown, read by the strict reader, or with `permissive` by one that links bare URLs too? */
 export const liveInMarkdown = (src, token, permissive = false) => mayHold(src, token) && liveInHtml((permissive ? PERMISSIVE : STRICT).render(src), token);
@@ -109,7 +114,6 @@ const tokened = (base) => {
 const REAL = { html: (doc) => renderPortableDocument(doc, {}), markdown: toMarkdown, text: toPlainText };
 const fence = (blocks) => '```portabledoc\n' + JSON.stringify(blocks) + '\n```';
 const strings = (v, path = []) => (typeof v === 'string' ? [path] : v && typeof v === 'object' ? Object.entries(v).flatMap(([k, x]) => strings(x, [...path, Array.isArray(v) ? Number(k) : k])) : []);
-const name = (type, path) => [type, ...path].map((k) => (typeof k === 'number' ? '[]' : k)).join('.').replaceAll('.[]', '[]');
 
 /** The block with `value` at `path`, or null when the path's parent is not there. */
 function withValue(block, path, value) {
@@ -130,37 +134,34 @@ function spliced(block) {
   return doc.length === 1 && doc[0].type === 'code' && doc[0].value === JSON.stringify(blocks) ? null : doc;
 }
 
-// Keys a renderer asks for that the block does not have, by path: what it would read if a doc filled them.
-const NOT_FIELDS = new Set(['then', 'toJSON', 'constructor', '$$typeof', 'length', '__proto__', 'valueOf', 'toString', 'nodeType', 'props', 'key', 'ref', '_owner', '_store']);
-function readsMissing(block, render) {
-  const reads = new Map();
-  const wrap = (v, path) =>
-    new Proxy(v, {
-      get(t, k, r) {
-        if (typeof k === 'string' && !NOT_FIELDS.has(k) && !Array.isArray(t) && !(k in t)) reads.set(JSON.stringify([...path, k]), [...path, k]);
-        const x = Reflect.get(t, k, r);
-        return typeof k === 'string' && x && typeof x === 'object' ? wrap(x, [...path, Array.isArray(t) ? Number(k) : k]) : x;
-      },
-    });
-  for (const out of Object.values(render)) out([wrap(block, [])]);
-  return [...reads.values()];
-}
+// The fills: a golden block again with each string field its schema declares and it leaves
+// out added (a renderer may read a field only while another is filled). Only its strings and
+// the keys the Proxy sees read are probed there; the candidates are probed on the golden.
+const FILLED = new WeakSet();
 
-/** Every fence-type golden block as it is, and again with each string field the schema declares and the golden leaves out added
- * (a renderer may read a field only while another is empty: `language` when there is no `lang`). */
-function goldenBlocks() {
+/** Every fence-type golden block as it is, then its fill when the schema declares strings it leaves out. */
+function fenceBlocks() {
   const out = [];
-  for (const file of fs.readdirSync(goldens).filter((f) => f.endsWith('.golden.json')).sort()) {
-    const { input } = JSON.parse(fs.readFileSync(new URL(file, goldens), 'utf8'));
-    for (const block of Array.isArray(input) ? input : (input?.blocks ?? [input])) {
-      if (!block || !FENCE_TYPES.has(block.type)) continue;
-      const declared = blockSchema.definitions.blocks[block.type]?.properties ?? {};
-      const extra = Object.entries(declared).filter(([k, p]) => !Object.hasOwn(block, k) && [p.type].flat().includes('string'));
-      out.push(block);
-      if (extra.length) out.push({ ...block, ...Object.fromEntries(extra.map(([k]) => [k, 'x'])) });
+  for (const { block } of goldenBlocks(FENCE_TYPES)) {
+    const declared = blockSchema.definitions.blocks[block.type]?.properties ?? {};
+    const extra = Object.entries(declared).filter(([k, p]) => !Object.hasOwn(block, k) && [p.type].flat().includes('string'));
+    out.push(block);
+    if (extra.length) {
+      const filled = { ...block, ...Object.fromEntries(extra.map(([k]) => [k, 'x'])) };
+      FILLED.add(filled);
+      out.push(filled);
     }
   }
   return out;
+}
+
+/** The paths to probe in `block`: every string it holds, every absent key a renderer reads, and on a golden every
+ * key the schema declares at each object or the Proxy sees read there (golden-reads.mjs's candidates), so a key a
+ * renderer reads only on a copy is probed too. */
+function probePaths(block, render) {
+  const seen = new Set();
+  const fill = FILLED.has(block) ? [] : candidates(block, render).flatMap(({ path, keys }) => keys.map(({ key }) => [...path, key]));
+  return [...strings(block), ...readsMissing(block, render), ...fill].filter((p) => p.at(-1) !== 'type' && !seen.has(JSON.stringify(p)) && seen.add(JSON.stringify(p)));
 }
 
 // A probe is looked for in three readings: the HTML, the Markdown by the strict reader, and the
@@ -170,15 +171,14 @@ const LINKED = 'linked markdown';
 const OWN = ['html', 'markdown']; // what the renderer itself linked
 const REFUSED = URL_CASES.filter((v) => safeUrl(v) === null);
 
-/** Probe every field of `blocks` through `render`: for each field, where a probe for a value is live and whether plain text holds it. */
-function survey(blocks, render = REAL) {
+/** Probe every field of `blocks` through `render` (or only the field named `only`): for each, where a probe for a value is live and whether plain text holds it. */
+function survey(blocks, render = REAL, only = null) {
   const fields = [];
   const types = new Set();
   let rendered = 0;
   for (const block of blocks) {
-    const seen = new Set();
-    const paths = [...strings(block), ...readsMissing(block, render)].filter((p) => p.at(-1) !== 'type' && !seen.has(JSON.stringify(p)) && seen.add(JSON.stringify(p)));
-    for (const path of paths) {
+    for (const path of probePaths(block, render)) {
+      if (only !== null && pathName(block.type, path) !== only) continue;
       const memo = new Map();
       // Where a probe for `base` is live, and whether the plain text holds it; nowhere when the fence stays code.
       const probe = (base) => {
@@ -186,21 +186,21 @@ function survey(blocks, render = REAL) {
         const { value, token } = tokened(base);
         const copy = withValue(block, path, value);
         const doc = copy && spliced(copy);
-        let result = { live: [], text: false };
+        let result = { live: [], text: false, shown: false };
         if (doc) {
           if (base === MARK) rendered++, types.add(block.type);
-          const md = render.markdown(doc);
+          const [html, md, text] = [render.html(doc), render.markdown(doc), render.text(doc)];
           const strict = liveInMarkdown(md, token);
           // The permissive reader links all the strict one does.
           const linked = strict || liveInMarkdown(md, token, true);
-          const live = [liveInHtml(render.html(doc), token) && 'html', strict && 'markdown', linked && LINKED].filter(Boolean);
-          result = { live, text: render.text(doc).includes(token) };
+          const live = [liveInHtml(html, token) && 'html', strict && 'markdown', linked && LINKED].filter(Boolean);
+          result = { live, text: text.includes(token), shown: [html, md, text].some((out) => mayHold(out, token)) };
         }
         memo.set(base, result);
         return result;
       };
       probe(MARK);
-      fields.push({ field: name(block.type, path), key: path.at(-1), probe });
+      fields.push({ field: pathName(block.type, path), key: path.at(-1), probe });
     }
   }
   return { fields, types, rendered };
@@ -224,6 +224,9 @@ function problems({ fields }, rules = LINKED_BY_RULE) {
   const out = new Set();
   for (const f of fields) {
     const { field, key, probe } = f;
+    // A field no output writes, even an https:// address in it, is not probed further: the cost of
+    // probing every candidate key. (Out of reach: a renderer that writes a value only once refused.)
+    if (!probe(MARK).shown) continue;
     const address = isAddress(field, key, rules);
     for (const base of REFUSED) {
       const { live, text } = probe(base);
@@ -272,34 +275,30 @@ test('the search: a probe is live everywhere but text, alt, title, aria-label, c
 });
 
 test('no refused value is live anywhere, and every field a renderer links is on ADDRESS_KEYS, or on LINKED_BY_RULE and kept to its rule', () => {
-  const blocks = goldenBlocks();
+  const blocks = fenceBlocks();
   const found = survey(blocks);
   // The search is live: every fence type the goldens hold rendered (a spliced code block too),
   // 228 marker probes rendered today, and a link's href is live in every reading and in the plain text.
   assert.deepEqual([...found.types].sort(), [...new Set(blocks.map((b) => b.type))].sort());
   assert.ok(found.rendered >= 200, `${found.rendered} probes rendered`);
-  assert.deepEqual(found.fields.find((f) => f.field === 'paragraph.content[].marks[].href').probe(MARK), { live: ['html', 'markdown', LINKED], text: true });
+  assert.deepEqual(found.fields.find((f) => f.field === 'paragraph.content[].marks[].href').probe(MARK), { live: ['html', 'markdown', LINKED], text: true, shown: true });
   assert.deepEqual(problems(found), []);
 });
 
 // Each plant below is a renderer change the search must catch, or must let through. The real
 // renderers cannot be changed inside a test, so each stub wraps them and adds its own output.
-const GOLDEN = goldenBlocks();
+const GOLDEN = fenceBlocks();
 const only = (type) => GOLDEN.filter((b) => b.type === type);
 const attr = (s) => String(s).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 const https = (v) => typeof v === 'string' && v.startsWith('https://');
 const plant = (where, add) => ({ ...REAL, [where]: (doc) => REAL[where](doc) + doc.map(add).join('') });
 const html = (add) => plant('html', (b) => (b.type === 'stat' && https(b.unit) ? add(attr(b.unit)) : ''));
-const unplanted = new Map();
-/** The real renderers' survey of one type, made once: probes are memoised, so later checks reuse them. */
-const real = (type) => (unplanted.has(type) ? unplanted : unplanted.set(type, survey(only(type)))).get(type);
-const baseline = (type, rules = LINKED_BY_RULE) => problems(real(type), rules);
 /** What breaks the rules for one field only: a plant check needs no other field's probes. */
 const problemsOf = (found, field, rules) => problems({ ...found, fields: found.fields.filter((f) => f.field === field) }, rules);
 /** Does a report on `field` starting with `prefix` name output `where` with the plant, and not without it? */
 function caught(type, render, [field, prefix], where, rules = LINKED_BY_RULE) {
   const has = (lines) => lines.some((l) => l.startsWith(prefix) && l.slice(l.lastIndexOf('(') + 1, -1).split(', ').includes(where));
-  return !has(problemsOf(real(type), field, rules)) && has(problemsOf(survey(only(type), render), field, rules));
+  return !has(problemsOf(survey(only(type), REAL, field), field, rules)) && has(problemsOf(survey(only(type), render, field), field, rules));
 }
 const neither = (field) => [field, `live but on neither list: ${field} (`];
 const refusedLive = (field, value) => [field, `refused value live: ${field} = ${JSON.stringify(value)} (`];
@@ -339,7 +338,7 @@ test('plants: a field written where text is inert (alt, title, aria-label, text,
     plant('html', (b) => (b.type === 'stat' ? `<img alt="${attr(b.unit)}" title="${attr(b.label)}"><b aria-label="${attr(b.body)}">${attr(b.unit)}</b>` : '')),
     plant('markdown', (b) => (b.type === 'stat' ? `\n\n\`${b.unit}\` and [x](/a "${String(b.label).replaceAll('"', '')}") and ![${b.body}](/a.png)\n` : '')),
   ];
-  const before = baseline('stat');
+  const before = problems(survey(only('stat')));
   for (const render of inert) assert.deepEqual(problems(survey(only('stat'), render)), before);
 });
 
@@ -351,7 +350,7 @@ test('plants: a LINKED_BY_RULE field linked with a value its rule does not allow
   const paths = plant('markdown', (b) => (/^\s*(?:https:\/\/|\/)/.test(label(b)) ? `\n\n[site](${label(b).trim()})\n` : ''));
   assert.ok(caught('stat', paths, against('/media/files/x.png'), 'markdown', rules), 'a path, which safe_url allows and the rule does not');
   assert.ok(caught('stat', paths, refusedLive('stat.label', '//evil.example/x'), 'markdown', rules), 'a protocol-relative path, which safe_url refuses');
-  assert.ok(!problemsOf(survey(only('stat'), paths), 'stat.label', rules).some((p) => p.startsWith(against('https://example.com/a')[1])), 'an https:// label is allowed');
+  assert.ok(!problemsOf(survey(only('stat'), paths, 'stat.label'), 'stat.label', rules).some((p) => p.startsWith(against('https://example.com/a')[1])), 'an https:// label is allowed');
   // Refuses javascript:, data:, vbscript:, http: and //, then links what new URL() makes of the rest.
   const normalizing = plant('markdown', (b) => {
     const v = label(b);
