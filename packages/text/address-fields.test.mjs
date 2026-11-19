@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
 import { blockSchema } from '@portable-doc/validate';
-// jsdom is the repo's HTML parser (packages/code tests use it); the root install holds it.
+// jsdom is the repo's HTML parser (packages/code tests use it too), at the same version.
 import { JSDOM } from 'jsdom';
 import MarkdownIt from 'markdown-it';
 import { FENCE_TYPES } from './from-markdown.js';
