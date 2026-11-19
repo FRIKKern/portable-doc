@@ -31,14 +31,22 @@ const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ?
 
 // ── lists ───────────────────────────────────────────────────────────────
 
-/** A list item: its blocks joined by a space as one inline run, and its nested lists kept as lists. */
+/**
+ * A list item: its blocks joined by a space as one inline run, and its nested lists kept as
+ * lists. In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
+ * @max_nest rule): its items and their blocks one space apart, joined to the item's own
+ * text by one space; a list with no text adds nothing.
+ */
 function listItem(item, depth) {
   const out = [];
   const children = [];
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
-      if (depth >= MAX_NEST) out.push(...(out.length ? [text(' ')] : []), text(flattenText([child]).trim()));
-      else children.push(...list(child, depth + 1));
+      if (depth < MAX_NEST) children.push(...list(child, depth + 1));
+      else {
+        const flat = flattenText([child]).trim();
+        if (flat) out.push(...(out.length ? [text(' ')] : []), text(flat));
+      }
       continue;
     }
     if (out.length) out.push(text(' '));

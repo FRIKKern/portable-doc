@@ -7,14 +7,47 @@
 import MarkdownIt from 'markdown-it';
 import { asList, isMap, safeUrl, str } from './util.js';
 
-/** Inline nesting deeper than this is kept as its plain text. */
+/**
+ * Lists inside lists, and inline marks inside marks, deeper than this are kept as
+ * their plain text. A list past it becomes the text of the deepest item kept: its
+ * items and their blocks one space apart, after the item's own text.
+ */
 export const MAX_NEST = 50;
 
+// markdown-it builds tokens to `maxNesting` levels (each list, list item and quote
+// is one) and skips the lines deeper than that. The limit is set just past what
+// MAX_NEST lists inside lists need, and the skipped lines are kept as one
+// `deep_source` token: their source, with the outer quote and list markers already
+// taken off, which flattenText parses when it reaches it. So no words are lost, and
+// depth costs no stack: each parse goes PARSE_LEVELS deep at most.
+const PARSE_LEVELS = 2 * (MAX_NEST + 2);
+// Parsing deep source again costs markdown-it time per level, and on some lines
+// (`- - - - …`) it rescans the rest of the line at each one. So one import parses
+// deep source of at most DEEP_PARSE_FACTOR times its own length; past that, the
+// rest is kept as its raw text, whitespace collapsed: every word, with any list or
+// quote markers in it. Only hostile input, thousands of levels deep, gets there.
+const DEEP_PARSE_FACTOR = 4;
+
 /** GFM: tables, strikethrough, bare-URL links; raw HTML read so its text can be kept. */
-export const parser = new MarkdownIt('default', { html: true, linkify: true, typographer: false });
+export const parser = new MarkdownIt('default', { html: true, linkify: true, typographer: false, maxNesting: PARSE_LEVELS });
 // Every link is parsed, and its URL kept as written; util.js safeUrl decides which become links.
 parser.validateLink = () => true;
 parser.normalizeLink = (url) => url;
+
+// markdown-it's own tokenize, except that where it would skip the lines too deep to
+// parse (from the first non-blank line in this container to its end) they are kept.
+// Within one call the level does not change, so checking it once on entry is the same.
+const tokenize = parser.block.tokenize.bind(parser.block);
+parser.block.tokenize = (state, startLine, endLine) => {
+  if (state.level < state.md.options.maxNesting) return tokenize(state, startLine, endLine);
+  const line = state.skipEmptyLines(startLine);
+  if (line >= endLine || state.sCount[line] < state.blkIndent) return void (state.line = line);
+  const tok = state.push('deep_source', '', 0);
+  tok.content = state.getLines(line, endLine, state.blkIndent, false);
+  state.env.deepLeft ??= DEEP_PARSE_FACTOR * state.src.length;
+  tok.meta = state.env; // the import's budget, shared by every parse of its deep source
+  state.line = endLine;
+};
 
 /** Flat open/close tokens as nodes: { type, tok, children }. Iterative. */
 export function tree(tokens) {
@@ -118,7 +151,10 @@ function leafText(node) {
   }
 }
 
-/** The plain text of some nodes, block siblings joined by a space. Iterative, so depth costs no stack. */
+/**
+ * The plain text of some nodes, block siblings joined by a space. Iterative, so depth costs no
+ * stack; a deep_source is parsed here and its nodes read in its place.
+ */
 export function flattenText(nodes) {
   let out = '';
   let skipping = null;
@@ -131,6 +167,16 @@ export function flattenText(nodes) {
       continue;
     }
     if (!isMap(node)) continue;
+    if (node.type === 'deep_source') {
+      const { content, meta: env } = node.tok;
+      stack.push(SEP);
+      if (env.deepLeft >= content.length) {
+        env.deepLeft -= content.length;
+        const nodes = tree(parser.parse(content, env));
+        for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
+      } else if (!skipping) out += `${out === '' || /\s$/.test(out) ? '' : ' '}${content.replace(/\s+/g, ' ').trim()}`;
+      continue;
+    }
     if (BLOCK.has(node.type)) stack.push(SEP);
     if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     else if (node.type === 'html_inline') skipping = rawTag(node, skipping);
