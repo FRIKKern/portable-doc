@@ -5,8 +5,11 @@
   "type": "module",
   "license": "Apache-2.0",
   "engines": { "node": ">=22" },
-  "exports": { ".": { "types": "./index.d.ts", "default": "./index.js" } },
-  "files": ["*.js", "index.d.ts", "README.md"],
+  "exports": {
+    ".": { "types": "./index.d.ts", "default": "./index.js" },
+    "./read-aliases": { "types": "./read-aliases.d.ts", "default": "./read-aliases.js" }
+  },
+  "files": ["*.js", "index.d.ts", "read-aliases.d.ts", "README.md"],
   "dependencies": { "@portable-doc/validate": "0.0.0", "markdown-it": "15.0.3" },
   "devDependencies": { "jsdom": "25.0.1" }
 }

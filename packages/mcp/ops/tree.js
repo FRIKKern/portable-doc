@@ -1,7 +1,19 @@
+import { readField } from '@portable-doc/text/read-aliases';
 import { get, isMap, same } from './terms.js';
 
 export const blockId = (block) => get(block, 'id');
 
+// The nested blocks of an expandable (`blocks`) or a terminal (`children`) are the ones the
+// renderers show: the field read through the one alias table and its blank rule, as
+// [key, list] with the key it was read under, or null when that is not a list.
+const BODY = { expandable: 'blocks', terminal: 'children' };
+export function shownBody(block) {
+  const { name, value } = readField(block, BODY[block.type]);
+  return Array.isArray(value) ? [name, value] : null;
+}
+
+// A steps row's body: its `children`, else its `blocks`. Rows are items, not blocks, so the
+// alias table does not cover them.
 function visibleAlias(container) {
   const children = get(container, 'children');
   if (children !== null && children !== false) return Array.isArray(children) ? ['children', children] : null;
@@ -14,9 +26,10 @@ export function visibleContainer(block) {
   switch (block.type) {
     case 'section':
       return Array.isArray(block.blocks) ? { kind: 'blocks', key: 'blocks', list: block.blocks } : null;
-    case 'expandable': {
-      const alias = visibleAlias(block);
-      return alias && { kind: 'blocks', key: alias[0], list: alias[1] };
+    case 'expandable':
+    case 'terminal': {
+      const body = shownBody(block);
+      return body && { kind: 'blocks', key: body[0], list: body[1] };
     }
     case 'steps':
       return Array.isArray(block.steps) ? { kind: 'steps', list: block.steps } : null;
@@ -26,8 +39,6 @@ export function visibleContainer(block) {
       return Array.isArray(block.columns) ? { kind: 'columns', list: block.columns } : null;
     case 'figure':
       return isMap(block.child) ? { kind: 'figure', child: block.child } : null;
-    case 'terminal':
-      return Array.isArray(block.children) && !Object.hasOwn(block, 'blocks') ? { kind: 'blocks', key: 'children', list: block.children } : null;
   }
 }
 
@@ -210,8 +221,10 @@ function paperChildLists(b) {
   switch (b.type) {
     case 'section':
       return Array.isArray(b.blocks) ? [b.blocks] : [];
-    case 'expandable':
-      return bodyList(b);
+    case 'expandable': {
+      const body = shownBody(b);
+      return body ? [body[1]] : [];
+    }
     case 'steps':
       return Array.isArray(b.steps) ? b.steps.flatMap(bodyList) : [];
     case 'tabs':

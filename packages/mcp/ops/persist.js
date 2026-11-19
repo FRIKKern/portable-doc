@@ -1,4 +1,5 @@
 import { get, isMap, isString, same } from './terms.js';
+import { shownBody } from './tree.js';
 
 const isList = Array.isArray;
 const size = (map) => Object.keys(map).length;
@@ -87,7 +88,12 @@ function byList(fun) {
   };
 }
 
+// The keys whose nested blocks are walked: on an expandable or a terminal, only the one the
+// renderers show (tree.js shownBody, through the alias table); elsewhere `blocks` and `children`.
+const nestedKeys = (b) => (b.type === 'expandable' || b.type === 'terminal' ? [shownBody(b)?.[0]].filter(Boolean) : ['blocks', 'children']);
 
+// A steps row's body key: `children`, else `blocks`. Rows are items, not blocks, so the alias
+// table does not cover them.
 function visibleBodyKey(container) {
   const children = get(container, 'children');
   if (isList(children)) return 'children';
@@ -133,10 +139,12 @@ function ensureBlock(block) {
   const { type } = b;
   if (type === 'steps' && isList(b.steps)) return put(b, 'steps', mapList(b.steps, (row) => (isMap(row) ? ensureVisibleBody(ensureIdentity(row)) : row)));
   if (type === 'tabs') return isList(get(b, 'tabs')) ? put(b, 'tabs', mapList(b.tabs, ensureTab)) : b;
-  if (type === 'expandable') return ensureVisibleBody(b);
+  if (type === 'expandable' || type === 'terminal') {
+    const body = shownBody(b);
+    return body ? put(b, body[0], ensureIds(body[1])) : b;
+  }
   if (type === 'columns') return isList(b.columns) ? put(b, 'columns', mapList(b.columns, (column) => (isList(column) ? ensureIds(column) : column))) : b;
   if (type === 'figure') return isMap(b.child) ? put(b, 'child', ensureBlock(b.child)) : b;
-  if (type === 'terminal') return isList(b.children) && !Object.hasOwn(b, 'blocks') ? put(b, 'children', ensureIds(b.children)) : b;
   return isList(b.blocks) ? put(b, 'blocks', ensureIds(b.blocks)) : b;
 }
 
@@ -188,7 +196,7 @@ function renderBlock(b, passes) {
     return leaves(put(b, 'tabs', mapList(b.tabs, (row) => (isMap(row) && isList(get(row, 'blocks')) ? put(row, 'blocks', nested(row.blocks)) : row))), passes);
   }
   if (b.type === 'columns' && isList(b.columns)) return leaves(put(b, 'columns', mapList(b.columns, (c) => (isList(c) ? nested(c) : c))), passes);
-  return localLeaves(['blocks', 'children'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, level(acc[key], key === 'blocks', passes)) : acc), b), passes);
+  return localLeaves(nestedKeys(b).reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, level(acc[key], key === 'blocks', passes)) : acc), b), passes);
 }
 
 function renderShape(b) {
@@ -413,7 +421,7 @@ const flattenCell = (content) => content.flatMap((item) => (isMap(item) && item.
 
 function leaves(b, passes) {
   if (!isMap(b)) return b;
-  return ['blocks', 'children'].reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, mapList(acc[key], (c) => leaves(c, passes))) : acc), localLeaves(b, passes));
+  return nestedKeys(b).reduce((acc, key) => (isList(get(acc, key)) ? put(acc, key, mapList(acc[key], (c) => leaves(c, passes))) : acc), localLeaves(b, passes));
 }
 
 function localLeaves(b, passes) {
