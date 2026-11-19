@@ -53,12 +53,18 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
   assert.equal(toMarkdown(fromMarkdown(md)), `${md}\n`, 'and it writes back as it was');
   // A heading import leaves with no text is still dropped.
   assert.deepEqual(fromMarkdown('# ![](javascript:x)\n\n## `` ``'), []);
-  // Import writes no block key under an old name (READ_ALIASES), in any block it makes.
+  // Import writes no block key under an old name (READ_ALIASES) in any block it builds. A
+  // portabledoc fence is spliced in as written, so a fenced heading keeps its `text`: putting
+  // fenced blocks under canonical names is the alias file's follow-up, and the check skips them.
+  const fenced = { type: 'heading', level: 2, text: 'Fenced' };
   const every = [
     '# h', 'p **b**', '- a\n  - b', '1. a', '- [x] t', '```js\nx\n```', '```mermaid\ngraph TD\n```\n\n*cap*', '    indented',
     '| a |\n| - |\n| 1 |', '> q\n>\n> — Who', '> [!warning] c', '---', '<div>html</div>',
+    `\`\`\`portabledoc\n${JSON.stringify([fenced])}\n\`\`\``,
   ].join('\n\n');
-  const stack = [...fromMarkdown(every)];
+  const read = fromMarkdown(every);
+  assert.deepEqual(read.at(-1), fenced, 'the fenced heading comes in as written, old name and all');
+  const stack = read.slice(0, -1);
   const types = new Set();
   while (stack.length) {
     const v = stack.pop();
@@ -70,6 +76,15 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
     }
   }
   for (const type of ['heading', 'paragraph', 'list', 'code', 'diagram', 'table', 'blockquote', 'callout', 'divider']) assert.ok(types.has(type), `the sample makes a ${type}`);
+});
+
+test('canon compares a key under its canonical name, unless two keys would land on it', () => {
+  assert.deepEqual(canon({ type: 'code', code: 'a' }), canon({ type: 'code', value: 'a' }));
+  assert.deepEqual(canon({ type: 'heading', level: 1, text: 'a' }), canon({ type: 'heading', level: 1, content: [t('a')] }));
+  // The renderer shows one of them; the compare must not pick the other and call them equal.
+  assert.notDeepEqual(canon({ type: 'code', code: 'a', text: 'b' }), canon({ type: 'code', value: 'b' }));
+  assert.notDeepEqual(canon({ type: 'code', code: 'a', text: 'b' }), canon({ type: 'code', value: 'a' }));
+  assert.notDeepEqual(canon({ type: 'code', value: 'a', code: 'b' }), canon({ type: 'code', value: 'b' }));
 });
 
 test('fromMarkdown follows Barkpark FromMarkdown on its own examples', () => {

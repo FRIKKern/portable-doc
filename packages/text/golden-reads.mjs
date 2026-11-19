@@ -283,8 +283,11 @@ export function canon(v) {
 }
 
 // A key under its canonical name (READ_ALIASES); a string an alias holds for inline `content` is one run.
+// A key is renamed only when it alone would land on that name: where the canonical key is there
+// too, or two aliases share it, the keys stay apart, so the compare sees the difference.
+const canonicalName = (block, key) => (typeof block.type === 'string' ? READ_ALIASES[`${block.type}.${key}`]?.split('.')[1] : undefined);
 function canonField(block, key, value) {
-  const to = typeof block.type === 'string' ? READ_ALIASES[`${block.type}.${key}`]?.split('.')[1] : undefined;
-  if (!to || Object.hasOwn(block, to)) return [key, canon(value)];
+  const to = canonicalName(block, key);
+  if (!to || Object.hasOwn(block, to) || Object.keys(block).filter((k) => canonicalName(block, k) === to).length > 1) return [key, canon(value)];
   return [to, to === 'content' && typeof value === 'string' ? runs([{ type: 'text', value }]) : canon(value)];
 }
