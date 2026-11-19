@@ -10,6 +10,7 @@
 
 import { type Block, escapeHtml, escapeAttr, str, asList, isMap } from '../inline'
 import type { RenderCtx } from './chrome'
+import { numberText } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -124,7 +125,7 @@ const fieldNumber: Emit = (b) => {
   const t = typeof v === 'string' ? v.trim() : ''
   const n = typeof v === 'number' ? v : /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(t) ? Number(t) : NaN
   const unit = str(b.unit).trim()
-  const text = Number.isFinite(n) ? String(n) + (unit && ' ' + unit) : '—'
+  const text = Number.isFinite(n) ? numberText(n) + (unit && ' ' + unit) : '—'
   return `<div class="bp-field"><span class="bp-field__l">${escapeHtml(str(b.label))}</span><div class="bp-field__v"><span>${escapeHtml(text)}</span></div></div>`
 }
 

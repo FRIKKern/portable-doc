@@ -8,6 +8,7 @@
 // `bp-dataviz bp-dataviz--empty` box (the browser twin of pdrender's placeholder).
 
 import { type Block, escapeHtml, escapeAttr, isMap, safeUrl } from '../inline'
+import { numberText } from '../../../text/number-text.js'
 import { maxOf, minOf } from '../min-max'
 import type { RenderCtx } from './chrome'
 
@@ -35,7 +36,7 @@ function numeric(v: unknown): number | null {
 }
 function displayString(v: unknown): string {
   if (typeof v === 'string') return v.trim()
-  if (typeof v === 'number' && Number.isInteger(v)) return String(v)
+  if (typeof v === 'number' && Number.isInteger(v)) return numberText(v)
   if (typeof v === 'number') return fmt(v)
   return ''
 }
@@ -50,17 +51,17 @@ function stringList(v: unknown): string[] {
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi)
 }
-const wholeDigits = (v: number) => (Math.abs(v) < 1e21 ? String(v) : BigInt(v).toString())
+const wholeDigits = (v: number) => numberText(v, 'whole')
 
 function fmt(v: number): string {
-  return Number.isInteger(v) ? wholeDigits(v) : v.toFixed(1)
+  return Number.isInteger(v) ? wholeDigits(v) : numberText(v, 1)
 }
 function fmt3(v: number): string {
-  return v.toFixed(3)
+  return numberText(v, 3)
 }
 function tick(v: number): string {
   const r = Math.round(v * 10) / 10
-  return Number.isInteger(r) ? wholeDigits(r) : r.toFixed(1)
+  return Number.isInteger(r) ? wholeDigits(r) : numberText(r, 1)
 }
 function tickCompact(v: number): string {
   if (Math.abs(v) < 10000) return tick(v)
@@ -75,7 +76,7 @@ function tickCompact(v: number): string {
   }
   const scaled = v / div
   return (
-    (Math.abs(scaled) < 1e21 ? scaled.toFixed(1) : `${BigInt(scaled)}.0`).replace(/\.0$/, '') +
+    (Math.abs(scaled) < 1e21 ? numberText(scaled, 1) : `${numberText(scaled, 'whole')}.0`).replace(/\.0$/, '') +
     suffix
   )
 }
@@ -952,7 +953,7 @@ export function decodePolyline(s: string): Array<[number, number]> {
   return out
 }
 
-const fmt2 = (v: number): string => v.toFixed(2)
+const fmt2 = (v: number): string => numberText(v, 2)
 
 const route: Emit = (block, ctx) => {
   const points = decodePolyline(displayString(get(block, 'polyline')))

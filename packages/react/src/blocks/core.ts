@@ -29,6 +29,7 @@ import {
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
 import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.js'
+import { numberText, stringOf } from '../../../text/number-text.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
 import type { RenderCtx } from './chrome'
 import { minOf } from '../min-max'
@@ -767,8 +768,8 @@ const image: Emit = (b) => {
   const w = b.width
   const h = b.height
   let dims = ''
-  if (w !== null && w !== undefined) dims += ` width="${escapeAttr(str(w) || String(w))}"`
-  if (h !== null && h !== undefined) dims += ` height="${escapeAttr(str(h) || String(h))}"`
+  if (w !== null && w !== undefined) dims += ` width="${escapeAttr(str(w) || stringOf(w))}"`
+  if (h !== null && h !== undefined) dims += ` height="${escapeAttr(str(h) || stringOf(h))}"`
   // Mirrors walk.ex's `:article` image/2: the reader shell progressively enhances
   // ONLY images carrying this hook, so a Paper's chrome images never become
   // lightbox triggers. This registry renders the :article surface exclusively —
@@ -1144,12 +1145,9 @@ function priorityHtml(p: unknown): string {
 
 function criteriaHtml(c: unknown): string {
   if (!isMap(c)) return ''
-  const m = c.met
-  const t = c.total
-  if (typeof m === 'number' && typeof t === 'number' && t > 0) {
-    return `<span class="bp-trow__cn">${m}/${t}</span>`
-  }
-  return ''
+  const met = typeof c.met === 'number' ? numberText(c.met) : ''
+  const total = typeof c.total === 'number' && c.total > 0 ? numberText(c.total) : ''
+  return met !== '' && total !== '' ? `<span class="bp-trow__cn">${met}/${total}</span>` : ''
 }
 
 function workerHtml(w: unknown): string {
@@ -1457,12 +1455,18 @@ const taskDetailEmit: Emit = (b, ctx) => taskDetail(b, ctx)
 
 /* roadmap (components.ex roadmap_html) */
 
-function clampf(n: unknown): number {
+// A position is a percent clamped to the track; a non-finite one is null, and its property is left
+// out of the style (number-text.js).
+const nonFinite = (n: unknown) => typeof n === 'number' && !Number.isFinite(n)
+function clampf(n: unknown): number | null {
+  if (nonFinite(n)) return null
   return typeof n === 'number' ? Math.min(Math.max(n, 0), 100) : 0
 }
-function clampfWidth(n: unknown, left: number): number {
+function clampfWidth(n: unknown, left: number): number | null {
+  if (nonFinite(n)) return null
   return typeof n === 'number' ? Math.min(Math.max(n, 1), 100 - left) : Math.max(1, 100 - left)
 }
+const pct = (prop: string, v: number | null) => (v === null ? '' : `${prop}:${numberText(v)}%`)
 
 // The two cannot-place strings: components.ex roadmap_unplaced_copy/0 and
 // roadmap_lane_unplaced_copy/0. An Elixir test reads these literals (and the Go
@@ -1487,9 +1491,10 @@ const roadmap: Emit = (b, ctx) => {
       renderBlock({ type: 'tasks', snapshot: rows }, ctx)
     )
   const todayVal = b.today
+  const todayLeft = clampf(todayVal)
   const today =
-    typeof todayVal === 'number'
-      ? `<span class="bp-rm__today" style="left:${clampf(todayVal)}%"></span>`
+    typeof todayVal === 'number' && todayLeft !== null
+      ? `<span class="bp-rm__today" style="${pct('left', todayLeft)}"></span>`
       : ''
   const scaleCells = asList(b.scale)
   const scale =
@@ -1503,13 +1508,13 @@ const roadmap: Emit = (b, ctx) => {
       const title = escapeHtml(str(m.title))
       const placed = placeable(m)
       const left = clampf(m.left)
-      const width = clampfWidth(m.width, left)
+      const width = clampfWidth(m.width, left ?? 0)
       const cls =
         'bp-rm__lane' +
         (truthy(m.phase_row) ? ' bp-rm__lane--phase' : '') +
         (placed ? '' : ' bp-rm__lane--unplaced')
       const body = placed
-        ? `<span class="bp-rm__bar bp-rm__bar--${role}" style="left:${left}%;width:${width}%"></span>`
+        ? `<span class="bp-rm__bar bp-rm__bar--${role}" style="${[pct('left', left), pct('width', width)].filter(Boolean).join(';')}"></span>`
         : `<span class="bp-rm__unplaced">${ctx.t(ROADMAP_LANE_UNPLACED_COPY)}</span>`
       return `<div class="${cls}"><span class="bp-rm__lbl">${draftHtml(m, ctx)}${title}</span><div class="bp-rm__track">${body}${today}</div></div>`
     })
