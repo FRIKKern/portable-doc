@@ -1,0 +1,27 @@
+{
+  "markdown": "> [!info] A\n>\n> ```portabledoc\n> [{\"type\":\"divider\",\"id\":\"d\"}]\n> ```\n\n```portabledoc\n[{\"type\":\"divider\",\"id\":\"d\"}]\n```",
+  "blocks": [
+    {
+      "type": "callout",
+      "tone": "info",
+      "content": [
+        {
+          "type": "text",
+          "value": "A"
+        }
+      ],
+      "slots": {
+        "body": [
+          {
+            "type": "divider",
+            "id": "d"
+          }
+        ]
+      }
+    },
+    {
+      "type": "code",
+      "value": "[{\"type\":\"divider\",\"id\":\"d\"}]"
+    }
+  ]
+}
