@@ -35,12 +35,18 @@ export const splitItems = (n) => lines(n, (i) => `- a${i}\n  - b\n\n  c${i}`);
 /** The name of the 120,000-item case in WORK_GENERATED; a test may read its shape at another size. */
 export const SPLIT_ITEMS = "120,000 items of '- a' + i + '\\n  - b\\n\\n  c' + i, joined by '\\n'";
 
+/** A heading, then one paragraph of `n` times 'a *b* ', then a last paragraph: 2n inline nodes in one paragraph. */
+export const markedParagraph = (n) => `# T\n\n${X(n, 'a *b* ')}\n\nafter`;
+/** The name of the 70,000-mark case in WORK_GENERATED; a test may read its shape at another size. */
+export const MARKED_PARAGRAPH = "'# T\\n\\n' + 'a *b* ' x 70,000 + '\\n\\nafter'";
+
 /** The work cases given by their generator only: name → text. */
 export const WORK_GENERATED = {
   "'> ' x 300 + 'l0', then '\\n> l' + i for i = 1, 2, … until 500,000 characters": upTo(`${X(300, '> ')}l0`, (i) => `\n> l${i}`),
   "'> ' x 300 + 'l0', then '\\nl' + i for i = 1, 2, … until 500,000 characters (lazy lines)": upTo(`${X(300, '> ')}l0`, (i) => `\nl${i}`),
   "'- ' x 250,000 + 'end' (one line)": `${X(250_000, '- ')}end`,
   [SPLIT_ITEMS]: splitItems(120_000),
+  [MARKED_PARAGRAPH]: markedParagraph(70_000),
 };
 
 /** The cut cases: name → [text, limits], read by readMarkdown with those limits. */

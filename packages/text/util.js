@@ -132,8 +132,10 @@ export const indent = (s, n) => s.split('\n').map((l) => (l === '' ? l : ' '.rep
 /** Markdown blockquote: every line behind `> `. */
 export const quote = (s) => s.split('\n').map((l) => (l === '' ? '>' : '> ' + l)).join('\n');
 
-/** Non-empty parts joined as separate paragraphs. */
-export const paras = (...parts) => parts.filter((p) => typeof p === 'string' && p.trim() !== '').join('\n\n');
+/** Non-empty parts, an array, joined as separate paragraphs: no spread, so any count of parts works. */
+export const parasOf = (parts) => parts.filter((p) => typeof p === 'string' && p.trim() !== '').join('\n\n');
+/** parasOf with its parts as arguments, for a few fixed parts. */
+export const paras = (...parts) => parasOf(parts);
 
 /**
  * A list. Each item is { head, checked?, body?, loose? }: `head` is the item's

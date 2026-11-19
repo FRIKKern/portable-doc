@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { parse } from 'acorn';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -227,17 +226,17 @@ console.log(JSON.stringify([blocks.map((b) => b.type), blocks[0].items.length, n
   assert.deepEqual(JSON.parse(run.stdout), [['list'], 2 * items, items], run.stderr);
 });
 
-test('the import spreads no array into a call: an array as long as the text overflows the stack as arguments', () => {
-  const source = fs.readFileSync(new URL('./from-markdown.js', import.meta.url), 'utf8');
-  const spreads = [];
-  const walk = (node) => {
-    if (Array.isArray(node)) return node.forEach(walk);
-    if (!node || typeof node.type !== 'string') return;
-    if ((node.type === 'CallExpression' || node.type === 'NewExpression') && node.arguments.some((a) => a.type === 'SpreadElement')) spreads.push(`line ${node.loc.start.line}: ${source.slice(node.start, node.end)}`);
-    for (const [key, value] of Object.entries(node)) if (key !== 'loc' && value && typeof value === 'object') walk(value);
-  };
-  walk(parse(source, { ecmaVersion: 'latest', sourceType: 'module', locations: true }));
-  assert.deepEqual(spreads, []);
+test('a paragraph of more marks than a spread of arguments holds on a small stack still imports as one paragraph', () => {
+  // The shared 70,000-mark case's shape: 2n inline nodes in one paragraph. On a 60 kB stack a spread of
+  // 40,000 overflows, as the full size does on the default stack; the whole text then fell back to one code block.
+  const marks = 20_000;
+  const script = `const { readMarkdown } = await import('./index.js');
+const { markedParagraph } = await import('../../fixtures/text-work/cases.mjs');
+const { blocks, notices } = readMarkdown(markedParagraph(${marks}));
+console.log(JSON.stringify([blocks.map((b) => b.type), blocks[1]?.content?.length, blocks[1]?.content?.at(-1), notices.map((n) => n.code)]));`;
+  const run = spawnSync(process.execPath, ['--stack-size=60', '--input-type=module', '-e', script], { cwd: here, encoding: 'utf8' });
+  const b = { type: 'em', children: [{ type: 'text', value: 'b' }] };
+  assert.deepEqual(JSON.parse(run.stdout), [['heading', 'paragraph', 'paragraph'], 2 * marks, b, []], run.stderr);
 });
 
 test('when the read fails, the import keeps the whole text as one code block and always says so', () => {

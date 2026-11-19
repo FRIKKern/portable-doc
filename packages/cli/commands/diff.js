@@ -35,7 +35,7 @@ function parse(args) {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--') {
-      files.push(...args.slice(i + 1));
+      for (const file of args.slice(i + 1)) files.push(file);
       break;
     }
     if (arg === '-' || !arg.startsWith('-')) files.push(arg);
