@@ -100,7 +100,9 @@ marks become `strong`, `em`, `strikethrough`, `code` and `link` nodes, in a
 heading's `content` as in a paragraph's, a
 bullet list with `[ ]` or `[x]` items is a checklist, an ordered list keeps
 its `start`, a fence keeps the first word of its info string as `lang`, `>`
-is a quote and `> [!tone]` a callout, `---` a divider. Two fences do more:
+is a quote and `> [!tone]` a callout, `---` a divider. A callout's first
+paragraph is its `content`, and every block after it in the quote is read
+into its `slots.body`. Two fences do more:
 
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
@@ -128,6 +130,10 @@ Where it differs from Barkpark, on purpose:
 - A hard line break is a `"\n"` in the text, a soft one a space. A list
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
+- A callout's blocks after its first paragraph are its `slots.body`, read as
+  blocks: lists, code, fences, callouts in callouts. Barkpark's importer joins
+  them into the callout's text. A plain `>` quote holds inline content only, so
+  its blocks stay one run of text in both.
 - What `toMarkdown` writes reads back: a quote's last paragraph `— Name` is
   its `cite`, and an emphasised paragraph right after a mermaid fence is the
   diagram's `caption`.
@@ -136,7 +142,7 @@ Where it differs from Barkpark, on purpose:
   however deep it is nested. Lists inside lists keep their shape to
   `MAX_NEST` (50) levels; a list nested deeper is kept as the text of the
   deepest item, its items and their blocks one space apart, as Barkpark does.
-  A quote keeps all its text, as one run, at any depth.
+  A plain quote keeps all its text, as one run, at any depth.
 - The import counts its work as what it re-scans: lines × nesting depth, plus
   characters. Its budget is 16,000,000 (`IMPORT_WORK`), and an ordinary document
   uses a small part of it: a 500 kB one of mixed blocks uses about a sixteenth.
@@ -167,6 +173,10 @@ back and compares, never by a list of types.
 - A block whose neighbour changes how it reads, such as an emphasised
   paragraph right after a diagram, is fenced.
 - A fence reusing an earlier fence's id is lost, as import would keep it back.
+- A callout is written as a `> [!tone]` quote with each block of its body
+  inside, decided the same way, so one that cannot be kept is listed under its
+  own path (`/blocks/0/slots/body/1`); a callout that line cannot hold (a
+  title, a tone import does not know) is fenced whole.
 
 <!-- round-trip-types:start -->
 <!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/readme.mjs`; `npm run check` fails when this part is stale. -->
@@ -193,6 +203,6 @@ Each form is tried bare, as a list item's child and inside a callout. A form of
 a type a fence may not hold must be reported lost, unless its own Markdown
 reads back as it, so a type is kept only once import accepts it.
 
-`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs`
+`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs packages/text/round-trip-nesting.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
 text, and the import rules, round trip and hostile input.
