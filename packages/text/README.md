@@ -131,8 +131,9 @@ Where it differs from Barkpark, on purpose:
   item's paragraphs are joined by a space, and a nested list stays a list in
   the item's `children`.
 - A callout's blocks after its first paragraph are its `slots.body`, read as
-  blocks: lists, code, fences, callouts in callouts. Barkpark's importer joins
-  them into the callout's text. A plain `>` quote holds inline content only, so
+  blocks: lists, code, fences, callouts in callouts, to `MAX_NEST` (50)
+  callouts deep; a callout deeper keeps its body as text, as a list that deep
+  does. Barkpark's importer joins them into the callout's text. A plain `>` quote holds inline content only, so
   its blocks stay one run of text in both.
 - What `toMarkdown` writes reads back: a quote's last paragraph `— Name` is
   its `cite`, and an emphasised paragraph right after a mermaid fence is the

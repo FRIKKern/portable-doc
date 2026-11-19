@@ -114,18 +114,24 @@ function calloutMarker(content) {
  * A quote. With a `[!tone]` marker at the head of its first paragraph it is a callout: that
  * paragraph is its content, and every block after it is read as blocks into `slots.body`,
  * fences and all. A plain quote holds inline content only, so it stays one run of all its text.
+ * A callout MAX_NEST callouts deep keeps its body as text too, joined to its content, as a
+ * list that deep does: the doc stays within the depth validate allows. Each child's text is
+ * read once, and a callout's body only as blocks, so no part of the tree is read twice.
  */
 function quote(node, state) {
   const children = node.children;
-  // Each child's text once: deep source in it is parsed again each time it is read.
-  const parts = children.map(textOf);
-  const marker = calloutMarker(parts[0] ?? []);
-  if (marker) {
+  const first = children.length ? textOf(children[0]) : [];
+  const marker = calloutMarker(first);
+  if (marker && state.depth < MAX_NEST) {
+    state.depth++;
     const body = blocksOf(children.slice(1), state);
+    state.depth--;
     const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
     return [body.length ? { ...callout, slots: { body } } : callout];
   }
+  const parts = [first, ...children.slice(1).map(textOf)];
   const content = joined(parts);
+  if (marker) return [{ type: 'callout', tone: marker.tone, content: calloutMarker(content).rest }];
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
@@ -244,8 +250,8 @@ function caption(node) {
 }
 
 /**
- * Sibling nodes as blocks, in order, sharing `state` (the ids fences used). `each(n)` runs
- * after a node is read, with the count of blocks before it.
+ * Sibling nodes as blocks, in order, sharing `state`: the ids fences used, and how many callouts
+ * deep they are. `each(n)` runs after a node is read, with the count of blocks before it.
  */
 function blocksOf(nodes, state, each) {
   const out = [];
@@ -262,7 +268,7 @@ function blocksOf(nodes, state, each) {
 // `env` is the parse's: when its work budget ran out while reading a top-level block,
 // that block's place is where the plain-text rest starts.
 const convert = (nodes, env) =>
-  blocksOf(nodes, { ids: new Set() }, (at) => {
+  blocksOf(nodes, { ids: new Set(), depth: 0 }, (at) => {
     if (env.spent && env.spent.path === undefined) env.spent.path = `/blocks/${at}`;
   });
 

@@ -123,3 +123,73 @@ test('an ordinary 500 kB document of mixed blocks uses at most an eighth of the 
   assert.ok(work <= IMPORT_WORK.budget / 8, `work ${work}, an eighth of the budget is ${IMPORT_WORK.budget / 8}`);
   assert.ok(blocks.length > 10_000);
 });
+
+// ── callouts in callouts ──
+
+const q = (n) => '> '.repeat(n);
+// D callouts, each in the one before: a level's marker line, then a bare `>`, so the next is a block of its body.
+const callouts = (D, marker = '[!info] ') => Array.from({ length: D }, (_, i) => `${q(i + 1)}${marker}h${i}\n${q(i + 1).trimEnd()}`).join('\n');
+// The callouts down the first one's body, and the deepest.
+function calloutChain(block) {
+  let depth = 0;
+  let at = block;
+  for (let next = at.slots?.body?.find((b) => b.type === 'callout'); next; next = at.slots?.body?.find((b) => b.type === 'callout')) {
+    at = next;
+    depth++;
+  }
+  return { depth: depth + 1, deepest: at };
+}
+
+test('callouts nested past MAX_NEST in a document: the blocks around them stay, callouts go 50 deep, the deepest keeps the rest as its text', () => {
+  for (const D of [51, 101]) {
+    const md = `# Title0\n\nIntro0.\n\n${callouts(D)}\n\nOutro0.`;
+    const blocks = keepsEveryWord(md, `${D} deep`);
+    assert.deepEqual(blocks.map((b) => b.type), ['heading', 'paragraph', 'callout', 'paragraph'], `${D} deep`);
+    assert.deepEqual(readMarkdown(md).notices, [], `${D} deep`);
+    const { depth, deepest: last } = calloutChain(blocks[2]);
+    assert.equal(depth, 51, `${D} deep: 50 callouts read their body as blocks, the 51st keeps its body as text`);
+    assert.equal(last.slots, undefined);
+    // The deeper markers stay as the literal text they are, as in any quote kept as text.
+    assert.deepEqual(last.content, [t(Array.from({ length: D - 50 }, (_, i) => `h${50 + i}`).join(' [!info] '))], `${D} deep`);
+  }
+});
+
+test('a callout and its body are each read once: callouts 1000 deep import in about the CPU time of plain quotes as deep', () => {
+  const cpu = (md) => {
+    const started = process.cpuUsage();
+    const out = readMarkdown(md);
+    const { user, system } = process.cpuUsage(started);
+    return { out, ms: (user + system) / 1000 };
+  };
+  const plain = cpu(callouts(1000, ''));
+  const marked = underBudget(5_000, () => cpu(callouts(1000)));
+  assert.ok(marked.ms < 4 * plain.ms + 100, `callouts ${marked.ms.toFixed(0)} ms of CPU, plain quotes ${plain.ms.toFixed(0)} ms`);
+  // Past the work budget the rest is plain text, with the notice, as for plain quotes.
+  assert.deepEqual(marked.out.notices.map((n) => [n.code, n.path]), [[IMPORT_WORK.notice, '/blocks/0']]);
+});
+
+test('callouts over plain quotes, and callouts 150 deep, keep their structure with no notice', () => {
+  // C callouts, then P plain quotes under the innermost, W lines in each.
+  const mixed = (C, P, W) => {
+    const lines = [];
+    for (let i = 1; i <= C; i++) lines.push(`${q(i)}[!info] h${i}`, q(i).trimEnd());
+    for (let j = 1; j <= P; j++) {
+      for (let w = 0; w < W; w++) lines.push(`${q(C + j)}plain${j} w${w}`);
+      lines.push(q(C + j).trimEnd());
+    }
+    return lines.join('\n');
+  };
+  for (const [C, P, W] of [[10, 40, 5], [30, 30, 3], [3, 90, 2]]) {
+    const md = mixed(C, P, W);
+    const blocks = keepsEveryWord(md, `${C} over ${P}`);
+    assert.deepEqual(readMarkdown(md).notices, []);
+    const { depth, deepest: last } = calloutChain(blocks[0]);
+    assert.equal(depth, C, `${C} over ${P}`);
+    assert.deepEqual(last.slots.body.map((b) => b.type), ['blockquote'], `${C} over ${P}: the plain quotes are one quote of text`);
+  }
+  const lines = [];
+  for (let i = 1; i <= 150; i++) lines.push(`${q(i)}[!info] h${i}`, q(i).trimEnd(), `${q(i)}p${i} words`, q(i).trimEnd());
+  const md = lines.join('\n');
+  assert.deepEqual(readMarkdown(md).notices, []);
+  assert.equal(calloutChain(keepsEveryWord(md, '150 deep')[0]).depth, 51);
+});
