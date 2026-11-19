@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { validate } from '@portable-doc/validate';
 import { FIXTURES, kept, sharedCases } from '../../scripts/write-shared-cases.mjs';
 import { CASES as HEADINGS } from '../../fixtures/headings/cases.mjs';
 import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
@@ -88,20 +89,20 @@ test('each alias case reads as its file says: readField of each name gives the v
   }
 });
 
-test('the fixtures README names, for each folder under fixtures/, the tests that read it, and each one does', () => {
-  const rows = fs.readFileSync(path.join(FIXTURES, 'README.md'), 'utf8').match(/^\| `[^`]+\/` \|.*$/gm);
-  const table = Object.fromEntries(rows.map((row) => [row.match(/^\| `([^`]+)\/`/)[1], row.split('|').at(-2).match(/`[^`]+\.test\.mjs`/g)?.map((f) => f.slice(1, -1)) ?? []]));
+// Each folder under fixtures/ is read in this file: broken/ and valid/ here by validation (the
+// validator's own test pins their codes and paths), the rest by the tests above. A folder not
+// named here fails, so none sits unread.
+const READ = {
+  broken: () => fs.readdirSync(path.join(FIXTURES, 'broken')).filter((f) => f.endsWith('.json')).map((f) => !validate(json(`broken/${f}`).doc).ok),
+  valid: () => fs.readdirSync(path.join(FIXTURES, 'valid')).filter((f) => f.endsWith('.json')).map((f) => validate(json(`valid/${f}`)).ok),
+};
+
+test('every folder under fixtures/ is one a test in this repository reads', () => {
+  const known = ['aliases', 'headings', 'nesting', 'round-trip', 'text-work', ...Object.keys(READ)].sort();
   const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  assert.deepEqual(Object.keys(table).sort(), folders, 'a row for each folder, and no other');
-  for (const [folder, tests] of Object.entries(table)) {
-    assert.ok(tests.length, `${folder}: no test named`);
-    for (const file of tests) {
-      const at = path.join(FIXTURES, '..', file);
-      assert.ok(fs.existsSync(at), `${file} does not exist`);
-      const source = fs.readFileSync(at, 'utf8');
-      // A path to the folder: `fixtures/<folder>` ending there or at a slash, or this file's `FIXTURES, '<folder>'`.
-      const reads = source.includes(`fixtures/${folder}/`) || source.includes(`fixtures/${folder}'`) || source.includes(`FIXTURES, '${folder}'`);
-      assert.ok(reads, `${file} does not read fixtures/${folder}`);
-    }
+  assert.deepEqual(folders, known, 'a folder no test reads, or a known one gone');
+  for (const [folder, read] of Object.entries(READ)) {
+    const results = read();
+    assert.ok(results.length && results.every(Boolean), `${folder}: its cases do not read as the README says`);
   }
 });

@@ -5,18 +5,15 @@ repository's tests read every one. This folder is the one home of these cases.
 A project that uses them copies them by script and records the portable-doc
 commit it copied; a hand-edited copy is not a copy.
 
-| Folder | A case file | Read by |
-|---|---|---|
-| `broken/` | one doc and the codes and paths validation reports for it | `packages/validate/validate.test.mjs`, `packages/mcp/explain.test.mjs`, `packages/mcp/server.test.mjs`, `packages/cli/cli.test.mjs` |
-| `valid/` | one doc that must pass validation | `packages/validate/validate.test.mjs`, `packages/text/text.test.mjs`, `packages/cli/cli.test.mjs` |
-| `nesting/` | `{ markdown, blocks }`: `fromMarkdown(markdown)` gives `blocks` | `packages/text/shared-cases.test.mjs` |
-| `headings/` | `{ markdown, blocks }`: `fromMarkdown(markdown)` gives `blocks` | `packages/text/shared-cases.test.mjs` |
-| `aliases/` | `{ block, reads }`: each field name read on `block` gives its value, `null` for none | `packages/text/shared-cases.test.mjs` |
-| `text-work/` | inputs and rules only; see its README | `packages/text/shared-cases.test.mjs` |
-| `round-trip/` | nothing kept; see its README | `packages/text/shared-cases.test.mjs` |
-
-The shared-cases test checks this table: a row for each folder here, and each test it names
-exists and reads that folder.
+| Folder | A case file |
+|---|---|
+| `broken/` | one doc and the codes and paths validation reports for it |
+| `valid/` | one doc that must pass validation |
+| `nesting/` | `{ markdown, blocks }`: `fromMarkdown(markdown)` gives `blocks` |
+| `headings/` | `{ markdown, blocks }`: `fromMarkdown(markdown)` gives `blocks` |
+| `aliases/` | `{ block, reads }`: each field name read on `block` gives its value, `null` for none |
+| `text-work/` | inputs and rules only; see its README |
+| `round-trip/` | nothing kept; see its README |
 
 The case files in `nesting/`, `headings/`, `text-work/` and `round-trip/` are generated:
 `node scripts/write-shared-cases.mjs` rewrites them from their inputs with this
