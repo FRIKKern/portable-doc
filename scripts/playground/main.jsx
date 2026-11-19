@@ -13,12 +13,11 @@ import { blocksOf, parseJson } from './parse.js';
 import { encodeShare } from './share.js';
 import { copyText, shiftLines } from './editing.js';
 import { outputsOf } from './outputs.js';
-import { opening, taker } from './ways-in.js';
+import { opening, useEditorDoc } from './ways-in.js';
 import { MarkdownBox, Outputs } from './panes.jsx';
 
 const explain = explainWith(readCodes(codesMarkdown));
 const renderOptions = { blocks: { ...fieldBlocks, ...embedBlocks() } };
-const DEBOUNCE_MS = 200;
 const LONG_LINK = 8000;
 const pretty = (value) => JSON.stringify(value, null, 2);
 // Engine messages for a blown stack differ by browser and mean nothing to a reader.
@@ -76,24 +75,15 @@ function Checks({ view }) {
 }
 
 function App({ examples, initial }) {
-  const [text, setText] = useState(initial.text);
-  const [settled, setSettled] = useState(initial.text);
+  const { text, settled, status, take, say: setStatus } = useEditorDoc(initial);
   const [view, setView] = useState(() => viewOf(initial.text, { html: '', markdown: '', text: '', blocks: 0, checks: [] }));
   const [exampleId, setExampleId] = useState(initial.exampleId);
-  const [status, setStatus] = useState(initial.status ?? '');
   const [link, setLink] = useState('');
   const [pasting, setPasting] = useState(false);
   const tabOut = useRef(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(text), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
   useEffect(() => setView((previous) => viewOf(settled, previous)), [settled]);
 
-  // New text enters the editor only through this door, by one of the ways in ways-in.js; a
-  // refused input leaves the doc as it was and says why. Typing settles after DEBOUNCE_MS.
-  const take = taker({ text, setText, setSettled, setStatus });
   useEffect(() => {
     const onHash = () => take('link', location.hash).then((entered) => entered && setExampleId(''));
     window.addEventListener('hashchange', onHash);

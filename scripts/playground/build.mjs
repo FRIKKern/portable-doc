@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSync } from 'esbuild';
+import { DOC_CAP_BYTES } from './share.js';
 
 const root = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -8,7 +9,8 @@ const root = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // source, the validator and the error words. A classic script, so the page also
 // works opened from disk (browsers refuse module scripts over file://). No
 // source map and no paths in the output, so the same inputs give the same bytes.
-export function bundlePlayground() {
+/** `cap`: the doc cap baked in, DOC_CAP_BYTES unless a test asks for a smaller one. */
+export function bundlePlayground({ cap = DOC_CAP_BYTES } = {}) {
   const result = buildSync({
     absWorkingDir: root,
     entryPoints: ['scripts/playground/main.jsx'],
@@ -18,7 +20,7 @@ export function bundlePlayground() {
     target: ['es2022'],
     jsx: 'automatic',
     loader: { '.md': 'text' },
-    define: { 'process.env.NODE_ENV': '"production"' },
+    define: { 'process.env.NODE_ENV': '"production"', 'globalThis.PLAYGROUND_DOC_CAP': String(cap) },
     minify: true,
     sourcemap: false,
     legalComments: 'eof',

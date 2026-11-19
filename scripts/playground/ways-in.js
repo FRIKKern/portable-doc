@@ -1,7 +1,8 @@
-// Every way text enters the playground editor, as one list, and the one door it comes in by.
-// main.jsx takes new text only through `taker` and `opening` here, so each way is held to the
-// cap: playground.test.mjs has one row per entry, each refusing an input over the cap with its
-// own message and keeping the editor's doc. A way in added here without a row fails that test.
+// Every way text enters the playground editor, as one list, and the editor's doc itself: it is
+// created here, in useEditorDoc, and changes only through `enter`, so each way is held to the
+// cap. playground.test.mjs drives each door of the real page with one byte over the cap and
+// one byte under.
+import { useEffect, useState } from 'react';
 import { tidyJson } from './parse.js';
 import { docFromMarkdown } from './outputs.js';
 import { decodeShare, MAX_DOC_BYTES, overCap } from './share.js';
@@ -54,23 +55,34 @@ export function enter(way, input, current) {
   return taken instanceof Promise ? taken.then((t) => settle(t, current)) : settle(taken, current);
 }
 
+const DEBOUNCE_MS = 200;
+
 /**
- * The editor's one door. Given its text and setters, `take(way, input, now = true)` enters
- * `input` by `way`, shows the result's status, and when the input goes in, puts it in the
- * editor (and renders it at once when `now`). Returns whether it went in, or a promise of that.
+ * The editor's doc, held here and nowhere else: the only way to change it is `take(way, input,
+ * now = true)`, which enters `input` by `way`, shows the result's status, and puts the text in
+ * the editor only when it goes in (rendered at once when `now`, else after DEBOUNCE_MS of
+ * quiet). Gives { text, settled, status, take, say }: `say` shows a status of the page's own.
  */
-export function taker({ text, setText, setSettled, setStatus }) {
+export function useEditorDoc(initial) {
+  const [text, setText] = useState(initial.text);
+  const [settled, setSettled] = useState(initial.text);
+  const [status, say] = useState(initial.status ?? '');
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(text), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
   const apply = (next, now) => {
-    if (next.status !== undefined) setStatus(next.status);
+    if (next.status !== undefined) say(next.status);
     if (!next.entered) return false;
     setText(next.text);
     if (now) setSettled(next.text);
     return true;
   };
-  return (way, input, now = true) => {
+  const take = (way, input, now = true) => {
     const next = enter(way, input, text);
     return next instanceof Promise ? next.then((n) => apply(n, now)) : apply(next, now);
   };
+  return { text, settled, status, take, say };
 }
 
 /**
