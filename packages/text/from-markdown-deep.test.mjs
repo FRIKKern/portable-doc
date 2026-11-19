@@ -170,7 +170,9 @@ test('a callout\'s parts are each read once: the nodes the read visits stay with
   const NO_LIMIT = { ...IMPORT_WORK, budget: Infinity, lineBytes: null };
   for (const name of ['callouts 1000 deep', 'callouts 150 deep, a paragraph in each', ...Object.keys(CASES).filter((n) => / callouts over \d+ plain quotes/.test(n))]) {
     const { count } = readPlan(planText(CASES[name], NO_LIMIT), NO_LIMIT);
-    // Each node read once is at most one visit a token; reading a callout's text again at each level of 50 is ten times that and more.
+    // Read once, a node is one visit and at least one token (0.56 to 0.79 here). Reading a callout's
+    // text again at each level is 1.8 to 20 visits a token; where that text is deep source it is also
+    // parsed again, and the count test above catches that.
     assert.ok(count.tokens > 0 && count.visits <= count.tokens, `${name}: ${count.visits} visits, ${count.tokens} tokens`);
   }
 });
