@@ -86,9 +86,11 @@ function callout(b, ctx) {
   return ctx.md ? quote(out) : out;
 }
 
+const CODE_KEYS = ['value', 'code', 'content', 'text'];
+
 /** A code block's source: the first non-blank of value, code, content, text. */
 export function codeSource(b) {
-  for (const key of ['value', 'code', 'content', 'text']) {
+  for (const key of CODE_KEYS) {
     const v = b[key];
     const s = Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? n : isMap(n) ? str(n.value) || str(n.text) : '')).join('') : str(v);
     if (s.trim() !== '') return s;
@@ -102,7 +104,7 @@ function code(b, ctx) {
   const source = codeSource(b);
   const lang = str(b.lang) || str(b.language);
   if (source.trim() === '') {
-    const blank = ['value', 'code', 'content', 'text'].map((k) => b[k]).find((v) => typeof v === 'string') ?? '';
+    const blank = CODE_KEYS.map((k) => b[k]).find((v) => typeof v === 'string') ?? '';
     return ctx.md ? fence(blank, lang) : '';
   }
   return ctx.md ? fence(source, lang) : source.replace(/\n+$/, '');
