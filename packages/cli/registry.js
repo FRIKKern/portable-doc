@@ -36,7 +36,7 @@ async function load(dir) {
     try {
       command = await import(new URL(file, dir));
     } catch (error) {
-      throw new Error(`commands/${file} does not load: ${error.message}`, { cause: error });
+      throw new Error(`commands/${file} does not load: ${error?.message ?? String(error)}`, { cause: error });
     }
     for (const [field, type] of Object.entries(SHAPE)) if (typeof command[field] !== type) throw new Error(`commands/${file} exports no ${field} (${type})`);
     if (!command.readme.startsWith('## ')) throw new Error(`commands/${file}: readme starts with "## <Title>"`);

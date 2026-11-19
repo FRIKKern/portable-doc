@@ -204,6 +204,9 @@ test('a file named like a command fails loudly and names itself when it has the 
   };
   await assert.rejects(loadCommands(folder('half.js', 'export const order = 1;\n')), /^Error: commands\/half\.js exports no synopsis \(string\)$/);
   await assert.rejects(loadCommands(folder('broken.js', 'export const = ;\n')), /^Error: commands\/broken\.js does not load: /);
+  // A module may throw anything, not only an Error.
+  await assert.rejects(loadCommands(folder('text.js', "throw 'no config';\n")), /^Error: commands\/text\.js does not load: no config$/);
+  await assert.rejects(loadCommands(folder('nothing.js', 'throw null;\n')), /^Error: commands\/nothing\.js does not load: null$/);
 });
 
 test('a command file dropped into commands/ is in the usage, the dispatch and the README, with no other file changed', async () => {
