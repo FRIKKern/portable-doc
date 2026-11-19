@@ -9,9 +9,9 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { toMarkdown, toPlainText } from '@portable-doc/text';
 import { FAKE_TOKEN, readerHtml, startFakeReader } from './test/fake-reader.mjs';
+import { READER_WAIT, REQUEST } from './test/request.mjs';
 
 const BIN = fileURLToPath(new URL('bin/portable-doc-mcp.mjs', import.meta.url));
-const TIMEOUT = { timeout: 20_000 };
 const spec = JSON.parse(fs.readFileSync(new URL('../../spec/blocks.schema.json', import.meta.url), 'utf8')).definitions;
 const golden = (name) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${name}.golden.json`, import.meta.url), 'utf8')).input;
 const DOC = { title: 'Local', blocks: [{ id: 'h', ...golden('heading') }, { id: 'c', ...golden('callout') }] };
@@ -19,11 +19,11 @@ const BROKEN = { blocks: [{ type: 'heading', level: 0, text: 'x' }, { type: 'nop
 
 async function connect(env) {
   const client = new Client({ name: 'test', version: '0.0.0' });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env, stderr: 'pipe' }));
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...READER_WAIT, ...env }, stderr: 'pipe' }), REQUEST);
   return client;
 }
 
-const call = (client, name, args) => client.callTool({ name, arguments: args }, undefined, TIMEOUT);
+const call = (client, name, args) => client.callTool({ name, arguments: args }, undefined, REQUEST);
 
 async function invalid(promise, pattern) {
   await assert.rejects(promise, (e) => {

@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
-import { canon } from './golden-reads.mjs';
+import { READ_ALIASES, canon } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
-import { ADDRESS_KEYS, safeUrl } from './util.js';
+import { safeUrl } from './util.js';
 
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
 
@@ -24,7 +24,7 @@ test('fromMarkdown reads headings, inline marks, links, task lists, tables and m
   ].join('\n\n');
   const blocks = fromMarkdown(md);
   assert.deepEqual(blocks, [
-    { type: 'heading', level: 2, text: 'Title' },
+    { type: 'heading', level: 2, content: [t('Title')] },
     {
       type: 'paragraph',
       content: [
@@ -45,10 +45,43 @@ test('fromMarkdown reads headings, inline marks, links, task lists, tables and m
   valid(blocks);
 });
 
+test('a heading keeps its marks and links as inline content, the way a paragraph does, and no block import builds itself uses an old name', () => {
+  const md = '# Hello **world** and [a link](https://example.com)';
+  const content = [t('Hello '), { type: 'strong', children: [t('world')] }, t(' and '), { type: 'link', href: 'https://example.com', children: [t('a link')] }];
+  assert.deepEqual(fromMarkdown(md), [{ type: 'heading', level: 1, content }]);
+  assert.deepEqual(fromMarkdown(md.slice(2))[0].content, content, 'the same inline content as a paragraph');
+  assert.equal(toMarkdown(fromMarkdown(md)), `${md}\n`, 'and it writes back as it was');
+  // A heading import leaves with no text is still dropped.
+  assert.deepEqual(fromMarkdown('# ![](javascript:x)\n\n## `` ``'), []);
+  // Import writes no block key under an old name (READ_ALIASES) in any block it builds itself. A
+  // portabledoc fence is spliced in as written, so a fenced heading keeps its `text`: putting
+  // fenced blocks under canonical names is the alias file's follow-up, and the check skips them.
+  const fenced = { type: 'heading', level: 2, text: 'Fenced' };
+  const every = [
+    '# h', 'p **b**', '- a\n  - b', '1. a', '- [x] t', '```js\nx\n```', '```mermaid\ngraph TD\n```\n\n*cap*', '    indented',
+    '| a |\n| - |\n| 1 |', '> q\n>\n> — Who', '> [!warning] c', '---', '<div>html</div>',
+    `\`\`\`portabledoc\n${JSON.stringify([fenced])}\n\`\`\``,
+  ].join('\n\n');
+  const read = fromMarkdown(every);
+  assert.deepEqual(read.at(-1), fenced, 'the fenced heading comes in as written, old name and all');
+  const stack = read.slice(0, -1);
+  const types = new Set();
+  while (stack.length) {
+    const v = stack.pop();
+    if (Array.isArray(v)) stack.push(...v);
+    else if (v && typeof v === 'object') {
+      if (typeof v.type === 'string') types.add(v.type);
+      for (const key of Object.keys(v)) assert.ok(!Object.hasOwn(READ_ALIASES, `${v.type}.${key}`), `import writes ${v.type}.${key}, an old name`);
+      stack.push(...Object.values(v));
+    }
+  }
+  for (const type of ['heading', 'paragraph', 'list', 'code', 'diagram', 'table', 'blockquote', 'callout', 'divider']) assert.ok(types.has(type), `the sample makes a ${type}`);
+});
+
 test('fromMarkdown follows Barkpark FromMarkdown on its own examples', () => {
   const list = (items, extra) => ({ type: 'list', ordered: true, items: items.map((v) => [t(v)]), ...extra });
   const cases = [
-    ['#### Four\n\n##### Five\n\n###### Six', [4, 5, 6].map((level, i) => ({ type: 'heading', level, text: ['Four', 'Five', 'Six'][i] }))],
+    ['#### Four\n\n##### Five\n\n###### Six', [4, 5, 6].map((level, i) => ({ type: 'heading', level, content: [t(['Four', 'Five', 'Six'][i])] }))],
     [
       '1. first\n2. second\n   - nested\n',
       [{ type: 'list', ordered: true, items: [[t('first')], { content: [t('second')], children: [{ type: 'list', ordered: false, items: [[t('nested')]] }] }] }],
@@ -100,7 +133,8 @@ test('a nested list reads back as a list in its item, not as text: fromMarkdown(
 
 test('inline <script> and <style> keep no text, in a paragraph or a heading', () => {
   assert.deepEqual(fromMarkdown('<b>hi</b> <script>bad()</script>there <style>p{}</style>end'), [{ type: 'paragraph', content: [t('hi there end')] }]);
-  assert.deepEqual(fromMarkdown('# Title <script>bad()</script>'), [{ type: 'heading', level: 1, text: 'Title' }]);
+  // The space before the script stays, as in a paragraph; written back, the heading is "# Title".
+  assert.deepEqual(fromMarkdown('# Title <script>bad()</script>'), [{ type: 'heading', level: 1, content: [t('Title ')] }]);
   assert.deepEqual(fromMarkdown('a <script/> b'), [{ type: 'paragraph', content: [t('a  b')] }]);
 });
 
@@ -213,7 +247,7 @@ test('the exported schema is frozen: a mutation throws and leaves validate and t
   assert.deepEqual(fromMarkdown(fenceOf(list)), [{ type: 'code', value: JSON.stringify(list) }]);
 });
 
-test('a portabledoc fence with an unsafe value in any address field stays a code block, whole; the address fields cover every address-like field the schema names', () => {
+test('a portabledoc fence with an unsafe value in any address field stays a code block, whole', () => {
   const t = (value) => ({ type: 'text', value });
   const bad = 'javascript:alert(1)';
   const fences = [
@@ -226,19 +260,6 @@ test('a portabledoc fence with an unsafe value in any address field stays a code
   for (const blocks of fences) assert.deepEqual(fromMarkdown(fenceOf(blocks)), [{ type: 'code', value: JSON.stringify(blocks) }], JSON.stringify(blocks));
   const safe = [{ type: 'paragraph', content: [t('a'), { type: 'image', src: 'https://example.com/a.png' }], poster: '/a.png' }];
   assert.deepEqual(fromMarkdown(fenceOf(safe)), safe);
-  // The schema has no address marker (validate refuses a `format` keyword), so the list is
-  // ADDRESS_KEYS; any schema property named like an address must be on it.
-  const names = new Set();
-  const stack = [blockSchema];
-  while (stack.length) {
-    const node = stack.pop();
-    if (node === null || typeof node !== 'object') continue;
-    if (node.properties && typeof node.properties === 'object' && !Array.isArray(node.properties)) for (const key of Object.keys(node.properties)) names.add(key);
-    stack.push(...Object.values(node));
-  }
-  const addressLike = [...names].filter((name) => /href|src|poster|url|uri/i.test(name)).sort();
-  assert.deepEqual(addressLike, ['href', 'poster', 'src']);
-  for (const name of addressLike) assert.ok(ADDRESS_KEYS.includes(name), name);
 });
 
 test('a Markdown image or link with an unsafe address keeps its text and loses the address; a safe one links', () => {
@@ -278,7 +299,7 @@ test('a heading, paragraph, list item or quote that import leaves with no text i
     ['- ![](javascript:x)\n  - a', [{ type: 'list', ordered: false, items: [{ content: [], children: [{ type: 'list', ordered: false, items: [[t('a')]] }] }] }]],
     // A table cell is not a block: it stays, empty.
     ['| a |\n|---|\n| ![](javascript:x) |', [{ type: 'table', head: [[t('a')]], rows: [[[]]] }]],
-    ['# a\n\n![](javascript:x)\n\nb', [{ type: 'heading', level: 1, text: 'a' }, { type: 'paragraph', content: [t('b')] }]],
+    ['# a\n\n![](javascript:x)\n\nb', [{ type: 'heading', level: 1, content: [t('a')] }, { type: 'paragraph', content: [t('b')] }]],
   ];
   for (const [md, blocks] of cases) {
     const got = fromMarkdown(md);

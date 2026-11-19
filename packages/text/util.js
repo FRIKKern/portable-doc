@@ -43,10 +43,25 @@ export function safeUrl(href) {
 }
 
 /** Fields that hold an address, wherever they sit: a link's or action's `href`, a media
- * `src` (image, video, captions, card media), a video `poster`, and `url`. The schema has no
- * address marker (validate refuses a `format` keyword), so a test checks that every
- * address-like property the schema names is here. */
+ * `src` (image, video, captions, card media), a video `poster`, and `url`. A fence with an
+ * unsafe value in one stays code. address-fields.test.mjs renders every string field of
+ * the fence types with a URL in it, and each field that comes out as an address must be
+ * here or on LINKED_BY_RULE. */
 export const ADDRESS_KEYS = Object.freeze(['href', 'src', 'poster', 'url']);
+
+/** Fields a renderer links under its own rule, which only ever links a safe address, so a
+ * fence needs no check on them. Each is keyed by block type and path (`[]` for an array
+ * item), so a field of the same name elsewhere, such as a diagram's Mermaid `source`, is not
+ * under it. Each rule is data: a value may be linked only when it starts with `prefix`, after
+ * trimming when `trimmed`. address-fields.test.mjs holds the renderers to it. `source` (and
+ * `sourceDefault`, the source of items without one) is a ref, not an address: on ADDRESS_KEYS
+ * its commit:, paper: and task: refs would turn the fence into code. */
+const HTTPS_REF = Object.freeze({ prefix: 'https://', trimmed: true });
+export const LINKED_BY_RULE = Object.freeze({
+  'stat.source': HTTPS_REF,
+  'stats.items[].source': HTTPS_REF,
+  'stats.sourceDefault': HTTPS_REF,
+});
 
 /** A URL as a Markdown link destination: spaces, brackets and controls
  * encoded; `&` and `\` backslash-escaped, so a parser decodes no entity
@@ -67,10 +82,13 @@ export function maxOf(list, floor = -Infinity) {
 /* ── Markdown escaping ── */
 
 /** Escape the characters that start inline markup anywhere in a line. An
- * underscore inside a word cannot start emphasis, so it stays bare. */
+ * underscore inside a word cannot start emphasis, so it stays bare. A `//`
+ * before a letter or digit, and not after one (nor after `_`, `:` or `/`), is
+ * written `/\/`: a reader that links bare URLs would link it as an address. */
 export function escInline(s) {
   const word = (c) => c !== undefined && /[\p{L}\p{N}]/u.test(c);
-  return s.replace(/[\\`*[\]~_<&]/g, (c, i) => {
+  return s.replace(/[\\`*[\]~_<&]|\/(?=\/)/g, (c, i) => {
+    if (c === '/') return word(s[i + 2]) && !word(s[i - 1]) && !/[_:/]/.test(s[i - 1] ?? '') ? '/\\' : c;
     if (c === '_') return word(s[i - 1]) && word(s[i + 1]) ? c : '\\_';
     if (c === '<') return /[A-Za-z/!?]/.test(s[i + 1] ?? '') ? '\\<' : c;
     if (c === '&') return /^&#?[A-Za-z0-9]+;/.test(s.slice(i, i + 34)) ? '\\&' : c;

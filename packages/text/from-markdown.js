@@ -6,7 +6,7 @@
 
 import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
-import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
+import { IMPORT_WORK, MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 
@@ -32,14 +32,22 @@ const textOf = (node) => (node.type === 'paragraph' || node.type === 'heading' ?
 
 // ── lists ───────────────────────────────────────────────────────────────
 
-/** A list item: its blocks joined by a space as one inline run, and its nested lists kept as lists. */
+/**
+ * A list item: its blocks joined by a space as one inline run, and its nested lists kept as
+ * lists. In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
+ * @max_nest rule): its items and their blocks one space apart, joined to the item's own
+ * text by one space; a list with no text adds nothing.
+ */
 function listItem(item, depth) {
   const out = [];
   const children = [];
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
-      if (depth >= MAX_NEST) out.push(...(out.length ? [text(' ')] : []), text(flattenText([child]).trim()));
-      else children.push(...list(child, depth + 1));
+      if (depth < MAX_NEST) children.push(...list(child, depth + 1));
+      else {
+        const flat = flattenText([child]).trim();
+        if (flat) out.push(...(out.length ? [text(' ')] : []), text(flat));
+      }
       continue;
     }
     if (out.length) out.push(text(' '));
@@ -90,7 +98,7 @@ function list(node, depth = 0) {
 
 // ── quotes and callouts ─────────────────────────────────────────────────
 
-const quoteContent = (children) => merge(children.flatMap((c, i) => [...(i ? [text(' ')] : []), ...textOf(c)]));
+const joined = (parts) => merge(parts.flatMap((p, i) => [...(i ? [text(' ')] : []), ...p]));
 
 // `[!type]` (or `[!type]+`, `[!type]-`) at the head of a quote: { tone, rest }, else null.
 function calloutMarker(content) {
@@ -104,13 +112,15 @@ function calloutMarker(content) {
 
 function quote(node) {
   const children = node.children;
-  const marker = calloutMarker(quoteContent(children));
+  // Each child's text once: deep source in it is parsed again each time it is read.
+  const parts = children.map(textOf);
+  const content = joined(parts);
+  const marker = calloutMarker(content);
   if (marker) return [{ type: 'callout', tone: marker.tone, content: marker.rest }];
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
-  if (cite) return [{ type: 'blockquote', content: quoteContent(children.slice(0, -1)), cite: cite[1] }];
-  const content = quoteContent(children);
+  if (cite) return [{ type: 'blockquote', content: joined(parts.slice(0, -1)), cite: cite[1] }];
   return blank(content) ? [] : [{ type: 'blockquote', content }];
 }
 
@@ -196,8 +206,9 @@ function table(node) {
 function block(node, state) {
   switch (node.type) {
     case 'heading': {
-      const t = flattenText(node.children).trim();
-      return t ? [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), text: t }] : [];
+      // Inline content under the canonical name, marks and links kept, as a paragraph's.
+      const content = inline(node.children);
+      return blank(content) ? [] : [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), content }];
     }
     case 'paragraph': return paragraph(inline(node.children));
     case 'bullet_list': case 'ordered_list': return list(node);
@@ -223,26 +234,44 @@ function caption(node) {
   return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
 }
 
-function convert(nodes) {
+// `env` is the parse's: when its work budget ran out while reading a top-level block,
+// that block's place is where the plain-text rest starts.
+function convert(nodes, env) {
   const state = { ids: new Set() };
   const out = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const blocks = block(node, state);
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
+    if (env.spent && env.spent.path === undefined) env.spent.path = `/blocks/${out.length}`;
     for (const b of blocks) out.push(b);
   }
   return out;
 }
 
-/** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate. Never throws. */
-export function fromMarkdown(markdown) {
+export { IMPORT_WORK };
+
+/**
+ * GFM Markdown as { blocks, notices, work }. `blocks` pass @portable-doc/validate. `work` is
+ * the import's count of lines × nesting depth re-scanned. Past IMPORT_WORK.budget the rest
+ * of the deeply nested text is kept as plain text, every word, and `notices` holds one
+ * { code: IMPORT_WORK.notice, path, work }: the block where that starts, and the count when
+ * it did. Never throws.
+ */
+export function readMarkdown(markdown) {
   const md = typeof markdown === 'string' ? markdown : '';
+  const env = {};
   try {
-    const blocks = convert(tree(parser.parse(md, {})));
-    if (validate({ blocks }).ok) return blocks;
+    const blocks = convert(tree(parser.parse(md, env)), env);
+    if (validate({ blocks }).ok) {
+      const notices = env.spent ? [{ code: IMPORT_WORK.notice, path: env.spent.path, work: env.spent.work }] : [];
+      return { blocks, notices, work: env.work ?? 0 };
+    }
   } catch {
     // fall through: the text as one code block
   }
-  return md.trim() === '' ? [] : [codeBlock(md)];
+  return { blocks: md.trim() === '' ? [] : [codeBlock(md)], notices: [], work: env.work ?? 0 };
 }
+
+/** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */
+export const fromMarkdown = (markdown) => readMarkdown(markdown).blocks;

@@ -7,7 +7,8 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
-import { CLOSE_GRACE_MS, preview, startPreview } from './preview.js';
+import { CLOSE_GRACE_MS, closeGraceMs, MAX_GRACE_MS, preview, startPreview } from './preview.js';
+import { HANG_MS } from '../../scripts/lib/hang.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.join(here, 'bin', 'portable-doc.mjs');
@@ -22,9 +23,13 @@ const docFile = (content) => {
   return file;
 };
 
-/** Start `portable-doc preview <file> --port 0`; resolves to { url, child, exited } once it prints its URL. */
+/**
+ * Start `portable-doc preview <file> --port 0`; resolves to { url, child, exited } once it prints its URL.
+ * Its stop waits up to HANG_MS for open streams to take their end, so a slow machine cannot cut one.
+ */
 function start(file) {
-  const child = spawn(process.execPath, [bin, 'preview', file, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const env = { ...process.env, PORTABLE_DOC_CLOSE_GRACE_MS: String(HANG_MS) };
+  const child = spawn(process.execPath, [bin, 'preview', file, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'], env });
   const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
   after(() => child.exitCode === null && child.kill('SIGKILL'));
   return new Promise((resolve, reject) => {
@@ -42,7 +47,7 @@ function start(file) {
 const page = async (url) => (await fetch(url)).text();
 
 /** Open /events and resolve once an event named `name` arrives (or reject after `ms`). */
-async function nextEvent(url, name, ms = 4000) {
+async function nextEvent(url, name, ms = HANG_MS) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), ms);
   const res = await fetch(new URL('/events', url), { signal: ac.signal });
@@ -66,7 +71,7 @@ async function nextEvent(url, name, ms = 4000) {
   };
 }
 
-const waitFor = async (check, ms = 4000) => {
+const waitFor = async (check, ms = HANG_MS) => {
   const end = Date.now() + ms; // hang deadline: only stops a wait that would never end
   while (!(await check())) {
     if (Date.now() > end) throw new Error('timed out'); // hang deadline
@@ -236,17 +241,41 @@ function openStream(url) {
   });
 }
 
+// Each watcher error sends one reload to every open stream. Send them in batches, letting
+// the server write and any reading client read between batches, until exactly one stream (the
+// paused one) still has writes held back: its socket buffers are full, at whatever size this
+// system gives them. Then send as many again, so its end waits behind data not yet sent.
+const turn = () => new Promise((resolve) => setImmediate(resolve));
+async function overfill(session, watcher) {
+  let sent = 0;
+  const emit = (n) => {
+    for (let i = 0; i < n; i++) watcher.emit('error', new Error('gone'));
+    sent += n;
+  };
+  const settle = async () => {
+    for (let i = 0; i < 100_000 && session.waiting() > 1; i++) await turn(); // hang bound
+    await turn();
+  };
+  while (session.waiting() !== 1) {
+    if (sent >= 5_000_000) assert.fail(`the socket buffers did not fill in ${sent} events`);
+    emit(1000);
+    await settle();
+  }
+  emit(sent);
+  await settle();
+  assert.equal(session.waiting(), 1, 'the paused stream still has writes held back');
+  return sent;
+}
+
 test('stopping the server ends each open /events stream cleanly, even one far behind on reading: it gets every event, then the end', async () => {
   const watcher = Object.assign(new EventEmitter(), { close() {} });
   const session = await startPreview({ ...fakes, file: docFile(heading('Stops')), port: 0, watch: () => watcher });
   const reading = await openStream(session.url);
   const behind = await openStream(session.url);
   behind.res.pause();
-  // Each watcher error sends one reload. 50,000 of them are far more than the socket buffers hold,
-  // so the paused stream's end waits behind data the server has not sent yet.
-  const events = 50_000;
-  for (let i = 0; i < events; i++) watcher.emit('error', new Error('gone'));
-  const closed = session.close();
+  const events = await overfill(session, watcher);
+  // The grace is a hang deadline here: the paused stream drains as fast as the machine allows.
+  const closed = session.close({ graceMs: HANG_MS });
   behind.res.resume();
   await closed;
   for (const stream of [reading, behind]) {
@@ -255,13 +284,70 @@ test('stopping the server ends each open /events stream cleanly, even one far be
   }
 });
 
-test(`a client that never reads cannot hold the stop: close() gives up waiting on it after CLOSE_GRACE_MS (${CLOSE_GRACE_MS} ms) and cuts it`, { timeout: CLOSE_GRACE_MS * 10 }, async () => {
+/**
+ * A paused stream with its buffers full, then close() under mocked timers: the grace runs out
+ * when the test says, not when the machine gets round to it. Resolves to the stream's outcome.
+ */
+async function stopStuck(t, name, close, graceMs) {
   const watcher = Object.assign(new EventEmitter(), { close() {} });
-  const session = await startPreview({ ...fakes, file: docFile(heading('Stuck')), port: 0, watch: () => watcher });
+  const session = await startPreview({ ...fakes, file: docFile(heading(name)), port: 0, watch: () => watcher });
   const stuck = await openStream(session.url);
   stuck.res.pause();
-  for (let i = 0; i < 50_000; i++) watcher.emit('error', new Error('gone'));
-  await session.close();
+  await overfill(session, watcher);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let closed = false;
+  const closing = close(session).then(() => (closed = true));
+  t.mock.timers.tick(graceMs - 1);
+  await turn();
+  assert.equal(closed, false, 'close() still waits on the stream that never reads');
+  t.mock.timers.tick(1);
+  await closing;
   stuck.res.resume();
-  assert.notEqual(await stuck.outcome, 'end');
+  return stuck.outcome;
+}
+
+test('a client that never reads cannot hold the stop: close() cuts it once the grace it was given is up', async (t) => {
+  assert.equal(await stopStuck(t, 'Stuck', (session) => session.close({ graceMs: 20 }), 20), 'aborted');
+});
+
+test(`by default, close() cuts a client that never reads once CLOSE_GRACE_MS (${CLOSE_GRACE_MS} ms) is up`, async (t) => {
+  assert.equal(await stopStuck(t, 'Stuck by default', (session) => session.close(), CLOSE_GRACE_MS), 'aborted');
+});
+
+test('the command takes its grace from PORTABLE_DOC_CLOSE_GRACE_MS: unset or empty is the default, a whole number up to the longest timer is used, anything else is refused', () => {
+  const grace = (value) => closeGraceMs(value === undefined ? {} : { PORTABLE_DOC_CLOSE_GRACE_MS: value });
+  for (const [value, ms] of [[undefined, CLOSE_GRACE_MS], ['', CLOSE_GRACE_MS], ['0', 0], ['20', 20], ['30000', 30_000], ['2147483647', MAX_GRACE_MS]]) assert.equal(grace(value), ms, String(value));
+  for (const value of [' 20', '20 ', 'abc', '-5', '1.5', '1e3', '0x10', '2147483648', '99999999999999999999']) {
+    assert.throws(() => grace(value), { message: `PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds from 0 to 2147483647, not "${value}"` }, value);
+  }
+});
+
+test('preview refuses a bad PORTABLE_DOC_CLOSE_GRACE_MS before it serves anything, and says why', async () => {
+  const child = spawn(process.execPath, [bin, 'preview', docFile(heading('Bad grace')), '--port', '0'], { env: { ...process.env, PORTABLE_DOC_CLOSE_GRACE_MS: '-5' } });
+  let out = '';
+  let err = '';
+  // A preview that serves instead prints its URL: stop it there, so the test fails, not hangs.
+  child.stdout.on('data', (d) => ((out += d), child.kill('SIGKILL')));
+  child.stderr.on('data', (d) => (err += d));
+  const code = await new Promise((resolve) => child.on('exit', resolve));
+  assert.deepEqual({ code, out, err }, { code: 2, out: '', err: 'portable-doc preview: PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds from 0 to 2147483647, not "-5"\n' });
+});
+
+test('preview stops its session with the grace PORTABLE_DOC_CLOSE_GRACE_MS sets', async (t) => {
+  const was = process.env.PORTABLE_DOC_CLOSE_GRACE_MS;
+  t.after(() => (was === undefined ? delete process.env.PORTABLE_DOC_CLOSE_GRACE_MS : (process.env.PORTABLE_DOC_CLOSE_GRACE_MS = was)));
+  process.env.PORTABLE_DOC_CLOSE_GRACE_MS = '1234';
+  const closes = [];
+  const start = async () => ({ url: 'http://127.0.0.1:1/', close: async (options) => void closes.push(options) });
+  const before = new Set(process.listeners('SIGTERM'));
+  let serving;
+  const served = new Promise((resolve) => (serving = resolve));
+  const io = { stdout: () => serving(), stderr() {} };
+  const done = preview([docFile(heading('Grace'))], {}, io, { ...fakes, UsageError: Error, start });
+  await served;
+  await turn(); // preview listens for the signal right after it prints the URL
+  // Call preview's own SIGTERM handler, not every handler in this process.
+  process.listeners('SIGTERM').find((listener) => !before.has(listener))();
+  assert.equal(await done, 0);
+  assert.deepEqual(closes, [{ graceMs: 1234 }]);
 });

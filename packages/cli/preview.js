@@ -16,6 +16,20 @@ const HOST = '127.0.0.1';
 // How long stopping waits for open /events streams to take their end. Only a client that
 // never reads uses it up; it is a deadline on that wait, not a measure of work.
 export const CLOSE_GRACE_MS = 1000;
+
+// The longest wait setTimeout takes: past it, Node waits 1 ms instead.
+export const MAX_GRACE_MS = 2_147_483_647;
+
+/**
+ * The command's grace, from PORTABLE_DOC_CLOSE_GRACE_MS: CLOSE_GRACE_MS when it is unset or
+ * empty, else a whole number of milliseconds from 0 to MAX_GRACE_MS. Anything else throws, naming it.
+ */
+export function closeGraceMs(env = process.env) {
+  const value = env.PORTABLE_DOC_CLOSE_GRACE_MS ?? '';
+  if (value === '') return CLOSE_GRACE_MS;
+  if (/^\d+$/.test(value) && Number(value) <= MAX_GRACE_MS) return Number(value);
+  throw new Error(`PORTABLE_DOC_CLOSE_GRACE_MS must be a whole number of milliseconds from 0 to ${MAX_GRACE_MS}, not "${shown(value)}"`);
+}
 const DEFAULT_PORT = 4317;
 const DEBOUNCE_MS = 120;
 
@@ -81,7 +95,7 @@ ${reasons}${body ?? ''}
  * Serve `file` until stopped. `deps` are the CLI's own `load` (read + parse,
  * with explain's words for a failure) and `renderHtml`, so the page says and
  * shows exactly what `explain` and `render --format html` do.
- * Resolves to { url, close() } once it listens; `port` undefined tries 4317, then any free port.
+ * Resolves to { url, close({ graceMs }), waiting() } once it listens; `port` undefined tries 4317, then any free port.
  * `watch` is fs.watch, replaceable in tests.
  */
 export async function startPreview({ file, port, load, renderHtml, io, watch = fs.watch }) {
@@ -186,8 +200,8 @@ export async function startPreview({ file, port, load, renderHtml, io, watch = f
   });
 
   // Stop listening, end every open stream and wait until each end is sent, so a tab sees the
-  // stream finish, not a cut. A client that never reads is cut after CLOSE_GRACE_MS.
-  const close = () =>
+  // stream finish, not a cut. A client that never reads is cut after `graceMs`.
+  const close = ({ graceMs = CLOSE_GRACE_MS } = {}) =>
     new Promise((resolve) => {
       clearTimeout(timer);
       watcher.close();
@@ -198,14 +212,17 @@ export async function startPreview({ file, port, load, renderHtml, io, watch = f
         res.end();
       }));
       clients.clear();
-      const deadline = setTimeout(() => server.closeAllConnections(), CLOSE_GRACE_MS);
+      const deadline = setTimeout(() => server.closeAllConnections(), graceMs);
       // Every end is sent: any socket still open (a browser keeps one idle) can go now.
       Promise.all(ended).then(() => {
         clearTimeout(deadline);
         server.closeAllConnections();
       });
     });
-  return { url: `http://${HOST}:${server.address().port}/`, close };
+  // How many open /events streams have writes held back, waiting on a client that reads
+  // slower than the server sends: their socket buffers are full.
+  const waiting = () => [...clients].filter((res) => res.writableNeedDrain).length;
+  return { url: `http://${HOST}:${server.address().port}/`, close, waiting };
 }
 
 function openBrowser(url, io) {
@@ -224,6 +241,12 @@ export async function preview(files, opts, io, { load, renderHtml, UsageError, s
     if (!/^\d+$/.test(opts.port) || port > 65535) throw new UsageError(`--port must be 0 to 65535, not "${shown(opts.port)}"`);
   }
   const [file] = files;
+  let graceMs;
+  try {
+    graceMs = closeGraceMs();
+  } catch (error) {
+    return io.stderr(`portable-doc preview: ${error.message}\n`), 2;
+  }
   const probe = await renderHtml([]);
   if (probe.missing || stylesheet() === null) return io.stderr(`portable-doc: ${probe.missing ?? 'html needs @portable-doc/react built; run "npm run react:build" in the repo'}\n`), 2;
   const first = await load(file, io);
@@ -247,6 +270,6 @@ export async function preview(files, opts, io, { load, renderHtml, UsageError, s
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
   });
-  await session.close();
+  await session.close({ graceMs });
   return 0;
 }
