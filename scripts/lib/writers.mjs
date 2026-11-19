@@ -3,8 +3,10 @@
 // or HTML is a writer here, and the word test (packages/text/writers-keep-words.test.mjs) runs each
 // one over every shared case in fixtures/. scripts/writer-registry.test.mjs fails when a package
 // exports a function that is neither a writer here nor named in NOT_A_WRITER, so a new writer
-// cannot go unseen by the word test. A writer exported as a property of an exported object is not
-// seen: fieldBlocks is the one known, and the field-and-embed HTML writer below covers it.
+// cannot go unseen by the word test. So does a method returning a string on an element a package
+// declares in its type declarations (`HTMLElementTagNameMap`), keyed `<package> <tag>.method`: a
+// writer names the one it runs as `method`. A writer exported as a property of an exported object
+// is not seen: fieldBlocks is the one known, and the field-and-embed HTML writer below covers it.
 import { renderPortableDocument } from '@portable-doc/react';
 import { embedBlocks } from '@portable-doc/react/embed';
 import { fieldBlocks } from '@portable-doc/react/field-blocks';
@@ -12,7 +14,8 @@ import { blocksToExportMarkdown, blocksToMarkdown, markdownToBlocks } from '../.
 import { fromMarkdown, toMarkdown, toPlainText } from '../../packages/text/index.js';
 
 /**
- * Each writer: its name, the package and export it runs, and write(blocks), which gives
+ * Each writer: its name, the package and export it runs (and the element method that runs it, if
+ * one does), and write(blocks), which gives
  * `{ output, lost?, readBack? }`. `output` is the string written, of the kind `writes` names.
  * `lost` lists the paths the writer says it did not write. `readBack` is the blocks the output
  * reads back as, where the writer carries blocks it cannot say as data inside its Markdown.
@@ -40,8 +43,16 @@ export const WRITERS = [
     writes: 'html',
     write: (blocks) => ({ output: renderPortableDocument(blocks, { blocks: { ...fieldBlocks, ...embedBlocks() } }) }),
   },
-  // The editor's Markdown for a file a person takes away: its element's toMarkdown().
-  { name: 'editor export', package: '@portable-doc/editor', export: 'blocksToExportMarkdown', writes: 'markdown', write: (blocks) => ({ output: blocksToExportMarkdown(blocks) }) },
+  // The editor's Markdown for a file a person takes away: the canvas element's toMarkdown(),
+  // which runs blocksToExportMarkdown.
+  {
+    name: 'editor export',
+    package: '@portable-doc/editor',
+    export: 'blocksToExportMarkdown',
+    method: '<bp-paper-canvas>.toMarkdown',
+    writes: 'markdown',
+    write: (blocks) => ({ output: blocksToExportMarkdown(blocks) }),
+  },
   {
     // The editor's source mode: Markdown that reads back as the same blocks, with what Markdown
     // cannot say carried as a block's JSON in an HTML comment.
@@ -56,7 +67,10 @@ export const WRITERS = [
   },
 ];
 
-/** Exported functions that are not writers of a document, each with why. Keyed `<package> <export>`. */
+/**
+ * Exported functions, and declared element methods returning a string, that are not writers of a
+ * document, each with why. Keyed `<package> <export>` or `<package> <tag>.method`.
+ */
 export const NOT_A_WRITER = {
   '@portable-doc/cli main': 'runs the CLI; its render and preview call the writers above',
   '@portable-doc/cli mainUsage': "writes the CLI's usage text",
@@ -90,7 +104,7 @@ export const NOT_A_WRITER = {
  */
 const EDITOR_BUNDLE = {
   source: 'packages/editor/src/markdown.js',
-  why: "a script bundle, built in Barkpark, that registers the editor's elements. Their one document writer is the toMarkdown() method, blocksToExportMarkdown in src/markdown.js. Their on-screen HTML is drawn in a browser, not by an exported function, so the word test cannot run it",
+  why: "a script bundle, built in Barkpark, that registers the editor's elements. Their one document writer is the canvas's toMarkdown() method (the editor export writer's `method`), blocksToExportMarkdown in src/markdown.js. Their on-screen HTML is drawn in a browser, not by an exported function, so the word test cannot run it",
 };
 export const BUILT_ELSEWHERE = {
   '@portable-doc/code ./bp-paper-code.js': { source: null, why: 'a script bundle of the package entry (src/reader-code.js), with no module exports' },
