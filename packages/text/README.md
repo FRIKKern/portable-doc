@@ -137,14 +137,40 @@ Where it differs from Barkpark, on purpose:
   `MAX_NEST` (50) levels; a list nested deeper is kept as the text of the
   deepest item, its items and their blocks one space apart, as Barkpark does.
   A quote keeps all its text, as one run, at any depth.
-- The import counts its work as what it re-scans: lines × nesting depth, plus
-  characters. Its budget is 16,000,000 (`IMPORT_WORK`), and an ordinary document
-  uses a small part of it: a 500 kB one of mixed blocks uses about a sixteenth.
-  Hostile input runs out of it: deep with many lines, or thousands of levels on
-  one line. Past the budget, the rest is kept as plain text, so Markdown syntax
-  and tags in it show as literal text. No word is lost, the import stays linear
-  in time with no deep stack, and `readMarkdown` returns an `import_work_spent`
-  notice with the path where the plain text starts.
+- The import counts its work from the text, before it parses, so every
+  importer of the same text cuts it at the same line. Lines are those
+  markdown-it reads: `\n`, `\r\n` and a lone `\r` each end a line, and a NUL
+  counts as U+FFFD (its core rule `normalize`). Each line costs
+  (depth + 1) × (2 + its UTF-8 bytes). Its depth is its quote and list markers
+  plus one per 2 columns of indentation among them, a tab running to the next
+  stop of 4; a blank line keeps the depth before it, and a line right after a
+  non-blank line keeps at least that line's depth, as it may be lazy. The
+  tests check the count is never below what markdown-it does to read the same
+  lines: hostile shapes, seeded sweeps, and a seeded neighbour search
+  (`import-work-search.test.mjs`). The budget is 16,000,000 (`IMPORT_WORK`);
+  an ordinary 500 kB document uses at most a third of it
+  (`ordinary-work.test.mjs`, nine shapes).
+- Two rules keep text as plain text, every word, with Markdown syntax and tags
+  in it shown as literal text, and `readMarkdown` returns one notice per
+  rule, `{ code: 'import_work_spent', rule, path, line, lines }`: the path
+  of the first plain paragraph, the first line kept as text (from 1), and how
+  many:
+  - From the line where the work passes the budget, the rest of the text is
+    one top-level paragraph, whitespace collapsed. Containers open at that
+    line close there.
+  - A line longer than `IMPORT_WORK.lineBytes` (set from the shared pack) is
+    one top-level paragraph, as typed. The text before it and the text after
+    it are each read as a document, so a quote, list or table open at that
+    line ends there; the line makes no setext heading and defines no link
+    reference. It is charged its bytes once. Inside an open code fence, the
+    code after it starts with the fence's opening line again, so it stays
+    code; in a list item that opening line makes a new item.
+- Behind the text's count, markdown-it's own count runs as a net. It counts
+  each container as markdown-it enters it; should that pass the budget where
+  the text's count said it would not, that container and the rest, at any
+  level, the top one included, are kept as plain text, every word, with one
+  notice of rule `net`. The shared cases never fire it; one
+  in the wild means the text's count is wrong, and is a bug to report.
 
 ## Round trip
 
@@ -169,7 +195,7 @@ back and compares, never by a list of types.
 - A fence reusing an earlier fence's id is lost, as import would keep it back.
 
 <!-- round-trip-types:start -->
-<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/readme.mjs`; `npm run check` fails when this part is stale. -->
+<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/scripts/write-readme.mjs`; `npm run check` fails when this part is stale. -->
 The round trip is lossless only for blocks of these types, and only where import accepts the block:
 
 - in their own Markdown or a portabledoc fence: `callout`, `chart`, `code`, `diagram`, `divider`, `eyebrow`, `heading`, `heatmap`, `list`, `paragraph`, `pullquote`, `stat`, `stats`, `table`;
@@ -195,6 +221,8 @@ Each form is tried bare, as a list item's child and inside a callout. A form of
 a type a fence may not hold must be reported lost, unless its own Markdown
 reads back as it, so a type is kept only once import accepts it.
 
-`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs`
+`node --test packages/text/text.test.mjs packages/text/from-markdown.test.mjs packages/text/round-trip.test.mjs packages/text/import-work.test.mjs packages/text/import-work-search.test.mjs packages/text/ordinary-work.test.mjs`
 checks that every spec type has a handler, that every golden renders to clean
-text, and the import rules, round trip and hostile input.
+text, and the import rules, round trip and hostile input. The import-work
+test sweeps 300 seeded documents; `IMPORT_WORK_SWEEP=20000` runs a longer
+sweep (about two minutes).
