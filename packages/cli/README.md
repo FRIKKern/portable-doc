@@ -1,9 +1,7 @@
 # @portable-doc/cli
 
-The `portable-doc` command: check PortableDoc files against the schema, explain
-what is wrong, render them as HTML, Markdown or plain text, compare two of
-them block by block, preview one in the browser as you edit it, and import
-Markdown. Plain JavaScript; it uses
+The `portable-doc` command, for PortableDoc files in a terminal, a git hook or
+CI. Plain JavaScript; it uses
 [`@portable-doc/validate`](../validate/CODES.md),
 [`@portable-doc/text`](../text/README.md) and, for HTML,
 [`@portable-doc/react`](../react/README.md).
@@ -12,6 +10,18 @@ Not yet on npm. Inside this repo, after `npm ci`, run it as `npx portable-doc`.
 
 A file can be a blocks array or `{ "blocks": [...] }`. A file of `-`, or no
 file at all, reads stdin.
+
+<!-- commands:start -->
+<!-- Built from commands/*.js by `node packages/cli/readme.mjs`; `npm run check` fails when this part is stale. -->
+
+| Command | What it does |
+|---|---|
+| [`validate [file...]`](#validate) | check docs against the PortableDoc schema |
+| [`explain [file...]`](#explain) | the same, with each error explained in full |
+| [`render [file]`](#render) | print a doc as html, markdown or text |
+| [`diff <a> <b>`](#diff) | compare two docs block by block |
+| [`preview <file>`](#preview) | serve a doc on 127.0.0.1 and reload it as the file changes |
+| [`import [file]`](#import) | turn a Markdown file into a doc |
 
 ## Validate
 
@@ -176,7 +186,11 @@ Previewing notes.json at http://127.0.0.1:4317/ (Ctrl-C stops)
   render, and the server keeps running.
 - `--open` opens the page with `open` (macOS) or `xdg-open`. Ctrl-C closes the
   watcher, ends each open tab's event stream cleanly (a tab that never reads is
-  cut after `CLOSE_GRACE_MS`, one second), and exits 0.
+  cut after a grace), and exits 0. The grace is `PORTABLE_DOC_CLOSE_GRACE_MS`
+  milliseconds, 1000 when it is unset or empty; any value but a whole number
+  from 0 to 2147483647 is refused with a message, and the exit is 2.
+- A second Ctrl-C while it stops ends the server at once: open streams are cut,
+  not ended, and the process dies of the signal (exit 130 in a shell).
 
 ## Import
 
@@ -192,6 +206,7 @@ Any Markdown imports; the exit is 2 only for a usage error, a file that cannot
 be read, or an output that cannot be written. `-o` works as in render.
 `--json` prints `{ ok, file, doc }`, or `{ ok, file, output }` with `-o`,
 and `{ ok: false, file, error }` when a file cannot be read or written.
+<!-- commands:end -->
 
 ## In a pre-commit hook or CI
 
@@ -208,5 +223,14 @@ git diff --cached --name-only --diff-filter=ACM -z -- 'docs/*.json' |
 - run: npm ci
 - run: npx portable-doc validate --json -- content/*.json > validate.json
 ```
+
+## Adding a command
+
+Each command is one file in [`commands/`](commands/), named after it: its
+place in the list, its usage, its `--help` text, its section of this README
+and its code. `portable-doc --help`, the dispatch and the sections above are
+built from that folder, so there is no other list to update. After adding or
+changing a command, run `node packages/cli/readme.mjs` to rewrite the
+sections; `npm run check` fails while they differ.
 
 `node --test packages/cli/*.test.mjs` runs the bin against the fixtures and a live preview.

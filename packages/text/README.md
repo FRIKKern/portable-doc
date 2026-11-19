@@ -112,9 +112,19 @@ Where it differs from Barkpark, on purpose:
   its `cite`, and an emphasised paragraph right after a mermaid fence is the
   diagram's `caption`.
 - Raw HTML keeps its visible text; tags, comments, scripts and styles go.
-- The parser is markdown-it, not Earmark. It runs in linear time on hostile
-  input and caps nesting at 100: quotes or lists nested deeper than that are
-  left out.
+- The parser is markdown-it, not Earmark. No visible word is ever left out,
+  however deep it is nested. Lists inside lists keep their shape to
+  `MAX_NEST` (50) levels; a list nested deeper is kept as the text of the
+  deepest item, its items and their blocks one space apart, as Barkpark does.
+  A quote keeps all its text, as one run, at any depth.
+- The import counts its work as what it re-scans: lines × nesting depth, plus
+  characters. Its budget is 16,000,000 (`IMPORT_WORK`), and an ordinary document
+  uses a small part of it: a 500 kB one of mixed blocks uses about a sixteenth.
+  Hostile input runs out of it: deep with many lines, or thousands of levels on
+  one line. Past the budget, the rest is kept as plain text, so Markdown syntax
+  and tags in it show as literal text. No word is lost, the import stays linear
+  in time with no deep stack, and `readMarkdown` returns an `import_work_spent`
+  notice with the path where the plain text starts.
 
 **Round trip.** For heading, paragraph, list, code, table, blockquote, divider
 and diagram, `fromMarkdown(toMarkdown(doc))` gives back an equivalent doc:
