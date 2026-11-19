@@ -59,14 +59,15 @@ export const ALIAS_TYPES = {
   'terminal.children': ['array'],
 };
 
-// "owner.field" → whether whitespace is content in that field (the table's whitespace column):
-// true, a string of only whitespace is a value; false, it is blank, like an empty string.
-export const ALIAS_WHITESPACE = {
+// "owner.field" → the table's column 'a whitespace-only value under the current name wins': true,
+// the first name holding any character is read, whitespace included; false, the first holding a
+// non-whitespace character, else the first holding any character.
+export const ALIAS_CURRENT_WHITESPACE_WINS = {
   'asciicast.posterAt': false,
   'blockquote.cite': false,
   'blockquote.content': false,
   'callout.content': false,
-  'code-tabs.tabs[].value': false,
+  'code-tabs.tabs[].value': true,
   'code.lang': false,
   'code.value': false,
   'expandable.blocks': false,
@@ -82,9 +83,9 @@ export const ALIAS_WHITESPACE = {
   'pullquote.content': false,
   'steps.steps[].blocks': false,
   'table.columns': false,
-  'table.columns[].text': false,
+  'table.columns[].text': true,
   'table.head': false,
-  'task-detail.criteria[].text': false,
-  'task-detail.task.criteria[].text': false,
+  'task-detail.criteria[].text': true,
+  'task-detail.task.criteria[].text': true,
   'terminal.children': false,
 };

@@ -53,59 +53,98 @@ test('the round-trip canon reads item and inline names as the renderers do: an o
   assert.notDeepEqual(canon(ROWS['list.items[].text'][0]), canon({ type: 'list', items: [{ content: t('two') }] }));
 });
 
-test('an inline code node of only whitespace, with no other name, keeps its whitespace; beside filled children, the children win', () => {
-  const space = { type: 'paragraph', content: [t('a')[0], { type: 'code', value: ' ' }, t('b')[0]] };
-  assert.equal(html(space), '<p>a<code> </code>b</p>');
-  // Markdown writes a code span of only spaces as the spaces, as on main.
-  assert.equal(md(space), 'a b\n');
-  assert.equal(text(space), 'a b\n');
+// Whitespace in running text is a value, as main showed it: a text leaf or an inline code node of
+// only whitespace between words, under its old name or its current name, in a paragraph, a
+// heading, a list item, strong, after inline code and under a mark. The column 'a whitespace-only
+// value under the current name wins' says yes for both. Each row is [case, block, HTML, Markdown,
+// text], all as main renders them, whole.
+const NEIGHBOURS = [
+  ['Hello world, a space under the old name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  ' '}, {type:  'text', value:  'world'}]}, '<p>Hello world</p>', 'Hello world\n', 'Hello world\n'],
+  ['Hello world in a heading, a space under the old name', {type:  'heading', level:  2, content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  ' '}, {type:  'text', value:  'world'}]}, '<h2>Hello world</h2>', '## Hello world\n', 'Hello world\n'],
+  ['Hello world in a list item, a space under the old name', {type:  'list', items:  [{content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  ' '}, {type:  'text', value:  'world'}]}]}, '<ul><li><span>Hello world</span></li></ul>', '- Hello world\n', '- Hello world\n'],
+  ['Hello world in strong, a space under the old name', {type:  'paragraph', content:  [{type:  'strong', children:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  ' '}, {type:  'text', value:  'world'}]}]}, '<p><span>Hello world</span></p>', '**Hello world**\n', 'Hello world\n'],
+  ['after inline code, a space under the old name', {type:  'paragraph', content:  [{type:  'code', value:  'f()'}, {type:  'text', text:  ' '}, {type:  'text', value:  'world'}]}, '<p><code>f()</code> world</p>', '`f()` world\n', 'f() world\n'],
+  ['Hello world, the leaf in em, a space under the old name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  ' ', marks:  [{type:  'em'}]}, {type:  'text', value:  'world'}]}, '<p>Hello<span> </span>world</p>', 'Hello world\n', 'Hello world\n'],
+  ['Hello world, a space under the current name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  ' '}, {type:  'text', value:  'world'}]}, '<p>Hello world</p>', 'Hello world\n', 'Hello world\n'],
+  ['Hello world in a heading, a space under the current name', {type:  'heading', level:  2, content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  ' '}, {type:  'text', value:  'world'}]}, '<h2>Hello world</h2>', '## Hello world\n', 'Hello world\n'],
+  ['Hello world in a list item, a space under the current name', {type:  'list', items:  [{content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  ' '}, {type:  'text', value:  'world'}]}]}, '<ul><li><span>Hello world</span></li></ul>', '- Hello world\n', '- Hello world\n'],
+  ['Hello world in strong, a space under the current name', {type:  'paragraph', content:  [{type:  'strong', children:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  ' '}, {type:  'text', value:  'world'}]}]}, '<p><span>Hello world</span></p>', '**Hello world**\n', 'Hello world\n'],
+  ['after inline code, a space under the current name', {type:  'paragraph', content:  [{type:  'code', value:  'f()'}, {type:  'text', value:  ' '}, {type:  'text', value:  'world'}]}, '<p><code>f()</code> world</p>', '`f()` world\n', 'f() world\n'],
+  ['Hello world, the leaf in em, a space under the current name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  ' ', marks:  [{type:  'em'}]}, {type:  'text', value:  'world'}]}, '<p>Hello<span> </span>world</p>', 'Hello world\n', 'Hello world\n'],
+  ['Hello world, a newline under the old name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  '\n'}, {type:  'text', value:  'world'}]}, '<p>Hello\nworld</p>', 'Hello\\\nworld\n', 'Hello\nworld\n'],
+  ['Hello world in a heading, a newline under the old name', {type:  'heading', level:  2, content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  '\n'}, {type:  'text', value:  'world'}]}, '<h2>Hello\nworld</h2>', '## Hello world\n', 'Hello world\n'],
+  ['Hello world in a list item, a newline under the old name', {type:  'list', items:  [{content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  '\n'}, {type:  'text', value:  'world'}]}]}, '<ul><li><span>Hello\nworld</span></li></ul>', '- Hello\\\n  world\n', '- Hello\n  world\n'],
+  ['Hello world in strong, a newline under the old name', {type:  'paragraph', content:  [{type:  'strong', children:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  '\n'}, {type:  'text', value:  'world'}]}]}, '<p><span>Hello\nworld</span></p>', '**Hello\\\nworld**\n', 'Hello\nworld\n'],
+  ['after inline code, a newline under the old name', {type:  'paragraph', content:  [{type:  'code', value:  'f()'}, {type:  'text', text:  '\n'}, {type:  'text', value:  'world'}]}, '<p><code>f()</code>\nworld</p>', '`f()`\\\nworld\n', 'f()\nworld\n'],
+  ['Hello world, the leaf in em, a newline under the old name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', text:  '\n', marks:  [{type:  'em'}]}, {type:  'text', value:  'world'}]}, '<p>Hello<span>\n</span>world</p>', 'Hello\\\nworld\n', 'Hello\nworld\n'],
+  ['Hello world, a newline under the current name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  '\n'}, {type:  'text', value:  'world'}]}, '<p>Hello\nworld</p>', 'Hello\\\nworld\n', 'Hello\nworld\n'],
+  ['Hello world in a heading, a newline under the current name', {type:  'heading', level:  2, content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  '\n'}, {type:  'text', value:  'world'}]}, '<h2>Hello\nworld</h2>', '## Hello world\n', 'Hello world\n'],
+  ['Hello world in a list item, a newline under the current name', {type:  'list', items:  [{content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  '\n'}, {type:  'text', value:  'world'}]}]}, '<ul><li><span>Hello\nworld</span></li></ul>', '- Hello\\\n  world\n', '- Hello\n  world\n'],
+  ['Hello world in strong, a newline under the current name', {type:  'paragraph', content:  [{type:  'strong', children:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  '\n'}, {type:  'text', value:  'world'}]}]}, '<p><span>Hello\nworld</span></p>', '**Hello\\\nworld**\n', 'Hello\nworld\n'],
+  ['after inline code, a newline under the current name', {type:  'paragraph', content:  [{type:  'code', value:  'f()'}, {type:  'text', value:  '\n'}, {type:  'text', value:  'world'}]}, '<p><code>f()</code>\nworld</p>', '`f()`\\\nworld\n', 'f()\nworld\n'],
+  ['Hello world, the leaf in em, a newline under the current name', {type:  'paragraph', content:  [{type:  'text', value:  'Hello'}, {type:  'text', value:  '\n', marks:  [{type:  'em'}]}, {type:  'text', value:  'world'}]}, '<p>Hello<span>\n</span>world</p>', 'Hello\\\nworld\n', 'Hello\nworld\n'],
+  ['**Hello** then a leaf {value: \' \', text: \'X\'} then *world*', {type:  'paragraph', content:  [{type:  'text', value:  'Hello', marks:  [{type:  'strong'}]}, {type:  'text', value:  ' ', text:  'X'}, {type:  'text', value:  'world', marks:  [{type:  'em'}]}]}, '<p><span>Hello</span> <span>world</span></p>', '**Hello** *world*\n', 'Hello world\n'],
+  ['Left Right, inline code children of a space', {type:  'paragraph', content:  [{type:  'text', value:  'Left'}, {type:  'code', children:  ' '}, {type:  'text', value:  'Right'}]}, '<p>Left<code> </code>Right</p>', 'Left Right\n', 'Left Right\n'],
+  ['Left Right, inline code value of a space', {type:  'paragraph', content:  [{type:  'text', value:  'Left'}, {type:  'code', value:  ' '}, {type:  'text', value:  'Right'}]}, '<p>Left<code> </code>Right</p>', 'Left Right\n', 'Left Right\n'],
+  ['Left Right, inline code children of a newline', {type:  'paragraph', content:  [{type:  'text', value:  'Left'}, {type:  'code', children:  '\n'}, {type:  'text', value:  'Right'}]}, '<p>Left<code>\n</code>Right</p>', 'Left\\\nRight\n', 'Left\nRight\n'],
+  ['Left Right, inline code value of a newline', {type:  'paragraph', content:  [{type:  'text', value:  'Left'}, {type:  'code', value:  '\n'}, {type:  'text', value:  'Right'}]}, '<p>Left<code>\n</code>Right</p>', 'Left\\\nRight\n', 'Left\nRight\n'],
+  ['inline code {value: \' \', children: [x]}', {type:  'paragraph', content:  [{type:  'code', value:  ' ', children:  [{type:  'text', value:  'x'}]}]}, '<p><code> </code></p>', '', ''],
+];
+
+test('whitespace between words, in a text leaf or an inline code node, under either name, shows as main shows it, in HTML, Markdown and text', () => {
+  for (const [name, block, h, markdown, plain] of NEIGHBOURS) {
+    assert.equal(html(block), h, name);
+    assert.equal(md(block), markdown, name);
+    assert.equal(text(block), plain, name);
+  }
+});
+
+test('the round-trip canon keeps whitespace between words: a leaf under its old name compares as under its current name, and keeps its space', () => {
+  const runText = (block) => JSON.stringify(canon(block));
+  for (const [name, block] of NEIGHBOURS.filter(([n]) => n.includes('under the old name'))) {
+    const current = JSON.parse(JSON.stringify(block).replace(/"text":("(?: |\\n)")/g, '"value":$1'));
+    assert.deepEqual(canon(block), canon(current), name);
+  }
+  assert.match(runText({ type: 'paragraph', content: [...t('Hello'), { type: 'text', text: ' ' }] }), /"text":"Hello "/);
+  assert.match(runText({ type: 'paragraph', content: [...t('Hello'), { type: 'text', text: ' ' }, ...t('world')] }), /"text":"Hello world"/);
+  assert.match(runText({ type: 'paragraph', content: [...t('Hello'), { type: 'text', text: '\n' }, ...t('world')] }), /"text":"Hello\\nworld"/);
+  // The current name's whitespace wins over a filled old name, in canon as in the renderers.
+  assert.match(runText({ type: 'paragraph', content: [...t('a'), { type: 'text', value: ' ', text: 'X' }, ...t('b')] }), /"text":"a b"/);
+});
+
+test('an inline code node of only whitespace keeps it, with or without children beside it, as main shows it', () => {
   assert.deepEqual(readItem({ type: 'code', value: ' ' }, 'inline:code', 'value'), { name: 'value', value: ' ' });
-  // The one blank rule: a blank value means "look at the other name". Main showed ' ' here.
+  assert.deepEqual(readItem({ type: 'code', value: ' ', children: t('x') }, 'inline:code', 'value'), { name: 'value', value: ' ' });
   const both = { type: 'paragraph', content: [{ type: 'code', value: ' ', children: t('x') }] };
-  assert.equal(html(both), '<p><code>x</code></p>');
-  assert.equal(md(both), '`x`\n');
-  assert.equal(text(both), 'x\n');
+  assert.equal(html(both), '<p><code> </code></p>');
 });
 
 // Each item edge whose output changes under the rule, one per row and kind: the block, then the
-// whole HTML, Markdown and text it shows now. What main showed is in each comment. No word main
-// shows is lost: a blank or [] current name, or one of a type it does not read, now falls to a
-// filled old name; and spaces alone under an old name no longer show in HTML.
+// whole HTML, Markdown and text it shows now; what main showed is in each comment. Each adds
+// characters where main showed none or an empty value: no character main shows is lost.
 const CHANGED = [
   // steps: blocks [] used to win and leave the step empty; the children show now.
   [{ type: 'steps', steps: [{ title: 'S', blocks: [], children: [{ type: 'paragraph', content: [{ type: 'text', value: 'B' }] }] }] }, '<ol class="bp-steps"><li class="bp-steps__step"><div class="bp-steps__title">S</div><div class="bp-steps__body"><p>B</p></div></li></ol>', '1. **S**\n\n   B\n', '1. S\n\n   B\n'],
-  // steps: blocks of a type the schema does not give it used to win; the children show now.
+  // steps: blocks of a type the schema does not give them used to win; the children show now.
   [{ type: 'steps', steps: [{ title: 'S', blocks: 'A', children: [{ type: 'paragraph', content: [{ type: 'text', value: 'B' }] }] }] }, '<ol class="bp-steps"><li class="bp-steps__step"><div class="bp-steps__title">S</div><div class="bp-steps__body"><p>B</p></div></li></ol>', '1. **S**\n\n   B\n', '1. S\n\n   B\n'],
+  // steps: children that are inlines, not blocks, now show as an unsupported block where blocks [] showed nothing.
+  [{ type: 'steps', steps: [{ title: 'S', blocks: [], children: [{ type: 'text', value: 'B' }] }] }, '<ol class="bp-steps"><li class="bp-steps__step"><div class="bp-steps__title">S</div><div class="bp-steps__body"><div class="bp-unknown-block">Unsupported block: text</div></div></li></ol>', '1. **S**\n', '1. S\n'],
   // code-tabs: a blank value used to win and leave the tab empty; the code shows now.
   [{ type: 'code-tabs', tabs: [{ label: 'L', value: '', code: 'B' }] }, '<div class="bp-code-tabs"><div class="bp-code-tabs__strip" role="tablist"><button type="button" class="bp-code-tabs__tab bp-code-tabs__tab--active" role="tab" aria-selected="true" data-lang="">L</button></div><div class="bp-code-tabs__panels"><div class="bp-code-tabs__panel" data-lang=""><pre class="bp-codeblock">B</pre></div></div></div>', '**L**\n\n```\nB\n```\n', 'L\n\nB\n'],
-  // code-tabs: spaces under code alone; HTML used to show them, it is empty now.
-  [{ type: 'code-tabs', tabs: [{ label: 'L', code: '  ' }] }, '<div class="bp-code-tabs"><div class="bp-code-tabs__strip" role="tablist"><button type="button" class="bp-code-tabs__tab bp-code-tabs__tab--active" role="tab" aria-selected="true" data-lang="">L</button></div><div class="bp-code-tabs__panels"><div class="bp-code-tabs__panel" data-lang=""><pre class="bp-codeblock"></pre></div></div></div>', '**L**\n', 'L\n'],
+  // code-tabs: a value that is not text (an inline array) used to win and show nothing; the code shows now.
+  [{ type: 'code-tabs', tabs: [{ label: 'L', value: [{ type: 'text', value: 'A' }], code: 'B' }] }, '<div class="bp-code-tabs"><div class="bp-code-tabs__strip" role="tablist"><button type="button" class="bp-code-tabs__tab bp-code-tabs__tab--active" role="tab" aria-selected="true" data-lang="">L</button></div><div class="bp-code-tabs__panels"><div class="bp-code-tabs__panel" data-lang=""><pre class="bp-codeblock">B</pre></div></div></div>', '**L**\n\n```\nB\n```\n', 'L\n\nB\n'],
+  // code-tabs: a value [] used to win; the code's spaces show now.
+  [{ type: 'code-tabs', tabs: [{ label: 'L', value: [], code: '  ' }] }, '<div class="bp-code-tabs"><div class="bp-code-tabs__strip" role="tablist"><button type="button" class="bp-code-tabs__tab bp-code-tabs__tab--active" role="tab" aria-selected="true" data-lang="">L</button></div><div class="bp-code-tabs__panels"><div class="bp-code-tabs__panel" data-lang=""><pre class="bp-codeblock">  </pre></div></div></div>', '**L**\n', 'L\n'],
   // columns: a blank text used to win and leave the head empty; the label shows now.
   [{ type: 'table', columns: [{ key: 'k', text: '', label: 'B' }], rows: [{ k: 1 }] }, '<table role="presentation" class="bp-table"><thead><tr><th class="bp-table__th"><span>B</span></th></tr></thead><tbody><tr><td class="bp-table__td"><span>1</span></td></tr></tbody></table>', '| B |\n| --- |\n| 1 |\n', 'B\n-\n1\n'],
-  // columns: text [] used to win; the label, an inline array, shows now.
-  [{ type: 'table', columns: [{ key: 'k', text: [], label: [{ type: 'text', value: 'B' }] }], rows: [{ k: 1 }] }, '<table role="presentation" class="bp-table"><thead><tr><th class="bp-table__th"><span>B</span></th></tr></thead><tbody><tr><td class="bp-table__td"><span>1</span></td></tr></tbody></table>', '| B |\n| --- |\n| 1 |\n', 'B\n-\n1\n'],
-  // columns: a blank label alone used to give an empty head; the key shows now, as with no label.
-  [{ type: 'table', columns: [{ key: 'k', label: '' }], rows: [{ k: 1 }] }, '<table role="presentation" class="bp-table"><thead><tr><th class="bp-table__th"><span>k</span></th></tr></thead><tbody><tr><td class="bp-table__td"><span>1</span></td></tr></tbody></table>', '| k |\n| --- |\n| 1 |\n', 'k\n-\n1\n'],
-  // criteria: a text of spaces used to win; the criterion shows now.
-  [{ type: 'task-detail', title: 'T', criteria: [{ text: '  ', criterion: 'B' }] }, '<div class="bp-tdetail"><div class="bp-tdetail__title">T</div><div class="bp-tdetail__meta"><span class="bp-g bp-g--open">○</span><span></span></div><div class="bp-tdetail__lbl">Criteria · 0/1</div><div class="bp-tdetail__crit"><div class="bp-crit"><span class="bp-g bp-g--ready">○</span><span class="bp-crit__t">B</span></div></div></div>', '**T**\n\nCriteria · 0/1\n\n- [ ] B\n', 'T\n\nCriteria · 0/1\n\n- [ ] B\n'],
-  // criteria under task: a text of spaces used to win; the criterion shows now.
-  [{ type: 'task-detail', task: { title: 'T', criteria: [{ text: '  ', criterion: 'B' }] } }, '<div class="bp-tdetail"><div class="bp-tdetail__title">T</div><div class="bp-tdetail__meta"><span class="bp-g bp-g--open">○</span><span></span></div><div class="bp-tdetail__lbl">Criteria · 0/1</div><div class="bp-tdetail__crit"><div class="bp-crit"><span class="bp-g bp-g--ready">○</span><span class="bp-crit__t">B</span></div></div></div>', '**T**\n\nCriteria · 0/1\n\n- [ ] B\n', 'T\n\nCriteria · 0/1\n\n- [ ] B\n'],
-  // criteria: spaces under criterion alone; HTML used to show them, it is empty now.
-  [{ type: 'task-detail', title: 'T', criteria: [{ criterion: '  ' }] }, '<div class="bp-tdetail"><div class="bp-tdetail__title">T</div><div class="bp-tdetail__meta"><span class="bp-g bp-g--open">○</span><span></span></div><div class="bp-tdetail__lbl">Criteria · 0/1</div><div class="bp-tdetail__crit"><div class="bp-crit"><span class="bp-g bp-g--ready">○</span><span class="bp-crit__t"></span></div></div></div>', '**T**\n\nCriteria · 0/1\n\n- [ ]\n', 'T\n\nCriteria · 0/1\n\n- [ ]\n'],
-  // a text leaf: a value of spaces used to win; its text shows now.
-  [{ type: 'paragraph', content: [{ type: 'text', value: '  ', text: 'B' }] }, '<p>B</p>', 'B\n', 'B\n'],
-  // inline code: children of spaces alone; HTML used to show them, it is empty now.
-  [{ type: 'paragraph', content: [{ type: 'code', children: '  ' }] }, '<p><code></code></p>', '', ''],
-  // blockquote: spaces under text alone; HTML used to show them, it is empty now.
-  [{ type: 'blockquote', text: '  ' }, '<blockquote class="bp-blockquote"><p></p></blockquote>', '', ''],
-  // ingress: spaces under text alone; HTML used to show them, it is empty now.
-  [{ type: 'ingress', text: '  ' }, '<p class="bp-role-ingress"></p>', '', ''],
-  // note: spaces under text alone; HTML used to show them, it is empty now.
-  [{ type: 'note', label: 'L', text: '  ' }, '<div class="bp-note"><span class="bp-note__k">L</span><div class="bp-note__d"></div></div>', '**L:**\n', 'L:\n'],
-  // notes: spaces under an item's text alone; HTML used to show them, it is empty now.
-  [{ type: 'notes', items: [{ label: 'L', text: '  ' }] }, '<div class="bp-notes"><div class="bp-note"><span class="bp-note__k">L</span><div class="bp-note__d"></div></div></div>', '- **L:**\n', '- L:\n'],
-  // list: spaces under an item's text alone; HTML used to show them, it is empty now.
-  [{ type: 'list', items: [{ text: '  ' }] }, '<ul><li><span></span></li></ul>', '-\n', '-\n'],
+  // columns: text {} used to win and show an empty inline object; the label shows now.
+  [{ type: 'table', columns: [{ key: 'k', text: { }, label: 'B' }], rows: [{ k: 1 }] }, '<table role="presentation" class="bp-table"><thead><tr><th class="bp-table__th"><span>B</span></th></tr></thead><tbody><tr><td class="bp-table__td"><span>1</span></td></tr></tbody></table>', '| B |\n| --- |\n| 1 |\n', 'B\n-\n1\n'],
+  // columns: text true used to win; the label shows now.
+  [{ type: 'table', columns: [{ key: 'k', text: true, label: 'B' }], rows: [{ k: 1 }] }, '<table role="presentation" class="bp-table"><thead><tr><th class="bp-table__th"><span>B</span></th></tr></thead><tbody><tr><td class="bp-table__td"><span>1</span></td></tr></tbody></table>', '| B |\n| --- |\n| 1 |\n', 'B\n-\n1\n'],
+  // columns: text true alone used to show nothing; the key shows now.
+  [{ type: 'table', columns: [{ key: 'k', text: true }], rows: [{ k: 1 }] }, '<table role="presentation" class="bp-table"><thead><tr><th class="bp-table__th"><span>k</span></th></tr></thead><tbody><tr><td class="bp-table__td"><span>1</span></td></tr></tbody></table>', '| k |\n| --- |\n| 1 |\n', 'k\n-\n1\n'],
+  // columns: label true alone used to show nothing; the key shows now.
+  [{ type: 'table', columns: [{ key: 'k', label: true }], rows: [{ k: 1 }] }, '<table role="presentation" class="bp-table"><thead><tr><th class="bp-table__th"><span>k</span></th></tr></thead><tbody><tr><td class="bp-table__td"><span>1</span></td></tr></tbody></table>', '| k |\n| --- |\n| 1 |\n', 'k\n-\n1\n'],
 ];
 
 test('each item edge whose behaviour changes under the rule shows the same winner in HTML, Markdown and text', () => {

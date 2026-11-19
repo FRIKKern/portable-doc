@@ -322,7 +322,13 @@ function canonAt(v, owner) {
   for (const field of ALIASED.get(own) ?? []) {
     if (!namesOf(own, field).some((name) => Object.hasOwn(v, name))) continue;
     const { name, value } = readItem(v, own, field);
-    if (value === undefined || !(name === field || folded(own, name))) continue;
+    // No name remains (each is null or of the wrong type): the renderers show nothing, and canon
+    // keeps a stored current name as it is, so two different stored values never compare equal.
+    if (value === undefined) {
+      if (v[field] !== undefined) out[field] = canonAt(v[field], inner(field, v[field]));
+      continue;
+    }
+    if (!(name === field || folded(own, name))) continue;
     out[field] = name !== field && convertOf(own, name) === 'inline-from-string' && typeof value === 'string' ? runs([{ type: 'text', value }]) : canonAt(value, inner(field, value));
   }
   return out;

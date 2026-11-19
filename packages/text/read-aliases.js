@@ -9,20 +9,21 @@
 // The rule, word for word as in the table's _comment:
 //   For each field, read the names in order: the current name first, then the old names in
 //   table order. Skip a name that is missing, null, or holds the wrong type. Where the row's
-//   whitespace-is-content column says yes, take the first remaining name whose value holds any
-//   character, whitespace included. Where it says no, take the first remaining name whose value
-//   holds a non-whitespace character, else the first that holds any character. If none does,
-//   take the first remaining name as stored. If no name remains, the field is empty. A string
-//   holds the characters it has; a non-empty array or a number holds a non-whitespace character.
+//   column 'a whitespace-only value under the current name wins' says yes, take the first
+//   remaining name whose value holds any character, whitespace included. Where it says no, take
+//   the first remaining name whose value holds a non-whitespace character, else the first that
+//   holds any character. If none does, take the first remaining name as stored. If no name
+//   remains, the field is empty. A string holds the characters it has; a non-empty array, a
+//   number or a non-empty object holds a non-whitespace character.
 // "Missing" is no own property or undefined. A name's type is what spec/blocks.schema.json gives it
 // on its owner (alias-types.js, made from the schema); a name the schema does not declare takes the
 // types of its field's other names, or, where it types none of them, those main's reader accepted
 // (UNTYPED in scripts/generate-alias-types.mjs; null: any). Text is a string or a finite number.
-// The whitespace column is ALIAS_WHITESPACE in alias-types.js, made from the table: yes for the
-// inline rows (a text leaf, an inline code node), where whitespace is running text; no for labels.
+// The column is ALIAS_CURRENT_WHITESPACE_WINS in alias-types.js, made from the table's
+// currentWhitespaceWins: yes where main showed a whitespace-only current name.
 
 import { TABLE } from './alias-table.js';
-import { ALIAS_TYPES, ALIAS_WHITESPACE } from './alias-types.js';
+import { ALIAS_CURRENT_WHITESPACE_WINS, ALIAS_TYPES } from './alias-types.js';
 
 // util.js's isMap, written here: util.js does work at load, and React bundles this module alone.
 const isMap = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -44,7 +45,7 @@ function built() {
   if (NAMES) return;
   deepFreeze(TABLE);
   deepFreeze(ALIAS_TYPES);
-  deepFreeze(ALIAS_WHITESPACE);
+  deepFreeze(ALIAS_CURRENT_WHITESPACE_WINS);
   const names = new Map();
   const current = new Map();
   for (const [from, { to }] of Object.entries(TABLE.aliases)) {
@@ -86,13 +87,13 @@ function ofTypes(owner, name, value) {
   return types === null || types.some((t) => OF_TYPE[t]?.(value));
 }
 
-/** Whether whitespace is content in field `field` of `owner` (the table's whitespace column); a field with no old names: false. */
-export function whitespaceIsContent(owner, field) {
+/** The table's column 'a whitespace-only value under the current name wins' for field `field` of `owner`; a field with no old names: false. */
+export function currentWhitespaceWins(owner, field) {
   built();
-  return ALIAS_WHITESPACE[`${owner}.${field}`] === true;
+  return ALIAS_CURRENT_WHITESPACE_WINS[`${owner}.${field}`] === true;
 }
 
-/** What a value holds: 2, a non-whitespace character; 1, only whitespace; 0, no character. A string holds the characters it has; a non-empty array or a number holds a non-whitespace character. */
+/** What a value holds: 2, a non-whitespace character; 1, only whitespace; 0, no character. A string holds the characters it has; a non-empty array, a number or a non-empty object holds a non-whitespace character. */
 export function holds(value) {
   if (typeof value === 'string') return value === '' ? 0 : /\S/.test(value) ? 2 : 1;
   return (Array.isArray(value) && value.length > 0) || typeof value === 'number' || (isMap(value) && Object.keys(value).length > 0) ? 2 : 0;
@@ -132,13 +133,15 @@ export const fieldOf = (block, field) => readField(block, field).value;
  */
 export function readItem(item, owner, field) {
   if (!isMap(item)) return { name: field, value: undefined };
-  const spaceIsContent = whitespaceIsContent(owner, field);
+  const spaceWins = currentWhitespaceWins(owner, field);
   let first, spaced;
   for (const name of namesOf(owner, field)) {
-    const value = Object.hasOwn(item, name) ? item[name] : undefined;
+    // A get first, so a reader traced by a Proxy (golden-reads.mjs) sees every name it looks at.
+    const got = item[name];
+    const value = got !== undefined && Object.hasOwn(item, name) ? got : undefined;
     if (value === undefined || value === null || !ofTypes(owner, name, value)) continue;
     const held = holds(value);
-    if (held === 2 || (held === 1 && spaceIsContent)) return { name, value };
+    if (held === 2 || (held === 1 && spaceWins)) return { name, value };
     if (held === 1) spaced ??= { name, value };
     first ??= { name, value };
   }
