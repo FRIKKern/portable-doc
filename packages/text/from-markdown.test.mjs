@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
-import { ADDRESS_KEYS, safeUrl } from './util.js';
+import { safeUrl } from './util.js';
 
 const golden = (type) => JSON.parse(fs.readFileSync(new URL(`../../goldens/blocks/${type}.golden.json`, import.meta.url), 'utf8')).input;
 
@@ -247,7 +247,7 @@ test('the exported schema is frozen: a mutation throws and leaves validate and t
   assert.deepEqual(fromMarkdown(fenceOf(list)), [{ type: 'code', value: JSON.stringify(list) }]);
 });
 
-test('a portabledoc fence with an unsafe value in any address field stays a code block, whole; the address fields cover every address-like field the schema names', () => {
+test('a portabledoc fence with an unsafe value in any address field stays a code block, whole', () => {
   const t = (value) => ({ type: 'text', value });
   const bad = 'javascript:alert(1)';
   const fences = [
@@ -260,19 +260,6 @@ test('a portabledoc fence with an unsafe value in any address field stays a code
   for (const blocks of fences) assert.deepEqual(fromMarkdown(fenceOf(blocks)), [{ type: 'code', value: JSON.stringify(blocks) }], JSON.stringify(blocks));
   const safe = [{ type: 'paragraph', content: [t('a'), { type: 'image', src: 'https://example.com/a.png' }], poster: '/a.png' }];
   assert.deepEqual(fromMarkdown(fenceOf(safe)), safe);
-  // The schema has no address marker (validate refuses a `format` keyword), so the list is
-  // ADDRESS_KEYS; any schema property named like an address must be on it.
-  const names = new Set();
-  const stack = [blockSchema];
-  while (stack.length) {
-    const node = stack.pop();
-    if (node === null || typeof node !== 'object') continue;
-    if (node.properties && typeof node.properties === 'object' && !Array.isArray(node.properties)) for (const key of Object.keys(node.properties)) names.add(key);
-    stack.push(...Object.values(node));
-  }
-  const addressLike = [...names].filter((name) => /href|src|poster|url|uri/i.test(name)).sort();
-  assert.deepEqual(addressLike, ['href', 'poster', 'src']);
-  for (const name of addressLike) assert.ok(ADDRESS_KEYS.includes(name), name);
 });
 
 test('a Markdown image or link with an unsafe address keeps its text and loses the address; a safe one links', () => {

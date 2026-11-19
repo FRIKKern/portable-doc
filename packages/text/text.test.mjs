@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { BLOCK_TYPES, toMarkdown, toPlainText } from './index.js';
+import { BLOCK_TYPES, fromMarkdown, toMarkdown, toPlainText } from './index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
@@ -115,6 +115,16 @@ test('Markdown-special characters in prose are escaped; plain text keeps them', 
   const doc = [{ type: 'paragraph', text: '# not a heading\n*stars* and _under_ [brackets]\n1. not a list' }];
   assert.equal(toMarkdown(doc), '\\# not a heading\\\n\\*stars\\* and \\_under\\_ \\[brackets\\]\\\n1\\. not a list\n');
   assert.equal(toPlainText(doc), '# not a heading\n*stars* and _under_ [brackets]\n1. not a list\n');
+});
+
+test('a // a reader could link as a protocol-relative address is escaped; a // between words or in http:// is not', () => {
+  // A reader that links bare URLs links //host after anything but a letter, a digit, _, : or /.
+  const para = (value) => [{ type: 'paragraph', content: [{ type: 'text', value }] }];
+  assert.equal(toMarkdown(para('see //evil.example/x')), 'see /\\/evil.example/x\n');
+  assert.equal(toMarkdown(para('//a.example, (//b.example) and x.//c.example')), '/\\/a.example, (/\\/b.example) and x./\\/c.example\n');
+  for (const text of ['a // b', 'http://example.com/a', 'abc//def.example', 'a ///x.example', 'see //']) assert.equal(toMarkdown(para(text)), `${text}\n`, text);
+  // Import gives the same text back (it links a bare http:// URL, so that one is left out here).
+  for (const text of ['see //evil.example/x', '(//b.example)', '//a.example', 'a // b']) assert.deepEqual(fromMarkdown(toMarkdown(para(text))), para(text), text);
 });
 
 test('a link with a disallowed scheme renders as its text only', () => {

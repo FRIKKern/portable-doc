@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 27 changes · cli: refuse a command file named help, and an order that is not a finite number ([#101](https://github.com/FRIKKern/portable-doc/pull/101))
+- **Today** · 28 changes · text: a behaviour test finds every field a renderer shows as an address ([#81](https://github.com/FRIKKern/portable-doc/pull/81))
 - **Yesterday** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
