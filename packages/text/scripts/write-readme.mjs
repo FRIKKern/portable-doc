@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // Writes the list of block types round-trip mode keeps into README.md, between the
 // round-trip-types markers: the importer's fence types, and every other type with a form
-// whose own Markdown reads back as it. Never typed by hand: `node packages/text/readme.mjs`
+// whose own Markdown reads back as it. Never typed by hand: `node packages/text/scripts/write-readme.mjs`
 // writes it, and a test fails when README.md differs.
 
 import fs from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { allForms } from './block-forms.mjs';
-import { FENCE_TYPES } from './from-markdown.js';
-import { fromMarkdown, toMarkdown } from './index.js';
+import { allForms } from '../block-forms.mjs';
+import { FENCE_TYPES } from '../from-markdown.js';
+import { fromMarkdown, toMarkdown } from '../index.js';
 
-const FILE = new URL('README.md', import.meta.url);
+const FILE = new URL('../README.md', import.meta.url);
 const START = '<!-- round-trip-types:start -->';
 const END = '<!-- round-trip-types:end -->';
-const NOTE = '<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/readme.mjs`; `npm run check` fails when this part is stale. -->';
+const NOTE = '<!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/scripts/write-readme.mjs`; `npm run check` fails when this part is stale. -->';
 
 /** The types round-trip mode keeps: { fenced, ownOnly }, each sorted. */
 export function keptTypes() {

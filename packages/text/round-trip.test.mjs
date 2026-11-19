@@ -7,7 +7,7 @@ import { SCHEMA_TYPES, allForms, contexts, formsOf } from './block-forms.mjs';
 import { FENCE_TYPES, checkFence } from './from-markdown.js';
 import { READ_ALIASES } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown } from './index.js';
-import { keptTypes, readme } from './readme.mjs';
+import { keptTypes, readme } from './scripts/write-readme.mjs';
 import { quote } from './util.js';
 
 // The rule: a block the author made survives a round trip, empty or not. In round-trip mode,
@@ -131,8 +131,8 @@ test('round-trip mode keeps a whole doc of every keepable form, in order, and fe
   assert.match(out.markdown, /```portabledoc\n\[\{"type":"paragraph"/);
 });
 
-test('the README lists the types round-trip mode keeps as node packages/text/readme.mjs writes them today: the fence types and blockquote', () => {
-  assert.equal(fs.readFileSync(new URL('README.md', import.meta.url), 'utf8'), readme(), 'stale: run node packages/text/readme.mjs');
+test('the README lists the types round-trip mode keeps as node packages/text/scripts/write-readme.mjs writes them today: the fence types and blockquote', () => {
+  assert.equal(fs.readFileSync(new URL('README.md', import.meta.url), 'utf8'), readme(), 'stale: run node packages/text/scripts/write-readme.mjs');
   assert.deepEqual(keptTypes().fenced, [...FENCE_TYPES].sort());
   assert.ok(keptTypes().ownOnly.includes('blockquote'));
 });
