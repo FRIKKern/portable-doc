@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Every shared case in fixtures/, read from disk: one reader per folder, so a test that walks
 // "every fixture case" reads them all the same way. A folder with no reader here, and not named
-// in NOT_READ with why, throws; so does a folder that gives no case. The word test
+// in NOT_READ with why (a reason that is not blank), throws; so does a folder that gives no case. The word test
 // (packages/text/writers-keep-words.test.mjs) and the round-trip list-item walk
 // (packages/text/round-trip-list-items.test.mjs) read through this.
 import fs from 'node:fs';
@@ -51,7 +51,7 @@ const READERS = {
 /** Every shared case as { folder, name, blocks, reads? }, read from each folder under fixtures/. */
 export async function fixtureCases() {
   const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  const unread = folders.filter((f) => !(f in READERS) && !(f in NOT_READ));
+  const unread = folders.filter((f) => !(f in READERS) && !(typeof NOT_READ[f] === 'string' && NOT_READ[f].trim()));
   if (unread.length) throw new Error(`fixtures/: no reader for ${unread.join(', ')}; add one to scripts/lib/fixture-cases.mjs, or name it in NOT_READ with why`);
   const all = [];
   for (const folder of folders.filter((f) => f in READERS)) {

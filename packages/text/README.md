@@ -223,7 +223,8 @@ back and compares, never by a list of types.
   title, a tone import does not know) is fenced whole.
 - A list is written as indented items with their blocks inside exactly when
   that reads back as the list; import keeps only nested lists as an item's
-  blocks, so a list whose item holds any other block is fenced whole.
+  blocks, so a list whose item holds any other block is fenced whole, or listed
+  in `lost` as a whole when a fence cannot hold it (an image, an unsafe link).
 
 <!-- round-trip-types:start -->
 <!-- Built from the fence types and the forms that read back in their own Markdown by `node packages/text/scripts/write-readme.mjs`; `npm run check` fails when this part is stale. -->

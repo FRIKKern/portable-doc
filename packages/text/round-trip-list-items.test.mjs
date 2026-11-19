@@ -36,7 +36,8 @@ test('in every fixture case, a list whose items hold blocks is written in its ow
     // The few generated inputs over KEEP_BYTES (callouts 1000 deep) take seconds to read back.
     if (JSON.stringify(blocks).length > KEEP_BYTES) continue;
     for (const list of outermost(blocks)) {
-      const key = JSON.stringify(list);
+      // Deduped per folder, so a list made from Markdown is checked as such even when an earlier folder holds it too.
+      const key = `${folder} ${JSON.stringify(list)}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const own = toMarkdown([list]);
@@ -60,8 +61,8 @@ test('in every fixture case, a list whose items hold blocks is written in its ow
     }
   }
   assert.deepEqual(wrong.slice(0, 5), [], `${wrong.length} lists`);
-  // Today: 25 distinct lists native (24 of them made from Markdown), 60 fenced. Fewer means cases went unread.
-  assert.ok(routes.native >= 20 && routes.fenced >= 50 && fromText >= 20, JSON.stringify({ ...routes, fromText }));
+  // Exact, so a list cannot change route unseen; a new shared case moves these on purpose.
+  assert.deepEqual({ ...routes, fromText }, { native: 25, fenced: 61, lost: 0, fromText: 24 });
 });
 
 test('a list whose item holds a block import cannot bring back is reported in lost, never written as kept', () => {
