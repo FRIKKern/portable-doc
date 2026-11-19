@@ -2,6 +2,7 @@
 // Data blocks: stats, charts, heatmaps, comparisons, gauges, routes, tables
 // and sheets. A picture turns into its numbers: a small table or list.
 
+import { numberText, stringOf } from './number-text.js';
 import { asList, fmtNum, isMap, maxOf, paras, str, tableOut } from './util.js';
 import { titled } from './blocks-layout.js';
 import { fieldOf, itemOf, readField } from './read-aliases.js';
@@ -132,7 +133,7 @@ function heatmap(b, ctx) {
   const marginals = get(b, 'marginals') === true;
   const cols = maxOf(grid.map((r) => r.length));
   const gutter = rowLabels.length > 0 || marginals;
-  const head = [...(gutter ? [''] : []), ...Array.from({ length: cols }, (_, j) => colLabels[j] ?? String(j + 1)), ...(marginals ? ['Σ'] : [])];
+  const head = [...(gutter ? [''] : []), ...Array.from({ length: cols }, (_, j) => colLabels[j] ?? numberText(j + 1)), ...(marginals ? ['Σ'] : [])];
   const sum = (xs) => xs.reduce((a, v) => a + v, 0);
   const rows = grid.map((row, i) => [
     ...(gutter ? [rowLabels[i] ?? ''] : []),
@@ -158,7 +159,7 @@ function chart(b, ctx) {
   const xLabels = asList(get(get(b, 'axes'), 'xLabels')).map(shown);
   const n = maxOf(series.map((s) => s.points.length));
   const head = ['', ...series.map((s) => s.label)].map((s) => one(ctx, s));
-  const rows = Array.from({ length: n }, (_, i) => [one(ctx, xLabels[i] || String(i + 1)), ...series.map((s) => (i < s.points.length ? fmtNum(s.points[i]) : ''))]);
+  const rows = Array.from({ length: n }, (_, i) => [one(ctx, xLabels[i] || numberText(i + 1)), ...series.map((s) => (i < s.points.length ? fmtNum(s.points[i]) : ''))]);
   const title = caption ? `${ctx.bold(one(ctx, caption))} (${kind})` : capitalizeFirst(kind);
   return paras(title, tableOut(head, rows, ctx.md));
 }
@@ -190,7 +191,7 @@ function gaugeRows(b) {
   }
   return [...counts.entries()]
     .sort((x, y) => (x[1] !== y[1] ? y[1] - x[1] : x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0))
-    .map(([label, count]) => [label, String(count), '']);
+    .map(([label, count]) => [label, numberText(count), '']);
 }
 
 function gaugeList(b, ctx) {
@@ -281,7 +282,7 @@ function table(b, ctx) {
     rows = rows.slice(1);
   }
   // columns-from-cols: a column's own type, else the type cols gives at its place.
-  const typeAt = (c) => (isMap(c) && c.type != null ? String(c.type) : null);
+  const typeAt = (c) => (isMap(c) && c.type != null ? stringOf(c.type) : null);
   const types = Array.from({ length: Math.max(columns.length, cols.length) }, (_, j) => typeAt(columns[j]) ?? typeAt(cols[j]) ?? '');
   const cell = (c) => ctx.inline(cellContent(c), { oneLine: true });
   const typed = (c, type) => {
