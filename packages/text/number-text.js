@@ -37,15 +37,45 @@ export function stringOf(v) {
 }
 
 /**
- * One style property that carries a number, as `prop:value`; '' when the number is not finite, so
- * the property is left out whole.
+ * How a style writes its number, by name. A new format is added here and nowhere else.
+ * digits: the digits numberText gives; tenths: a whole number in full, else one digit after the
+ * point; thousandths: three digits after the point.
+ */
+export const STYLE_FORMATS = Object.freeze({
+  digits: (n) => numberText(n),
+  tenths: (n) => (Number.isInteger(n) ? numberText(n, 'whole') : numberText(n, 1)),
+  thousandths: (n) => numberText(n, 3),
+});
+
+/** Every text a style may write before its number. */
+export const STYLE_BEFORE = Object.freeze(['', 'span ', 'repeat(', 'auto repeat(']);
+
+/** Every text a style may write after its number. */
+export const STYLE_AFTER = Object.freeze([
+  '',
+  '%',
+  'px',
+  ',12px)',
+  ',minmax(10px,44px))',
+  ',minmax(28px,auto))',
+  ',minmax(10px,44px)) auto',
+  ',minmax(28px,auto)) auto',
+]);
+
+/**
+ * One style property that carries a number, as `prop:<before><number><after>`; '' when the number
+ * is not finite, so the property is left out whole. The format, before and after are data from the
+ * lists above; any other throws, finite number or not.
  * @param {string} prop
  * @param {number | null | undefined} n
- * @param {(n: number) => string} [write] the value from the finite number; by default its digits
+ * @param {{ format?: string, before?: string, after?: string }} [how]
  * @returns {string}
  */
-export function styleOf(prop, n, write = numberText) {
-  return typeof n === 'number' && Number.isFinite(n) ? `${prop}:${write(n)}` : '';
+export function styleOf(prop, n, { format = 'digits', before = '', after = '' } = {}) {
+  if (!Object.hasOwn(STYLE_FORMATS, format)) throw new TypeError(`styleOf: ${JSON.stringify(format)} is not a style format`);
+  if (!STYLE_BEFORE.includes(before)) throw new TypeError(`styleOf: ${JSON.stringify(before)} is not a listed text before a number`);
+  if (!STYLE_AFTER.includes(after)) throw new TypeError(`styleOf: ${JSON.stringify(after)} is not a listed text after a number`);
+  return typeof n === 'number' && Number.isFinite(n) ? `${prop}:${before}${STYLE_FORMATS[format](n)}${after}` : '';
 }
 
 /**

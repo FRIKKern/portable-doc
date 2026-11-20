@@ -15,9 +15,7 @@
 //     `name:` in a fragment with no markup, the name a word or a span), a template span that
 //     calls a number writer with an argument that may hold a number. Writers are known by symbol:
 //     numberText, stringOf, a const naming a writer, or a function in React's source whose body
-//     calls one so. Inside styleOf's write callback a call is trusted only when each such argument
-//     is the callback's own parameter, the finite number styleOf hands it; styleOf leaves a
-//     property whose number is not finite out whole;
+//     calls one so. styleOf takes no function: it writes its number by a named format;
 //   - styleOf written straight into style="…" (not inside styleAttr), which writes style="" when
 //     its number is not finite.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
@@ -100,9 +98,7 @@ function reactRoutes(only) {
   };
   // Number writers are found by symbol, never by name. The door's are numberText and stringOf
   // (number-text.js). A function in React's source is one when its body calls a writer with an
-  // argument that may hold a number, unless the call is trusted; a const that names a writer is one.
-  // A call is trusted inside styleOf's write callback when each argument of it that may hold a
-  // number is the callback's own parameter: the finite number styleOf hands it.
+  // argument that may hold a number; a const that names a writer is one.
   const symOf = (node) => {
     let sym = checker.getSymbolAtLocation(node);
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
@@ -112,14 +108,7 @@ function reactRoutes(only) {
   const isCallOf = (n, name) => ts.isCallExpression(n) && fromDoor(symOf(n.expression), [name]);
   const writers = new Set();
   const isWriter = (sym) => fromDoor(sym, ['numberText', 'stringOf']) || writers.has(sym);
-  const trusted = (call) => {
-    let fn = call.parent;
-    while (fn && !ts.isFunctionLike(fn)) fn = fn.parent;
-    if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || !isCallOf(fn.parent, 'styleOf') || fn.parent.arguments[2] !== fn) return false;
-    const param = fn.parameters[0] && symOf(fn.parameters[0].name);
-    return call.arguments.every((a) => !mayHold(typeOf(a)) || (!!param && ts.isIdentifier(a) && symOf(a) === param));
-  };
-  const writerCall = (n) => ts.isCallExpression(n) && isWriter(symOf(n.expression)) && n.arguments.some((a) => mayHold(typeOf(a))) && !trusted(n);
+  const writerCall = (n) => ts.isCallExpression(n) && isWriter(symOf(n.expression)) && n.arguments.some((a) => mayHold(typeOf(a)));
   const has = (node, hit) => {
     let found = false;
     const look = (n) => {
@@ -266,9 +255,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i style="color:${eh(n)}">`', ['escapeHtml of a number', STYLE]],
       ['`<i style="${[\'width:\', numberText(n), \'%\'].join(\'\')}">`', STYLE],
       ['`<i style="width:${String(numberText(n))}%">`', STYLE],
-      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${numberText(x)}%;height:${numberText(n)}px`)])}>`', STYLE],
       ['`<i style="${styleOf(\'width\', n)}">`', 'styleOf in a style attribute without styleAttr'],
-      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${fmt(x)}%`)])}>`', null],
       ['`<i style="color:${s}">`', null],
       ['`<i style="color:${eh(s)}">`', null],
       ['`<i style="color:${ea(s)}">`', null],
@@ -288,7 +275,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
     ];
     const head = [
       "import { escapeHtml as eh, escapeAttr as ea } from '../inline'",
-      "import { numberText, styleAttr, styleOf } from '../../../text/number-text.js'",
+      "import { numberText, styleOf } from '../../../text/number-text.js'",
       'const fmt = (x: number) => numberText(x, 1)',
       'declare const hn: number',
       'const W = { w: (x: number) => numberText(x) }',
