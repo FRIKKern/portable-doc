@@ -12,7 +12,7 @@
 import { type Block, escapeHtml, safeUrl, isMap } from '../inline'
 import type { RenderCtx } from './chrome'
 import { coverSpans, spanAttr, type Span } from './spans'
-import { numberText, styleOf } from '../../../text/number-text.js'
+import { numberText, styleAttr, styleColor, styleOf } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -65,18 +65,15 @@ const SHEET_URL_RE = /^https?:\/\/[^\s<>"']+$/i
 const NUMERIC_RE = /^-?\$?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][+-]?\d+)?%?$/
 // Right-align: ISO date / datetime display strings.
 const TEMPORAL_RE = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/
-// A strict #rrggbb may reach the inline background (Sheets.CondFormat.valid_bg?).
-const BG_RE = /^#[0-9a-fA-F]{6}$/
 
 function toStr(v: unknown): string {
   return typeof v === 'string' ? v : typeof v === 'number' ? numberText(v) : ''
 }
 
-function colWidthStyle(colWidths: unknown, idx: number): string {
-  if (!Array.isArray(colWidths)) return ''
-  const w = colWidths[idx]
-  const p = typeof w === 'number' && Number.isInteger(w) && w > 0 ? styleOf('width', w, { after: 'px' }) : ''
-  return p === '' ? '' : `${p};`
+// A column's width in px: a whole number above 0, else none.
+function colWidth(colWidths: unknown, idx: number): number | null {
+  const w = Array.isArray(colWidths) ? colWidths[idx] : undefined
+  return typeof w === 'number' && Number.isInteger(w) && w > 0 ? w : null
 }
 
 function sheetMerges(merges: unknown): Span[] {
@@ -94,39 +91,38 @@ function sheetMerges(merges: unknown): Span[] {
   )
 }
 
-function cellStyleFragment(styles: unknown, r: number, c: number): string {
-  if (!isMap(styles)) return ''
-  const s = styles[`${numberText(r)},${numberText(c)}`]
-  if (!isMap(s)) return ''
-  const parts = [
-    s.b === true ? 'font-weight:bold;' : '',
-    s.i === true ? 'font-style:italic;' : '',
-    typeof s.bg === 'string' && BG_RE.test(s.bg) ? `background:${s.bg};` : '',
-    s.al === 'left' || s.al === 'center' || s.al === 'right' ? `text-align:${s.al};` : '',
-  ].join('')
-  return parts === '' ? '' : ';' + parts
+function cellStyle(styles: unknown, r: number, c: number): Record<string, unknown> | null {
+  const s = isMap(styles) ? styles[`${numberText(r)},${numberText(c)}`] : undefined
+  return isMap(s) ? s : null
 }
 
-function errStyle(cell: string): string {
-  return ERROR_VALUES.has(cell) ? ';color:#dc2626;font-weight:bold' : ''
+// A cell's inline style (sheet_inline_style/1): its column's width, then its own bold, italic,
+// background (a strict #rrggbb, Sheets.CondFormat.valid_bg?) and alignment, then an error value's
+// red bold. Each property ends with `;`, but the error's last one does not.
+function sheetStyle(width: number | null, s: Record<string, unknown> | null, err: boolean): string {
+  return styleAttr(
+    [
+      styleOf('width', width, { after: 'px' }),
+      s?.b === true ? 'font-weight:bold' : '',
+      s?.i === true ? 'font-style:italic' : '',
+      styleColor('background', s?.bg, { shape: 'hex6' }),
+      s?.al === 'left' || s?.al === 'center' || s?.al === 'right' ? `text-align:${s.al}` : '',
+      err ? 'color:#dc2626' : '',
+      err ? 'font-weight:bold' : '',
+    ],
+    { end: err ? '' : ';' },
+  )
 }
 
 function explicitAl(styles: unknown, r: number, c: number): boolean {
-  if (!isMap(styles)) return false
-  const s = styles[`${numberText(r)},${numberText(c)}`]
-  return isMap(s) && (s.al === 'left' || s.al === 'center' || s.al === 'right')
+  const s = cellStyle(styles, r, c)
+  return s !== null && (s.al === 'left' || s.al === 'center' || s.al === 'right')
 }
 
 function defaultAlignClass(cell: string): string | null {
   if (cell === 'TRUE' || cell === 'FALSE') return 'sheet-al-center'
   if (NUMERIC_RE.test(cell) || TEMPORAL_RE.test(cell)) return 'sheet-al-right'
   return null
-}
-
-// Collapse the `;;` seam + trim the cosmetic leading `;` (sheet_inline_style/1).
-function inlineStyle(raw: string): string {
-  const style = raw.replace(/;;/g, ';').replace(/^;+/, '')
-  return style === '' ? '' : ` style="${style}"`
 }
 
 function cellHtml(cell: string): string {
@@ -154,7 +150,7 @@ const sheet: Emit = (b, ctx) => {
     head.length === 0
       ? ''
       : `<thead><tr>${head
-          .map((cell, idx) => `<th class="bp-sheet__th"${inlineStyle(colWidthStyle(colWidths, idx))}>${escapeHtml(cell)}</th>`)
+          .map((cell, idx) => `<th class="bp-sheet__th"${sheetStyle(colWidth(colWidths, idx), null, false)}>${escapeHtml(cell)}</th>`)
           .join('')}</tr></thead>`
 
   const tbody = body
@@ -162,13 +158,10 @@ const sheet: Emit = (b, ctx) => {
       const cells = row
         .map((cell, c) => {
           if (covered.has(`${numberText(r)},${numberText(c)}`)) return ''
-          const wStyle = colWidthStyle(colWidths, c)
           const span = spanAttr(anchors, r, c)
-          const extra = cellStyleFragment(styles, r, c)
-          const err = errStyle(cell)
           const alignClass = explicitAl(styles, r, c) ? null : defaultAlignClass(cell)
           const tdClass = ['bp-sheet__td', alignClass].filter(Boolean).join(' ')
-          return `<td${span} class="${tdClass}"${inlineStyle(wStyle + extra + err)}>${cellHtml(cell)}</td>`
+          return `<td${span} class="${tdClass}"${sheetStyle(colWidth(colWidths, c), cellStyle(styles, r, c), ERROR_VALUES.has(cell))}>${cellHtml(cell)}</td>`
         })
         .join('')
       return `<tr>${cells}</tr>`
