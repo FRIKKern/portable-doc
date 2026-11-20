@@ -2,17 +2,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
-import { embedBlocks } from '@portable-doc/react/embed';
-import { fieldBlocks } from '@portable-doc/react/field-blocks';
 import { validate } from '@portable-doc/validate';
 
 // scripts/style-stand-ins.json: React's own output for blocks whose style no golden holds yet,
-// each recorded from the renderer before the change that moved its style into the door. Each row is
-// held byte for byte, rendered with the field and embed blocks as the style sites test renders it,
+// recorded from the renderer before style formats were named. Each row is held byte for byte
 // until the goldens carry its case; then the row goes, so the count only shrinks.
 
 const { about, rows } = JSON.parse(fs.readFileSync(new URL('style-stand-ins.json', import.meta.url), 'utf8'));
-const STAND_INS_MOST = 9;
+const STAND_INS_MOST = 6;
 
 // The style each row is there to hold, by case.
 const HOLDS = {
@@ -22,9 +19,6 @@ const HOLDS = {
   'a heatmap grid with row labels': ['grid-template-columns:auto repeat(2,minmax(10px,44px))'],
   'a heatmap calendar with row labels': ['grid-template-columns:auto repeat(2,12px)'],
   'a heatmap matrix with values, no marginals and row labels': ['grid-template-columns:auto repeat(2,minmax(28px,auto))'],
-  "a sheet's cell styles and an error cell": ['width:12px;', 'width:12px;font-weight:bold;background:#ABCDEF;text-align:center;', 'font-style:italic;color:#dc2626;font-weight:bold', 'text-align:right;'],
-  'a colour field with a three-digit hex': ['background:#AbC'],
-  'a colour field whose value is not a hex': ['background:transparent'],
 };
 
 test('every stand-in row renders its recorded bytes and holds its style', () => {
@@ -33,7 +27,7 @@ test('every stand-in row renders its recorded bytes and holds its style', () => 
   assert.deepEqual(rows.map((row) => row.case).sort(), Object.keys(HOLDS).sort());
   for (const { case: name, block, html } of rows) {
     assert.ok(validate({ blocks: [block] }).ok, `${name}: the block does not validate`);
-    assert.equal(renderPortableDocument([block], { blocks: { ...fieldBlocks, ...embedBlocks() } }), html, name);
+    assert.equal(renderPortableDocument([block]), html, name);
     for (const style of HOLDS[name]) assert.ok(html.includes(`style="${style}"`), `${name}: no style="${style}"`);
   }
 });

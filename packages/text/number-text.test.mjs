@@ -40,6 +40,8 @@ test('styleColor writes a colour only in a listed shape; a value the shape refus
   assert.deepEqual([styleColor('background', '#AbC', { shape: 'hex' }), styleColor('background', '#1e5347', { shape: 'hex' }), styleColor('background', '#ABCDEF', { shape: 'hex6' })], ['background:#AbC', 'background:#1e5347', 'background:#ABCDEF']);
   for (const v of ['#abc', '#12345g', 'red', '#abcd', ' #abcdef', '#abcdef;x:1', 1, null, undefined]) assert.equal(styleColor('background', v, { shape: 'hex6' }), '', String(v));
   for (const v of ['red', '#ab', '#abcd', 'url(x)', '#abc\n', 0xabc]) assert.equal(styleColor('background', v, { shape: 'hex' }), '', String(v));
+  // A value the shape refuses writes nothing, so a caller's listed fallback is written instead.
+  assert.equal(styleAttr([styleColor('background', 'red', { shape: 'hex' }) || 'background:transparent']), ' style="background:transparent"');
   for (const shape of ['rgb', 'toString', undefined]) assert.throws(() => styleColor('background', '#abc', { shape }), TypeError, String(shape));
   assert.deepEqual(Object.keys(STYLE_COLORS), ['hex', 'hex6']);
 });

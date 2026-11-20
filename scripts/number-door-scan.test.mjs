@@ -19,9 +19,7 @@
 //     markup, a CSS declaration's value after `name:` (a word, -webkit- and -- names too, or a
 //     hole directly before the colon). Fixed text is a value whose type is a string literal or a
 //     union of them, or a ternary, ||, ??, template or + chain of fixed texts. A hole between a
-//     tag's attributes (`<i${styleAttr([…])}>`) writes attributes, not a style, and is not one. A
-//     word and a colon before a hole in a fragment with no markup is read as a declaration, so a
-//     label like `commit:${id}` is named too: a false red, on the safe side;
+//     tag's attributes (`<i${styleAttr([…])}>`) writes attributes, not a style, and is not one;
 //   - a styleAttr call whose list is not written out (a value, or a spread in it), and an item in
 //     the list that is neither a styleOf or styleColor call nor fixed text;
 //   - a styleOf or styleColor call whose property name is not fixed text;
@@ -52,11 +50,10 @@
 //   a method held in a variable, called with call or apply, or called by element access
 //   (`n['toFixed'](1)`).
 // - A number used as a computed key (`{ [n]: 1 }`) whose keys are then shown.
-// - In a style: a property named by a hole and written with a space (`${k}: ${v}`, read as a
-//   label; a template or + chain that puts its text in a style is refused there); a style opener
-//   split across pieces joined without + or a template (`['<i ', 'style', '="…'].join('')`). Each
-//   has a plant row that the scan must not name. packages/text writes no HTML style, so the style
-//   rules read React only; a style written there would go unseen.
+// - In a style: what STYLE_LIMITS lists, each with its plant and the scan's answer to it (a
+//   template or + chain that puts a `${k}: ${v}` label in a style is refused there). packages/text
+//   writes no HTML style, so the style rules read React only; a style written there would go
+//   unseen.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
 // - packages/editor (written only by the sync from Barkpark's paper editor), React's dist (built
@@ -90,6 +87,15 @@ const WHY = {
   jsx: 'a JSX style',
   use: 'a use of styleOf, styleAttr or styleColor the scan cannot follow',
 };
+// What the style rules get wrong, each with a plant as written in the plant file (s a string, n a
+// number) and what the scan says of it: null for a style it misses, a reason for text that is no
+// style but is refused (a false red, on the safe side). The plant test holds each answer; when the
+// scan learns a case, its plant's answer changes and its row leaves this list.
+const STYLE_LIMITS = Object.freeze([
+  { limit: 'a property named by a hole and written with a space is read as a label', plant: '`${s}: ${numberText(n)}px`', named: null },
+  { limit: 'a style opener split across pieces joined without + or a template is not seen', plant: '[\'<i \', \'style\', \'="width:\', numberText(n), \'%">\'].join(\'\')', named: null },
+  { limit: 'a `name:` text joined to a value outside any style is refused', plant: "'commit:' + s", named: WHY.hole },
+]);
 // A CSS declaration's value runs on after `name:` in a fragment with no markup: the name a word
 // (-webkit- and -- names too) or a hole directly before the colon; not `${k}: ` with a space, which
 // is a label. A hole stands in the text as \u0000.
@@ -441,11 +447,8 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i${styleAttr(list)}>`', list],
       ['`<i${styleAttr([...list])}>`', list],
       ['`<i${styleAttr([styleOf(s, n)])}>`', prop],
-      // Listed limits (the header's "What it cannot see"): each is a number in a style that the
-      // scan does not name. A property named by a hole and written with a space; an opener split
-      // across pieces joined without + or a template.
-      ['`${s}: ${numberText(n)}px`', null],
-      ['[\'<i \', \'style\', \'="width:\', numberText(n), \'%">\'].join(\'\')', null],
+      // The style rules' listed limits, each answered as STYLE_LIMITS says.
+      ...STYLE_LIMITS.map(({ plant, named }) => [plant, named]),
     ];
     const head = [
       `import { escapeHtml as eh } from ${JSON.stringify(path.join(REACT_SRC, 'inline'))}`,
