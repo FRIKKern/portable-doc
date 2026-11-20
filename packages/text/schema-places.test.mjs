@@ -3,32 +3,25 @@
 // writer-case block, against where spec/blocks.schema.json types them (schema-places.mjs).
 // schema-places.json lists each difference exactly: a new one fails, and so does a listed one that
 // is no longer a difference, so the list only shrinks, row by row, in the change that types the
-// place or stops the reader reading it.
+// place or stops the reader reading it. The list is written from the run (schema-places-run.mjs):
+//   node packages/text/schema-places-run.mjs --write
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { renderPortableDocument } from '@portable-doc/react';
-import { goldenBlocks, writerCaseBlocks } from './golden-reads.mjs';
-import { BLOCK_TYPES, toMarkdown, toPlainText } from './index.js';
+import { PIN, RENDERS, measure } from './schema-places-run.mjs';
 import { places } from './schema-places.mjs';
 
-const PINNED = JSON.parse(fs.readFileSync(new URL('./schema-places.json', import.meta.url), 'utf8'));
-const RENDERS = { html: (blocks) => renderPortableDocument(blocks, {}), markdown: toMarkdown, text: toPlainText };
-const TYPES = new Set(BLOCK_TYPES);
-
-const CASES = [...goldenBlocks(TYPES), ...writerCaseBlocks(TYPES)];
+const PINNED = JSON.parse(fs.readFileSync(PIN, 'utf8'));
 
 test('every place the readers read, and the schema does not type, is listed by name and kind; the list only shrinks', () => {
-  const got = places(CASES, RENDERS);
+  const got = measure();
   // Exact both ways: a new difference fails, and so does a listed one that no longer is one.
   assert.deepEqual(got.gaps, PINNED.gaps, 'read where a case fills it, untyped in the schema: { name: kind }');
   assert.deepEqual(got.probed, PINNED.probed, 'read, but filled by no case');
   assert.deepEqual(got.oldNames, PINNED.oldNames, 'old names (spec/read-aliases.json), read under the one-field-one-name rule');
-  // The criterion's own subset: gaps that hold text, inline content or blocks, apart from other values.
-  const textAndBlocks = Object.values(got.gaps).filter((kind) => kind.split(' ').some((k) => k !== 'other')).length;
-  const counts = { gaps: Object.keys(got.gaps).length, textAndBlocks, probed: got.probed.length, oldNames: got.oldNames.length };
-  assert.deepEqual(counts, PINNED.counts);
+  // textAndBlocks is the criterion's own subset: gaps that hold text, inline content or blocks.
+  assert.deepEqual(got.counts, PINNED.counts);
 });
 
 test('a table cell is read by the readers and untyped in the schema', () => {
