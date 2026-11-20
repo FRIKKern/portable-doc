@@ -1,0 +1,144 @@
+{
+  "about": "React's own output for six blocks no golden holds yet (a section and five heatmaps), recorded from the renderer before the change that named style formats. These rows are not parity truth: they hold React to what it wrote then. Each row goes when the goldens carry its case.",
+  "rows": [
+    {
+      "case": "a section cell with an order",
+      "block": {
+        "type": "section",
+        "layout": {
+          "mode": "grid",
+          "tracks": 2
+        },
+        "blocks": [
+          {
+            "type": "card",
+            "slots": {
+              "title": [
+                {
+                  "type": "heading",
+                  "text": "Alpha"
+                }
+              ]
+            },
+            "order": 2
+          },
+          {
+            "type": "card",
+            "slots": {
+              "title": [
+                {
+                  "type": "heading",
+                  "text": "Beta"
+                }
+              ]
+            },
+            "order": 1
+          }
+        ]
+      },
+      "html": "<div style=\"display:flex;flex-direction:column\"><hr class=\"bp-hr\"><div class=\"bp-section__grid\" style=\"--bp-tracks:2;--bp-grid-gap:var(--bp-space-md,1.6rem)\"><div class=\"bp-section__cell\" style=\"order:2\"><div class=\"bp-card\"><h2>Alpha</h2></div></div><div class=\"bp-section__cell\" style=\"order:1\"><div class=\"bp-card\"><h2>Beta</h2></div></div></div><hr class=\"bp-hr\"></div>"
+    },
+    {
+      "case": "a heatmap matrix with marginals and values",
+      "block": {
+        "type": "heatmap",
+        "cells": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "values": true,
+        "marginals": true
+      },
+      "html": "<div class=\"bp-heat bp-heat--mtx\"><div class=\"bp-heat__grid\" style=\"grid-template-columns:auto repeat(2,minmax(28px,auto)) auto\"><span class=\"bp-heat__rl\"></span><span class=\"bp-heat__cl\"></span><span class=\"bp-heat__cl\"></span><span class=\"bp-heat__cl bp-heat__cl--sum\">Σ</span><span class=\"bp-heat__rl\"></span><i class=\"bp-heat__c bp-heat__c--b0 bp-heat__c--v\" title=\"1\">1</i><i class=\"bp-heat__c bp-heat__c--b1 bp-heat__c--v\" title=\"2\">2</i><span class=\"bp-heat__sum\">3</span><span class=\"bp-heat__rl\"></span><i class=\"bp-heat__c bp-heat__c--b2 bp-heat__c--v\" title=\"3\">3</i><i class=\"bp-heat__c bp-heat__c--b3 bp-heat__c--v\" title=\"4\">4</i><span class=\"bp-heat__sum\">7</span><span class=\"bp-heat__rl\">Σ</span><span class=\"bp-heat__sum\">4</span><span class=\"bp-heat__sum\">6</span><span class=\"bp-heat__sum bp-heat__sum--grand\">10</span></div><div class=\"bp-heat__legend\">less <i class=\"bp-heat__c bp-heat__c--b0\"></i><i class=\"bp-heat__c bp-heat__c--b1\"></i><i class=\"bp-heat__c bp-heat__c--b2\"></i><i class=\"bp-heat__c bp-heat__c--b3\"></i> more</div></div>"
+    },
+    {
+      "case": "a heatmap matrix with marginals and no values",
+      "block": {
+        "type": "heatmap",
+        "cells": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "marginals": true
+      },
+      "html": "<div class=\"bp-heat bp-heat--mtx\"><div class=\"bp-heat__grid\" style=\"grid-template-columns:auto repeat(2,minmax(10px,44px)) auto\"><span class=\"bp-heat__rl\"></span><span class=\"bp-heat__cl\"></span><span class=\"bp-heat__cl\"></span><span class=\"bp-heat__cl bp-heat__cl--sum\">Σ</span><span class=\"bp-heat__rl\"></span><i class=\"bp-heat__c bp-heat__c--b0\" title=\"1\"></i><i class=\"bp-heat__c bp-heat__c--b1\" title=\"2\"></i><span class=\"bp-heat__sum\">3</span><span class=\"bp-heat__rl\"></span><i class=\"bp-heat__c bp-heat__c--b2\" title=\"3\"></i><i class=\"bp-heat__c bp-heat__c--b3\" title=\"4\"></i><span class=\"bp-heat__sum\">7</span><span class=\"bp-heat__rl\">Σ</span><span class=\"bp-heat__sum\">4</span><span class=\"bp-heat__sum\">6</span><span class=\"bp-heat__sum bp-heat__sum--grand\">10</span></div><div class=\"bp-heat__legend\">less <i class=\"bp-heat__c bp-heat__c--b0\"></i><i class=\"bp-heat__c bp-heat__c--b1\"></i><i class=\"bp-heat__c bp-heat__c--b2\"></i><i class=\"bp-heat__c bp-heat__c--b3\"></i> more</div></div>"
+    },
+    {
+      "case": "a heatmap grid with row labels",
+      "block": {
+        "type": "heatmap",
+        "cells": [
+          [
+            0.1,
+            0.9
+          ],
+          [
+            0.5,
+            0.3
+          ]
+        ],
+        "rowLabels": [
+          "Mon",
+          "Tue"
+        ]
+      },
+      "html": "<div class=\"bp-heat\"><div class=\"bp-heat__grid\" style=\"grid-template-columns:auto repeat(2,minmax(10px,44px))\"><span class=\"bp-heat__rl\">Mon</span><i class=\"bp-heat__c\" style=\"--i:0.111\" title=\"0.1\"></i><i class=\"bp-heat__c\" style=\"--i:1.000\" title=\"0.9\"></i><span class=\"bp-heat__rl\">Tue</span><i class=\"bp-heat__c\" style=\"--i:0.556\" title=\"0.5\"></i><i class=\"bp-heat__c\" style=\"--i:0.333\" title=\"0.3\"></i></div><div class=\"bp-heat__legend\">less <i class=\"bp-heat__c\" style=\"--i:0.150\"></i><i class=\"bp-heat__c\" style=\"--i:0.350\"></i><i class=\"bp-heat__c\" style=\"--i:0.550\"></i><i class=\"bp-heat__c\" style=\"--i:0.750\"></i><i class=\"bp-heat__c\" style=\"--i:1.000\"></i> more</div></div>"
+    },
+    {
+      "case": "a heatmap calendar with row labels",
+      "block": {
+        "type": "heatmap",
+        "mode": "calendar",
+        "cells": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "rowLabels": [
+          "Mon",
+          "Tue"
+        ]
+      },
+      "html": "<div class=\"bp-heat bp-heat--cal\"><div class=\"bp-heat__scroll\"><div class=\"bp-heat__grid\" style=\"grid-template-columns:auto repeat(2,12px)\"><span class=\"bp-heat__rl\">Mon</span><i class=\"bp-heat__c bp-heat__c--b0\" title=\"1\"></i><i class=\"bp-heat__c bp-heat__c--b1\" title=\"2\"></i><span class=\"bp-heat__rl\">Tue</span><i class=\"bp-heat__c bp-heat__c--b2\" title=\"3\"></i><i class=\"bp-heat__c bp-heat__c--b3\" title=\"4\"></i></div></div><div class=\"bp-heat__legend\">less <i class=\"bp-heat__c bp-heat__c--b0\"></i><i class=\"bp-heat__c bp-heat__c--b1\"></i><i class=\"bp-heat__c bp-heat__c--b2\"></i><i class=\"bp-heat__c bp-heat__c--b3\"></i> more</div></div>"
+    },
+    {
+      "case": "a heatmap matrix with values, no marginals and row labels",
+      "block": {
+        "type": "heatmap",
+        "cells": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "values": true,
+        "rowLabels": [
+          "Mon",
+          "Tue"
+        ]
+      },
+      "html": "<div class=\"bp-heat bp-heat--mtx\"><div class=\"bp-heat__grid\" style=\"grid-template-columns:auto repeat(2,minmax(28px,auto))\"><span class=\"bp-heat__rl\">Mon</span><i class=\"bp-heat__c bp-heat__c--b0 bp-heat__c--v\" title=\"1\">1</i><i class=\"bp-heat__c bp-heat__c--b1 bp-heat__c--v\" title=\"2\">2</i><span class=\"bp-heat__rl\">Tue</span><i class=\"bp-heat__c bp-heat__c--b2 bp-heat__c--v\" title=\"3\">3</i><i class=\"bp-heat__c bp-heat__c--b3 bp-heat__c--v\" title=\"4\">4</i></div><div class=\"bp-heat__legend\">less <i class=\"bp-heat__c bp-heat__c--b0\"></i><i class=\"bp-heat__c bp-heat__c--b1\"></i><i class=\"bp-heat__c bp-heat__c--b2\"></i><i class=\"bp-heat__c bp-heat__c--b3\"></i> more</div></div>"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { numberText, stringOf, styleAttr, styleOf } from './number-text.js';
+import fs from 'node:fs';
+import { STYLE_AFTER, STYLE_BEFORE, STYLE_FORMATS, numberText, stringOf, styleAttr, styleOf } from './number-text.js';
 
 test('a finite number shows its digits; NaN, Infinity and -Infinity show nothing', () => {
   for (const n of [NaN, Infinity, -Infinity]) {
@@ -19,7 +20,25 @@ test('stringOf writes a value as String does, each number in it through numberTe
 });
 
 test('styleOf writes a property only when its number is finite; styleAttr writes no empty style', () => {
-  assert.deepEqual([styleOf('order', 2), styleOf('--i', -0), styleOf('width', 40, (x) => `${numberText(x)}%`)], ['order:2', '--i:0', 'width:40%']);
-  for (const n of [NaN, Infinity, -Infinity, null, undefined]) assert.equal(styleOf('width', n, (x) => `${numberText(x)}%`), '', String(n));
+  assert.deepEqual([styleOf('order', 2), styleOf('--i', -0), styleOf('width', 40, { after: '%' }), styleOf('grid-column', 3, { before: 'span ' })], ['order:2', '--i:0', 'width:40%', 'grid-column:span 3']);
+  assert.deepEqual([2.25, 7, 1e21].map((n) => styleOf('width', n, { format: 'tenths', after: '%' })), ['width:2.3%', 'width:7%', 'width:1000000000000000000000%']);
+  assert.deepEqual([styleOf('--i', 1 / 9, { format: 'thousandths' }), styleOf('--i', 1, { format: 'thousandths' })], ['--i:0.111', '--i:1.000']);
+  for (const n of [NaN, Infinity, -Infinity, null, undefined]) assert.equal(styleOf('width', n, { after: '%' }), '', String(n));
   assert.deepEqual([styleAttr(['a:1', '', 'b:2']), styleAttr(['', '']), styleAttr([])], [' style="a:1;b:2"', '', '']);
+});
+
+test('a style format, a text before and a text after are each one of a closed list; any other throws', () => {
+  for (const how of [{ format: 'hundredths' }, { format: 'toString' }, { before: 'auto ' }, { after: '%;height:1px' }, { after: 'em' }]) {
+    for (const n of [1, NaN]) assert.throws(() => styleOf('width', n, how), TypeError, JSON.stringify(how));
+  }
+  for (const before of STYLE_BEFORE) for (const after of STYLE_AFTER) assert.equal(styleOf('p', 4, { before, after }), `p:${before}4${after}`);
+});
+
+test('the types list the same formats and texts as the code', () => {
+  const dts = fs.readFileSync(new URL('number-text.d.ts', import.meta.url), 'utf8');
+  const tuple = (name) => JSON.parse(dts.match(new RegExp(`export const ${name}: readonly (\\[[^\\]]*\\]);`))[1].replace(/'/g, '"'));
+  assert.deepEqual(tuple('STYLE_BEFORE'), [...STYLE_BEFORE]);
+  assert.deepEqual(tuple('STYLE_AFTER'), [...STYLE_AFTER]);
+  const formats = dts.match(/export const STYLE_FORMATS: Readonly<\{ (.*) \}>;/)[1].split('; ').map((f) => f.split(':')[0]);
+  assert.deepEqual(formats, Object.keys(STYLE_FORMATS));
 });

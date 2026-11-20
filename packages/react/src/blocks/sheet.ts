@@ -75,7 +75,7 @@ function toStr(v: unknown): string {
 function colWidthStyle(colWidths: unknown, idx: number): string {
   if (!Array.isArray(colWidths)) return ''
   const w = colWidths[idx]
-  const p = typeof w === 'number' && Number.isInteger(w) && w > 0 ? styleOf('width', w, (x) => `${numberText(x)}px`) : ''
+  const p = typeof w === 'number' && Number.isInteger(w) && w > 0 ? styleOf('width', w, { after: 'px' }) : ''
   return p === '' ? '' : `${p};`
 }
 

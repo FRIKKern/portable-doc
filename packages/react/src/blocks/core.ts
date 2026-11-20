@@ -1029,7 +1029,7 @@ function orderInt(v: unknown): number | null {
 // cell_layout_attr/1).
 function cellLayoutAttr(child: unknown): string {
   if (!isMap(child)) return ''
-  return styleAttr([styleOf('grid-column', spanInt(child.span), (x) => `span ${numberText(x)}`), styleOf('order', orderInt(child.order))])
+  return styleAttr([styleOf('grid-column', spanInt(child.span), { before: 'span ' }), styleOf('order', orderInt(child.order))])
 }
 
 const HR = '<hr class="bp-hr">'
@@ -1463,7 +1463,7 @@ function clampfWidth(n: unknown, left: number): number | null {
   if (nonFinite(n)) return null
   return typeof n === 'number' ? Math.min(Math.max(n, 1), 100 - left) : Math.max(1, 100 - left)
 }
-const pct = (prop: string, v: number | null) => styleOf(prop, v, (x) => `${numberText(x)}%`)
+const pct = (prop: string, v: number | null) => styleOf(prop, v, { after: '%' })
 
 // The two cannot-place strings: components.ex roadmap_unplaced_copy/0 and
 // roadmap_lane_unplaced_copy/0. An Elixir test reads these literals (and the Go

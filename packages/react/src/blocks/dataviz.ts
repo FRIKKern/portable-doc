@@ -56,9 +56,6 @@ const wholeDigits = (v: number) => numberText(v, 'whole')
 function fmt(v: number): string {
   return Number.isInteger(v) ? wholeDigits(v) : numberText(v, 1)
 }
-function fmt3(v: number): string {
-  return numberText(v, 3)
-}
 function tick(v: number): string {
   const r = Math.round(v * 10) / 10
   return Number.isInteger(r) ? wholeDigits(r) : numberText(r, 1)
@@ -132,7 +129,7 @@ function statHtml(block: unknown, ctx: RenderCtx): string {
   if (max !== null && max > 0) {
     const nv = numeric(value)
     const pct = nv === null ? 0.0 : clamp(nv / max, 0.0, 1.0)
-    bar = `<div class="bp-stat__bar"><i${styleAttr([styleOf('width', pct * 100, (x) => `${fmt(x)}%`)])}></i></div>`
+    bar = `<div class="bp-stat__bar"><i${styleAttr([styleOf('width', pct * 100, { format: 'tenths', after: '%' })])}></i></div>`
   }
   const labelHtml = label === '' ? '' : `<div class="bp-stat__l">${escapeHtml(label)}</div>`
   // THE KILDE LAW: a stat is a datum, and a datum carries its provenance.
@@ -415,7 +412,7 @@ function heatWidths(grid: number[][], cols: number): Array<[number, number]> {
   })
 }
 
-const heatGap = (pad: number) => (pad > 0 ? `<i${styleAttr([styleOf('grid-column', pad, (x) => `span ${numberText(x)}`)])}></i>` : '')
+const heatGap = (pad: number) => (pad > 0 ? `<i${styleAttr([styleOf('grid-column', pad, { before: 'span ' })])}></i>` : '')
 
 function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string {
   const maxNum = numeric(get(block, 'max'))
@@ -450,17 +447,17 @@ function heatGridHtml(grid: number[][], block: unknown, ctx: RenderCtx): string 
     for (let j = 0; j < width; j++) {
       const v = row[j] ?? 0.0
       const iNorm = clamp(v / maxVal, 0.0, 1.0)
-      cells += `<i class="bp-heat__c"${styleAttr([styleOf('--i', iNorm, fmt3)])} title="${fmt(v)}"></i>`
+      cells += `<i class="bp-heat__c"${styleAttr([styleOf('--i', iNorm, { format: 'thousandths' })])} title="${fmt(v)}"></i>`
     }
     body += label + cells + heatGap(gap)
   })
 
-  const track = rowLabels.length === 0 ? '' : 'auto '
+  const before = rowLabels.length === 0 ? 'repeat(' : 'auto repeat('
   let legend = `<div class="bp-heat__legend">${ctx.t('less')} `
   for (const i of [0.15, 0.35, 0.55, 0.75, 1.0])
-    legend += `<i class="bp-heat__c"${styleAttr([styleOf('--i', i, fmt3)])}></i>`
+    legend += `<i class="bp-heat__c"${styleAttr([styleOf('--i', i, { format: 'thousandths' })])}></i>`
   legend += ` ${ctx.t('more')}</div>`
-  return `<div class="bp-heat"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, (c) => `${track}repeat(${numberText(c)},minmax(10px,44px))`)])}>${head}${body}</div>${legend}</div>`
+  return `<div class="bp-heat"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, { before, after: ',minmax(10px,44px))' })])}>${head}${body}</div>${legend}</div>`
 }
 
 function heatCalendarHtml(grid: number[][], block: unknown, ctx: RenderCtx): string {
@@ -496,8 +493,8 @@ function heatCalendarHtml(grid: number[][], block: unknown, ctx: RenderCtx): str
     body += label + cells + heatGap(gap)
   })
 
-  const track = rowLabels.length === 0 ? '' : 'auto '
-  return `<div class="bp-heat bp-heat--cal"><div class="bp-heat__scroll"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', weeks, (w) => `${track}repeat(${numberText(w)},12px)`)])}>${head}${body}</div></div>${dualLegend(ctx)}</div>`
+  const before = rowLabels.length === 0 ? 'repeat(' : 'auto repeat('
+  return `<div class="bp-heat bp-heat--cal"><div class="bp-heat__scroll"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', weeks, { before, after: ',12px)' })])}>${head}${body}</div></div>${dualLegend(ctx)}</div>`
 }
 
 function matrixCell(bin: number, v: number, showVals: boolean): string {
@@ -554,10 +551,15 @@ function heatMatrixExtrasHtml(grid: number[][], block: unknown, ctx: RenderCtx):
       `<span class="bp-heat__sum bp-heat__sum--grand">${fmt(grand)}</span>`
   }
 
-  const track = gutter ? 'auto ' : ''
-  const cellTrack = showVals ? 'minmax(28px,auto)' : 'minmax(10px,44px)'
-  const sumTrack = showMarg ? ' auto' : ''
-  return `<div class="bp-heat bp-heat--mtx"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, (c) => `${track}repeat(${numberText(c)},${cellTrack})${sumTrack}`)])}>${head}${body}${foot}</div>${dualLegend(ctx)}</div>`
+  const before = gutter ? 'auto repeat(' : 'repeat('
+  const after = showVals
+    ? showMarg
+      ? ',minmax(28px,auto)) auto'
+      : ',minmax(28px,auto))'
+    : showMarg
+      ? ',minmax(10px,44px)) auto'
+      : ',minmax(10px,44px))'
+  return `<div class="bp-heat bp-heat--mtx"><div class="bp-heat__grid"${styleAttr([styleOf('grid-template-columns', cols, { before, after })])}>${head}${body}${foot}</div>${dualLegend(ctx)}</div>`
 }
 
 const heatmap: Emit = (block, ctx) => {
@@ -805,7 +807,7 @@ function barRow(
   return (
     `<div class="${prefix}__row">` +
     `<span class="${prefix}__l">${escapeHtml(label)}</span>` +
-    `<span class="${prefix}__bar"><i${styleAttr([styleOf('width', prop * 100, (x) => `${fmt(x)}%`)])}></i></span>` +
+    `<span class="${prefix}__bar"><i${styleAttr([styleOf('width', prop * 100, { format: 'tenths', after: '%' })])}></i></span>` +
     (digit === null ? '' : `<span class="${prefix}__d">${digit}</span>`) +
     extra +
     `</div>`
@@ -985,7 +987,7 @@ const route: Emit = (block, ctx) => {
   const [fx, fy] = last
 
   const svg =
-    `<svg class="bp-route__map" viewBox="0 0 ${numberText(ROUTE_W)} ${numberText(h)}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}"${styleAttr(['display:block', 'width:100%', styleOf('max-width', ROUTE_W, (w) => `${numberText(w)}px`), 'height:auto;'])}>` +
+    `<svg class="bp-route__map" viewBox="0 0 ${numberText(ROUTE_W)} ${numberText(h)}" role="img" aria-label="${escapeAttr(ctx.t('route track'))}"${styleAttr(['display:block', 'width:100%', styleOf('max-width', ROUTE_W, { after: 'px' }), 'height:auto;'])}>` +
     `<path d="${d}" fill="none" stroke="${ROUTE_TRACK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>` +
     `<circle cx="${sx}" cy="${sy}" r="5.5" fill="none" stroke="${ROUTE_START}" stroke-width="3"/>` +
     `<circle cx="${fx}" cy="${fy}" r="5.5" fill="${ROUTE_FINISH}"/>` +
