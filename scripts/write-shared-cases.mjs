@@ -16,6 +16,7 @@ import { depthsOf, linesOf } from '../fixtures/text-work/rule-reader.mjs';
 import { CUT_RULES, RULES } from '../fixtures/text-work/rules.mjs';
 import { allForms } from '../packages/text/block-forms.mjs';
 import { planText } from '../packages/text/import-work.js';
+import { currentNames } from '../packages/text/current-names.js';
 import { fromMarkdown, readMarkdown, toMarkdown } from '../packages/text/index.js';
 
 export const FIXTURES = fileURLToPath(new URL('../fixtures/', import.meta.url));
@@ -66,7 +67,8 @@ function cutCases() {
   return caseFile(CUT_RULES, cases);
 }
 
-// Every block form round-trip mode keeps in its own Markdown or a fence, as { markdown, blocks }.
+// Every block form round-trip mode keeps in its own Markdown or a fence, as { markdown, input,
+// blocks }: the blocks as stored, and as they read back, their old names under their current names.
 function roundTripCases() {
   const slug = (s) => s.replace(/"([^"]*)"/g, '$1 str').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
   const cases = {};
@@ -74,8 +76,9 @@ function roundTripCases() {
     const { markdown, lost } = toMarkdown(blocks, { mode: 'round-trip' });
     if (lost.length) return;
     if (name in cases) throw new Error(`two forms share the name ${name}`);
-    if (!isDeepStrictEqual(fromMarkdown(markdown), blocks)) throw new Error(`${name} does not read back`);
-    cases[name] = { markdown, blocks };
+    const back = currentNames(blocks);
+    if (!isDeepStrictEqual(fromMarkdown(markdown), back)) throw new Error(`${name} does not read back`);
+    cases[name] = { markdown, input: blocks, blocks: back };
   };
   for (const [name, block] of allForms()) put(`round-trip-${slug(name)}`, [block]);
   put('round-trip-emphasis-after-diagram', [{ type: 'diagram', source: 'graph TD; A-->B' }, { type: 'paragraph', content: [{ type: 'em', children: [{ type: 'text', value: 'Not a caption' }] }] }]);

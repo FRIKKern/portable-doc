@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 import { validate } from '@portable-doc/validate';
 import { SCHEMA_TYPES, allForms, contexts, formsOf } from './block-forms.mjs';
+import { currentNames } from './current-names.js';
 import { FENCE_TYPES, checkFence } from './from-markdown.js';
 import { READ_ALIASES } from './golden-reads.mjs';
 import { fromMarkdown, toMarkdown } from './index.js';
@@ -59,7 +60,7 @@ test('round-trip mode: each form import accepts comes back exactly; any other is
     // In a callout, the form is decided on its own inside the callout's quote: kept, or listed under its own path.
     if (name.endsWith(` ${QUOTED}`)) {
       const inner = block.slots.body[0];
-      if (keepable(inner)) assert.deepEqual([lost, fromMarkdown(markdown)], [[], [block]], `${name}: import accepts it, so it comes back exactly`);
+      if (keepable(inner)) assert.deepEqual([lost, fromMarkdown(markdown)], [[], currentNames([block])], `${name}: import accepts it, so it comes back exactly`);
       else {
         assert.deepEqual(lost, [{ path: '/blocks/0/slots/body/0', id: inner.id ?? null, type: inner.type, reason: fenceReason(inner) }], `${name}: listed under its own path, with the fence's reason`);
         assert.match(markdown, /^> \[!info\] Note\n/, `${name}: the callout is still written in its own Markdown`);
@@ -70,7 +71,7 @@ test('round-trip mode: each form import accepts comes back exactly; any other is
     if (!FENCE_TYPES.has(block.type) && !native(block)) assert.equal(lost[0]?.reason, 'type', `${name}: a type outside the allowlist must not pass as kept`);
     if (keepable(block)) {
       assert.deepEqual(lost, [], `${name}: import accepts it, yet it is reported lost`);
-      assert.deepEqual(fromMarkdown(markdown), [block], `${name}: not the same block after a round trip`);
+      assert.deepEqual(fromMarkdown(markdown), currentNames([block]), `${name}: not the same block after a round trip`);
     } else {
       assert.deepEqual(lost, [{ path: '/blocks/0', id: block.id ?? null, type: block.type, reason: fenceReason(block) }], `${name}: import cannot bring it back, so it is reported with the fence's reason`);
       assert.equal(markdown, toMarkdown([block]), `${name}: a block round-trip mode cannot keep is written readably`);
@@ -123,7 +124,7 @@ test('round-trip mode keeps a whole doc of every keepable form, in order, and fe
   const blocks = FORMS.map(([, block]) => block).filter((block) => keepable(block) && (block.id === undefined || (!ids.has(block.id) && ids.add(block.id))));
   const { markdown, lost } = toMarkdown({ blocks }, ROUND_TRIP);
   assert.deepEqual(lost, []);
-  assert.deepEqual(fromMarkdown(markdown), blocks);
+  assert.deepEqual(fromMarkdown(markdown), currentNames(blocks));
   // Alone, each reads back; together, the emphasised paragraph reads as the diagram's caption.
   const pair = [{ type: 'diagram', source: 'graph TD; A-->B' }, { type: 'paragraph', content: [{ type: 'em', children: [{ type: 'text', value: 'Not a caption' }] }] }];
   const out = toMarkdown(pair, ROUND_TRIP);
@@ -137,6 +138,26 @@ test('the README lists the types round-trip mode keeps as node packages/text/scr
   assert.ok(keptTypes().ownOnly.includes('blockquote'));
 });
 
+test('round-trip mode gives a doc back with current names, and lists a block whose fold would lose a value as old_name_dropped, with the fix', () => {
+  // Old names alone come back under their current names. A heading stored under its old name is
+  // written in its own Markdown, bare and in a callout; an eyebrow has none, so it is a fence.
+  const heading = { type: 'heading', level: 2, text: 'H' };
+  const note = (body) => ({ type: 'callout', tone: 'info', content: [{ type: 'text', value: 'Note' }], slots: { body } });
+  for (const [block, written] of [
+    [heading, '## H\n'],
+    [note([heading]), '> [!info] Note\n>\n> ## H\n'],
+    [{ type: 'eyebrow', text: 'E' }, '```portabledoc\n[{"type":"eyebrow","text":"E"}]\n```\n'],
+  ]) {
+    const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
+    assert.deepEqual([lost, markdown, fromMarkdown(markdown)], [[], written, currentNames([block])], JSON.stringify(block));
+  }
+  // Two names with different values: no form brings both back, so the block is lost, own Markdown or fence.
+  for (const [block, fix] of [[{ type: 'code', code: 'a', value: 'b' }, 'write value'], [{ type: 'eyebrow', text: 'E', content: [{ type: 'text', value: 'F' }] }, 'write content']]) {
+    const { lost } = toMarkdown([block], ROUND_TRIP);
+    assert.deepEqual(lost, [{ path: '/blocks/0', id: null, type: block.type, reason: 'old_name_dropped', fix }], JSON.stringify(block));
+  }
+});
+
 test('round-trip mode reports a fence import would keep back for a reused id, and anything that is not a block; readable mode is unchanged', () => {
   const doc = [{ type: 'heading', level: 1, text: 'a', id: 'x' }, 'not a block', { type: 'heading', level: 1, text: 'b', id: 'x' }];
   const { markdown, lost } = toMarkdown(doc, ROUND_TRIP);
@@ -144,7 +165,7 @@ test('round-trip mode reports a fence import would keep back for a reused id, an
     { path: '/blocks/1', id: null, type: null, reason: 'not-a-block' },
     { path: '/blocks/2', id: 'x', type: 'heading', reason: 'id' },
   ]);
-  assert.deepEqual(fromMarkdown(markdown), [doc[0], { type: 'heading', level: 1, content: [{ type: 'text', value: 'b' }] }]);
+  assert.deepEqual(fromMarkdown(markdown), [currentNames(doc[0]), { type: 'heading', level: 1, content: [{ type: 'text', value: 'b' }] }]);
   assert.equal(toMarkdown(doc), '# a\n\n# b\n');
   assert.equal(toMarkdown(doc, { mode: 'readable' }), toMarkdown(doc));
 });

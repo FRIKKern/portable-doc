@@ -100,7 +100,7 @@ function render(doc, md, options) {
   return out === '' ? '' : `${out}\n`;
 }
 
-export { IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, fromMarkdown, readMarkdown } from './from-markdown.js';
+export { IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, OLD_NAME_DROPPED, fromMarkdown, readMarkdown } from './from-markdown.js';
 
 /**
  * The document as CommonMark with GFM tables, task lists and strikethrough: readable, one way.

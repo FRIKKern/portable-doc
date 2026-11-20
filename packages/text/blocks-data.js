@@ -5,7 +5,7 @@
 import { numberText, stringOf } from './number-text.js';
 import { asList, fmtNum, isMap, maxOf, paras, str, tableOut } from './util.js';
 import { titled } from './blocks-layout.js';
-import { fieldOf, itemOf, readField } from './read-aliases.js';
+import { fieldOf, itemOf, readField, readItem } from './read-aliases.js';
 
 const get = (m, k) => (isMap(m) ? m[k] : undefined);
 
@@ -249,13 +249,61 @@ function coveredCells(spans, lens) {
 const TABLE_CELL_CAP = 10_000;
 const DELTA = ['▼', '-', '▲'];
 
-const rowCells = (row) => (isMap(row) && Array.isArray(row.cells) ? row.cells : asList(row));
+// Where the reader takes a row's cells, and a cell's inline nodes, each as a map over those places:
+// `f(x, path)` is given each with its JSON pointer from the row or cell, and what it returns takes
+// its place. The reader collects them; the fold of old names (mapTableCells) rewrites them.
+/** A row's cells: a row object's `cells`, else the row itself when it is a list. */
+const mapRowCells = (row, f) => (isMap(row) && Array.isArray(row.cells) ? { ...row, cells: row.cells.map((c, i) => f(c, `/cells/${i}`)) } : Array.isArray(row) ? row.map((c, i) => f(c, `/${i}`)) : row);
+/** A cell's inline nodes: a list cell's items, or a cell's `content`, each node, or the `content` of a node that has one. A cell with a string `text` has none. */
+export function mapCellInline(cell, f) {
+  if (Array.isArray(cell)) return cell.map((n, i) => f(n, `/${i}`));
+  if (!isMap(cell) || typeof cell.text === 'string' || !Array.isArray(cell.content)) return cell;
+  const inner = (n, i) => (isMap(n) && Array.isArray(n.content) ? { ...n, content: n.content.map((m, j) => f(m, `/content/${i}/content/${j}`)) } : f(n, `/content/${i}`));
+  return { ...cell, content: cell.content.map(inner) };
+}
+const collect = (map, v) => {
+  const out = [];
+  map(v, (x) => (out.push(x), x));
+  return out;
+};
+const rowCells = (row) => collect(mapRowCells, row);
 
 function cellContent(cell) {
-  if (!isMap(cell)) return cell;
-  if (typeof cell.text === 'string') return cell.text;
-  if (!Array.isArray(cell.content)) return cell;
-  return cell.content.flatMap((n) => (isMap(n) && Array.isArray(n.content) ? n.content : [n]));
+  if (isMap(cell) && typeof cell.text === 'string') return cell.text;
+  return Array.isArray(cell) || (isMap(cell) && Array.isArray(cell.content)) ? collect(mapCellInline, cell) : cell;
+}
+
+/** The keys a table's row objects hold their cells under: each column's, when it has no head and every column is an object with a key; else null. */
+function rowKeys(head, columns) {
+  return !head.length && columns.length && columns.every((c) => isMap(c) && typeof c.key === 'string' && c.key !== '') ? columns.map((c) => c.key) : null;
+}
+const realColumns = (b) => {
+  const read = readField(b, 'columns');
+  return read.name === 'columns' ? asList(read.value) : [];
+};
+
+/**
+ * Table `b` with each cell where the reader below takes one passed through `f(cell, path)`, `path`
+ * its JSON pointer from the table: the head's cells; with no head, each column's text, which
+ * builds it; and each row's cells, by the column keys when the columns are keyed. The fold of old
+ * names walks a table's cells by this (current-names.js).
+ */
+export function mapTableCells(b, f) {
+  const out = { ...b };
+  const head = readField(b, 'head');
+  const heads = asList(head.value);
+  if (heads.length) out[head.name] = heads.map((c, i) => f(c, `/${head.name}/${i}`));
+  const columns = realColumns(b);
+  if (!heads.length && columns.length && columns.every(isMap)) {
+    out.columns = columns.map((c, i) => {
+      const { name, value } = readItem(c, 'table.columns[]', 'text');
+      return value === undefined ? c : { ...c, [name]: f(value, `/columns/${i}/${name}`) };
+    });
+  }
+  const keys = rowKeys(heads, columns);
+  const row = (r, i) => (keys && isMap(r) ? { ...r, ...Object.fromEntries(keys.filter((k) => Object.hasOwn(r, k)).map((k) => [k, f(r[k], `/rows/${i}/${k}`)])) } : mapRowCells(r, (c, p) => f(c, `/rows/${i}${p}`)));
+  if (Array.isArray(b.rows)) out.rows = b.rows.map(row);
+  return out;
 }
 
 const int = (v, min) => {
@@ -267,8 +315,7 @@ function table(b, ctx) {
   let head = asList(fieldOf(b, 'head'));
   let rows = asList(b.rows);
   // A real `columns` builds the head; `cols`, read in its place, gives only each column's type.
-  const read = readField(b, 'columns');
-  const columns = read.name === 'columns' ? asList(read.value) : [];
+  const columns = realColumns(b);
   const cols = asList(b.cols);
   const maps = columns.length && columns.every(isMap);
   const keyed = maps && !columns.every((c) => typeof c.text === 'string') && columns.every((c) => typeof c.key === 'string' && c.key !== '');
@@ -276,7 +323,8 @@ function table(b, ctx) {
   if (keyed && rowTotal * columns.length > TABLE_CELL_CAP) return 'Table too large to show';
   if (!head.length && maps) {
     head = columns.map((c) => itemOf(c, 'table.columns[]', 'text') ?? (typeof c.key === 'string' ? c.key : ''));
-    if (columns.every((c) => typeof c.key === 'string' && c.key !== '')) rows = rows.map((r) => (isMap(r) ? columns.map((c) => r[c.key] ?? '') : r));
+    const keys = rowKeys([], columns);
+    if (keys) rows = rows.map((r) => (isMap(r) ? keys.map((k) => r[k] ?? '') : r));
   } else if (!head.length && rows.length && isMap(rows[0]) && (rows[0].header || rowCells(rows[0]).every((c) => isMap(c) && !!c.header))) {
     head = rowCells(rows[0]);
     rows = rows.slice(1);
