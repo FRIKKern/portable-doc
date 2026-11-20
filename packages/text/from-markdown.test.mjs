@@ -10,6 +10,7 @@ import { MAX_NEST } from './from-markdown-inline.js';
 import { readPlan } from './from-markdown.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
 import { planText } from './import-work.js';
+import { readItem } from './read-aliases.js';
 import { IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, OLD_NAME_DROPPED, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 import { safeUrl } from './util.js';
 
@@ -87,6 +88,10 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
 
 test('a portabledoc fence imports its old names under their current names, by the rule every reader uses; each value it loses is a notice', () => {
   const code = (v) => ({ type: 'code', value: v });
+  // A current value of spaces alone beside a filled old name. By `holds`, a non-empty array holds
+  // text, so every reader takes `content` and shows nothing; the import keeps it, and `text` is
+  // a value it drops.
+  const SPACES = { type: 'heading', level: 2, text: 'H', content: [t(' ')] };
   // [stored, imported, the names dropped as { path, name, current }]. The current name wins when it
   // holds a value; of two old names, the table's first. A table's `cols` and `header: true` stay.
   // A value that holds no text by the readers' own measure (`holds`, read-aliases.js: a blank
@@ -98,6 +103,7 @@ test('a portabledoc fence imports its old names under their current names, by th
     [{ type: 'code', code: 'a', text: 'b' }, code('a'), [['/blocks/0/text', 'text', 'value']]],
     [{ type: 'code', value: ' ', code: 'a' }, code('a'), []],
     [{ type: 'heading', level: 2, text: 'H', content: [] }, { type: 'heading', level: 2, content: [t('H')] }, []],
+    [SPACES, { type: 'heading', level: 2, content: [t(' ')] }, [['/blocks/0/text', 'text', 'content']]],
     [{ type: 'paragraph', content: [t('p')], meta: { type: 'heading', text: 'k' } }, { type: 'paragraph', content: [t('p')], meta: { type: 'heading', text: 'k' } }, []],
     [{ type: 'paragraph', content: [t('p')], meta: [{ type: 'code', code: 'a', value: 'b' }] }, { type: 'paragraph', content: [t('p')], meta: [{ type: 'code', code: 'a', value: 'b' }] }, []],
     [{ type: 'code', code: 'a', value: 'a', lang: 'js' }, { ...code('a'), lang: 'js' }, []],
@@ -132,6 +138,9 @@ test('a portabledoc fence imports its old names under their current names, by th
     const want = dropped.map(([path, name, current]) => ({ code: OLD_NAME_DROPPED, path, line: 1, lines: 3, name, current, fix: `write ${current}` }));
     assert.deepEqual(read.notices, want, label);
   }
+  // The readers read SPACES as its import does: `content`, which shows no text.
+  assert.deepEqual(readItem(SPACES, 'heading', 'content'), { name: 'content', value: [t(' ')] });
+  assert.deepEqual([toPlainText([SPACES]), toMarkdown([SPACES])], ['', '']);
   // The notice's path is the block's place in the doc, and its lines the fence's.
   const later = readMarkdown(`Intro\n\n\`\`\`portabledoc\n[{"type":"divider"},\n${JSON.stringify({ type: 'code', code: 'a', value: 'b' })}]\n\`\`\``);
   assert.deepEqual(later.notices, [{ code: OLD_NAME_DROPPED, path: '/blocks/2/code', line: 3, lines: 4, name: 'code', current: 'value', fix: 'write value' }]);
