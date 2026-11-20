@@ -16,8 +16,9 @@
 //   - a hole in a style that is not fixed text. A template, a string, or a + chain of them is read
 //     as one text, holes and all. A style is the value of an attribute named style (any case,
 //     spaces around =, quoted or not), the text of a <style> element, or, in a fragment with no
-//     markup, a CSS declaration's value after `name:` (a word, -webkit- and -- names too, or a
-//     hole directly before the colon). Fixed text is a value whose type is a string literal or a
+//     markup, a CSS declaration's value after `name:`, quotes and all (the name a word, -webkit-
+//     and -- names too, or a hole directly before the colon with the value right after it).
+//     Nothing in an HTML comment is a tag or a style. Fixed text is a value whose type is a string literal or a
 //     union of them, or a ternary, ||, ??, template or + chain of fixed texts. A hole between a
 //     tag's attributes (`<i${styleAttr([…])}>`) writes attributes, not a style, and is not one;
 //   - a styleAttr call whose list is not written out (a value, or a spread in it), and an item in
@@ -87,19 +88,35 @@ const WHY = {
   jsx: 'a JSX style',
   use: 'a use of styleOf, styleAttr or styleColor the scan cannot follow',
 };
-// What the style rules get wrong, each with a plant as written in the plant file (s a string, n a
-// number) and what the scan says of it: null for a style it misses, a reason for text that is no
-// style but is refused (a false red, on the safe side). The plant test holds each answer; when the
-// scan learns a case, its plant's answer changes and its row leaves this list.
+// What the style rules get wrong, each with its plants as written in the plant file (s a string, n
+// a number) and what the scan says of them: null for a style it misses, a reason for text that is
+// no style but is refused (a false red, on the safe side). The plant test holds each answer; when
+// the scan learns a case, its plants' answer changes and its row leaves this list. Most are
+// disguises: the scan stops a value reaching a style by accident; it does not stop an author who
+// disguises the value or the word style.
 const STYLE_LIMITS = Object.freeze([
-  { limit: 'a property named by a hole and written with a space is read as a label', plant: '`${s}: ${numberText(n)}px`', named: null },
-  { limit: 'a style opener split across pieces joined without + or a template is not seen', plant: '[\'<i \', \'style\', \'="width:\', numberText(n), \'%">\'].join(\'\')', named: null },
-  { limit: 'a `name:` text joined to a value outside any style is refused', plant: "'commit:' + s", named: WHY.hole },
+  { limit: 'a property named by a hole and written with a space is read as a label', plants: ['`${s}: ${numberText(n)}px`'], named: null },
+  {
+    limit: 'a style opener split across pieces joined without + or a template is not seen',
+    plants: ['[\'<i \', \'style\', \'="width:\', numberText(n), \'%">\'].join(\'\')', '\'<i st\'.concat(\'yle="width:\', numberText(n), \'%">\')'],
+    named: null,
+  },
+  { limit: "a const whose value is asserted to a fixed text type (`as 'x'`) is trusted as fixed text", plants: ['`<i style="width:${w6}%">`'], named: null },
+  { limit: "a function whose fixed text return type is asserted over another value (`as any`) is trusted: a call is read by its type, not its body", plants: ['`<i style="color:${lie()}">`'], named: null },
+  {
+    limit: 'an attribute name glued from a hole and text is not read as one name',
+    plants: ['`<i ${\'sty\'}le="width:${numberText(n)}%">`', '`<i ${s}le="width:${numberText(n)}%">`', '`<i st${\'yle\'}="width:${numberText(n)}%">`'],
+    named: null,
+  },
+  { limit: 'a value put into a closed style text by replace is not seen', plants: ['\'<i style="width:W%">\'.replace(\'W\', numberText(n))'], named: null },
+  { limit: 'a style object given to an element maker outside JSX (h, createElement) is not seen', plants: ["h('i', { style: { width: n } })", "React.createElement('i', { style: { width: n } })"], named: null },
+  { limit: 'a `name:` text joined to a value outside any style is refused', plants: ["'commit:' + s"], named: WHY.hole },
 ]);
-// A CSS declaration's value runs on after `name:` in a fragment with no markup: the name a word
-// (-webkit- and -- names too) or a hole directly before the colon; not `${k}: ` with a space, which
-// is a label. A hole stands in the text as \u0000.
-const DECL = /(?:^|[;{\u0000])\s*(?:-{0,2}[a-z][a-z0-9-]*\s*:[^;"'{}]*|\u0000:)$/i;
+// A CSS declaration's value runs on after `name:`, quotes and all, in a fragment with no markup: the
+// name a word (-webkit- and -- names too), or a hole directly before the colon with the value
+// starting right after it; not `${k}: ` with a space, which is a label. A hole stands in the text
+// as \u0000.
+const DECL = /(?:^|[;{\u0000])\s*(?:-{0,2}[a-z][a-z0-9-]*\s*|\u0000):(?!(?<=\u0000:)\s)[^;{}]*$/i;
 
 /**
  * Read one text, as pieces of text and holes, the way HTML would: for each hole, whether it sits in
@@ -137,7 +154,16 @@ function readStyle(pieces, safeName) {
     for (let j = 0; j < t.length; j++) {
       const c = t[j];
       const opening = mode === 'text' || mode === 'tag' ? /^<([a-z][a-z0-9-]*)/i.exec(t.slice(j)) : null;
-      if (mode === 'element') {
+      if (mode === 'comment') {
+        if (t.startsWith('-->', j)) {
+          mode = 'text';
+          j += 2;
+        }
+      } else if ((mode === 'text' || mode === 'tag') && t.startsWith('<!--', j)) {
+        // Nothing in an HTML comment is a tag or a style, an opener neither.
+        mode = 'comment';
+        j += 3;
+      } else if (mode === 'element') {
         if (t.slice(j, j + 7).toLowerCase() === '</style') mode = 'text';
       } else if (mode === 'value') {
         if (quote ? c === quote : /\s/.test(c)) {
@@ -432,6 +458,12 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i style="width:${numberText(n)}`', [hole, open]],
       ['\'<i style="width:\'.concat(numberText(n), \'%">\')', open],
       ['`<i ${attr}="width:${numberText(n)}%">`', [name, hole]],
+      // A CSS value after a quote, a later hole after a hole-named property, and a style opened
+      // after an HTML comment that holds an opener.
+      ['`font-family:"${s}"`', hole],
+      ['`${s}:1px ${numberText(n)}`', hole],
+      ['`<!-- <i style="--> <b style="width:${numberText(n)}%">`', hole],
+      ['`<!-- <i style="width:${numberText(n)}%"> -->`', null],
       // Fixed texts pass: a literal, a const, a function whose returns are literals, a ternary,
       // and a hole between attributes; an attribute named by a data- template type.
       ['`<i style="color:${\'red\'}">`', null],
@@ -448,7 +480,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i${styleAttr([...list])}>`', list],
       ['`<i${styleAttr([styleOf(s, n)])}>`', prop],
       // The style rules' listed limits, each answered as STYLE_LIMITS says.
-      ...STYLE_LIMITS.map(({ plant, named }) => [plant, named]),
+      ...STYLE_LIMITS.flatMap(({ plants, named }) => plants.map((plant) => [plant, named])),
     ];
     const head = [
       `import { escapeHtml as eh } from ${JSON.stringify(path.join(REACT_SRC, 'inline'))}`,
@@ -467,6 +499,10 @@ test('the scan finds each route it names, in React by type and in text by syntax
       'declare const attr: string',
       'declare const dn: `data-${string}`',
       'declare const list: string[]',
+      "const w6 = numberText(hn) as 'x'",
+      "const lie = (): 'red' => numberText(hn) as any",
+      'declare const h: (tag: string, props: object) => unknown',
+      'declare const React: { createElement: (tag: string, props: object) => unknown }',
       'const so = styleOf',
       "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
       "  if (typeof b.count !== 'number') return []",
@@ -526,9 +562,9 @@ test('no number reaches React\'s HTML or the text writers\' output outside numbe
 });
 
 test('a style colour has one check, the door\'s', () => {
-  // The one copy is STYLE_COLORS in the door. A colour pattern (# and a hex digit class) anywhere
-  // else in React's source or in the door is a second copy.
-  const COLOUR = /#[^\n]*\[(?:0-9a-f|a-f0-9|\\da-f)/i;
+  // The one copy is STYLE_COLORS in the door. A colour pattern (# and a hex digit class that
+  // starts 0-9a-f, a-f0-9, a-fA-F0-9 or \da-f, in either case) anywhere else in React's source or in the door is a second copy.
+  const COLOUR = /#[^\n]*\[(?:0-9a-f|a-f0-9|a-fa-f0-9|\\da-f)/i;
   const hits = [...reactSources().files, path.join(root, DOOR)].flatMap((f) =>
     fs.readFileSync(f, 'utf8').split('\n').flatMap((line, i) => (COLOUR.test(line) ? [`${path.relative(root, f)}:${i + 1}`] : [])),
   );
