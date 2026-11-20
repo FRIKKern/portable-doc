@@ -14,5 +14,13 @@ export type StyleBefore = (typeof STYLE_BEFORE)[number];
 export type StyleAfter = (typeof STYLE_AFTER)[number];
 /** One style property that carries a number, as `prop:<before><number><after>`; '' when the number is not finite, so the property is left out whole. */
 export function styleOf(prop: string, n: number | null | undefined, how?: { format?: StyleFormat; before?: StyleBefore; after?: StyleAfter }): string;
-/** A style attribute (with its leading space) from its properties, the empty ones left out; '' when none is left. */
-export function styleAttr(props: string[]): string;
+/** Every shape a style's colour may take, by name: the one copy of each colour check. */
+export const STYLE_COLORS: Readonly<{ hex: RegExp; hex6: RegExp }>;
+export type StyleColorShape = keyof typeof STYLE_COLORS;
+/** One style property that carries a colour, as `prop:<colour>`; '' when the value is not a string of the named shape. */
+export function styleColor(prop: string, v: unknown, how: { shape: StyleColorShape }): string;
+/** Every text a style attribute may end with, after its last property. */
+export const STYLE_END: readonly ['', ';'];
+export type StyleEnd = (typeof STYLE_END)[number];
+/** A style attribute (with its leading space) from its properties, the empty ones left out, and its end text; '' when none is left. */
+export function styleAttr(props: string[], how?: { end?: StyleEnd }): string;

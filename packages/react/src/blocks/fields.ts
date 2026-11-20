@@ -16,7 +16,7 @@
 
 import { type Block, escapeAttr as ea, escapeHtml as eh, isMap, safeUrl } from '../inline'
 import type { RenderCtx } from './chrome'
-import { numberText } from '../../../text/number-text.js'
+import { numberText, styleAttr, styleColor } from '../../../text/number-text.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
 
@@ -98,11 +98,10 @@ export const fieldEmitters: Record<string, Emit> = {
     text(b, typeof b.value === 'string' ? b.value.replace(/T/g, ' ') : val(b)),
   'field-color': (b) => {
     const hex = val(b)
-    const safe = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex) ? hex : 'transparent'
     return row(
       b,
       hex
-        ? `<i class="bp-field__swatch" style="background:${safe}"></i><span class="bp-field__mono">${eh(hex)}</span>`
+        ? `<i class="bp-field__swatch"${styleAttr([styleColor('background', hex, { shape: 'hex' }) || 'background:transparent'])}></i><span class="bp-field__mono">${eh(hex)}</span>`
         : NONE,
     )
   },

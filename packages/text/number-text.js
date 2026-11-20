@@ -79,12 +79,40 @@ export function styleOf(prop, n, { format = 'digits', before = '', after = '' } 
 }
 
 /**
- * A style attribute (with its leading space) from its properties, the empty ones left out; '' when
- * none is left, so no empty style="" is written.
- * @param {string[]} props
+ * Every shape a style's colour may take, by name: the one copy of each colour check. A new shape is
+ * added here and nowhere else. hex: # and 3 or 6 hex digits; hex6: # and 6 hex digits.
+ */
+export const STYLE_COLORS = Object.freeze({
+  hex: /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,
+  hex6: /^#[0-9a-f]{6}$/i,
+});
+
+/**
+ * One style property that carries a colour, as `prop:<colour>`; '' when the value is not a string
+ * of the named shape, so the property is left out whole. A shape off the list throws.
+ * @param {string} prop
+ * @param {unknown} v
+ * @param {{ shape: 'hex' | 'hex6' }} how
  * @returns {string}
  */
-export function styleAttr(props) {
+export function styleColor(prop, v, { shape } = {}) {
+  if (!Object.hasOwn(STYLE_COLORS, shape)) throw new TypeError(`styleColor: ${JSON.stringify(shape)} is not a colour shape`);
+  return typeof v === 'string' && STYLE_COLORS[shape].test(v) ? `${prop}:${v}` : '';
+}
+
+/** Every text a style attribute may end with, after its last property. */
+export const STYLE_END = Object.freeze(['', ';']);
+
+/**
+ * A style attribute (with its leading space) from its properties, the empty ones left out, and its
+ * end text after the last; '' when none is left, so no empty style="" is written. An end off the
+ * list throws.
+ * @param {string[]} props
+ * @param {{ end?: string }} [how]
+ * @returns {string}
+ */
+export function styleAttr(props, { end = '' } = {}) {
+  if (!STYLE_END.includes(end)) throw new TypeError(`styleAttr: ${JSON.stringify(end)} is not a listed end text`);
   const kept = props.filter((p) => p !== '');
-  return kept.length ? ` style="${kept.join(';')}"` : '';
+  return kept.length ? ` style="${kept.join(';')}${end}"` : '';
 }

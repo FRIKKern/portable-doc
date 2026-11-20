@@ -204,7 +204,8 @@ interface SourceRef {
 export function parseSourceRef(ref: unknown): SourceRef | null {
   if (typeof ref !== 'string') return null
   if (/^commit:[0-9a-f]{7,40}$/.test(ref)) {
-    return { raw: ref, label: 'commit:' + ref.slice(7, 14), href: null }
+    // The ref's own `commit:` and its first 7 hex digits.
+    return { raw: ref, label: ref.slice(0, 14), href: null }
   }
   if (/^paper:[a-z0-9][a-z0-9-]*$/.test(ref)) return { raw: ref, label: ref, href: null }
   if (/^task:[A-Za-z0-9._-]+$/.test(ref)) return { raw: ref, label: ref, href: null }
