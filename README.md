@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 12 changes · test: pin the not-a-writer list with a reason per name ([#135](https://github.com/FRIKKern/portable-doc/pull/135))
+- **Today** · 13 changes · spec: a callout's content and body, and the rows that hold every writer to them ([#137](https://github.com/FRIKKern/portable-doc/pull/137))
 - **Yesterday** · 52 changes · react, text: a style property whose number is not finite is left out whole, by one rule at the number door ([#123](https://github.com/FRIKKern/portable-doc/pull/123))
 - **This week** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
 - **Last week** · 2 milestones closed
