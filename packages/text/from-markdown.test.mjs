@@ -156,7 +156,7 @@ test('a fence folds old names only where readers read blocks: other data is kept
   const kept = fenced(meta);
   assert.deepEqual([kept.blocks, kept.notices], [[{ type: 'paragraph', content: [t('Intro')] }, ...meta], []]);
   // A paragraph under its old name in the deepest list a fence may hold (blocks nest at most
-  // MAX_DEPTH deep): far above MAX_VALUE_DEPTH, so it folds, and nothing else changes.
+  // MAX_DEPTH deep): far below MAX_VALUE_DEPTH, so it folds, and nothing else changes.
   let stored = { type: 'paragraph', text: 'x' };
   let folded = { type: 'paragraph', content: [t('x')] };
   for (let i = 1; i < MAX_DEPTH; i++) [stored, folded] = [stored, folded].map((b) => ({ type: 'list', items: [{ children: [b] }] }));
