@@ -138,6 +138,8 @@ test('every writer keeps every word of every shared case, or lists where it lost
   assert.equal(counted.size, EDITOR_LOSSES.length, 'editor-losses.mjs: two rows of one writer and kind');
   let seen = 0;
   let bigSeen = 0;
+  // Words in a callout's body that its writer wrote, so a field names their loss, not the place.
+  const namedInBody = [];
   for (const [name, blocks, words = textWords(blocks)] of await cases()) {
     seen++;
     for (const writer of WRITERS) {
@@ -152,9 +154,11 @@ test('every writer keeps every word of every shared case, or lists where it lost
         if (row) excused.add(`${row[0]} ${writer.name}`);
         return !row;
       });
-      const uncounted = missing.filter(([, key, path]) => {
-        const row = `${writer.name}: ${lossKind(writer.name, name, key, path, blocks)}`;
+      const lostIn = (place) => missing.filter(([, , p]) => p.startsWith(place));
+      const uncounted = missing.filter(([w, key, path]) => {
+        const row = `${writer.name}: ${lossKind(writer.name, name, key, path, blocks, lostIn)}`;
         if (!counted.has(row)) return true;
+        if (path.includes('/slots/body/') && !row.endsWith(': a callout body')) namedInBody.push(`${row}: ${w} at ${path} of ${name}`);
         counted.set(row, counted.get(row) + 1);
         return false;
       });
@@ -163,6 +167,11 @@ test('every writer keeps every word of every shared case, or lists where it lost
   }
   if (process.env.WORDS_DUMP) fs.writeFileSync(process.env.WORDS_DUMP, drops.join('\n'));
   assert.deepEqual(drops, []);
+  // The words in a callout's body whose loss its field names, because the writer wrote the body:
+  // the export's x-axis labels of the chart in one case (moved from "a callout body" to "a chart
+  // label" when the export came to write a callout's body, its total unchanged).
+  const CASE = 'round-trip-chart-filled-in-a-callout-a-markdown-quote';
+  assert.deepEqual(namedInBody, ['W1', 'W2', 'W3', 'W4'].map((w, i) => `editor export: a chart label: ${w} at /blocks/0/slots/body/0/axes/xLabels/${i} of ${CASE}`), 'words in a callout body named by their field');
   // Each listed loss is the exact count of words lost: a new loss and a fix both move it.
   assert.deepEqual(Object.fromEntries(counted), Object.fromEntries(EDITOR_LOSSES.map(([writer, kind, count]) => [`${writer}: ${kind}`, count])), 'editor-losses.mjs: a count moved; a fix brings its row down or out, a new loss is a bug');
   assert.ok(seen > 390, `${seen} cases`);

@@ -27,15 +27,23 @@ test('every block type and alias in the spec has its own text handler', () => {
   }
 });
 
+// goldens/limits holds the limit goldens (*.golden.json) and value-too-deep.json, the validator's
+// value-depth cases: each case whose expect is empty is a valid doc, so it is rendered here too.
+const VALUE_DEPTH = 'goldens/limits/value-too-deep.json';
 const docs = [
-  ...jsonIn('goldens/blocks'),
-  ...jsonIn('goldens/limits'),
-  ...jsonIn('fixtures/valid'),
-  'goldens/nested-list-carriers.json',
-].map((file) => {
-  const json = read(file);
-  return { file, doc: asDoc('input' in json ? json.input : json) };
-});
+  ...[
+    ...jsonIn('goldens/blocks'),
+    ...jsonIn('goldens/limits').filter((f) => f.endsWith('.golden.json')),
+    ...jsonIn('fixtures/valid'),
+    'goldens/nested-list-carriers.json',
+  ].map((file) => {
+    const json = read(file);
+    return { file, doc: asDoc('input' in json ? json.input : json) };
+  }),
+  ...read(VALUE_DEPTH)
+    .cases.filter((c) => c.expect.length === 0)
+    .map((c) => ({ file: `${VALUE_DEPTH}: ${c.name}`, doc: asDoc(c.doc) })),
+];
 
 test('every golden and valid doc renders to clean, non-empty, deterministic text', () => {
   assert.ok(docs.length >= 140, `only ${docs.length} docs`);
