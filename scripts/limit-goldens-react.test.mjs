@@ -16,12 +16,19 @@ const GOLDENS = fs
   .sort()
   .map((f) => [f.replace(/\.golden\.json$/, ''), JSON.parse(fs.readFileSync(new URL(f, DIR), 'utf8'))]);
 
+// The pack's own list of its limit goldens, so a golden missing on disk is seen.
+const IN_PACK = Object.keys(JSON.parse(fs.readFileSync(new URL('../SOURCE.json', import.meta.url), 'utf8')).files).filter((f) => f.startsWith('goldens/limits/'));
+
+// This list only shrinks: its length is held at or under NOT_YET_MOST.
 const NOT_YET = {
   'list-at-the-depth-limit': 'at the deepest level the reader writes the empty item; React writes "Nested too deep to show" there',
 };
+const NOT_YET_MOST = 1;
 
 test('React writes every limit golden byte for byte, except the ones named with why', () => {
   assert.ok(GOLDENS.length > 0, 'no limit goldens');
+  assert.equal(GOLDENS.length, IN_PACK.length, 'limit goldens on disk and in SOURCE.json');
+  assert.ok(Object.keys(NOT_YET).length <= NOT_YET_MOST, 'NOT_YET only shrinks');
   const names = GOLDENS.map(([name]) => name);
   for (const name of Object.keys(NOT_YET)) assert.ok(names.includes(name), `${name}: named, but no such golden`);
   const wrong = [];
