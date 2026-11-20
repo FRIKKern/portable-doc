@@ -23,6 +23,7 @@
 //   - a styleOf write argument, parentheses unwrapped, that is neither an inline function nor a
 //     bare name of the door's writer or of a React function declared as a function or a const
 //     (through const aliases): a ternary, bind, a cast, a call, a property, a parameter, a let;
+//     and a spread among styleOf's arguments, which hides the write argument;
 //   - any use of styleOf or styleAttr but a direct call or its import: an alias, or a value;
 //   - inside a writer, a value it hands a number writer in any form but the 2 it follows
 //     (FOLLOWED; a test pins the count, which may only shrink): a literal, and a plain
@@ -322,6 +323,7 @@ function reactRoutes(only) {
           else if (captures.has(symOf(w))) at(w, 'a number in a style value outside styleOf');
         } else if (w && (ts.isArrowFunction(w) || ts.isFunctionExpression(w))) has(w, (c) => (writerCall(c) && at(c, 'a number in a style value outside styleOf'), false));
         else if (w) at(w, 'a styleOf write argument the scan cannot follow');
+        if (isCallOf(node, 'styleOf')) for (const a of node.arguments) if (ts.isSpreadElement(a)) at(a, 'a styleOf write argument the scan cannot follow');
       } else if (ts.isIdentifier(node) && fromDoor(symOf(node), ['styleOf', 'styleAttr']) && !ts.isImportSpecifier(node.parent)) {
         // styleOf and styleAttr are read only where called by name: an alias or a value is refused.
         const use = ts.isPropertyAccessExpression(node.parent) && node.parent.name === node ? node.parent : node;
@@ -524,6 +526,8 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i${styleAttr([styleOf(\'width\', n, (wr))])}>`', STYLE],
       ['`<i${styleAttr([styleOf(\'width\', n, wr as (v: number) => string)])}>`', WRITE_ARG],
       ['`<i${styleAttr([styleOf(\'width\', n, lw)])}>`', WRITE_ARG],
+      ['`<i${styleAttr([styleOf(...sargs)])}>`', WRITE_ARG],
+      ['`<i${styleAttr([styleOf(\'width\', ...srest)])}>`', WRITE_ARG],
       ['`<i${styleAttr([so(\'width\', n, (v) => numberText(hn))])}>`', null],
       // Listed limits (the header's "What it cannot see"): each is a number in a style that the
       // scan does not name. Concatenation; a join built outside the template; an object's method;
@@ -585,6 +589,8 @@ test('the scan finds each route it names, in React by type and in text by syntax
       'const wu = (x: string | number) => { x = hn; return numberText(x) }',
       'const wd = (v: number) => { ({ v } = { v: hn }); return numberText(v) }',
       'let lw = fmt',
+      "const sargs = ['width', hn, wr] as const",
+      'const srest = [hn, wr] as const',
       'const wa = (w: (v: number) => string) => styleOf(\'width\', hn, w)',
       'const so = styleOf',
       "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
