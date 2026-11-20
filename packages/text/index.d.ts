@@ -116,12 +116,33 @@ export interface ImportFallbackNotice {
   lines: number;
 }
 
-export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice;
+/** The code of the notice for a value a fence's block lost when its old names folded into their current names. */
+export const OLD_NAME_DROPPED: 'old_name_dropped';
+
+/**
+ * A note from the import: a ```portabledoc fence's block held a field under two names with
+ * different values, and the import kept the one every reader picks (the current name, when it
+ * holds a value) under the current name. `path` is the dropped key's, `name` that key, `current`
+ * the field's current name and `fix` the fix, `write <current>`. `line` is the fence's first
+ * source line, from 1, and `lines` how many lines the fence spans.
+ */
+export interface OldNameDroppedNotice {
+  code: 'old_name_dropped';
+  path: string;
+  line: number;
+  lines: number;
+  name: string;
+  current: string;
+  fix: string;
+}
+
+export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice | OldNameDroppedNotice;
 
 /**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
  * from the text. `notices` says what a limit cut and each list item split off, by kind: the
- * `budget` and `line` notices, then the splits in source order, then a `net` one; it is empty
+ * `budget` and `line` notices, then the splits and a fence's dropped old names
+ * (`old_name_dropped`) in source order, then a `net` one; it is empty
  * when none happened. When the import falls back to one code block, its one notice is
  * `import_fell_back`. `limits` defaults to IMPORT_WORK. Never throws.
  */

@@ -27,7 +27,7 @@ export const FROM_MARKDOWN = ['headings', 'list-split', 'nesting', 'text-work'];
 
 const markdownCases = async (folder) => Object.entries((await import(new URL(`${folder}/cases.mjs`, FIXTURES).href)).CASES).map(([name, markdown]) => ({ name, blocks: readMarkdown(markdown).blocks }));
 
-// Each folder's cases as { name, blocks, reads? }.
+// Each folder's cases as { name, blocks, reads?, input? }.
 const READERS = {
   nesting: () => markdownCases('nesting'),
   headings: () => markdownCases('headings'),
@@ -43,7 +43,8 @@ const READERS = {
       ...cut.map(([name, [markdown, limits]]) => ({ name, blocks: readMarkdown(markdown, limits).blocks })),
     ];
   },
-  'round-trip': () => Object.entries(JSON.parse(sharedCases()[path.posix.join('round-trip', 'round-trip-cases.json')])).map(([name, { markdown }]) => ({ name, blocks: fromMarkdown(markdown) })),
+  // `input` is the case's blocks as stored, before import puts old names under current names.
+  'round-trip': () => Object.entries(JSON.parse(sharedCases()[path.posix.join('round-trip', 'round-trip-cases.json')])).map(([name, { markdown, input }]) => ({ name, blocks: fromMarkdown(markdown), input })),
   valid: () => json('valid').map(([name, doc]) => ({ name, blocks: Array.isArray(doc) ? doc : doc.blocks })),
   writers: () => json('writers').map(([name, { blocks }]) => ({ name, blocks })),
   // An alias case's block holds a field under two names; `reads` names the one a reader takes.
@@ -51,7 +52,7 @@ const READERS = {
   aliases: () => json('aliases').filter(([, c]) => validate({ blocks: [c.block] }).ok).map(([name, { block, reads }]) => ({ name, blocks: [block], reads })),
 };
 
-/** Every shared case as { folder, name, blocks, reads? }, read from each folder under fixtures/. */
+/** Every shared case as { folder, name, blocks, reads?, input? }, read from each folder under fixtures/. */
 export async function fixtureCases() {
   const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
   const unread = folders.filter((f) => !(f in READERS) && !(typeof NOT_READ[f] === 'string' && NOT_READ[f].trim()));

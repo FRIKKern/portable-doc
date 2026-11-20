@@ -117,11 +117,14 @@ function writtenWords(writer, blocks) {
 const big = (blocks) => JSON.stringify(blocks).length > KEEP_BYTES;
 const SLOW = ['round-trip Markdown'];
 
-/** Every shared case as [name, blocks, words it must keep?]: an alias case owes only the words its `reads` names. */
+/**
+ * Every shared case as [name, blocks, words it must keep?]: an alias case owes only the words its
+ * `reads` names. A round-trip case is its blocks as stored (`input`), old names and all.
+ */
 async function cases() {
-  return (await fixtureCases()).map(({ name, blocks, reads }) => [
+  return (await fixtureCases()).map(({ name, blocks, reads, input }) => [
     name,
-    blocks,
+    input ?? blocks,
     reads && Object.entries(reads).flatMap(([key, v]) => (typeof v === 'string' ? wordsIn(v).map((w) => [w, key, `/blocks/0/${key}`]) : [])),
   ]);
 }

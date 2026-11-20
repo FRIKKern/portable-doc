@@ -112,7 +112,17 @@ into its `slots.body`. Two fences do more:
   every block in it is of a fence type (`FENCE_TYPES`, listed under
   [Round trip](#round-trip)): at the top, and nested wherever the schema puts
   blocks (a list item's `children`, a callout's `slots.body`, …). Otherwise the
-  fence stays a code block.
+  fence stays a code block. A spliced block's old names (the alias table, as
+  in `spec/read-aliases.json`) come in under their current names, picked and
+  converted by the rule every reader uses, so the current name wins when it
+  holds a value. Only what the readers read is folded: the blocks, the places
+  the schema puts blocks and inline nodes in them, a table's cells where its
+  reader takes them, and the item paths the alias table names; data under any
+  other key (`meta` and the like) stays as written.
+  A table's `cols` and `header: true` stay as they are too. Each value that
+  loses adds an `old_name_dropped` notice (`OLD_NAME_DROPPED`) with its fix,
+  `write <current>`; a value that holds no text (a blank string, an empty
+  array) adds none.
 
 It never throws. The result always passes `@portable-doc/validate`; if the
 parser or the walk ever fails, the whole input comes back as one code block.
@@ -138,8 +148,8 @@ Where it differs from Barkpark, on purpose:
   order; more text after a later nested list splits again. In an ordered list
   the new item takes the next number, and the numbers after it continue from
   there. Each split adds a `list_item_split` notice (`LIST_ITEM_SPLIT`). The
-  notices come by kind: any `budget` or `line` notice, then the splits in
-  source order, then a `net` one.
+  notices come by kind: any `budget` or `line` notice, then the splits and a
+  fence's dropped old names in source order, then a `net` one.
 - Should reading the text fail, `readMarkdown` keeps the whole text as one code
   block and says so with one `import_fell_back` notice (`IMPORT_FELL_BACK`),
   its `lines` the text's line count. That is a bug to report.
@@ -193,8 +203,12 @@ Where it differs from Barkpark, on purpose:
   in the wild means the text's count is wrong, and is a bug to report.
 - Each list item split off at text after its nested list adds a notice
   `{ code: 'list_item_split', path, line, lines }`: the new item's path, its
-  text's first source line (from 1) and how many lines it spans. These come in
-  source order, after any `budget` or `line` notice and before a `net` one.
+  text's first source line (from 1) and how many lines it spans. Each value a
+  fence's block loses as its old names fold adds
+  `{ code: 'old_name_dropped', path, line, lines, name, current, fix }`: the
+  dropped key's path, the fence's lines, the name dropped, the current name and
+  `write <current>`. These come in source order, after any `budget` or `line`
+  notice and before a `net` one.
 
 ## Round trip
 
