@@ -34,7 +34,7 @@ Either choice can still be reversed. Reversing it is cheap until the reader chan
 
 ## Decision
 
-- SPEC.md states the rule: "A callout's `content` is its own first paragraph, and its `slots.body` is the blocks after that paragraph; neither field is a copy of the other. A callout's body holds any block a document may hold, under the one depth limit every document has."
+- SPEC.md states the rule: "A callout's content is its own first paragraph, its slots.body is the blocks after that paragraph, and neither field is a copy of the other. A callout's body holds any block a document may hold." The schema's callout entry is to carry the same two sentences. The one depth limit every document has applies to a callout's body too.
 - A callout with empty `content` and a body is allowed: an empty first line is not a missing one.
 - Readers show `content`, then every block of the body, in that order, each once.
 - `scripts/callout-rule.test.mjs` holds SPEC.md to the sentences, word for word. It also holds the shared cases and the readers here to the rule:

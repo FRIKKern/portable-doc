@@ -9,16 +9,19 @@ import { fixtureCases } from './lib/fixture-cases.mjs';
 import { WRITERS } from './lib/writers.mjs';
 import { KEEP_BYTES } from './write-shared-cases.mjs';
 
-/** The sentences SPEC.md states, word for word. */
-export const CALLOUT_RULE = [
-  "A callout's `content` is its own first paragraph, and its `slots.body` is the blocks after that paragraph; neither field is a copy of the other.",
-  "A callout's body holds any block a document may hold, under the one depth limit every document has.",
-];
+/**
+ * The callout rule, word for word: SPEC.md opens its callout paragraph with it, and the schema's
+ * callout entry is to carry the same two sentences, compared against this one constant.
+ */
+export const CALLOUT_RULE = "A callout's content is its own first paragraph, its slots.body is the blocks after that paragraph, and neither field is a copy of the other. A callout's body holds any block a document may hold.";
+export const DEPTH = 'The one depth limit every document has applies to it too.';
 export const EMPTY_CONTENT = 'A callout with empty `content` and a body is allowed: an empty first line is not a missing one.';
 
 test('SPEC.md states the callout rule, and allows a callout with empty content and a body', () => {
-  const spec = fs.readFileSync(new URL('../SPEC.md', import.meta.url), 'utf8').replace(/\s+/g, ' ');
-  assert.deepEqual([...CALLOUT_RULE, EMPTY_CONTENT].filter((s) => !spec.includes(s)), [], 'SPEC.md does not say these, word for word');
+  const raw = fs.readFileSync(new URL('../SPEC.md', import.meta.url), 'utf8');
+  const spec = raw.replace(/\s+/g, ' ');
+  assert.deepEqual([CALLOUT_RULE, DEPTH, EMPTY_CONTENT].filter((s) => !spec.includes(s)), [], 'SPEC.md does not say these, word for word');
+  assert.ok(raw.includes(`\n\n${CALLOUT_RULE} ${DEPTH} `), 'SPEC.md opens a paragraph with the rule, byte for byte, then the depth limit');
 });
 
 const wordsIn = (s) => s.match(/\p{L}[\p{L}\p{N}]*/gu) ?? [];

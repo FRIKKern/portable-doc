@@ -10,7 +10,7 @@ spec/blocks.schema.json here ── copy        Barkpark checks its modules agai
 
 PortableDoc is a JSON document: an ordered list of blocks, each with a type from a closed set of 80. Every block belongs to one composition tier: `element` (a leaf), `widget` (composes elements into one unit) or `section` (owns the layout of its children). A doc type can declare structure rules per block kind: presence, cardinality and position.
 
-A callout's `content` is its own first paragraph, and its `slots.body` is the blocks after that paragraph; neither field is a copy of the other. A callout's body holds any block a document may hold, under the one depth limit every document has. A callout with empty `content` and a body is allowed: an empty first line is not a missing one. Readers show the content, then every block of the body, in that order ([0014](docs/decisions/0014-callout-content-and-body.md)).
+A callout's content is its own first paragraph, its slots.body is the blocks after that paragraph, and neither field is a copy of the other. A callout's body holds any block a document may hold. The one depth limit every document has applies to it too. A callout with empty `content` and a body is allowed: an empty first line is not a missing one. Readers show the content, then every block of the body, in that order ([0014](docs/decisions/0014-callout-content-and-body.md)).
 
 What lands here, and when:
 
