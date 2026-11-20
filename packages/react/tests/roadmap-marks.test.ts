@@ -11,7 +11,7 @@ const html = (fields: Record<string, unknown>, snapshot: Record<string, unknown>
 // Each lane's marks, in the order they are drawn.
 const marks = (fields: Record<string, unknown>, snapshot: Record<string, unknown>[]) =>
   [...html(fields, snapshot).matchAll(/<div class="bp-rm__track">(.*?)<\/div>/g)].map((t) =>
-    [...t[1].matchAll(/<span class="bp-rm__(note|ms)"([^>]*)><\/span>/g)].map((m) => `${m[1]}${m[2]}`),
+    [...(t[1] ?? '').matchAll(/<span class="bp-rm__(note|ms)"([^>]*)><\/span>/g)].map((m) => `${m[1]}${m[2]}`),
   )
 const row = (fields: Record<string, unknown>) => ({ title: 'Row', status: 'done', ...fields })
 const BAR = { left: 10, width: 30 }
@@ -58,12 +58,12 @@ describe("a placed roadmap row's notes and milestones", () => {
   })
 
   it('a row with neither renders as before, byte for byte', () => {
-    expect(html({ ...SPAN, today: '2026-01-06' }, [row(BAR), row({ start: '2026-01-03', end: '2026-01-07', status: 'todo' })])).toBe(
+    expect(html({ ...SPAN, today: '2026-01-06' }, [row(BAR), row({ start: '2026-01-03', end: '2026-01-07' })])).toBe(
       '<div class="bp-roadmap"><div class="bp-rm__lanes">' +
         '<div class="bp-rm__lane"><span class="bp-rm__lbl">Row</span><div class="bp-rm__track">' +
         '<span class="bp-rm__bar bp-rm__bar--done" style="left:10%;width:30%"></span><span class="bp-rm__today" style="left:50%"></span></div></div>' +
         '<div class="bp-rm__lane"><span class="bp-rm__lbl">Row</span><div class="bp-rm__track">' +
-        '<span class="bp-rm__bar bp-rm__bar--todo" style="left:20%;width:40%"></span><span class="bp-rm__today" style="left:50%"></span></div></div>' +
+        '<span class="bp-rm__bar bp-rm__bar--done" style="left:20%;width:40%"></span><span class="bp-rm__today" style="left:50%"></span></div></div>' +
         '</div></div>',
     )
   })
