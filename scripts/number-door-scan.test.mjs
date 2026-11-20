@@ -37,7 +37,9 @@
 // - packages/text/*.js but the door, read by syntax only: any String() call or String passed as a
 //   function, and any call of those five methods.
 // A test on the real source holds that none is found, after checking that the scan read exactly the
-// door's call sites and the lines opening a style that a plain search of the text finds. Another
+// door's call sites and the lines opening a style that a plain search of the text finds (a code
+// line assigning a name `style`, `const style = …`, is found by the search and opens none: a false
+// red, on the safe side). Another
 // holds that a style colour's check has one copy, STYLE_COLORS in the door.
 //
 // What it cannot see:
@@ -507,7 +509,8 @@ test('no number reaches React\'s HTML or the text writers\' output outside numbe
   // The scan saw the real styles: it read the door's call sites and the lines that open a style
   // that a plain search finds, the same ones exactly. Blind to either, or reading one the search
   // does not, it is red and names the site.
-  assert.deepEqual(reactSources().refused, [], 'dot-named folders or source files under React\'s source, which the type checker would not read');
+  const { refused } = reactSources();
+  assert.deepEqual(refused, [], refused.join('\n'));
   const search = plainSearch();
   assert.ok(search.doorCalls.length > 0, 'the plain search finds no call of the door\'s style functions');
   assert.deepEqual([...routes.doorCalls].sort(), [...search.doorCalls].sort(), 'the door\'s call sites, as the scan read them and as the plain search finds them');
