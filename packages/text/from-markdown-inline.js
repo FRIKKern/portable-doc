@@ -9,9 +9,9 @@ import { MAX_DEPTH } from '@portable-doc/validate';
 import { asList, isMap, safeUrl, str } from './util.js';
 
 // Blocks nest in the import as deep as validate allows them, MAX_DEPTH
-// (packages/validate/index.js:31): one Markdown level is one format level. A list, a list
-// in a list item and a callout's body are each one level down, as checkBlock counts them
-// (packages/validate/index.js:224). Past it, the deeper levels are kept as text, with a
+// (packages/validate/index.js:31): one Markdown level is one format level. A list in a list
+// item, and a block in a callout's body, are each one level down, counted together, as
+// checkBlock counts them (packages/validate/index.js:224). Past it, the deeper levels are kept as text, with a
 // NESTING_KEPT_AS_TEXT notice (from-markdown.js).
 
 /**
