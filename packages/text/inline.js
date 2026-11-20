@@ -4,6 +4,7 @@
 // their marks; the leaves are then emitted with the fewest delimiters, so
 // neighbouring leaves that share a mark share one `**…**` or one link.
 
+import { MAX_VALUE_DEPTH } from '@portable-doc/validate';
 import { MAX_DEPTH, TOO_DEEP, asList, codeSpan, escInline, escLineStart, isMap, mdUrl, safeUrl, str } from './util.js';
 import { itemOf, readItem } from './read-aliases.js';
 
@@ -24,9 +25,13 @@ export function codeValue(n) {
   return name === 'value' ? str(value) : inlineText(value);
 }
 
-/** The flat text of an inline tree, no marks. */
+/**
+ * The flat text of an inline tree, no marks. It counts one level for each list and each node, as
+ * validate counts a value's levels, against validate's MAX_VALUE_DEPTH: an inline tree sits below
+ * the doc's own levels, so no valid doc reaches it. Past it, the too-deep notice in its place.
+ */
 export function inlineText(nodes, depth = 0) {
-  if (depth >= MAX_DEPTH) return '';
+  if (depth >= MAX_VALUE_DEPTH) return TOO_DEEP;
   if (typeof nodes === 'string' || typeof nodes === 'number') return str(nodes);
   if (Array.isArray(nodes)) return nodes.map((n) => inlineText(n, depth + 1)).join('');
   if (!isMap(nodes)) return '';

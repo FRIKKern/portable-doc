@@ -6,7 +6,7 @@
 // copied by the sync (decision 0012), and are held there.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAX_DEPTH, validate } from '@portable-doc/validate';
+import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { TOO_DEEP } from '../packages/text/util.js';
 import { WRITERS } from './lib/writers.mjs';
 
@@ -38,16 +38,62 @@ test('each text writer and React write a doc MAX_DEPTH deep whole, and one level
 });
 
 // The text writers' flat text of an inline tree (inlineText in packages/text/inline.js: a
-// wikilink's children, an inline code node's old-named children, text-from-inline old names)
-// stops at MAX_DEPTH, counting one for each list and one for each node: MAX_DEPTH / 2 levels of
-// a node in a list. A wikilink whose children nest that deep is written whole. Past it is a
-// separate change; this row holds the limit only.
-test('the text writers write a wikilink whose children nest MAX_DEPTH / 2 levels whole', () => {
-  const deepest = MAX_DEPTH / 2;
-  const levels = Array.from({ length: deepest - 1 }).reduce((kids, _, i) => [{ type: 'text', value: `w${deepest - 1 - i} ` }, { type: 'span', children: kids }], [{ type: 'text', value: `w${deepest}` }]);
-  const doc = [{ type: 'paragraph', content: [{ type: 'wikilink', target: 'page', children: levels }] }];
-  const writers = OURS.filter((w) => w.package === '@portable-doc/text' && w.name !== 'round-trip Markdown');
-  assert.deepEqual(writers.map((w) => w.name), ['readable Markdown', 'plain text']);
-  const all = Array.from({ length: deepest }, (_, i) => `w${i + 1}`).join(' ');
-  for (const writer of writers) assert.equal(writer.write(doc).output, `${all}\n`, `${writer.name}, ${deepest} levels: every level's word`);
+// wikilink's children, and an inline code node's old-named children, also read through the
+// text-from-inline alias) counts one level for each list and each node, as validate counts a
+// value's levels, against MAX_VALUE_DEPTH. The deepest valid doc of nested em under a wikilink,
+// or under an inline code node's old children, is MAX_VALUE_DEPTH levels deep by walkDepth: each
+// writer keeps every word of it. A doc deeper than validate allows keeps every word above the cap
+// and the too-deep notice once. The marks path (flatten, inline.js) and React's reader are not
+// held here: they count against MAX_DEPTH, with the notice past it.
+const ems = (k) => [{ type: 'em', children: Array.from({ length: k - 1 }).reduce((kids, _, i) => [{ type: 'text', value: `w${k - 1 - i} ` }, { type: 'em', children: kids }], [{ type: 'text', value: `w${k}` }, { type: 'text', value: ' end' }]) }];
+const flat = {
+  'a wikilink': (k) => [{ type: 'paragraph', content: [{ type: 'wikilink', target: 'page', children: ems(k) }] }],
+  "an inline code node's old children": (k) => [{ type: 'paragraph', content: [{ type: 'code', children: ems(k) }] }],
+};
+const wordsOf = (s) => new Set(Array.from(s.matchAll(/w(\d+)/g), (m) => Number(m[1])));
+const textWriters = OURS.filter((w) => w.package === '@portable-doc/text' && w.name !== 'round-trip Markdown');
+// The doc's own levels above the nested em: doc, paragraph, content, the wikilink or code node,
+// its children, and the deepest em's text leaves at the bottom; two more for each em.
+const DEEPEST_EM = (MAX_VALUE_DEPTH - 6) / 2;
+
+test('the deepest valid doc of nested em under a wikilink or old code children is MAX_VALUE_DEPTH deep, and one em more is refused', () => {
+  assert.deepEqual(textWriters.map((w) => w.name), ['readable Markdown', 'plain text']);
+  for (const [shape, doc] of Object.entries(flat)) {
+    assert.equal(walkDepth(doc(DEEPEST_EM)), MAX_VALUE_DEPTH, shape);
+    assert.deepEqual([validate(doc(DEEPEST_EM)).ok, validate(doc(DEEPEST_EM + 1)).errors.map((e) => e.code)], [true, ['too_deep']], shape);
+  }
 });
+
+for (const [shape, doc] of Object.entries(flat)) {
+  for (const k of [51, DEEPEST_EM]) {
+    test(`the text writers keep every word of ${shape} over ${k} nested em${k === DEEPEST_EM ? ', the deepest a valid doc has' : ''}`, () => {
+      for (const writer of textWriters) {
+        const out = writer.write(doc(k)).output;
+        assert.deepEqual([wordsOf(out).size, out.includes(`w${k}`), count(out, TOO_DEEP)], [k, true, 0], writer.name);
+      }
+    });
+  }
+  // The round-trip writer keeps a block in its own Markdown when that reads back as the same
+  // blocks, compared through the import's old-name fold, which reads old code children as their
+  // flat text. So such a doc is written as a code span, and every word reads back.
+  if (shape.includes('old children')) {
+    for (const k of [51, DEEPEST_EM]) {
+      test(`the round-trip writer writes ${shape} over ${k} nested em as a code span, and every word reads back`, () => {
+        const roundTrip = OURS.find((w) => w.name === 'round-trip Markdown');
+        const { output, lost, readBack } = roundTrip.write(doc(k));
+        const back = readBack[0].content[0];
+        assert.deepEqual([output.startsWith('`'), output.includes('```portabledoc'), lost, readBack.length, back.type, wordsOf(back.value).size], [true, false, [], 1, 'code', k]);
+      });
+    }
+  }
+  test(`past MAX_VALUE_DEPTH, a doc validate refuses, the text writers keep every word of ${shape} above it and write the too-deep notice once`, () => {
+    // The em holding word i has its children at level 2i of the flat text's count: the cap stops the
+    // em holding word MAX_VALUE_DEPTH / 2. That em holds two text leaves, one level below its
+    // children, so a cap one level deeper writes two notices, and one level shallower drops a word.
+    const k = MAX_VALUE_DEPTH / 2;
+    for (const writer of textWriters) {
+      const out = writer.write(doc(k)).output;
+      assert.deepEqual([wordsOf(out).size, out.includes(`w${k}`), count(out, TOO_DEEP)], [k - 1, false, 1], writer.name);
+    }
+  });
+}
