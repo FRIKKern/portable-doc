@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
 import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
+import { currentNames } from './current-names.js';
 import { MAX_NEST } from './from-markdown-inline.js';
 import { readPlan } from './from-markdown.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
@@ -325,7 +326,7 @@ test('round trip: every core golden survives toMarkdown then fromMarkdown, and f
   }
   for (const type of FENCE_ONLY) {
     const doc = [golden(type)];
-    assert.deepEqual(fromMarkdown(`\`\`\`portabledoc\n${JSON.stringify(doc)}\n\`\`\``), doc, type);
+    assert.deepEqual(fromMarkdown(`\`\`\`portabledoc\n${JSON.stringify(doc)}\n\`\`\``), currentNames(doc), type);
   }
   // Anything else in a fence is kept as the fence's text.
   const image = JSON.stringify([golden('image')]);
@@ -392,7 +393,7 @@ test('every allowed block type still splices in when nested in a list item or a 
     { type: 'list', ordered: false, items: [{ content: [t('b')], children: all }] },
   ];
   valid(blocks);
-  assert.deepEqual(fromMarkdown(fenceOf(blocks)), blocks);
+  assert.deepEqual(fromMarkdown(fenceOf(blocks)), currentNames(blocks));
 });
 
 test('the exported schema is frozen: a mutation throws and leaves validate and the fence guard as they were', () => {

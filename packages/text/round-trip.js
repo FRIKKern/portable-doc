@@ -5,6 +5,7 @@
 // compared, so a new block type is kept the day import can read it back.
 
 import { QUOTED } from './blocks-prose.js';
+import { currentNames } from './current-names.js';
 import { checkFence, fromMarkdown } from './from-markdown.js';
 import { MAX_NEST } from './from-markdown-inline.js';
 import { isMap } from './util.js';
@@ -18,7 +19,15 @@ const sortKeys = (_key, value) =>
   value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, value[k]])) : value;
 /** The same JSON value, whatever the order of its keys. */
 const same = (a, b) => JSON.stringify(a, sortKeys) === JSON.stringify(b, sortKeys);
-const readsBack = (markdown, blocks) => same(fromMarkdown(markdown), blocks);
+// Read back as the same blocks once their old names are under their current names, as import
+// writes them (currentNames, the fold canon compares by).
+const readsBack = (markdown, blocks) => same(fromMarkdown(markdown), currentNames(blocks));
+/** The fix for each value the fold of `block` loses, `write <current>`, joined; '' when it loses none. */
+function dropFix(block) {
+  const fixes = [];
+  currentNames(block, ({ field }) => fixes.push(`write ${field}`));
+  return [...new Set(fixes)].join('; ');
+}
 
 /** A block as a ```portabledoc fence holding it, in the form of a code block for the readable writer. */
 const fenced = (block) => ({ type: 'code', lang: 'portabledoc', value: JSON.stringify([block]) });
@@ -62,9 +71,16 @@ function planLevel(list, base, write, levels, depth = 0) {
   list.forEach((block, at) => (isMap(block) ? kept.push({ at, block }) : lost.set(at, 'not-a-block')));
   const blocks = kept.map(({ block }) => block);
   const level = { base, list, kept, blocks, lost, plan: [], lossy: false };
+  // A block whose fold loses a value reads back without it, in any form: it is lost, with the fix.
+  const drops = (i, block = blocks[i]) => {
+    const fix = dropFix(block);
+    if (fix) lost.set(kept[i].at, { reason: 'old_name_dropped', fix });
+    return fix !== '';
+  };
   const fence = (i) => {
     const check = checkFence([blocks[i]], new Set());
     if (check.reason) return lost.set(kept[i].at, check.reason), blocks[i];
+    if (drops(i)) return blocks[i];
     const f = fenced(blocks[i]);
     return readsBack(write([f]), [blocks[i]]) ? f : (lost.set(kept[i].at, 'changed'), blocks[i]);
   };
@@ -73,6 +89,7 @@ function planLevel(list, base, write, levels, depth = 0) {
   // deep, as far as import reads quotes in quotes. A block of the body that cannot be kept is in
   // a fence of the whole callout too, so no such fence is tried for it.
   const nest = (i) => {
+    if (drops(i, head(blocks[i]))) return blocks[i];
     const line = quoted(head(blocks[i]));
     if (!readsBack(write([line]), [head(blocks[i])])) return fence(i);
     const inner = planLevel(blocks[i].slots.body, `${base}/${kept[i].at}/slots/body`, write, levels, depth + 1);
@@ -82,6 +99,7 @@ function planLevel(list, base, write, levels, depth = 0) {
   };
   // Any other block in its own Markdown, a callout in its `> [!tone]` form, else a fence.
   const own = (i) => {
+    if (drops(i)) return blocks[i];
     const entry = blocks[i].type === 'callout' ? quoted(blocks[i]) : blocks[i];
     return readsBack(write([entry]), [blocks[i]]) ? entry : fence(i);
   };
@@ -125,7 +143,7 @@ function collect(level, levels, out = []) {
         path: `${level.base}/${at}`,
         id: isMap(block) && typeof block.id === 'string' ? block.id : null,
         type: isMap(block) && typeof block.type === 'string' ? block.type : null,
-        reason: level.lost.get(at),
+        ...(typeof level.lost.get(at) === 'string' ? { reason: level.lost.get(at) } : level.lost.get(at)),
       });
     }
     const inner = levels.get(level.plan[index.get(at)]);
