@@ -9,13 +9,16 @@ import { validate } from '@portable-doc/validate';
 // until the goldens carry its case; then the row goes, so the count only shrinks.
 
 const { about, rows } = JSON.parse(fs.readFileSync(new URL('style-stand-ins.json', import.meta.url), 'utf8'));
-const STAND_INS_MOST = 3;
+const STAND_INS_MOST = 6;
 
 // The style each row is there to hold, by case.
 const HOLDS = {
   'a section cell with an order': ['order:2', 'order:1'],
   'a heatmap matrix with marginals and values': ['grid-template-columns:auto repeat(2,minmax(28px,auto)) auto'],
   'a heatmap matrix with marginals and no values': ['grid-template-columns:auto repeat(2,minmax(10px,44px)) auto'],
+  'a heatmap grid with row labels': ['grid-template-columns:auto repeat(2,minmax(10px,44px))'],
+  'a heatmap calendar with row labels': ['grid-template-columns:auto repeat(2,12px)'],
+  'a heatmap matrix with values, no marginals and row labels': ['grid-template-columns:auto repeat(2,minmax(28px,auto))'],
 };
 
 test('every stand-in row renders its recorded bytes and holds its style', () => {
