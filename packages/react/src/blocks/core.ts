@@ -1490,7 +1490,7 @@ const roadmap: Emit = (b, ctx) => {
     )
   // today is a YYYY-MM-DD date, drawn at its place in the block's start–end span (roadmap-span.ts);
   // with no span, or a today that is not a date, there is no line.
-  const span = roadmapSpan(b)
+  const span = roadmapSpan(b.start, b.end)
   const todayDay = roadmapDate(b.today)
   const today =
     span !== null && todayDay !== null

@@ -19,10 +19,10 @@ export function roadmapDate(v: unknown): number | null {
 
 export type RoadmapSpan = { start: number; end: number }
 
-/** The block's start and end as a span, when both are dates and end is after start; else null. */
-export function roadmapSpan(block: { start?: unknown; end?: unknown }): RoadmapSpan | null {
-  const start = roadmapDate(block.start)
-  const end = roadmapDate(block.end)
+/** A block's start and end as a span, when both are dates and end is after start; else null. */
+export function roadmapSpan(startValue: unknown, endValue: unknown): RoadmapSpan | null {
+  const start = roadmapDate(startValue)
+  const end = roadmapDate(endValue)
   return start !== null && end !== null && end > start ? { start, end } : null
 }
 
