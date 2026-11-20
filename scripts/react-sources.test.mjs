@@ -48,9 +48,15 @@ test('the source walk reads .ts and .tsx files and refuses a dot-named or git-ig
       for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
     }
     const { files, refused } = found;
-    const rel = (list) => list.map((f) => path.relative(root, f));
+    const rel = (list) => list.map((f) => f.replace(root + path.sep, ''));
     assert.deepEqual(rel(files), ['a.ts', 'blocks/b.tsx']);
-    assert.deepEqual(rel(refused), ['.hidden.ts', '.plant', 'blocks/.deep', 'blocks/g.local.ts', 'dist']);
+    assert.deepEqual(rel(refused), [
+      '.hidden.ts: a dot-named source file, which the type checker does not read',
+      '.plant: a dot-named folder, which the type checker does not read',
+      'blocks/.deep: a dot-named folder, which the type checker does not read',
+      'blocks/g.local.ts: a git-ignored source file, which no other checkout has',
+      'dist: a git-ignored folder, which no other checkout has',
+    ]);
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }

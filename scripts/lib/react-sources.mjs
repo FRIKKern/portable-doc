@@ -18,7 +18,8 @@ export const REACT_SRC = fileURLToPath(new URL('../../packages/react/src', impor
 
 /**
  * The .ts and .tsx files under root (no .d.ts), sorted, and each dot-named or git-ignored folder or
- * source file under it.
+ * source file under it, as "<path>: <why>". The tests that walk print these lines as their failure,
+ * so this is the one place that says why a path is refused.
  * @param {string} [root]
  * @returns {{ files: string[], refused: string[] }}
  */
@@ -30,8 +31,11 @@ export function reactSources(root = REACT_SRC) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
       const source = /\.tsx?$/.test(e.name) && !e.name.endsWith('.d.ts');
-      if (e.name.startsWith('.') || ignored.has(p)) {
-        if (e.isDirectory() || source) refused.push(p);
+      const kind = e.isDirectory() ? 'folder' : 'source file';
+      if (e.name.startsWith('.')) {
+        if (e.isDirectory() || source) refused.push(`${p}: a dot-named ${kind}, which the type checker does not read`);
+      } else if (ignored.has(p)) {
+        if (e.isDirectory() || source) refused.push(`${p}: a git-ignored ${kind}, which no other checkout has`);
       } else if (e.isDirectory()) walk(p);
       else if (source) files.push(p);
     }
