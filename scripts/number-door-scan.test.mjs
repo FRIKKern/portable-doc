@@ -29,9 +29,9 @@
 //     writer a style value reaches; elsewhere it only counts as capturing. So a writer that
 //     assigns a parameter (escapeHtml, escapeAttr) is named in a style value whatever it is
 //     given, a string too: a false red, on the safe side. On the real source no style value
-//     reaches a writer, and a test holds that, after checking the scan read every styleOf call and
-//     every style value a plain search of the text finds (the search sees `style="…${` and
-//     `name:${`; the scan sees more, so the search is a floor);
+//     reaches a writer, and a test holds that, after checking the scan read exactly the styleOf
+//     calls and the lines with a style value that a plain search of the text finds (`style="…${`,
+//     `name:${` and `name:var(--v, ${`);
 //   - styleOf written straight into style="…" (not inside styleAttr), which writes style="" when
 //     its number is not finite.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
@@ -310,7 +310,8 @@ function reactRoutes(only) {
 
 /**
  * A plain search of React's source text, no parser: each `styleOf(`, and each line with a template
- * span right after `style="…` or `style='…` or right after a CSS `name:` (as `name:${`), as file:line.
+ * span right after `style="…` or `style='…`, right after a CSS `name:` (as `name:${`), or as the
+ * fallback of a CSS variable (`name:var(--v, ${`), as file:line.
  */
 function plainSearch() {
   const files = [];
@@ -327,7 +328,7 @@ function plainSearch() {
     const t = fs.readFileSync(f, 'utf8');
     styleOf += (t.match(/\bstyleOf\(/g) ?? []).length;
     t.split('\n').forEach((line, i) => {
-      if (/style=["'][^"'`]*\$\{|`(?:--)?[a-z][a-z-]*:\$\{|;(?:--)?[a-z][a-z-]*:\$\{|\}:\$\{/.test(line)) styleValues.push(`${path.relative(root, f)}:${i + 1}`);
+      if (/style=["'][^"'`]*\$\{|`(?:--)?[a-z][a-z-]*:\$\{|;(?:--)?[a-z][a-z-]*:\$\{|\}:\$\{|[a-z]:var\(--[\w-]+,\s*\$\{/.test(line)) styleValues.push(`${path.relative(root, f)}:${i + 1}`);
     });
   }
   return { styleOf, styleValues };
@@ -526,14 +527,13 @@ test('the scan finds each route it names, in React by type and in text by syntax
 
 test('no number reaches React\'s HTML or the text writers\' output outside numberText', () => {
   const routes = reactRoutes();
-  // The scan saw the real styles: it read every styleOf call a plain search finds, and every style
-  // value a plain search finds. Blind to either, it reads none and this is red.
+  // The scan saw the real styles: it read the styleOf calls and the style values a plain search
+  // finds, the same ones exactly. Blind to either, or reading one the search does not, it is red.
   const search = plainSearch();
   assert.ok(search.styleOf > 0, 'the plain search finds no styleOf call');
   assert.equal(routes.doorCalls.length, search.styleOf, 'styleOf calls the scan read, and the plain search');
   assert.ok(search.styleValues.length > 0, 'the plain search finds no style value');
-  const spans = new Set(routes.styleSpans.map((s) => s.split(' ')[0]));
-  assert.deepEqual(search.styleValues.filter((at) => !spans.has(at)), [], 'style values the plain search finds and the scan did not read');
+  assert.deepEqual([...new Set(routes.styleSpans.map((s) => s.split(' ')[0]))].sort(), [...search.styleValues].sort(), 'lines with a style value, as the scan read them and as the plain search finds them');
   // Every number in a real style goes through styleOf, so no style value it read reaches a writer;
   // the plant test shows the style rules finding one.
   assert.deepEqual(routes.reached, [], 'writers a template style value reaches');
