@@ -87,6 +87,9 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
 
 test('a portabledoc fence imports its old names under their current names, by the rule every reader uses; each value it loses is a notice', () => {
   const code = (v) => ({ type: 'code', value: v });
+  // Why a case skips the canon compare: canon reads a list that holds only code blocks as inline
+  // content, comparing the code's text alone, so it sees no text under a code block's old name.
+  const CODE_BLOCKS_READ_AS_INLINE = 'canon reads a list of only code blocks as inline content';
   // [stored, imported, the names dropped as { path, name, current }]. The current name wins when it
   // holds a value; of two old names, the table's first. A table's `cols` and `header: true` stay.
   const cases = [
@@ -111,18 +114,17 @@ test('a portabledoc fence imports its old names under their current names, by th
       { type: 'callout', tone: 'info', content: [t('c')], slots: { body: [{ type: 'code', code: 'a', lang: 'js' }] } },
       { type: 'callout', tone: 'info', content: [t('c')], slots: { body: [{ type: 'code', value: 'a', lang: 'js' }] } },
       [],
-      // Canon reads a body of code blocks alone as inline content, so it sees no text in `code`.
-      'canon misreads',
+      CODE_BLOCKS_READ_AS_INLINE,
     ],
   ];
-  for (const [stored, imported, dropped, misread] of cases) {
+  for (const [stored, imported, dropped, skipCanon] of cases) {
     const label = JSON.stringify(stored);
     valid([stored]);
     const read = readMarkdown(`\`\`\`portabledoc\n${JSON.stringify([stored])}\n\`\`\``);
     assert.deepEqual(read.blocks, [imported], label);
     valid(read.blocks);
-    // Block by block: canon reads an array of code blocks alone as inline content.
-    if (!misread) assert.deepEqual(canon(read.blocks[0]), canon(stored), `${label}: the same doc as canon reads it`);
+    // Block by block, as the top list of blocks may itself hold only code blocks.
+    if (skipCanon !== CODE_BLOCKS_READ_AS_INLINE) assert.deepEqual(canon(read.blocks[0]), canon(stored), `${label}: the same doc as canon reads it`);
     assert.equal(toPlainText(read.blocks), toPlainText([stored]), `${label}: the same text`);
     const want = dropped.map(([path, name, current]) => ({ code: OLD_NAME_DROPPED, path, line: 1, lines: 3, name, current, fix: `write ${current}` }));
     assert.deepEqual(read.notices, want, label);

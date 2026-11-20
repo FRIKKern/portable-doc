@@ -67,8 +67,8 @@ function cutCases() {
   return caseFile(CUT_RULES, cases);
 }
 
-// Every block form round-trip mode keeps in its own Markdown or a fence, as { markdown, blocks }:
-// the blocks as they read back, their old names under their current names.
+// Every block form round-trip mode keeps in its own Markdown or a fence, as { markdown, input,
+// blocks }: the blocks as stored, and as they read back, their old names under their current names.
 function roundTripCases() {
   const slug = (s) => s.replace(/"([^"]*)"/g, '$1 str').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
   const cases = {};
@@ -78,7 +78,7 @@ function roundTripCases() {
     if (name in cases) throw new Error(`two forms share the name ${name}`);
     const back = currentNames(blocks);
     if (!isDeepStrictEqual(fromMarkdown(markdown), back)) throw new Error(`${name} does not read back`);
-    cases[name] = { markdown, blocks: back };
+    cases[name] = { markdown, input: blocks, blocks: back };
   };
   for (const [name, block] of allForms()) put(`round-trip-${slug(name)}`, [block]);
   put('round-trip-emphasis-after-diagram', [{ type: 'diagram', source: 'graph TD; A-->B' }, { type: 'paragraph', content: [{ type: 'em', children: [{ type: 'text', value: 'Not a caption' }] }] }]);

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 import { FROM_MARKDOWN, fixtureCases } from '../../scripts/lib/fixture-cases.mjs';
 import { KEEP_BYTES } from '../../scripts/write-shared-cases.mjs';
+import { currentNames } from './current-names.js';
 import { fromMarkdown, toMarkdown } from './index.js';
 import { isMap } from './util.js';
 
@@ -32,7 +33,10 @@ test('in every fixture case, a list whose items hold blocks is written in its ow
   const wrong = [];
   const routes = { native: 0, fenced: 0, lost: 0 };
   let fromText = 0;
-  for (const { folder, name, blocks } of await fixtureCases()) {
+  // A case's lists as stored: a round-trip case's input, before import puts its old names under
+  // their current names, so a form stored under an old name counts as its own list.
+  for (const { folder, name, blocks: read, input } of await fixtureCases()) {
+    const blocks = input ?? read;
     // The few generated inputs over KEEP_BYTES (callouts 1000 deep) take seconds to read back.
     if (JSON.stringify(blocks).length > KEEP_BYTES) continue;
     for (const list of outermost(blocks)) {
@@ -41,7 +45,7 @@ test('in every fixture case, a list whose items hold blocks is written in its ow
       if (seen.has(key)) continue;
       seen.add(key);
       const own = toMarkdown([list]);
-      const readsBack = isDeepStrictEqual(fromMarkdown(own), [list]);
+      const readsBack = isDeepStrictEqual(fromMarkdown(own), currentNames([list]));
       const { markdown, lost } = toMarkdown([list], ROUND_TRIP);
       if (readsBack) {
         routes.native++;
@@ -51,7 +55,7 @@ test('in every fixture case, a list whose items hold blocks is written in its ow
         routes.fenced++;
         if (markdown !== fence(list)) wrong.push(`${name}: neither its own Markdown nor one fence of the whole list`);
       }
-      if (!lost.length && !isDeepStrictEqual(fromMarkdown(markdown), [list])) wrong.push(`${name}: written as kept, but reads back differently`);
+      if (!lost.length && !isDeepStrictEqual(fromMarkdown(markdown), currentNames([list]))) wrong.push(`${name}: written as kept, but reads back differently`);
       // A list import made from Markdown a person wrote reads back in its own Markdown, so a broken
       // nested-list writer shows here, not as lists quietly moved into fences.
       if (FROM_MARKDOWN.includes(folder)) {

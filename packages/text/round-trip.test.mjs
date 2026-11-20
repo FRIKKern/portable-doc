@@ -139,10 +139,17 @@ test('the README lists the types round-trip mode keeps as node packages/text/scr
 });
 
 test('round-trip mode gives a doc back with current names, and lists a block whose fold would lose a value as old_name_dropped, with the fix', () => {
-  // Old names alone come back under their current names, in their own Markdown or a fence.
-  for (const block of [{ type: 'heading', level: 2, text: 'H' }, { type: 'eyebrow', text: 'E' }]) {
+  // Old names alone come back under their current names. A heading stored under its old name is
+  // written in its own Markdown, bare and in a callout; an eyebrow has none, so it is a fence.
+  const heading = { type: 'heading', level: 2, text: 'H' };
+  const note = (body) => ({ type: 'callout', tone: 'info', content: [{ type: 'text', value: 'Note' }], slots: { body } });
+  for (const [block, written] of [
+    [heading, '## H\n'],
+    [note([heading]), '> [!info] Note\n>\n> ## H\n'],
+    [{ type: 'eyebrow', text: 'E' }, '```portabledoc\n[{"type":"eyebrow","text":"E"}]\n```\n'],
+  ]) {
     const { markdown, lost } = toMarkdown([block], ROUND_TRIP);
-    assert.deepEqual([lost, fromMarkdown(markdown)], [[], currentNames([block])], JSON.stringify(block));
+    assert.deepEqual([lost, markdown, fromMarkdown(markdown)], [[], written, currentNames([block])], JSON.stringify(block));
   }
   // Two names with different values: no form brings both back, so the block is lost, own Markdown or fence.
   for (const [block, fix] of [[{ type: 'code', code: 'a', value: 'b' }, 'write value'], [{ type: 'eyebrow', text: 'E', content: [{ type: 'text', value: 'F' }] }, 'write content']]) {
