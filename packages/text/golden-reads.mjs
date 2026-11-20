@@ -7,7 +7,8 @@
 
 import fs from 'node:fs';
 import { blockSchema, validate } from '@portable-doc/validate';
-import { aliasTable, convertOf, currentName, itemOf, namesOf, readItem } from './read-aliases.js';
+import { MARK, foldFields, foldsKey, innerPath, isInline, ownType } from './current-names.js';
+import { aliasTable, itemOf, readItem } from './read-aliases.js';
 
 const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
 
@@ -276,8 +277,6 @@ export function filledNames(block) {
 // whether written as a node (`{ type: 'strong', children }`, a link node) or
 // on a text leaf (`marks: [{ type: 'bold' }]`, a link mark), and neighbouring
 // runs with the same marks are one run.
-const MARK = { strong: 'strong', bold: 'strong', em: 'em', italic: 'em', strikethrough: 'strike', strike: 'strike', s: 'strike' };
-const INLINE = new Set(['text', 'link', 'code', ...Object.keys(MARK)]);
 function runs(nodes, marks = [], out = []) {
   for (const n of nodes) {
     const own = (n.marks ?? []).map((m) => (m.type === 'link' ? `link:${m.href}` : MARK[m.type] ?? m.type));
@@ -297,22 +296,6 @@ function codeText(n) {
   const { name, value } = readItem(n, 'inline:code', 'value');
   return name === 'value' ? value : runs(Array.isArray(value) ? value : []).map((r) => r.text).join('');
 }
-const isInline = (v) => Array.isArray(v) && v.length > 0 && v.every((n) => n && INLINE.has(n.type));
-// The fields of each owner (a block type, or a block type and the path to its items) that have
-// old names, from the alias table; and every owner with the paths that lead to one.
-const ALIASED = new Map();
-const OWNERS = new Set();
-for (const { to } of Object.values(aliasTable().aliases)) {
-  const [owner, field] = [to.slice(0, to.lastIndexOf('.')), to.slice(to.lastIndexOf('.') + 1)];
-  if (!ALIASED.has(owner)) ALIASED.set(owner, new Set());
-  ALIASED.get(owner).add(field);
-  for (let i = owner.indexOf('.'); i !== -1; i = owner.indexOf('.', i + 1)) OWNERS.add(owner.slice(0, i));
-  OWNERS.add(owner);
-}
-// A list item is keyed on list.items[] whatever the list type is spelled.
-const SPELLED = blockSchema.definitions.aliases ?? {};
-const ownType = (type) => (SPELLED[type]?.['x-alias-of'] === 'list' ? 'list' : type);
-
 /** `v` as compared. */
 export const canon = (v) => canonAt(v, undefined);
 
@@ -324,27 +307,12 @@ function canonAt(v, owner) {
   const type = typeof v.type === 'string' ? v.type : '';
   const own = owner ?? type;
   const path = owner ?? ownType(type);
-  const inner = (k, x) => (OWNERS.has(`${path}.${k}${Array.isArray(x) ? '[]' : ''}`) ? `${path}.${k}${Array.isArray(x) ? '[]' : ''}` : undefined);
   const out = {};
-  for (const [k, x] of Object.entries(v)) {
-    // An aliased field and its old names are read below, the way the renderers read them.
-    if (k !== 'id' && !ALIASED.get(own)?.has(k) && !folded(own, k)) out[k] = canonAt(x, inner(k, x));
-  }
-  for (const field of ALIASED.get(own) ?? []) {
-    if (!namesOf(own, field).some((name) => Object.hasOwn(v, name))) continue;
-    const { name, value } = readItem(v, own, field);
-    // No name remains (each is null or of the wrong type): the renderers show nothing, and canon
-    // keeps a stored current name as it is, so two different stored values never compare equal.
-    if (value === undefined) {
-      if (v[field] !== undefined) out[field] = canonAt(v[field], inner(field, v[field]));
-      continue;
-    }
-    if (!(name === field || folded(own, name))) continue;
-    out[field] = name !== field && convertOf(own, name) === 'inline-from-string' && typeof value === 'string' ? runs([{ type: 'text', value }]) : canonAt(value, inner(field, value));
-  }
+  // A field with old names, and the old names folded into it, are read by the shared fold
+  // (current-names.js), the way the renderers read them and a fence imports them.
+  for (const [k, x] of Object.entries(v)) if (k !== 'id' && !foldsKey(own, k)) out[k] = canonAt(x, innerPath(path, k, x));
+  // No name remains (each is null or of the wrong type): the renderers show nothing, and the fold
+  // keeps a stored current name as it is, so two different stored values never compare equal.
+  for (const { field, value } of foldFields(v, own)) out[field] = canonAt(value, innerPath(path, field, value));
   return out;
 }
-
-// An old name canon folds into its field. A table's `cols` is kept as it is: the renderers read
-// it for each column's type even beside a real `columns`, and never build a head from it.
-const folded = (owner, key) => currentName(owner, key) !== undefined && convertOf(owner, key) !== 'columns-from-cols';

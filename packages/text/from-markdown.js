@@ -9,6 +9,7 @@ import { everyBlockAllowed } from './fence-blocks.js';
 import { IMPORT_WORK, planText } from './import-work.js';
 import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
+import { currentNames } from './current-names.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
 
 const MAX_FENCE_BLOCKS = 50;
@@ -41,6 +42,8 @@ function textOf(node, count = undefined) {
 export const LIST_ITEM_SPLIT = 'list_item_split';
 /** The code of the notice that the import fell back to keeping the whole text as one code block. */
 export const IMPORT_FELL_BACK = 'import_fell_back';
+/** The code of the notice that a fence's block held a field under two names with different values, and the import kept one. */
+export const OLD_NAME_DROPPED = 'old_name_dropped';
 
 // A token's line in the whole text, from 0: its parse starts at `base`. An item's own blocks
 // are read in one tokenize call, at one level, so none after a kept nested list is deep source
@@ -212,7 +215,9 @@ function scan(value) {
 // A ```portabledoc fence holds a JSON array of blocks, spliced in when it is
 // 1 to 50 blocks, every block in it of the allowed types, nested no deeper than MAX_VALUE_DEPTH, that
 // validate, hold only safe addresses (href, src, poster, url) and reuse no id from an earlier fence.
-// Anything else is a plain code block.
+// Anything else is a plain code block. A spliced block's old names (alias-table.js) are folded into
+// their current names by the rule every reader uses (current-names.js), and each value that fold
+// loses adds an OLD_NAME_DROPPED notice.
 
 /**
  * Whether a fence's parsed value is spliced, given the ids earlier fences used: { ids } (the
@@ -230,7 +235,7 @@ export function checkFence(blocks, usedIds) {
   return { ids };
 }
 
-function fence(source, state) {
+function fence(source, node, state) {
   let blocks;
   try {
     blocks = JSON.parse(source);
@@ -240,7 +245,13 @@ function fence(source, state) {
   const check = checkFence(blocks, state.ids);
   if (check.reason) return [codeBlock(source)];
   for (const id of check.ids) state.ids.add(id);
-  return blocks;
+  // The fence's lines, its opening and closing ones too; its blocks start at the import's place.
+  const first = lineOf(node.tok, 0, state.base) ?? state.base;
+  const lines = (lineOf(node.tok, 1, state.base) ?? first + 1) - first;
+  const dir = state.at.slice(0, state.at.lastIndexOf('/'));
+  const start = Number(state.at.slice(state.at.lastIndexOf('/') + 1));
+  const drop = ({ path, name, field }) => state.splits.push({ code: OLD_NAME_DROPPED, path, line: first + 1, lines, name, current: field, fix: `write ${field}` });
+  return blocks.map((b, j) => currentNames(b, drop, `${dir}/${start + j}`));
 }
 
 // A fence's language: the first word of its info string.
@@ -250,7 +261,7 @@ function code(node, state) {
   const source = str(node.tok.content).replace(/\n+$/, '');
   const lang = langOf(node);
   if (lang === 'mermaid') return [{ type: 'diagram', source }];
-  if (lang === 'portabledoc') return fence(source, state);
+  if (lang === 'portabledoc') return fence(source, node, state);
   return [codeBlock(source, lang)];
 }
 
@@ -305,7 +316,8 @@ function caption(node) {
 /**
  * A read's state: the ids fences used, how many callouts deep the read is (quote()), and its
  * count: the tokens markdown-it made and the nodes read, so a test sees no part read twice.
- * `splits` holds a LIST_ITEM_SPLIT notice per list item split off; `blocks` is the path of the
+ * `splits` holds a LIST_ITEM_SPLIT notice per list item split off and an OLD_NAME_DROPPED one per
+ * value a fence's fold lost, in source order; `blocks` is the path of the
  * blocks being read, `at` the block's, and `base` the line the parse starts at.
  */
 const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 }, splits: [], blocks: '/blocks', at: '/blocks', base: 0 });
@@ -337,8 +349,11 @@ export { IMPORT_WORK };
  * plain text, with a notice of the same shape and rule 'net': `line` the first source line
  * kept so, `lines` how many. Each list item split off at text after its nested list adds one
  * { code: LIST_ITEM_SPLIT, path, line, lines }: the new item, and its text's source lines (the
- * first from 1, and how many). The notices come by kind: 'budget' and 'line', then the splits
- * in source order, then 'net'. Should the read throw or give blocks that do not validate, the
+ * first from 1, and how many). Each value a fence's block loses when its old names fold into
+ * their current names adds one { code: OLD_NAME_DROPPED, path, line, lines, name, current, fix }:
+ * the dropped key's path, the fence's source lines, the name dropped, the current name, and the
+ * fix, `write <current>`. The notices come by kind: 'budget' and 'line', then the splits and
+ * dropped names in source order, then 'net'. Should the read throw or give blocks that do not validate, the
  * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
  * notice and no other. Never throws.
  */

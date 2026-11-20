@@ -9,7 +9,7 @@ import { MAX_NEST } from './from-markdown-inline.js';
 import { readPlan } from './from-markdown.js';
 import { READ_ALIASES, canon } from './golden-reads.mjs';
 import { planText } from './import-work.js';
-import { IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
+import { IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, OLD_NAME_DROPPED, fromMarkdown, readMarkdown, toMarkdown, toPlainText } from './index.js';
 import { safeUrl } from './util.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -60,9 +60,8 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
   assert.equal(toMarkdown(fromMarkdown(md)), `${md}\n`, 'and it writes back as it was');
   // A heading import leaves with no text is still dropped.
   assert.deepEqual(fromMarkdown('# ![](javascript:x)\n\n## `` ``'), []);
-  // Import writes no block key under an old name (READ_ALIASES) in any block it builds itself. A
-  // portabledoc fence is spliced in as written, so a fenced heading keeps its `text`: putting
-  // fenced blocks under canonical names is the alias file's follow-up, and the check skips them.
+  // Import writes no block key under an old name (READ_ALIASES) in any block: those it builds
+  // itself, and a portabledoc fence's, whose old names import under their current names.
   const fenced = { type: 'heading', level: 2, text: 'Fenced' };
   const every = [
     '# h', 'p **b**', '- a\n  - b', '1. a', '- [x] t', '```js\nx\n```', '```mermaid\ngraph TD\n```\n\n*cap*', '    indented',
@@ -70,8 +69,8 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
     `\`\`\`portabledoc\n${JSON.stringify([fenced])}\n\`\`\``,
   ].join('\n\n');
   const read = fromMarkdown(every);
-  assert.deepEqual(read.at(-1), fenced, 'the fenced heading comes in as written, old name and all');
-  const stack = read.slice(0, -1);
+  assert.deepEqual(read.at(-1), { type: 'heading', level: 2, content: [t('Fenced')] }, 'the fenced heading comes in under its current name');
+  const stack = [...read];
   const types = new Set();
   while (stack.length) {
     const v = stack.pop();
@@ -83,6 +82,53 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
     }
   }
   for (const type of ['heading', 'paragraph', 'list', 'code', 'diagram', 'table', 'blockquote', 'callout', 'divider']) assert.ok(types.has(type), `the sample makes a ${type}`);
+});
+
+test('a portabledoc fence imports its old names under their current names, by the rule every reader uses; each value it loses is a notice', () => {
+  const code = (v) => ({ type: 'code', value: v });
+  // [stored, imported, the names dropped as { path, name, current }]. The current name wins when it
+  // holds a value; of two old names, the table's first. A table's `cols` and `header: true` stay.
+  const cases = [
+    [{ type: 'code', code: 'a' }, code('a'), []],
+    [{ type: 'code', code: 'a', value: 'b' }, code('b'), [['/blocks/0/code', 'code', 'value']]],
+    [{ type: 'code', code: 'a', text: 'b' }, code('a'), [['/blocks/0/text', 'text', 'value']]],
+    [{ type: 'code', value: ' ', code: 'a' }, code('a'), [['/blocks/0/value', 'value', 'value']]],
+    [{ type: 'code', code: 'a', value: 'a', lang: 'js' }, { ...code('a'), lang: 'js' }, []],
+    [{ type: 'paragraph', text: 'hi' }, { type: 'paragraph', content: [t('hi')] }, []],
+    [{ id: 'h1', type: 'heading', level: 2, text: 'H', content: [t('C')] }, { id: 'h1', type: 'heading', level: 2, content: [t('C')] }, [['/blocks/0/text', 'text', 'content']]],
+    [{ type: 'paragraph', content: [{ type: 'text', text: 'leaf' }, { type: 'code', children: [t('x')] }] }, { type: 'paragraph', content: [t('leaf'), code('x')] }, []],
+    [{ type: 'list', ordered: false, items: [{ text: 'one' }] }, { type: 'list', ordered: false, items: [{ content: [t('one')] }] }, []],
+    [{ type: 'table', header: ['A'], rows: [['1']] }, { type: 'table', head: ['A'], rows: [['1']] }, []],
+    [{ type: 'table', header: true, rows: [['A'], ['1']] }, { type: 'table', header: true, rows: [['A'], ['1']] }, []],
+    [{ type: 'table', cols: [{ key: 'a', type: 'delta' }], columns: [{ key: 'a', label: 'A' }], rows: [{ a: 1 }] }, { type: 'table', cols: [{ key: 'a', type: 'delta' }], columns: [{ key: 'a', text: 'A' }], rows: [{ a: 1 }] }, []],
+    [
+      { type: 'callout', tone: 'info', text: 'hi', slots: { body: [{ type: 'paragraph', text: 'x', content: [t('y')] }] } },
+      { type: 'callout', tone: 'info', content: [t('hi')], slots: { body: [{ type: 'paragraph', content: [t('y')] }] } },
+      [['/blocks/0/slots/body/0/text', 'text', 'content']],
+    ],
+    [
+      { type: 'callout', tone: 'info', content: [t('c')], slots: { body: [{ type: 'code', code: 'a', lang: 'js' }] } },
+      { type: 'callout', tone: 'info', content: [t('c')], slots: { body: [{ type: 'code', value: 'a', lang: 'js' }] } },
+      [],
+      // Canon reads a body of code blocks alone as inline content, so it sees no text in `code`.
+      'canon misreads',
+    ],
+  ];
+  for (const [stored, imported, dropped, misread] of cases) {
+    const label = JSON.stringify(stored);
+    valid([stored]);
+    const read = readMarkdown(`\`\`\`portabledoc\n${JSON.stringify([stored])}\n\`\`\``);
+    assert.deepEqual(read.blocks, [imported], label);
+    valid(read.blocks);
+    // Block by block: canon reads an array of code blocks alone as inline content.
+    if (!misread) assert.deepEqual(canon(read.blocks[0]), canon(stored), `${label}: the same doc as canon reads it`);
+    assert.equal(toPlainText(read.blocks), toPlainText([stored]), `${label}: the same text`);
+    const want = dropped.map(([path, name, current]) => ({ code: OLD_NAME_DROPPED, path, line: 1, lines: 3, name, current, fix: `write ${current}` }));
+    assert.deepEqual(read.notices, want, label);
+  }
+  // The notice's path is the block's place in the doc, and its lines the fence's.
+  const later = readMarkdown(`Intro\n\n\`\`\`portabledoc\n[{"type":"divider"},\n${JSON.stringify({ type: 'code', code: 'a', value: 'b' })}]\n\`\`\``);
+  assert.deepEqual(later.notices, [{ code: OLD_NAME_DROPPED, path: '/blocks/2/code', line: 3, lines: 4, name: 'code', current: 'value', fix: 'write value' }]);
 });
 
 test('fromMarkdown follows Barkpark FromMarkdown on its own examples', () => {
