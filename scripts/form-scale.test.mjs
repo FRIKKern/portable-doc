@@ -44,17 +44,19 @@ test('a scale with any finite bound renders at once, with at most SCALE_MAX_OPTI
   }
 });
 
-// -1e16 plus 0 to 100: past 2^53 numbers are two apart, so 101 sums give 51 distinct options.
-test('a scale whose bounds pass 2^53 shows each option once', () => {
-  const html = renderPortableDocument(form({ min: -1e16 }));
-  assert.deepEqual({ options: optionsIn(html).length, html: html.length, markdown: toMarkdown(form({ min: -1e16 })).length }, { options: 51, html: 6338, markdown: 58 });
-});
-
 // How a bound reads, row by row: the one source, which Barkpark copies.
 const BOUNDS = JSON.parse(fs.readFileSync(new URL('../fixtures/form-scale/bounds.json', import.meta.url), 'utf8'));
 
+// -1e16 plus 0 to 100: past 2^53 numbers are two apart, so 101 sums give 51 distinct options.
+// The option count is the fixture row's; this test pins the sizes of the output.
+test('a scale whose bounds pass 2^53 shows each option once', () => {
+  const { min, options } = BOUNDS.find((row) => row.min === -1e16);
+  const html = renderPortableDocument(form({ min }));
+  assert.deepEqual({ options: optionsIn(html).length, html: html.length, markdown: toMarkdown(form({ min })).length }, { options, html: 6338, markdown: 58 });
+});
+
 test('every row of fixtures/form-scale/bounds.json shows its options in React, the Markdown and the plain text', () => {
-  assert.ok(BOUNDS.length >= 12, `${BOUNDS.length} rows`);
+  assert.equal(BOUNDS.length, 13);
   for (const { case: name, options, first, last, ...scale } of BOUNDS) {
     const shown = optionsIn(renderPortableDocument(form(scale)));
     assert.deepEqual([shown.length, shown[0], shown.at(-1)], [options, first, last], name);
@@ -62,12 +64,6 @@ test('every row of fixtures/form-scale/bounds.json shows its options in React, t
   }
 });
 
-test('the scale offers min through min + 100, and nothing when max is below min', () => {
+test('the cap is 101 options', () => {
   assert.equal(SCALE_MAX_OPTIONS, 101);
-  assert.deepEqual(scaleOptions({ min: 1, max: 1000 }), Array.from({ length: 101 }, (_, k) => 1 + k));
-  assert.deepEqual(scaleOptions(undefined), [1, 2, 3, 4, 5]);
-  assert.deepEqual(scaleOptions({ min: '2', max: 4.5 }), [2, 3, 4, 5], 'a bound that is not whole is its default');
-  assert.deepEqual(scaleOptions({ min: 5, max: 1 }), []);
-  assert.deepEqual(optionsIn(renderPortableDocument(form({ min: 5, max: 1 }))), []);
-  assert.equal(scaleLine(toMarkdown(form({ min: 5, max: 1 }))), null);
 });

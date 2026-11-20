@@ -7,6 +7,7 @@
   { "case": "a digit string reads its leading digits", "min": "12abc", "max": "20", "options": 9, "first": "12", "last": "20" },
   { "case": "a digit string reads its leading digits, so \"2.5\" is 2", "min": "2.5", "max": 4, "options": 3, "first": "2", "last": "4" },
   { "case": "a number that is not whole is no bound: min uses its default", "min": 2.5, "max": 4, "options": 4, "first": "1", "last": "4" },
+  { "case": "a max that is not whole is no bound: max uses its default", "min": "2", "max": 4.5, "options": 4, "first": "2", "last": "5" },
   { "case": "text that is not a number is no bound: both use their defaults", "min": "abc", "max": "NaN", "options": 5, "first": "1", "last": "5" },
   { "case": "past 2^53 numbers are two apart: of min + 0 to min + 100, each sum shown once", "min": -1e16, "options": 51, "first": "-10000000000000000", "last": "-9999999999999900" },
   { "case": "a number too large for a double is not finite: min uses its default", "min": 9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999, "max": 3, "options": 3, "first": "1", "last": "3" },
