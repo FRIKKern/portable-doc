@@ -16,13 +16,17 @@
 //     calls a number writer with an argument that may hold a number, with no argument at all,
 //     with an argument whose property the writer reads (`o.w`) where that property may hold a
 //     number, or whose body turns into text a number it captures, whatever it is given. Inside a
-//     writer, the scan follows only these forms of what it hands a number writer: a literal, or a
-//     ternary of followable branches; a name, its own when declared in the writer (a parameter or
-//     a local) and captured when declared outside; a property path rooted at a parameter, read at
-//     that path where the writer is called. It refuses every other form, as capturing, and names
-//     it with file:line in each writer a style value reaches: a path rooted outside the writer or
-//     at a local (`cfg.w`, `Math.PI`), element access, a call, `!`, a cast, `?.`, arithmetic. A
-//     path a call site's argument type does not have is refused there. Writers are known by symbol:
+//     writer, the scan follows what it hands a number writer in 5 forms only (FOLLOWED; a test
+//     pins the count, which may only shrink): a literal; a ternary of followables; a name, own
+//     (the writer's parameter, a plain name with no default, or a local) or captured (declared
+//     outside); a path rooted at an own parameter (`o.w`), checked at each call on the argument's
+//     type; a callback parameter on a followable source (an array method's item or a for-of
+//     variable is its iterable's element, styleOf's write callback gets styleOf's number, an index
+//     is own). It refuses every other form, as capturing, and names it with file:line in each
+//     writer a style value reaches: a path rooted outside the writer or at a local (`cfg.w`,
+//     `Math.PI`), element access, a call, `!`, a cast, `?.`, arithmetic, a destructured parameter,
+//     a parameter with a default. A path a call site's argument type does not have is refused
+//     there. Writers are known by symbol:
 //     numberText, stringOf, a const naming a writer, or a function in React's source whose body
 //     calls one so. Inside styleOf's write callback a call is trusted only when each such argument
 //     is the callback's own parameter, the finite number styleOf hands it; styleOf leaves a
@@ -51,8 +55,9 @@
 //   it); a number writer reached through an object's or a class's method, or as a value passed
 //   around (its text made before the template); a writer given only arguments with no number,
 //   whose number is a local made from a captured one (`(s: string) => { const m = n; … }`); a
-//   property named by a span and written with a space (`${k}: …`, read as a label). Each has a plant row that the scan must not name. packages/text writes no HTML
-//   style, so the style rules read React only; a style written there would go unseen.
+//   property named by a span and written with a space (`${k}: …`, read as a label). Each has a
+//   plant row that the scan must not name. packages/text writes no HTML style, so the style rules
+//   read React only; a style written there would go unseen.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
 // - packages/editor (written only by the sync from Barkpark's paper editor), React's dist (built
@@ -72,6 +77,12 @@ const ESCAPES = new Set(['escapeHtml', 'escapeAttr']);
 // An encoder writes an array through String, so a number array's NaN reaches it as "NaN".
 const ENCODES = new Set(['encodeURIComponent', 'encodeURI']);
 const DOOR = 'packages/text/number-text.js';
+// The forms of a value handed to a number writer inside a writer that the scan follows. The test
+// pins their count, which may only shrink.
+const FOLLOWED = ['a literal', 'a ternary of followables', 'a name, own or captured', 'a path rooted at an own parameter', 'a callback parameter on a followable source'];
+const FOLLOWED_MAX = 5;
+// The longest path a writer may read on a parameter before it counts as capturing.
+const PATH_MAX = 8;
 /** Where the template text before a span leaves it: 'attr' inside an open style="…" or style='…',
  * 'decl' after a CSS declaration's `name:` in a fragment with no markup (`width:`, `--i:`, or a
  * name from a span directly before the number, `${p}:`; not `${k}: ` with a space, which is a
@@ -154,6 +165,11 @@ function reactRoutes(only) {
       types = types.flatMap((u) => {
         if (u.flags & (F.Any | F.Unknown)) return [u];
         return parts(checker.getNonNullableType(u)).flatMap((m) => {
+          if (name === '[]') {
+            if (checker.isArrayType(m) || checker.isTupleType(m)) return checker.getTypeArguments(m);
+            const index = checker.getIndexTypeOfType(checker.getApparentType(m), ts.IndexKind.Number);
+            return index ? [index] : [];
+          }
           const apparent = checker.getApparentType(m);
           const prop = checker.getPropertyOfType(apparent, name);
           const next = prop ? checker.getTypeOfSymbolAtLocation(prop, where) : checker.getIndexTypeOfType(apparent, ts.IndexKind.String);
@@ -200,38 +216,98 @@ function reactRoutes(only) {
     for (let p = n.parent; p; p = p.parent) if (isCallOf(p, 'styleAttr')) return false;
     return true;
   };
-  // What a writer fn hands a number writer, in the forms the scan follows: a literal (or a
-  // ternary of followable branches); a name declared in fn, its parameters' and locals' own; a
-  // name declared outside fn, captured; or a property path rooted at a parameter of fn, read at
-  // that path (`x.w`) and checked where fn is called. Any other form is refused: a path rooted
-  // outside fn or at a local, element access, a call, `!`, a cast, `?.`, arithmetic.
+  // What a writer fn hands a number writer is followed only in the FOLLOWED forms, tried in
+  // turn; any other form is refused. An answer is own (with the paths it reads on fn's own
+  // parameters), captured (declared outside fn), or refused. A local's own answer is marked: it
+  // is the writer's own as a name (a listed limit), but a path on it is refused.
   const outside = (fn, d) => d.getSourceFile() !== fn.getSourceFile() || d.pos < fn.pos || d.end > fn.end;
   const LITERAL = new Set([ts.SyntaxKind.NumericLiteral, ts.SyntaxKind.BigIntLiteral, ts.SyntaxKind.StringLiteral, ts.SyntaxKind.NoSubstitutionTemplateLiteral, ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword]);
   const REFUSED = { kind: 'refused' };
-  const follow = (fn, e) => {
-    while (ts.isParenthesizedExpression(e)) e = e.expression;
-    if (LITERAL.has(e.kind) || (ts.isPrefixUnaryExpression(e) && ts.isNumericLiteral(e.operand) && (e.operator === ts.SyntaxKind.MinusToken || e.operator === ts.SyntaxKind.PlusToken))) return { kind: 'own', reads: [] };
-    if (ts.isConditionalExpression(e)) {
+  const CAPTURED = { kind: 'captured' };
+  const OWN = { kind: 'own', reads: [] };
+  const LOCAL = { kind: 'own', reads: [], local: true };
+  const extend = (r, names) => (r.kind === 'own' ? { kind: 'own', reads: r.reads.map(([i, q]) => [i, [...q, ...names]]), local: r.local } : r);
+  // An array method's callback gets its receiver's element (`[]`) first and the index second.
+  const ITEM_METHODS = new Set(['map', 'flatMap', 'forEach', 'filter', 'some', 'every', 'find', 'findIndex', 'findLast', 'findLastIndex']);
+  const declIn = (fn, id) => {
+    const decls = symOf(id)?.declarations ?? [];
+    return decls.length ? decls.find((d) => !outside(fn, d)) ?? 'outside' : null;
+  };
+  // A parameter or for-of variable of a callback inside fn, and the value it is handed.
+  const callbackItem = (fn, d) => {
+    if (ts.isVariableDeclaration(d) && ts.isVariableDeclarationList(d.parent) && ts.isForOfStatement(d.parent.parent)) return ts.isIdentifier(d.name) ? ['item', d.parent.parent.expression] : ['refused'];
+    if (!ts.isParameter(d) || d.parent === fn) return null;
+    const f = d.parent;
+    const i = f.parameters.indexOf(d);
+    const call = f.parent;
+    if (!ts.isIdentifier(d.name) || d.initializer || !call || !ts.isCallExpression(call)) return ['refused'];
+    if (isCallOf(call, 'styleOf') && call.arguments[2] === f) return i === 0 && call.arguments[1] ? ['value', call.arguments[1]] : ['refused'];
+    if (ts.isPropertyAccessExpression(call.expression) && ITEM_METHODS.has(call.expression.name.text) && call.arguments[0] === f) {
+      if (i === 1) return ['index'];
+      if (i === 0) return ['item', call.expression.expression];
+    }
+    return ['refused'];
+  };
+  const forms = {
+    'a literal': (fn, e) =>
+      LITERAL.has(e.kind) || (ts.isPrefixUnaryExpression(e) && ts.isNumericLiteral(e.operand) && (e.operator === ts.SyntaxKind.MinusToken || e.operator === ts.SyntaxKind.PlusToken)) ? OWN : null,
+    'a ternary of followables': (fn, e) => {
+      if (!ts.isConditionalExpression(e)) return null;
       const both = [follow(fn, e.whenTrue), follow(fn, e.whenFalse)];
       if (both.some((r) => r.kind === 'refused')) return REFUSED;
-      if (both.some((r) => r.kind === 'captured')) return { kind: 'captured' };
-      return { kind: 'own', reads: both.flatMap((r) => r.reads) };
+      if (both.some((r) => r.kind === 'captured')) return CAPTURED;
+      return { kind: 'own', reads: both.flatMap((r) => r.reads), local: both.some((r) => r.local) };
+    },
+    // Own: fn's own parameter, declared as a plain name with no default; a local (a listed limit).
+    // A destructured parameter, or one with a default, is refused.
+    'a name, own or captured': (fn, e) => {
+      if (!ts.isIdentifier(e)) return null;
+      const d = declIn(fn, e);
+      if (d === null) return REFUSED;
+      if (d === 'outside') return CAPTURED;
+      if (callbackItem(fn, d)) return null;
+      if (ts.isParameter(d)) return ts.isIdentifier(d.name) && !d.initializer && !d.dotDotDotToken ? { kind: 'own', reads: [[fn.parameters.indexOf(d), []]] } : REFUSED;
+      if (ts.isBindingElement(d)) {
+        let holder = d;
+        while (ts.isBindingElement(holder)) holder = holder.parent.parent;
+        return ts.isParameter(holder) ? REFUSED : LOCAL;
+      }
+      return LOCAL;
+    },
+    'a path rooted at an own parameter': (fn, e) => {
+      if (!ts.isPropertyAccessExpression(e)) return null;
+      const names = [];
+      let root = e;
+      while (ts.isPropertyAccessExpression(root) && !(root.flags & ts.NodeFlags.OptionalChain) && ts.isIdentifier(root.name)) {
+        names.unshift(root.name.text);
+        root = root.expression;
+      }
+      if (!ts.isIdentifier(root) || root.flags & ts.NodeFlags.OptionalChain || ts.isPropertyAccessExpression(root)) return REFUSED;
+      const r = follow(fn, root);
+      return r.kind === 'own' && !r.local && r.reads.length ? extend(r, names) : REFUSED;
+    },
+    // Followed through what it is handed: an array method's item or a for-of variable is the
+    // element of a followable iterable; styleOf's write callback gets styleOf's number; an index is
+    // own. Anything else is refused.
+    'a callback parameter on a followable source': (fn, e) => {
+      if (!ts.isIdentifier(e)) return null;
+      const d = declIn(fn, e);
+      const item = d && d !== 'outside' ? callbackItem(fn, d) : null;
+      if (!item) return null;
+      const [how, source] = item;
+      if (how === 'index') return OWN;
+      if (how === 'value') return follow(fn, source);
+      if (how === 'item') return extend(follow(fn, source), ['[]']);
+      return REFUSED;
+    },
+  };
+  assert.deepEqual(Object.keys(forms), FOLLOWED, 'each followed form is listed in FOLLOWED');
+  const follow = (fn, e) => {
+    while (ts.isParenthesizedExpression(e)) e = e.expression;
+    for (const form of FOLLOWED) {
+      const r = forms[form](fn, e);
+      if (r) return r;
     }
-    const names = [];
-    let root = e;
-    while (ts.isPropertyAccessExpression(root) && !(root.flags & ts.NodeFlags.OptionalChain) && ts.isIdentifier(root.name)) {
-      names.unshift(root.name.text);
-      root = root.expression;
-    }
-    if (!ts.isIdentifier(root) || root.flags & ts.NodeFlags.OptionalChain) return REFUSED;
-    const decls = symOf(root)?.declarations ?? [];
-    if (!decls.length) return REFUSED;
-    const param = decls.find((d) => ts.isParameter(d) && d.parent === fn && ts.isIdentifier(d.name));
-    const at = param ? fn.parameters.indexOf(param) : -1;
-    if (!names.length) return decls.every((d) => outside(fn, d)) ? { kind: 'captured' } : { kind: 'own', reads: at >= 0 ? [[at, []]] : [] };
-    if (at >= 0) return { kind: 'own', reads: [[at, names]] };
-    // A path rooted at a parameter of a function inside fn (a callback's item) is its own.
-    if (decls.every((d) => ts.isParameter(d) && !outside(fn, d))) return { kind: 'own', reads: [] };
     return REFUSED;
   };
   // Reads a writer body: true when it learns something new about sym (a capture or a read path).
@@ -250,10 +326,13 @@ function reactRoutes(only) {
             if (!captures.has(sym)) grew = !!captures.add(sym);
             return;
           }
-          for (const [j, q] of r.reads) {
-            if (whole && q.length && addRead(sym, j, q)) grew = true;
-            for (const p of paths) if (addRead(sym, j, [...q, ...p])) grew = true;
-          }
+          for (const [j, q] of r.reads)
+            for (const names of [...(whole && q.length ? [q] : []), ...paths.map((p) => [...q, ...p])]) {
+              // A path that keeps growing (a writer that reads itself deeper) counts as capturing.
+              if (names.length > PATH_MAX) {
+                if (!captures.has(sym)) grew = !!captures.add(sym);
+              } else if (addRead(sym, j, names)) grew = true;
+            }
         });
       }
       ts.forEachChild(n, look);
@@ -396,6 +475,7 @@ const textFiles = () =>
   fs.readdirSync(path.join(root, 'packages/text')).filter((f) => f.endsWith('.js')).map((f) => `packages/text/${f}`).filter((f) => f !== DOOR).sort();
 
 test('the scan finds each route it names, in React by type and in text by syntax', () => {
+  assert.ok(FOLLOWED.length <= FOLLOWED_MAX, `the followed forms may only shrink: ${FOLLOWED.length} > ${FOLLOWED_MAX}`);
   const dir = fs.mkdtempSync(path.join(react, 'src', '.scan-'));
   try {
     const plant = path.join(dir, 'plant.ts');
@@ -461,6 +541,12 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i style="color:${pkv(s, lab)}">`', null],
       ['`<i style="color:${pkv(s, ob)}">`', [STYLE, REFUSE]],
       ['`<i style="width:${pr(s)}%">`', STYLE],
+      ['`<i style="width:${f2(s)}%">`', STYLE],
+      ['`<i style="width:${f3(s)}%">`', STYLE],
+      ['`<i style="width:${f4(s, cfgs)}%">`', STYLE],
+      ['`<i style="width:${f5(cfg)}%">`', STYLE],
+      ['`<i style="width:${f6(s)}%">`', STYLE],
+      ['`<i style="color:${f7(s, [s])}">`', null],
       // Listed limits (the header's "What it cannot see"): each is a number in a style that the
       // scan does not name. Concatenation; a join built outside the template; an object's method;
       // a class's method; a value passed around; a writer given only arguments with no number,
@@ -500,6 +586,17 @@ test('the scan finds each route it names, in React by type and in text by syntax
       // once from a style value, is named there and refused on its own line.
       'const pu = (x: string) => x + numberText(cfg.b.c)',
       'const pr = (x: string) => x + numberText(cfg.b.c)',
+      // A callback's item on a captured array is captured (f2), and a path on it refused (f3); on an
+      // own parameter it is read at `[]` and checked at the call (f4). A destructured parameter (f5)
+      // and a parameter with a default (f6) are refused. An index is own (f7).
+      'declare const xs2: number[]',
+      'declare const cfgs: { w: number }[]',
+      "const f2 = (x: string) => x + xs2.map((v) => numberText(v)).join('')",
+      "const f3 = (x: string) => x + cfgs.map((o) => numberText(o.w)).join('')",
+      "const f4 = (x: string, os: { w: number }[]) => x + os.map((o) => numberText(o.w)).join('')",
+      'const f5 = ({ w }: { w: number }) => numberText(w)',
+      'const f6 = (x: string, k = cfg.w) => x + numberText(k)',
+      "const f7 = (x: string, os: string[]) => x + os.map((o, i) => o + numberText(i)).join('')",
       "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
       "  if (typeof b.count !== 'number') return []",
       '  const n = b.count',
@@ -521,6 +618,9 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['const pw', REFUSE],
       ['const pe', REFUSE],
       ['const pr', REFUSE],
+      ['const f3', REFUSE],
+      ['const f5', REFUSE],
+      ['const f6', REFUSE],
     ];
     const found = reactRoutes([plant]).map((r) => {
       const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/);
