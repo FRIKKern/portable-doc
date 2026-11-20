@@ -36,3 +36,18 @@ test('each text writer and React write a doc MAX_DEPTH deep whole, and one level
     }
   }
 });
+
+// The text writers' flat text of an inline tree (inlineText in packages/text/inline.js: a
+// wikilink's children, an inline code node's old-named children, text-from-inline old names)
+// stops at MAX_DEPTH, counting one for each list and one for each node: MAX_DEPTH / 2 levels of
+// a node in a list. A wikilink whose children nest that deep is written whole. Past it is a
+// separate change; this row holds the limit only.
+test('the text writers write a wikilink whose children nest MAX_DEPTH / 2 levels whole', () => {
+  const deepest = MAX_DEPTH / 2;
+  const levels = Array.from({ length: deepest - 1 }).reduce((kids, _, i) => [{ type: 'text', value: `w${deepest - 1 - i} ` }, { type: 'span', children: kids }], [{ type: 'text', value: `w${deepest}` }]);
+  const doc = [{ type: 'paragraph', content: [{ type: 'wikilink', target: 'page', children: levels }] }];
+  const writers = OURS.filter((w) => w.package === '@portable-doc/text' && w.name !== 'round-trip Markdown');
+  assert.deepEqual(writers.map((w) => w.name), ['readable Markdown', 'plain text']);
+  const all = Array.from({ length: deepest }, (_, i) => `w${i + 1}`).join(' ');
+  for (const writer of writers) assert.equal(writer.write(doc).output, `${all}\n`, `${writer.name}, ${deepest} levels: every level's word`);
+});
