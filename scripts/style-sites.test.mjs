@@ -52,10 +52,10 @@ const CASES = {
   "taskboard#'padding-left'#1": [['task row padding-left in px', /bp-trow[^"]*" style="padding-left:\d+px"/]],
 };
 
-/** React's source files as [file, text]; a dot-named folder or source file under it is red by name. */
+/** React's source files as [file, text]; a dot-named or git-ignored folder or source file under it is red by name. */
 const sources = () => {
   const { files, refused } = reactSources();
-  assert.deepEqual(refused, [], 'dot-named folders or source files under React\'s source');
+  assert.deepEqual(refused, [], 'dot-named or git-ignored folders or source files under React\'s source');
   return files.map((f) => [f, fs.readFileSync(f, 'utf8')]);
 };
 
