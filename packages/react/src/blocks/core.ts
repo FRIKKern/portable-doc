@@ -29,6 +29,7 @@ import {
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
 import { type RoadmapSpan, roadmapDate, roadmapDatePct, roadmapSpan } from '../roadmap-span'
+import { roadmapMarks } from '../roadmap-marks'
 import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.js'
 import { numberText, stringOf, styleAttr, styleOf } from '../../../text/number-text.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
@@ -1530,7 +1531,8 @@ const roadmap: Emit = (b, ctx) => {
         (truthy(m.phase_row) ? ' bp-rm__lane--phase' : '') +
         (placed ? '' : ' bp-rm__lane--unplaced')
       const body = placed
-        ? `<span class="bp-rm__bar bp-rm__bar--${role}"${markStyle(left, width)}></span>`
+        ? `<span class="bp-rm__bar bp-rm__bar--${role}"${markStyle(left, width)}></span>` +
+          roadmapMarks(truthy(m.note), truthy(m.milestone), left, width)
         : `<span class="bp-rm__unplaced">${ctx.t(ROADMAP_LANE_UNPLACED_COPY)}</span>`
       return `<div class="${cls}"><span class="bp-rm__lbl">${draftHtml(m, ctx)}${title}</span><div class="bp-rm__track">${body}${today}</div></div>`
     })
