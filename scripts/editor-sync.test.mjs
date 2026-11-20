@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { BARKPARK_EDITOR, EDITOR_DIR, editorHashes } from './lib/editor.mjs';
 import { BARKPARK_PACK, BARKPARK_REPO, hashes } from './lib/pack.mjs';
 import { editor, pack, write } from './lib/synthetic.mjs';
-import { TREE_CHECK_LIMITS } from './test-files.mjs';
+import { TREE_CHECK_LIMITS } from './lib/tree-check-limits.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.dirname(scripts);
@@ -230,6 +230,19 @@ test('a test run that leaves a file in the tree, or changes one, fails naming it
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /test-files: the run left the tree changed:\n {2}src\/left\.ts\n {2}touched\.txt\n/);
   assert.doesNotMatch(r.out, /mine\.txt/);
+});
+
+test('the root test run started through a symlinked path runs its tests: one red test exits 1', () => {
+  const real = path.join(tmp, `red-${n++}`);
+  write(path.join(real, 'scripts', 'test-files.mjs'), fs.readFileSync(path.join(scripts, 'test-files.mjs'), 'utf8'));
+  write(path.join(real, 'scripts', 'red.test.mjs'), "import { test } from 'node:test';\ntest('red', () => { throw new Error('red on purpose'); });\n");
+  execFileSync('git', ['init', '-q', real]);
+  const link = path.join(tmp, `red-link-${n++}`);
+  fs.symlinkSync(real, link, 'dir');
+  const { NODE_TEST_CONTEXT, ...env } = process.env;
+  const r = node(path.join(link, 'scripts', 'test-files.mjs'), ['--run'], env);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /^# fail 1$/m, r.out);
 });
 
 test('each listed limit of the tree check is real: its plant runs and the run still passes', () => {
