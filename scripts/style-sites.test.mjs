@@ -53,10 +53,10 @@ const CASES = {
   "taskboard#'padding-left'#1": [['task row padding-left in px', /bp-trow[^"]*" style="padding-left:\d+px"/]],
 };
 
-/** React's source files as [file, text]; a dot-named folder or source file under it is red by name. */
+/** React's source files as [file, text]; each path the walk refuses is red, named with the walk's reason. */
 const sources = () => {
   const { files, refused } = reactSources();
-  assert.deepEqual(refused, [], 'dot-named folders or source files under React\'s source');
+  assert.deepEqual(refused, [], refused.join('\n'));
   return files.map((f) => [f, fs.readFileSync(f, 'utf8')]);
 };
 

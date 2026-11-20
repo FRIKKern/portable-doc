@@ -4,7 +4,8 @@
 // Prints the list, or with --run runs them with `node --test` and exits with its code. A run must
 // leave the tree as it found it: each path git reports (changed or untracked) is read before and
 // after, and a path the run added, changed or removed fails it by name. A tree with edits of its own
-// (a sync, a branch at work) can still run; only what the tests did counts.
+// (a sync, a branch at work) can still run; only what the tests did counts. What the check cannot
+// see is listed in scripts/lib/tree-check-limits.mjs.
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';

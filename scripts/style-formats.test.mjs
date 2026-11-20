@@ -60,7 +60,7 @@ function check(files) {
 
 test('every styleOf call in React writes a listed format with listed texts: three counts, one number', () => {
   const { files, refused } = reactSources();
-  assert.deepEqual(refused, [], 'dot-named folders or source files under React\'s source');
+  assert.deepEqual(refused, [], refused.join('\n'));
   const found = plainCount(files);
   const { calls } = check(files);
   assert.ok(found > 0, 'the plain search finds no styleOf call');
