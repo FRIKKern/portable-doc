@@ -2,7 +2,7 @@
   "counts": {
     "gaps": 111,
     "textAndBlocks": 89,
-    "probed": 55,
+    "probed": 57,
     "oldNames": 2
   },
   "gaps": {
@@ -139,6 +139,8 @@
     "questionnaire.questions[].rationale",
     "questionnaire.questions[].recommendation",
     "roadmap.snapshot[].end",
+    "roadmap.snapshot[].milestone",
+    "roadmap.snapshot[].note",
     "roadmap.snapshot[].start",
     "sheet.snapshot.styles",
     "sheet.snapshot.truncated",
