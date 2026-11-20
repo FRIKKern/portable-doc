@@ -28,6 +28,7 @@ import {
 } from '../inline'
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
+import { roadmapDate, roadmapDatePct, roadmapSpan } from '../roadmap-span'
 import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.js'
 import { numberText, stringOf, styleAttr, styleOf } from '../../../text/number-text.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
@@ -1487,11 +1488,13 @@ const roadmap: Emit = (b, ctx) => {
       `<div class="bp-tasks bp-tasks--empty">${ctx.t(ROADMAP_UNPLACED_COPY)}</div>` +
       renderBlock({ type: 'tasks', snapshot: rows }, ctx)
     )
-  const todayVal = b.today
-  const todayLeft = clampf(todayVal)
+  // today is a YYYY-MM-DD date, drawn at its place in the block's start–end span (roadmap-span.ts);
+  // with no span, or a today that is not a date, there is no line.
+  const span = roadmapSpan(b)
+  const todayDay = roadmapDate(b.today)
   const today =
-    typeof todayVal === 'number' && todayLeft !== null
-      ? `<span class="bp-rm__today"${styleAttr([pct('left', todayLeft)])}></span>`
+    span !== null && todayDay !== null
+      ? `<span class="bp-rm__today"${styleAttr([pct('left', clampf(roadmapDatePct(todayDay, span)))])}></span>`
       : ''
   const scaleCells = asList(b.scale)
   const scale =
