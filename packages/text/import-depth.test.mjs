@@ -4,7 +4,7 @@
 // notice naming that block. Marks inside marks keep their own limit, MAX_MARK_NEST.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAX_DEPTH, validate } from '@portable-doc/validate';
+import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
 import { MAX_MARK_NEST } from './from-markdown-inline.js';
 import { NESTING_KEPT_AS_TEXT, readMarkdown } from './index.js';
@@ -82,4 +82,24 @@ test('marks inside marks keep their own limit, 50: 50 deep stay marks, the 51st 
   const past = read(marks(MAX_MARK_NEST + 1));
   assert.deepEqual(markChain(past.blocks[0].content), { depth: MAX_MARK_NEST, text: 'm50 m51 x m51 m50' });
   assert.deepEqual(past.notices, [{ code: NESTING_KEPT_AS_TEXT, path: '/blocks/0', line: 1, lines: 1 }]);
+});
+
+// A portabledoc fence holds its blocks as JSON, and the import reads old names under their current
+// ones: an inline code node's old `children` becomes its `value`, their flat text (inlineText, the
+// text-from-inline convert). The fence is taken when its blocks, counted as a doc object
+// ({ blocks }), nest at most MAX_VALUE_DEPTH value levels: doc, blocks, paragraph, content, code,
+// children, the deepest em's text leaves, and two for each em. Deeper, it is kept as a code block
+// of its JSON.
+test('a portabledoc fence with old code children over the deepest em it takes imports with every word in the value; one em more is kept as a code block', () => {
+  const ems = (k) => [{ type: 'em', children: Array.from({ length: k - 1 }).reduce((kids, _, i) => [t(`w${k - 1 - i} `), { type: 'em', children: kids }], [t(`w${k}`), t(' end')]) }];
+  const blocks = (k) => [{ type: 'paragraph', content: [{ type: 'code', children: ems(k) }] }];
+  const fence = (k) => `\`\`\`portabledoc\n${JSON.stringify(blocks(k))}\n\`\`\`\n`;
+  const words = (s) => new Set(s.match(/w\d+/g)).size;
+  const k = Math.floor((MAX_VALUE_DEPTH - 7) / 2);
+  assert.deepEqual([walkDepth({ blocks: blocks(k) }) <= MAX_VALUE_DEPTH, walkDepth({ blocks: blocks(k + 1) }) > MAX_VALUE_DEPTH, validate(blocks(k)).ok], [true, true, true]);
+  const taken = readMarkdown(fence(k));
+  assert.deepEqual([taken.blocks.length, taken.blocks[0].type, taken.blocks[0].content.length, taken.blocks[0].content[0].type, taken.notices], [1, 'paragraph', 1, 'code', []]);
+  assert.equal(words(taken.blocks[0].content[0].value), k, `${k} em: every word in the code's value`);
+  const kept = readMarkdown(fence(k + 1));
+  assert.deepEqual([kept.blocks.length, kept.blocks[0].type, words(kept.blocks[0].value)], [1, 'code', k + 1], `${k + 1} em: a code block of the JSON, every word`);
 });
