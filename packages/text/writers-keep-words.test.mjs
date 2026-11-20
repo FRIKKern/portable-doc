@@ -138,6 +138,8 @@ test('every writer keeps every word of every shared case, or lists where it lost
   assert.equal(counted.size, EDITOR_LOSSES.length, 'editor-losses.mjs: two rows of one writer and kind');
   let seen = 0;
   let bigSeen = 0;
+  // Words in a callout's body that its writer wrote, so a field names their loss, not the place.
+  const namedInBody = [];
   for (const [name, blocks, words = textWords(blocks)] of await cases()) {
     seen++;
     for (const writer of WRITERS) {
@@ -152,8 +154,10 @@ test('every writer keeps every word of every shared case, or lists where it lost
         if (row) excused.add(`${row[0]} ${writer.name}`);
         return !row;
       });
-      const uncounted = missing.filter(([, key, path]) => {
-        const row = `${writer.name}: ${lossKind(writer.name, name, key, path, blocks)}`;
+      const lostIn = (place) => missing.filter(([, , p]) => p.startsWith(place));
+      const uncounted = missing.filter(([w, key, path]) => {
+        const row = `${writer.name}: ${lossKind(writer.name, name, key, path, blocks, lostIn)}`;
+        if (path.includes('/slots/body/') && !row.endsWith(': a callout body')) namedInBody.push(`${writer.name}: ${w} at ${path} of ${name}`);
         if (!counted.has(row)) return true;
         counted.set(row, counted.get(row) + 1);
         return false;
