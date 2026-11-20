@@ -10,11 +10,12 @@ export function roadmapDate(v: unknown): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim())
   if (!m) return null
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  const t = Date.UTC(y, mo - 1, d)
-  const back = new Date(t)
-  // 2026-02-30 is not a date: Date.UTC would roll it over to March.
+  // setUTCFullYear, not Date.UTC: Date.UTC reads years 0-99 as 1900-1999.
+  const back = new Date(0)
+  back.setUTCFullYear(y, mo - 1, d)
+  // 2026-02-30 is not a date: the setter would roll it over to March.
   if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return null
-  return t / DAY_MS
+  return back.getTime() / DAY_MS
 }
 
 export type RoadmapSpan = { start: number; end: number }

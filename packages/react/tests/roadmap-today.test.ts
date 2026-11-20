@@ -15,6 +15,8 @@ describe("a roadmap's today line", () => {
   it('a valid roadmap with today, start and end draws its today line at its place in the span', () => {
     expect(todayLines({ ...SPAN, today: '2026-01-04' })).toEqual(['<span class="bp-rm__today" style="left:30%"></span>'])
     expect(todayLines({ ...SPAN, today: ' 2026-01-06 ' })).toEqual(['<span class="bp-rm__today" style="left:50%"></span>'])
+    // A year below 100 is a year like any other.
+    expect(todayLines({ start: '0050-01-01', end: '0050-12-31', today: '0050-07-02' })).toEqual(['<span class="bp-rm__today" style="left:50%"></span>'])
   })
 
   it('a today before the span is drawn at 0, one after it at 100', () => {
