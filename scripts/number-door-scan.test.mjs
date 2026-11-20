@@ -29,7 +29,9 @@
 //     writer a style value reaches; elsewhere it only counts as capturing. So a writer that
 //     assigns a parameter (escapeHtml, escapeAttr) is named in a style value whatever it is
 //     given, a string too: a false red, on the safe side. On the real source no style value
-//     reaches a writer, and a test holds that;
+//     reaches a writer, and a test holds that, after checking the scan read every styleOf call and
+//     every style value a plain search of the text finds (the search sees `style="…${` and
+//     `name:${`; the scan sees more, so the search is a floor);
 //   - styleOf written straight into style="…" (not inside styleAttr), which writes style="" when
 //     its number is not finite.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
@@ -247,8 +249,12 @@ function reactRoutes(only) {
     if (body) has(body.parent, (n) => (refusedArgs(body.parent, n).forEach((a) => refused.add(a)), false));
   }
   const found = [];
+  // What the scan read, so a test can show it saw the door's calls and the style values.
+  const doorCalls = [];
+  const styleSpans = [];
   for (const sf of program.getSourceFiles().filter((s) => files.includes(s.fileName))) {
     const rel = path.relative(root, sf.fileName);
+    const lineOf = (node) => `${rel}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`;
     const seen = new Set();
     const at = (node, why) => {
       const where = `${rel}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}: ${why}`;
@@ -271,6 +277,7 @@ function reactRoutes(only) {
         }
         for (const a of node.arguments) if (ts.isIdentifier(a) && a.text === 'String') at(a, 'String passed as a function');
         for (const a of node.arguments) if (refused.has(a)) at(a, 'a number writer argument the scan cannot follow');
+        if (isCallOf(node, 'styleOf')) doorCalls.push(lineOf(node));
       } else if (ts.isIdentifier(node) && fromDoor(symOf(node), ['styleOf', 'styleAttr']) && !ts.isImportSpecifier(node.parent)) {
         // styleOf and styleAttr are read only where called by name: an alias or a value is refused.
         const use = ts.isPropertyAccessExpression(node.parent) && node.parent.name === node ? node.parent : node;
@@ -279,6 +286,7 @@ function reactRoutes(only) {
         let text = node.head.text;
         for (const span of node.templateSpans) {
           const where = styleContext(text);
+          if (where) styleSpans.push(`${lineOf(span.expression)} ${where}`);
           if (where && has(span.expression, writerCall)) at(span.expression, 'a number in a style value outside styleOf');
           if (where === 'attr' && has(span.expression, bareStyleOf)) at(span.expression, 'styleOf in a style attribute without styleAttr');
           text += '\u0000' + span.literal.text;
@@ -294,8 +302,35 @@ function reactRoutes(only) {
     };
     visit(sf);
   }
+  found.doorCalls = doorCalls;
+  found.styleSpans = styleSpans;
   found.reached = [...reached].filter((sym) => bodyOf.has(sym)).map((sym) => sym.getName()).sort();
   return found;
+}
+
+/**
+ * A plain search of React's source text, no parser: each `styleOf(`, and each line with a template
+ * span right after `style="…` or `style='…` or right after a CSS `name:` (as `name:${`), as file:line.
+ */
+function plainSearch() {
+  const files = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(dir, e.name));
+      else if (/\.tsx?$/.test(e.name) && !e.name.endsWith('.d.ts')) files.push(path.join(dir, e.name));
+    }
+  };
+  walk(path.join(react, 'src'));
+  let styleOf = 0;
+  const styleValues = [];
+  for (const f of files) {
+    const t = fs.readFileSync(f, 'utf8');
+    styleOf += (t.match(/\bstyleOf\(/g) ?? []).length;
+    t.split('\n').forEach((line, i) => {
+      if (/style=["'][^"'`]*\$\{|`(?:--)?[a-z][a-z-]*:\$\{|;(?:--)?[a-z][a-z-]*:\$\{|\}:\$\{/.test(line)) styleValues.push(`${path.relative(root, f)}:${i + 1}`);
+    });
+  }
+  return { styleOf, styleValues };
 }
 
 /** Each route in a text writer's source, by syntax, as "file:line: why: code". */
@@ -491,8 +526,16 @@ test('the scan finds each route it names, in React by type and in text by syntax
 
 test('no number reaches React\'s HTML or the text writers\' output outside numberText', () => {
   const routes = reactRoutes();
-  // Every number in a real style goes through styleOf, so no template's style value reaches a
-  // writer; the plant test shows the style rules finding one.
+  // The scan saw the real styles: it read every styleOf call a plain search finds, and every style
+  // value a plain search finds. Blind to either, it reads none and this is red.
+  const search = plainSearch();
+  assert.ok(search.styleOf > 0, 'the plain search finds no styleOf call');
+  assert.equal(routes.doorCalls.length, search.styleOf, 'styleOf calls the scan read, and the plain search');
+  assert.ok(search.styleValues.length > 0, 'the plain search finds no style value');
+  const spans = new Set(routes.styleSpans.map((s) => s.split(' ')[0]));
+  assert.deepEqual(search.styleValues.filter((at) => !spans.has(at)), [], 'style values the plain search finds and the scan did not read');
+  // Every number in a real style goes through styleOf, so no style value it read reaches a writer;
+  // the plant test shows the style rules finding one.
   assert.deepEqual(routes.reached, [], 'writers a template style value reaches');
   const found = [...routes, ...textFiles().flatMap((f) => textRoutes(f, fs.readFileSync(path.join(root, f), 'utf8')))];
   assert.deepEqual(found, []);
