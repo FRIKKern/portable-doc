@@ -20,8 +20,9 @@ export const CASES = {
   'list-item-text-after-two-nested-lists': '- a\n  - b\n\n  c\n\n  more c\n\n  - d\n\n  e',
   // A split inside a nested list, then one outside it, in source order.
   'list-item-split-inside-then-outside-nested-list': '- x\n  - y\n    - z\n\n    z2\n\n  x2',
-  // 49 deep the text splits off with a notice; 50 deep (MAX_NEST) the nested list is the
-  // item's text, and the text after it stays in place with none.
-  'list-item-text-after-nested-list-deep-49': deep(49),
-  'list-item-text-after-nested-list-deep-50': deep(50),
+  // 98 deep the text splits off with a notice; 99 deep (the deepest list validate allows) the
+  // nested list is the item's text, and the text after it stays in place, with a notice that
+  // the list keeps nesting as text and no split.
+  'list-item-text-after-nested-list-deep-98': deep(98),
+  'list-item-text-after-nested-list-deep-99': deep(99),
 };

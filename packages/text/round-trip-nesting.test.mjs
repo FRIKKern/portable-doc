@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { checkFence } from './from-markdown.js';
+import { MAX_DEPTH, validate } from '@portable-doc/validate';
 import { fromMarkdown, toMarkdown, toPlainText } from './index.js';
 
 // A callout is Markdown's quote: `> [!tone]` and its first paragraph are the callout, every block
@@ -92,22 +92,22 @@ test('a callout round-trip mode cannot keep is written as the readable writer wr
   assert.equal(markdown, `> [!info] Note\n>\n${toMarkdown([inner]).trimEnd().split('\n').map((l) => `> ${l}`).join('\n')}\n`);
 });
 
-test('callouts in callouts are kept in their own Markdown to 50 deep; deeper ones are kept by a fence, or lost when import keeps no fence of them', () => {
+test('callouts in callouts are kept in their own Markdown as deep as validate allows; one more callout is past MAX_DEPTH', () => {
   const nested = (n, leaf) => {
     let block = leaf;
     for (let i = 0; i < n; i++) block = callout([block]);
     return block;
   };
-  const fifty = nested(50, p('deep'));
-  const kept = toMarkdown([fifty], ROUND_TRIP);
-  assert.deepEqual([kept.lost, fromMarkdown(kept.markdown)], [[], [fifty]]);
+  // The deepest a valid doc goes: MAX_DEPTH - 1 callouts, a paragraph in the deepest body.
+  const deepest = nested(MAX_DEPTH - 1, p('deep'));
+  const kept = toMarkdown([deepest], ROUND_TRIP);
+  assert.deepEqual([kept.lost, fromMarkdown(kept.markdown)], [[], [deepest]]);
   assert.doesNotMatch(kept.markdown, /portabledoc/);
-  // An image at the bottom of 50: listed at its own path, 50 bodies down.
-  const image = toMarkdown([nested(50, { type: 'image', src: 'https://example.com/a.png' })], ROUND_TRIP);
-  assert.deepEqual(image.lost.map((l) => [l.path, l.reason]), [[`/blocks/0${'/slots/body/0'.repeat(50)}`, 'type']]);
-  // 51 deep with an image: the whole is one block a fence cannot hold.
-  const deeper = nested(51, { type: 'image', src: 'https://example.com/a.png' });
-  assert.deepEqual(toMarkdown([deeper], ROUND_TRIP).lost, [{ path: '/blocks/0', id: null, type: 'callout', reason: checkFence([deeper], new Set()).reason }]);
+  // An image at the bottom: listed at its own path, MAX_DEPTH - 1 bodies down.
+  const image = toMarkdown([nested(MAX_DEPTH - 1, { type: 'image', src: 'https://example.com/a.png' })], ROUND_TRIP);
+  assert.deepEqual(image.lost.map((l) => [l.path, l.reason]), [[`/blocks/0${'/slots/body/0'.repeat(MAX_DEPTH - 1)}`, 'type']]);
+  // One callout more is a doc validate refuses: no valid doc nests past what import reads.
+  assert.deepEqual(validate([nested(MAX_DEPTH, p('deep'))]).errors.map((e) => e.code), ['too_deep']);
 });
 
 test('readable mode writes a callout\'s content, then its body: a two-paragraph callout imported from Markdown keeps every word', () => {

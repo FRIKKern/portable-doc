@@ -136,7 +136,23 @@ export interface OldNameDroppedNotice {
   fix: string;
 }
 
-export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice | OldNameDroppedNotice;
+/** The code of the notice for a block that keeps, as text, levels nested past the import's limits. */
+export const NESTING_KEPT_AS_TEXT: 'nesting_kept_as_text';
+
+/**
+ * A note from the import: the block at `path` keeps as text, every word, levels nested past the
+ * import's limits: blocks deeper than validate's MAX_DEPTH (a list in its deepest item, or a
+ * callout's body), or marks inside marks deeper than 50. `line` is the block's first source
+ * line, from 1, and `lines` how many lines it spans.
+ */
+export interface NestingKeptAsTextNotice {
+  code: 'nesting_kept_as_text';
+  path: string;
+  line: number;
+  lines: number;
+}
+
+export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice | OldNameDroppedNotice | NestingKeptAsTextNotice;
 
 /**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count

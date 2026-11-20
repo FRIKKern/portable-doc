@@ -7,7 +7,7 @@
 import { QUOTED } from './blocks-prose.js';
 import { currentNames } from './current-names.js';
 import { checkFence, fromMarkdown } from './from-markdown.js';
-import { MAX_NEST } from './from-markdown-inline.js';
+import { MAX_DEPTH } from '@portable-doc/validate';
 import { isMap } from './util.js';
 
 /** A copy of a callout that the writer writes in its `> [!tone]` form. */
@@ -34,10 +34,10 @@ const fenced = (block) => ({ type: 'code', lang: 'portabledoc', value: JSON.stri
 
 /** A callout's body, when it has blocks: import reads a `> [!tone]` quote's blocks back into it. */
 const calloutBody = (b) => (b.type === 'callout' && isMap(b.slots) && Array.isArray(b.slots.body) && b.slots.body.length ? b.slots.body : null);
-/** How many callouts deep a block's callouts in callouts go, counted to MAX_NEST + 1. */
+/** How many callouts deep a block's callouts in callouts go, counted to MAX_DEPTH. */
 function calloutDepth(block) {
   let n = 0;
-  for (let at = [block]; n <= MAX_NEST; n++) {
+  for (let at = [block]; n < MAX_DEPTH; n++) {
     at = at.flatMap((b) => (isMap(b) && calloutBody(b)) || []);
     if (!at.length) break;
   }
@@ -85,8 +85,8 @@ function planLevel(list, base, write, levels, depth = 0) {
     return readsBack(write([f]), [blocks[i]]) ? f : (lost.set(kept[i].at, 'changed'), blocks[i]);
   };
   // A callout with a body, in its own Markdown, its body planned as a level of its own: each
-  // block in it is itself, a fence, or listed under its own path. Only to MAX_NEST callouts
-  // deep, as far as import reads quotes in quotes. A block of the body that cannot be kept is in
+  // block in it is itself, a fence, or listed under its own path. Only while the deepest body
+  // stays within MAX_DEPTH, as far as import reads quotes in quotes. A block of the body that cannot be kept is in
   // a fence of the whole callout too, so no such fence is tried for it.
   const nest = (i) => {
     if (drops(i, head(blocks[i]))) return blocks[i];
@@ -103,7 +103,7 @@ function planLevel(list, base, write, levels, depth = 0) {
     const entry = blocks[i].type === 'callout' ? quoted(blocks[i]) : blocks[i];
     return readsBack(write([entry]), [blocks[i]]) ? entry : fence(i);
   };
-  level.plan = blocks.map((block, i) => (calloutBody(block) && depth + calloutDepth(block) <= MAX_NEST ? nest(i) : own(i)));
+  level.plan = blocks.map((block, i) => (calloutBody(block) && depth + calloutDepth(block) < MAX_DEPTH ? nest(i) : own(i)));
   const { plan } = level;
   // A planned callout stands in as its line alone, and is never fenced for its neighbours.
   const shown = (entry) => (levels.has(entry) ? head(entry) : entry);

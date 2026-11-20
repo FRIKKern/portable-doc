@@ -4,10 +4,10 @@
 // this one differs. Fail-soft: odd Markdown never throws, and a parser
 // failure gives the whole text back as one code block.
 
-import { MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
+import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
 import { IMPORT_WORK, planText } from './import-work.js';
-import { MAX_NEST, attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
+import { attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { currentNames } from './current-names.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
@@ -30,11 +30,12 @@ const codeBlock = (value, lang) => (lang ? { type: 'code', value, lang } : { typ
 // heading, paragraph, list item or quote is dropped, never kept empty.
 const blank = (content) => renderInline(content, true) === '';
 const paragraph = (content) => (blank(content) ? [] : [{ type: 'paragraph', content }]);
-// `count`, when given, gets the nodes read on `visits` (a paragraph or heading is one).
-function textOf(node, count = undefined) {
+// `count`, when given, gets the nodes read on `visits` (a paragraph or heading is one); `past`
+// gets `past: true` when marks past MAX_MARK_NEST are kept as text (inline).
+function textOf(node, count = undefined, past = undefined) {
   if (node.type !== 'paragraph' && node.type !== 'heading') return [text(flattenText([node], count).trim())];
   if (count) count.visits++;
-  return inline(node.children);
+  return inline(node.children, 0, past);
 }
 
 // ── lists ───────────────────────────────────────────────────────────────
@@ -44,6 +45,16 @@ export const LIST_ITEM_SPLIT = 'list_item_split';
 export const IMPORT_FELL_BACK = 'import_fell_back';
 /** The code of the notice that a fence's block held a field under two names with different values, and the import kept one. */
 export const OLD_NAME_DROPPED = 'old_name_dropped';
+/**
+ * The code of the notice that a block holds, as text, levels nested past the import's limits:
+ * blocks past MAX_DEPTH, or marks past MAX_MARK_NEST. Every word is kept.
+ */
+export const NESTING_KEPT_AS_TEXT = 'nesting_kept_as_text';
+// The notice for the block at `path`, from its token: its source lines, the first from 1.
+function keptAsText(path, tok, base) {
+  const line = lineOf(tok, 0, base) ?? base;
+  return { code: NESTING_KEPT_AS_TEXT, path, line: line + 1, lines: (lineOf(tok, 1, base) ?? line + 1) - line };
+}
 
 // A token's line in the whole text, from 0: its parse starts at `base`. An item's own blocks
 // are read in one tokenize call, at one level, so none after a kept nested list is deep source
@@ -55,19 +66,20 @@ const lineOf = (tok, i, base) => (tok.map ? base + tok.map[i] : undefined);
  * nested lists kept as lists. Text after a kept nested list starts a new item at the same
  * level, so the words stay in source order: an item's text always comes before its children.
  * Each new item carries `moved`, the source lines of its text: [first, end), from 0.
- * In an item at depth MAX_NEST, a nested list is kept as its text instead (Barkpark's
- * @max_nest rule): its items and their blocks one space apart, joined to the item's own
- * text by one space, in place; a list with no text adds nothing. `base` is the line the
- * parse starts at.
+ * In a list MAX_DEPTH - 1 deep (the deepest validate allows), a nested list is kept as its text
+ * instead: its items and their blocks one space apart, joined to the item's own text by one
+ * space, in place; a list with no text adds nothing. A part that keeps such text, or marks
+ * past MAX_MARK_NEST, has `past`. `depth` is the list's own, from 0 at the top of the doc;
+ * `base` is the line the parse starts at.
  */
 function listItem(item, depth, base) {
   const parts = [];
-  let part = { out: [], children: [], notes: [] };
+  let part = { out: [], children: [], notes: [], past: false };
   let after; // the line after the last kept nested list, while the part has one
-  const close = () => parts.push({ content: merge(part.out), children: part.children, notes: part.notes, moved: part.moved });
+  const close = () => parts.push({ content: merge(part.out), children: part.children, notes: part.notes, moved: part.moved, past: part.past });
   for (const child of item.children) {
     if (LISTS.has(child.type)) {
-      if (depth < MAX_NEST) {
+      if (depth + 1 < MAX_DEPTH) {
         const notes = [];
         const kept = list(child, depth + 1, notes, base);
         for (const n of notes) part.notes.push({ ...n, path: `/children/${part.children.length}${n.path}` });
@@ -78,6 +90,7 @@ function listItem(item, depth, base) {
         if (flat) {
           if (part.out.length) part.out.push(text(' '));
           part.out.push(text(flat));
+          part.past = true;
         }
       }
       continue;
@@ -85,13 +98,13 @@ function listItem(item, depth, base) {
     if (part.children.length) {
       close();
       const first = lineOf(child.tok, 0, base) ?? after ?? base;
-      part = { out: [], children: [], notes: [], moved: [first, first] };
+      part = { out: [], children: [], notes: [], moved: [first, first], past: false };
       after = undefined;
     }
     if (part.moved) part.moved[1] = lineOf(child.tok, 1, base) ?? lineOf(item.tok, 1, base) ?? part.moved[1];
     if (part.out.length) part.out.push(text(' '));
     if (child.type === 'fence' || child.type === 'code_block') part.out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
-    else for (const node of textOf(child)) part.out.push(node);
+    else for (const node of textOf(child, undefined, part)) part.out.push(node);
   }
   close();
   return parts;
@@ -110,7 +123,9 @@ const withChildren = (item, children) => (children.length ? { ...item, children 
 
 /**
  * A list as [block], or [] when no item has text or a nested list left. Each item split off
- * adds a LIST_ITEM_SPLIT notice to `notes`, its path from the list block, in source order.
+ * adds a LIST_ITEM_SPLIT notice to `notes`, its path from the list block, in source order, and
+ * a list with an item that keeps deeper levels as text (`past`) adds one NESTING_KEPT_AS_TEXT
+ * notice for itself, before its items' notices.
  */
 function list(node, depth = 0, notes = [], base = 0) {
   const ordered = node.type === 'ordered_list';
@@ -121,6 +136,7 @@ function list(node, depth = 0, notes = [], base = 0) {
     .map((it) => ({ ...it, task: ordered || it.moved ? null : taskItem(it.content) }))
     .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
   if (!items.length) return [];
+  if (items.some((it) => it.past)) notes.push(keptAsText('', node.tok, base));
   items.forEach((it, i) => {
     if (it.moved) notes.push({ code: LIST_ITEM_SPLIT, path: `/items/${i}`, line: it.moved[0] + 1, lines: it.moved[1] - it.moved[0] });
     for (const n of it.notes) notes.push({ ...n, path: `/items/${i}${n.path}` });
@@ -162,15 +178,16 @@ function calloutMarker(content) {
  * A quote. With a `[!tone]` marker at the head of its first paragraph it is a callout: that
  * paragraph is its content, and every block after it is read as blocks into `slots.body`,
  * fences and all. A plain quote holds inline content only, so it stays one run of all its text.
- * A callout MAX_NEST callouts deep keeps its body as text too, joined to its content, as a
- * list that deep does: the doc stays within the depth validate allows. Each child's text is
- * read once, and a callout's body only as blocks, so no part of the tree is read twice.
+ * A callout MAX_DEPTH - 1 deep keeps its body as text too, joined to its content, as a list
+ * that deep does: the doc stays within the depth validate allows, and the callout gets a
+ * NESTING_KEPT_AS_TEXT notice (convert). Each child's text is read once, and a callout's body
+ * only as blocks, so no part of the tree is read twice.
  */
 function quote(node, state) {
   const children = node.children;
-  const first = children.length ? textOf(children[0], state.count) : [];
+  const first = children.length ? textOf(children[0], state.count, state.past) : [];
   const marker = calloutMarker(first);
-  if (marker && state.depth < MAX_NEST) {
+  if (marker && state.depth + 1 < MAX_DEPTH) {
     const { at, blocks } = state;
     state.depth++;
     state.blocks = `${at}/slots/body`;
@@ -180,9 +197,12 @@ function quote(node, state) {
     const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
     return [body.length ? { ...callout, slots: { body } } : callout];
   }
-  const parts = [first, ...children.slice(1).map((child) => textOf(child, state.count))];
+  const parts = [first, ...children.slice(1).map((child) => textOf(child, state.count, state.past))];
   const content = joined(parts);
-  if (marker) return [{ type: 'callout', tone: marker.tone, content: calloutMarker(content).rest }];
+  if (marker) {
+    if (children.length > 1) state.past.past = true;
+    return [{ type: 'callout', tone: marker.tone, content: calloutMarker(content).rest }];
+  }
   // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
@@ -271,12 +291,12 @@ function code(node, state) {
 
 // ── blocks ──────────────────────────────────────────────────────────────
 
-function table(node) {
+function table(node, past) {
   const rows = (section) =>
     node.children
       .filter((c) => c.type === section)
       .flatMap((s) => s.children.filter((r) => r.type === 'tr'))
-      .map((r) => r.children.filter((c) => c.type === 'th' || c.type === 'td').map((c) => inline(c.children)));
+      .map((r) => r.children.filter((c) => c.type === 'th' || c.type === 'td').map((c) => inline(c.children, 0, past)));
   const head = rows('thead')[0];
   return head ? { type: 'table', head, rows: rows('tbody') } : { type: 'table', rows: rows('tbody') };
 }
@@ -285,19 +305,19 @@ function block(node, state) {
   switch (node.type) {
     case 'heading': {
       // Inline content under the canonical name, marks and links kept, as a paragraph's.
-      const content = inline(node.children);
+      const content = inline(node.children, 0, state.past);
       return blank(content) ? [] : [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), content }];
     }
-    case 'paragraph': return paragraph(inline(node.children));
+    case 'paragraph': return paragraph(inline(node.children, 0, state.past));
     case 'bullet_list': case 'ordered_list': {
       const notes = [];
-      const out = list(node, 0, notes, state.base);
+      const out = list(node, state.depth, notes, state.base);
       for (const n of notes) state.splits.push({ ...n, path: `${state.at}${n.path}` });
       return out;
     }
     case 'fence': case 'code_block': return code(node, state);
     case 'blockquote': return quote(node, state);
-    case 'table': return [table(node)];
+    case 'table': return [table(node, state.past)];
     case 'hr': return [{ type: 'divider' }];
     case 'html_block': {
       const visible = visibleText(node.tok.content).trim();
@@ -320,20 +340,27 @@ function caption(node) {
 /**
  * A read's state: the ids fences used, how many callouts deep the read is (quote()), and its
  * count: the tokens markdown-it made and the nodes read, so a test sees no part read twice.
- * `splits` holds a LIST_ITEM_SPLIT notice per list item split off and an OLD_NAME_DROPPED one per
- * value a fence's fold lost, in source order; `blocks` is the path of the
- * blocks being read, `at` the block's, and `base` the line the parse starts at.
+ * `splits` holds a LIST_ITEM_SPLIT notice per list item split off, an OLD_NAME_DROPPED one per
+ * value a fence's fold lost and a NESTING_KEPT_AS_TEXT one per block that keeps deeper levels as
+ * text, in source order; `blocks` is the path of the blocks being read, `at` the block's, `past`
+ * the block's mark that it keeps such text (convert), and `base` the line the parse starts at.
  */
 const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 }, splits: [], blocks: '/blocks', at: '/blocks', base: 0 });
 
 // Each block of `nodes` onto `out`, sharing `state`: the ids fences used, and how many callouts
-// deep they are. Where the net first fires, its path is the block's place.
+// deep they are. Where the net first fires, its path is the block's place. A block that keeps
+// deeper levels as text gets its notice ahead of any its body's blocks add.
 function convert(nodes, state, out = [], net = undefined) {
+  const outer = state.past;
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     state.count.visits++;
-    state.at = `${state.blocks}/${out.length}`;
+    const at = (state.at = `${state.blocks}/${out.length}`);
+    const past = (state.past = { past: false });
+    const slot = state.splits.length;
     const blocks = block(node, state);
+    state.past = outer;
+    if (past.past) state.splits.splice(slot, 0, keptAsText(at, node.tok, state.base));
     if (langOf(node) === 'mermaid' && caption(nodes[i + 1])) blocks[0].caption = caption(nodes[++i]);
     if (net?.fired && net.path === undefined) net.path = `/blocks/${out.length}`;
     for (const b of blocks) out.push(b);
@@ -356,8 +383,10 @@ export { IMPORT_WORK };
  * first from 1, and how many). Each value a fence's block loses when its old names fold into
  * their current names adds one { code: OLD_NAME_DROPPED, path, line, lines, name, current, fix }:
  * the dropped key's path, the fence's source lines, the name dropped, the current name, and the
- * fix, `write <current>`. The notices come by kind: 'budget' and 'line', then the splits and
- * dropped names in source order, then 'net'. Should the read throw or give blocks that do not validate, the
+ * fix, `write <current>`. Each block that keeps, as text, levels nested past the limits (blocks
+ * past validate's MAX_DEPTH, marks past MAX_MARK_NEST) adds one { code: NESTING_KEPT_AS_TEXT,
+ * path, line, lines }: the block, and its source lines. The notices come by kind: 'budget' and
+ * 'line', then the splits, dropped names and nesting kept as text in source order, then 'net'. Should the read throw or give blocks that do not validate, the
  * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
  * notice and no other. Never throws.
  */

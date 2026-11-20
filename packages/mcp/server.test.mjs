@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { CallToolResultSchema, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { MAX_DEPTH, MAX_NODES } from './limits.js';
+import { MAX_ARGS_DEPTH, MAX_NODES } from './limits.js';
 import { MAX_HTML_BYTES, render } from './render.js';
 import { MAX_MESSAGE_BYTES } from './stdio.js';
 import { MAX_OPS } from './tools.js';
@@ -215,8 +215,8 @@ describe('over stdio with the SDK client', () => {
     assert.match(words[0].text, /^… › field "blocks" › block 1 \(section\)/);
     assert.ok(words[0].where.length <= 1000);
     assert.match(words[0].where, /› block 1 \(section\)$/);
-    await protocolError(call(client, 'apply_ops', { doc, ops: [] }), new RegExp(`nest deeper than ${MAX_DEPTH} JSON levels`));
-    await protocolError(call(client, 'render', { doc }), new RegExp(`nest deeper than ${MAX_DEPTH} JSON levels`));
+    await protocolError(call(client, 'apply_ops', { doc, ops: [] }), new RegExp(`nest deeper than ${MAX_ARGS_DEPTH} JSON levels`));
+    await protocolError(call(client, 'render', { doc }), new RegExp(`nest deeper than ${MAX_ARGS_DEPTH} JSON levels`));
     await protocolError(call(client, 'apply_ops', { doc: SAMPLE, ops: [{ op: 'append-block', block: deepDoc(600).blocks[0] }] }), /nest deeper/);
   });
 
@@ -427,7 +427,7 @@ describe('raw stdio: lines that are not MCP still get an answer', () => {
       const refused = await reply(callLine(id, name, `{"doc":${deep}${name === 'apply_ops' ? ',"ops":[]' : ''}}`));
       assert.equal(refused.id, id);
       assert.equal(refused.error.code, ErrorCode.InvalidParams);
-      assert.match(refused.error.message, new RegExp(`nest deeper than ${MAX_DEPTH} JSON levels`));
+      assert.match(refused.error.message, new RegExp(`nest deeper than ${MAX_ARGS_DEPTH} JSON levels`));
     }
   });
 

@@ -148,25 +148,33 @@ Where it differs from Barkpark, on purpose:
   order; more text after a later nested list splits again. In an ordered list
   the new item takes the next number, and the numbers after it continue from
   there. Each split adds a `list_item_split` notice (`LIST_ITEM_SPLIT`). The
-  notices come by kind: any `budget` or `line` notice, then the splits and a
-  fence's dropped old names in source order, then a `net` one.
+  notices come by kind: any `budget` or `line` notice, then the splits, a
+  fence's dropped old names and nesting kept as text in source order, then a
+  `net` one.
 - Should reading the text fail, `readMarkdown` keeps the whole text as one code
   block and says so with one `import_fell_back` notice (`IMPORT_FELL_BACK`),
   its `lines` the text's line count. That is a bug to report.
 - A callout's blocks after its first paragraph are its `slots.body`, read as
-  blocks: lists, code, fences, callouts in callouts, to `MAX_NEST` (50)
-  callouts deep; a callout deeper keeps its body as text, as a list that deep
-  does. Barkpark's importer joins them into the callout's text. A plain `>` quote holds inline content only, so
+  blocks: lists, code, fences, callouts in callouts, as deep as validate's
+  `MAX_DEPTH` (100) allows; the deepest callout keeps its body as text, as a
+  list that deep does. Barkpark's importer joins them into the callout's text. A plain `>` quote holds inline content only, so
   its blocks stay one run of text in both.
 - What `toMarkdown` writes reads back: a quote's last paragraph `— Name` is
   its `cite`, and an emphasised paragraph right after a mermaid fence is the
   diagram's `caption`.
 - Raw HTML keeps its visible text; tags, comments, scripts and styles go.
 - The parser is markdown-it, not Earmark. No visible word is ever left out,
-  however deep it is nested. Lists inside lists keep their shape to
-  `MAX_NEST` (50) levels; a list nested deeper is kept as the text of the
-  deepest item, its items and their blocks one space apart, as Barkpark does.
-  A plain quote keeps all its text, as one run, at any depth.
+  however deep it is nested. Blocks nest as deep as validate's `MAX_DEPTH`
+  (100): one Markdown level is one format level, a list, a list in a list
+  item and a callout's body each one, counted together. A list nested deeper
+  is kept as the text of the deepest item, its items and their blocks one
+  space apart, as Barkpark does. Marks inside marks keep their shape to
+  `MAX_MARK_NEST` (50); deeper ones are their plain text. Barkpark's importer
+  still nests blocks to 50. A plain quote keeps all its text, as one run, at
+  any depth.
+- A block that keeps deeper levels as text, by either limit, adds one notice
+  `{ code: 'nesting_kept_as_text', path, line, lines }` (`NESTING_KEPT_AS_TEXT`):
+  the block's path and its source lines.
 - The import counts its work from the text, before it parses, so every
   importer of the same text cuts it at the same line. Lines are those
   markdown-it reads: `\n`, `\r\n` and a lone `\r` each end a line, and a NUL

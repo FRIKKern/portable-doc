@@ -50,16 +50,17 @@ test('one name, one case: no two shared cases share a name, in any folder or acr
   assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), []);
 });
 
-test('callouts nest to 50 deep: in the 52-deep case the 51st keeps the 52nd as text, with no notice', () => {
-  const { markdown, blocks } = JSON.parse(FILES['nesting/callout-52-deep-past-cap.json']);
-  assert.deepEqual(readMarkdown(markdown).notices, []);
+test('callouts nest to 100 deep: in the 101-deep case the 100th keeps the 101st as text, and says so', () => {
+  const { markdown, blocks } = JSON.parse(FILES['nesting/callout-101-deep-past-cap.json']);
+  const path = `/blocks/0${'/slots/body/0'.repeat(99)}`;
+  assert.deepEqual(readMarkdown(markdown).notices, [{ code: 'nesting_kept_as_text', path, line: 199, lines: 4 }]);
   let at = blocks[0];
   let depth = 1;
   while (at.slots) {
     at = at.slots.body[0];
     depth++;
   }
-  assert.deepEqual([depth, at.content], [51, [{ type: 'text', value: 'h50 [!info] h51' }]]);
+  assert.deepEqual([depth, at.content], [100, [{ type: 'text', value: 'h99 [!info] h100' }]]);
 });
 
 test('the text-work rules, done from their words alone, give planText\'s work and notices on every shared case and a seeded sweep', () => {

@@ -4,7 +4,7 @@ export const MAX_NODES = 200_000;
 // The arguments object holds the doc one level down. That is the only level the
 // argument limit adds, so a doc at the format's own limit always fits.
 export const ARGS_LEVEL = 1;
-export const MAX_DEPTH = MAX_VALUE_DEPTH + ARGS_LEVEL;
+export const MAX_ARGS_DEPTH = MAX_VALUE_DEPTH + ARGS_LEVEL;
 
 const JSON_TEXT = /^[ \t\n\r]*[[{]/;
 
@@ -41,6 +41,6 @@ export function measure(value, { strings = false } = {}) {
     if (v !== null && typeof v === 'object') for (const child of Object.values(v)) stack.push(child);
     else if (expand) for (const inner of expand(v)) stack.push(inner);
   }
-  const depth = walkDepth(value, { limit: MAX_DEPTH, expand });
-  return { nodes, depth, over: depth > MAX_DEPTH ? 'depth' : null };
+  const depth = walkDepth(value, { limit: MAX_ARGS_DEPTH, expand });
+  return { nodes, depth, over: depth > MAX_ARGS_DEPTH ? 'depth' : null };
 }

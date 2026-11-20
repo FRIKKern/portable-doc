@@ -1,7 +1,7 @@
 import { CODES, MAX_ERRORS, validate } from '@portable-doc/validate';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { explain } from './explain.js';
-import { MAX_DEPTH, MAX_NODES, measure } from './limits.js';
+import { MAX_ARGS_DEPTH, MAX_NODES, measure } from './limits.js';
 import { applyOps } from './ops/apply.js';
 import { TABLE_OPS } from './ops/intents.js';
 import { render } from './render.js';
@@ -90,13 +90,13 @@ function checkDoc(doc, size, { walked }) {
   if (!isMap(doc) && !Array.isArray(doc)) throw bad('doc must be an object with a blocks array, or a blocks array');
   if (!walked) return;
   if (!Array.isArray(doc) && !Array.isArray(doc.blocks)) throw bad('doc must be an object with a blocks array, or a blocks array');
-  if (size.over === 'depth') throw bad(`arguments nest deeper than ${MAX_DEPTH} JSON levels`);
+  if (size.over === 'depth') throw bad(`arguments nest deeper than ${MAX_ARGS_DEPTH} JSON levels`);
 }
 
 function checkDecoded(args) {
   const over = measure(args, { strings: true }).over;
   if (over === 'nodes') throw bad(`a table edit reads the JSON inside strings, and with it the arguments hold more than ${MAX_NODES} JSON values`);
-  if (over === 'depth') throw bad(`a table edit reads the JSON inside strings, and with it the arguments nest deeper than ${MAX_DEPTH} JSON levels`);
+  if (over === 'depth') throw bad(`a table edit reads the JSON inside strings, and with it the arguments nest deeper than ${MAX_ARGS_DEPTH} JSON levels`);
 }
 
 // An MCP stdio client reads at most 10 MiB per message (the SDK's default buffer, which also
