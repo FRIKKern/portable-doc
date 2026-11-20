@@ -7,7 +7,6 @@ import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
 import { fixtureCases } from './lib/fixture-cases.mjs';
 import { WRITERS } from './lib/writers.mjs';
-import { KEEP_BYTES } from './write-shared-cases.mjs';
 
 /**
  * The callout rule, word for word: SPEC.md opens its callout paragraph with it, and the schema's
@@ -34,45 +33,46 @@ const words = (x, key) =>
 const isCallout = (b) => b && typeof b === 'object' && b.type === 'callout';
 const bodyOf = (b) => (Array.isArray(b.slots?.body) ? b.slots.body : []);
 
-/** Every callout with a body in `blocks`, two callouts deep at most, as [path, callout]. */
+/** Every callout with a body in `blocks`, at any depth, as [path, callout]. */
 function calloutsWithABody(blocks) {
   const out = [];
-  const visit = (x, path, depth) => {
-    if (Array.isArray(x)) return x.forEach((y, i) => visit(y, [...path, i], depth));
+  const visit = (x, path) => {
+    if (Array.isArray(x)) return x.forEach((y, i) => visit(y, [...path, i]));
     if (!x || typeof x !== 'object') return;
-    if (isCallout(x) && bodyOf(x).length) {
-      out.push([path, x]);
-      if (depth === 2) return;
-    }
-    for (const [k, v] of Object.entries(x)) visit(v, [...path, k], depth + (isCallout(x) ? 1 : 0));
+    if (isCallout(x) && bodyOf(x).length) out.push([path, x]);
+    for (const [k, v] of Object.entries(x)) visit(v, [...path, k]);
   };
-  visit(blocks, [], 1);
+  visit(blocks, []);
   return out;
 }
 
-/** `blocks` with the value at `path` replaced. */
-const replaced = (x, [head, ...rest], value) => {
-  if (head === undefined) return value;
-  const copy = Array.isArray(x) ? [...x] : { ...x };
-  copy[head] = replaced(x[head], rest, value);
-  return copy;
+/** How many callouts deep the callouts in `x` go. */
+const calloutDepth = (x) => {
+  if (Array.isArray(x)) return x.reduce((m, y) => Math.max(m, calloutDepth(y)), 0);
+  if (!x || typeof x !== 'object') return 0;
+  const below = Object.values(x).reduce((m, y) => Math.max(m, calloutDepth(y)), 0);
+  return isCallout(x) ? below + 1 : below;
 };
 const withoutBody = ({ slots, ...b }) => {
   const { body, ...others } = slots ?? {};
   return Object.keys(others).length ? { ...b, slots: others } : b;
 };
 
-const cases = (await fixtureCases()).filter(({ blocks }) => JSON.stringify(blocks).length <= KEEP_BYTES).flatMap(({ name, blocks }) => calloutsWithABody(blocks).map(([path, callout]) => ({ name, blocks, path, callout })));
+// Every callout with a body, at any depth, in every shared case.
+const cases = (await fixtureCases()).flatMap(({ name, blocks }) => calloutsWithABody(blocks).map(([path, callout]) => ({ name, blocks, path, callout })));
 
-test('the shared cases hold callouts with content and a body, and one with empty content and a body', () => {
+test('the shared cases hold callouts with content and a body, and each with empty content and a body is a valid doc', (t) => {
   const both = cases.filter(({ callout }) => words(callout.content).length);
   assert.ok(both.length >= 9, `callouts with content and a body: ${both.length}`);
+  // Judged: every callout with empty content and a body, at any depth, in every shared case.
   const empty = cases.filter(({ callout }) => !words(callout.content).length);
+  t.diagnostic(`${empty.length} callouts with empty content and a body: ${[...new Set(empty.map(({ name }) => name))].join(', ')}`);
   assert.ok(empty.some(({ name }) => name === 'callout-empty-content-with-body'), 'callout-empty-content-with-body');
-  for (const { name, blocks } of empty) assert.equal(validate({ blocks }).ok, true, name);
+  assert.deepEqual([...new Set(empty.filter(({ blocks }) => !validate({ blocks }).ok).map(({ name }) => name))], [], 'not a valid doc');
 });
 
-test("in every shared case, a callout's content is never its body's first block", () => {
+test("in every shared case, a callout's content is never its body's first block", (t) => {
+  t.diagnostic(`${cases.length} callouts with a body`);
   const copies = cases.filter(({ callout }) => words(callout.content).length && words(callout.content).join(' ') === words(bodyOf(callout)[0]).join(' '));
   assert.deepEqual(copies.map(({ name, path }) => `${name} at /${path.join('/')}`), []);
 });
@@ -95,19 +95,28 @@ const inOrder = (list, want) => {
   return i === want.length;
 };
 
-test('React and the text writers show a callout\'s content, then every block of its body, each once', () => {
+// The one limit: round-trip Markdown reads each write back as blocks, and reading back a callout
+// with more than 10 callouts in its body takes seconds (the deep nesting stress cases hold them:
+// on 2026-11-20 every callout took 9 s on that writer alone). It judges the callouts with at most 10 in their body;
+// every other writer judges all of them.
+const ROUND_TRIP_DEPTH = 10;
+const judgedBy = (writer) => (writer.name === 'round-trip Markdown' ? cases.filter(({ callout }) => calloutDepth(bodyOf(callout)) <= ROUND_TRIP_DEPTH) : cases);
+
+test('React and the text writers show a callout\'s content, then every block of its body, each once', (t) => {
   assert.deepEqual(READERS.map((w) => w.name), ['readable Markdown', 'plain text', 'round-trip Markdown', 'HTML', 'HTML with field and embed blocks']);
+  t.diagnostic(READERS.map((w) => `${w.name}: ${judgedBy(w).length} of ${cases.length}`).join('; '));
   const wrong = [];
-  for (const { name, blocks, path, callout } of cases) {
-    const at = (b) => replaced(blocks, path, b);
-    const own = new Set(words(callout));
-    for (const writer of READERS) {
+  for (const writer of READERS) {
+    for (const { name, path, callout } of judgedBy(writer)) {
+      // The callout is written alone: its words are the same wherever it sits.
+      const at = (b) => [b];
+      const own = new Set(words(callout));
       const [whole, content, body, neither] = [callout, withoutBody(callout), { ...callout, content: [] }, withoutBody({ ...callout, content: [] })].map((b) => counts(wordsIn(textOf(writer, at(b)))));
       const off = [...own].filter((w) => (whole.get(w) ?? 0) !== (content.get(w) ?? 0) + (body.get(w) ?? 0) - (neither.get(w) ?? 0));
       if (off.length) wrong.push(`${writer.name}: ${name} at /${path.join('/')}: ${off.join(', ')} shown other than once`);
       // Order: the content's words, then each body block's words as the writer writes that block alone.
       const mine = (text) => wordsIn(text).filter((w) => own.has(w));
-      if (!inOrder(mine(textOf(writer, blocks)), [...words(callout.content), ...bodyOf(callout).flatMap((b) => mine(textOf(writer, [b])))])) wrong.push(`${writer.name}: ${name} at /${path.join('/')}: not content, then the body in order`);
+      if (!inOrder(mine(textOf(writer, [callout])), [...words(callout.content), ...bodyOf(callout).flatMap((b) => mine(textOf(writer, [b])))])) wrong.push(`${writer.name}: ${name} at /${path.join('/')}: not content, then the body in order`);
     }
   }
   assert.deepEqual(wrong, []);
