@@ -17,7 +17,10 @@ export const json = (dir) =>
   fs.readdirSync(new URL(`${dir}/`, FIXTURES)).filter((f) => f.endsWith('.json')).sort().map((f) => [`fixtures/${dir}/${f}`, JSON.parse(fs.readFileSync(new URL(`${dir}/${f}`, FIXTURES), 'utf8'))]);
 
 /** Folders whose cases are not read, each with why. */
-export const NOT_READ = { broken: 'docs that fail validation; writers owe only a valid doc its words' };
+export const NOT_READ = {
+  broken: 'docs that fail validation; writers owe only a valid doc its words',
+  'form-scale': 'rows of scale bounds, not docs; scripts/form-scale.test.mjs reads each through React and the text writers',
+};
 
 /** Folders whose cases are Markdown a person writes, read by import: their blocks are what import makes. */
 export const FROM_MARKDOWN = ['headings', 'list-split', 'nesting', 'text-work'];
