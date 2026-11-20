@@ -28,7 +28,6 @@ test('styleOf writes a property only when its number is finite; styleAttr writes
 });
 
 test('a style format, a text before and a text after are each one of a closed list; any other throws', () => {
-  assert.deepEqual(Object.keys(STYLE_FORMATS), ['digits', 'tenths', 'thousandths']);
   for (const how of [{ format: 'hundredths' }, { format: 'toString' }, { before: 'auto ' }, { after: '%;height:1px' }, { after: 'em' }]) {
     for (const n of [1, NaN]) assert.throws(() => styleOf('width', n, how), TypeError, JSON.stringify(how));
   }

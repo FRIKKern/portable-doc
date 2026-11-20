@@ -14,9 +14,10 @@ import { renderPortableDocument } from '@portable-doc/react';
 import { fieldBlocks } from '@portable-doc/react/field-blocks';
 import { embedBlocks } from '@portable-doc/react/embed';
 import { NOT_YET, limitGoldens } from './lib/limit-goldens.mjs';
+import { REACT_SRC, reactSources } from './lib/react-sources.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const src = path.join(root, 'packages/react/src');
+const src = REACT_SRC;
 const N = '\\d+';
 
 // What each call writes, matched with its element's class, one row per case.
@@ -51,12 +52,12 @@ const CASES = {
   "taskboard#'padding-left'#1": [['task row padding-left in px', /bp-trow[^"]*" style="padding-left:\d+px"/]],
 };
 
-const sourceFiles = (dir) =>
-  fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) return sourceFiles(p);
-    return /\.tsx?$/.test(e.name) && !e.name.endsWith('.d.ts') ? [p] : [];
-  });
+/** React's source files as [file, text]; a dot-named folder or source file under it is red by name. */
+const sources = () => {
+  const { files, refused } = reactSources();
+  assert.deepEqual(refused, [], 'dot-named folders or source files under React\'s source');
+  return files.map((f) => [f, fs.readFileSync(f, 'utf8')]);
+};
 
 /** The plain search: each `styleOf(` in the sources, as { id, at }; a call whose first argument it cannot read has id null. */
 function sitesIn(sources) {
@@ -98,7 +99,7 @@ function guards() {
 }
 
 test('every styleOf call in React is rendered by a guard, in each way it writes', () => {
-  const sites = sitesIn(sourceFiles(src).map((f) => [f, fs.readFileSync(f, 'utf8')]));
+  const sites = sitesIn(sources());
   assert.ok(sites.length > 0, 'the plain search finds no styleOf call');
   const { all, written } = guards();
   assert.equal(written.length, all, 'guards React does not write byte for byte');
@@ -106,7 +107,7 @@ test('every styleOf call in React is rendered by a guard, in each way it writes'
 });
 
 test('a new call, a call gone and a case with no guard are each red', () => {
-  const sites = sitesIn(sourceFiles(src).map((f) => [f, fs.readFileSync(f, 'utf8')]));
+  const sites = sitesIn(sources());
   const { written } = guards();
   const plant = [path.join(src, 'blocks', 'plant.ts'), "const a = styleOf('outline-width', n, { after: 'px' })\nconst b = styleOf(\n  'gap', n)"];
   assert.deepEqual(uncovered([...sites, ...sitesIn([plant])], CASES, written).unmapped, [`packages/react/src/blocks/plant.ts:1 plant#'outline-width'#1`, 'packages/react/src/blocks/plant.ts:2 null']);

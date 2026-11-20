@@ -64,9 +64,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { REACT_SRC, reactSources } from './lib/react-sources.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const react = path.join(root, 'packages/react');
@@ -91,10 +93,12 @@ const styleContext = (text) => {
   return !text.includes('<') && /(?:^|;)\s*(?:(?:--)?[a-z][a-z-]*:[^;"']*|\u0000:)$/.test(text) ? 'decl' : null;
 };
 
-/** Each route in React's source files (or the given ones), as "file:line: why: code". */
+/** Each route in React's source files (or only the given ones, which may sit outside them), as "file:line: why: code". */
 function reactRoutes(only) {
   const config = ts.getParsedCommandLineOfConfigFile(path.join(react, 'tsconfig.json'), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} });
-  const files = only ?? config.fileNames.filter((f) => f.startsWith(path.join(react, 'src') + path.sep));
+  const files = only ?? reactSources().files;
+  // The source the scan reads writers from: React's files and the given ones.
+  const ours = new Set([...reactSources().files, ...files]);
   const program = ts.createProgram(files, config.options);
   const checker = program.getTypeChecker();
   const F = ts.TypeFlags;
@@ -190,7 +194,7 @@ function reactRoutes(only) {
   const capturing = (fn) => (n) => refusedArgs(fn, n).length > 0 || (ts.isCallExpression(n) && captures.has(symOf(n.expression)));
   const bodies = [];
   const aliases = [];
-  for (const sf of program.getSourceFiles().filter((f) => f.fileName.startsWith(path.join(react, 'src') + path.sep))) {
+  for (const sf of program.getSourceFiles().filter((f) => ours.has(f.fileName))) {
     const collect = (n) => {
       if (ts.isFunctionDeclaration(n) && n.name && n.body) bodies.push([symOf(n.name), n.body]);
       else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
@@ -232,7 +236,7 @@ function reactRoutes(only) {
     });
   };
   const reachIn = (node) => has(node, (c) => (ts.isCallExpression(c) && reach(symOf(c.expression)), false));
-  for (const sf of program.getSourceFiles().filter((f) => f.fileName.startsWith(path.join(react, 'src') + path.sep)))
+  for (const sf of program.getSourceFiles().filter((f) => ours.has(f.fileName)))
     ts.forEachChild(sf, function look(n) {
       if (ts.isTemplateExpression(n)) {
         let text = n.head.text;
@@ -313,15 +317,8 @@ function reactRoutes(only) {
  * span right after `style="…` or `style='…`, right after a CSS `name:` (as `name:${`), or as the
  * fallback of a CSS variable (`name:var(--v, ${`), as file:line.
  */
-function plainSearch() {
-  const files = [];
-  const walk = (dir) => {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (e.isDirectory()) walk(path.join(dir, e.name));
-      else if (/\.tsx?$/.test(e.name) && !e.name.endsWith('.d.ts')) files.push(path.join(dir, e.name));
-    }
-  };
-  walk(path.join(react, 'src'));
+function plainSearch(srcRoot = REACT_SRC) {
+  const { files } = reactSources(srcRoot);
   let styleOf = 0;
   const styleValues = [];
   for (const f of files) {
@@ -356,7 +353,8 @@ const textFiles = () =>
 
 test('the scan finds each route it names, in React by type and in text by syntax', () => {
   assert.ok(FOLLOWED.length <= FOLLOWED_MAX, `the followed forms may only shrink: ${FOLLOWED.length} > ${FOLLOWED_MAX}`);
-  const dir = fs.mkdtempSync(path.join(react, 'src', '.scan-'));
+  // The plant lives outside the tree, so no walk of the source can see it; it imports React's source by absolute path.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-scan-'));
   try {
     const plant = path.join(dir, 'plant.ts');
     // One route per line; each line names the reason the scan must give for it.
@@ -443,8 +441,8 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`${s}: ${numberText(n)}px`', null],
     ];
     const head = [
-      "import { escapeHtml as eh, escapeAttr as ea } from '../inline'",
-      "import { numberText, stringOf, styleOf } from '../../../text/number-text.js'",
+      `import { escapeHtml as eh, escapeAttr as ea } from ${JSON.stringify(path.join(REACT_SRC, 'inline'))}`,
+      `import { numberText, stringOf, styleOf } from ${JSON.stringify(path.join(root, 'packages/text/number-text.js'))}`,
       'const fmt = (x: number) => numberText(x, 1)',
       'declare const hn: number',
       'const W = { w: (x: number) => numberText(x) }',
@@ -529,6 +527,7 @@ test('no number reaches React\'s HTML or the text writers\' output outside numbe
   const routes = reactRoutes();
   // The scan saw the real styles: it read the styleOf calls and the style values a plain search
   // finds, the same ones exactly. Blind to either, or reading one the search does not, it is red.
+  assert.deepEqual(reactSources().refused, [], 'dot-named folders or source files under React\'s source, which the type checker would not read');
   const search = plainSearch();
   assert.ok(search.styleOf > 0, 'the plain search finds no styleOf call');
   assert.equal(routes.doorCalls.length, search.styleOf, 'styleOf calls the scan read, and the plain search');

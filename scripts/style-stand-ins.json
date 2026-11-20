@@ -1,5 +1,5 @@
 {
-  "about": "React's own output for three blocks no golden holds yet, recorded from the renderer before the change that named style formats. These rows are not parity truth: they hold React to what it wrote then. Each row goes when the goldens carry its case.",
+  "about": "React's own output for six blocks no golden holds yet (a section and five heatmaps), recorded from the renderer before the change that named style formats. These rows are not parity truth: they hold React to what it wrote then. Each row goes when the goldens carry its case.",
   "rows": [
     {
       "case": "a section cell with an order",

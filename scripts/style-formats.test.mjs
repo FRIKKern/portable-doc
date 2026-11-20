@@ -11,23 +11,17 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { STYLE_AFTER, STYLE_BEFORE, STYLE_FORMATS } from '../packages/text/number-text.js';
+import { reactSources } from './lib/react-sources.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const react = path.join(root, 'packages/react');
-const src = path.join(react, 'src');
 const ts = createRequire(path.join(react, 'package.json'))('typescript');
 const LISTS = { format: Object.keys(STYLE_FORMATS), before: [...STYLE_BEFORE], after: [...STYLE_AFTER] };
-
-const sourceFiles = (dir) =>
-  fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) return sourceFiles(p);
-    return /\.tsx?$/.test(e.name) && !e.name.endsWith('.d.ts') ? [p] : [];
-  });
 
 /** The plain search: each `styleOf(` in the files' text. */
 const plainCount = (files) => files.reduce((n, f) => n + (fs.readFileSync(f, 'utf8').match(/\bstyleOf\(/g) ?? []).length, 0);
@@ -65,7 +59,8 @@ function check(files) {
 }
 
 test('every styleOf call in React writes a listed format with listed texts: three counts, one number', () => {
-  const files = sourceFiles(src);
+  const { files, refused } = reactSources();
+  assert.deepEqual(refused, [], 'dot-named folders or source files under React\'s source');
   const found = plainCount(files);
   const { calls } = check(files);
   assert.ok(found > 0, 'the plain search finds no styleOf call');
@@ -76,7 +71,8 @@ test('every styleOf call in React writes a listed format with listed texts: thre
 });
 
 test('a call off the lists is refused by the type checker and not counted as listed', () => {
-  const dir = fs.mkdtempSync(path.join(src, '.style-'));
+  // The plant lives outside the tree, so no walk of the source can see it; it imports the door by absolute path.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-style-'));
   try {
     const plant = path.join(dir, 'plant.ts');
     // One call per line: [code, refused by the type checker, format listed, texts listed].
@@ -94,7 +90,7 @@ test('a call off the lists is refused by the type checker and not counted as lis
       ["styleOf('width', n)", false, true, true],
     ];
     const head = [
-      "import { styleOf } from '../../../text/number-text.js'",
+      `import { styleOf } from ${JSON.stringify(path.join(root, 'packages/text/number-text.js'))}`,
       "export const f = (n: number, s: string, b: boolean, f: string) => {",
       "  const lit = b ? ',12px)' : 'px'",
       '  return [',

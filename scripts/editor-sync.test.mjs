@@ -209,6 +209,28 @@ test('the root test run fails when it finds no test file, in list mode and with 
   }
 });
 
+test('a test run that leaves a file in the tree, or changes one, fails naming it; edits made before the run do not count', () => {
+  const root = path.join(tmp, `left-${n++}`);
+  write(path.join(root, 'scripts', 'test-files.mjs'), fs.readFileSync(path.join(scripts, 'test-files.mjs'), 'utf8'));
+  write(path.join(root, 'scripts', 'clean.test.mjs'), "import { test } from 'node:test';\ntest('clean', () => {});\n");
+  execFileSync('git', ['init', '-q', root]);
+  write(path.join(root, 'mine.txt'), 'an edit of my own\n');
+  write(path.join(root, 'touched.txt'), 'before\n');
+  // The inner `node --test` must not see this run's own test context, or it skips its files.
+  const { NODE_TEST_CONTEXT, ...env } = process.env;
+  const clean = node(path.join(root, 'scripts', 'test-files.mjs'), ['--run'], env);
+  assert.equal(clean.code, 0, clean.out);
+  write(
+    path.join(root, 'scripts', 'leaves.test.mjs'),
+    "import fs from 'node:fs';\nimport { test } from 'node:test';\ntest('leaves', () => { fs.writeFileSync(new URL('../src/left.ts', import.meta.url), ''); fs.writeFileSync(new URL('../touched.txt', import.meta.url), 'after\\n'); });\n",
+  );
+  fs.mkdirSync(path.join(root, 'src'));
+  const r = node(path.join(root, 'scripts', 'test-files.mjs'), ['--run'], env);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /test-files: the run left the tree changed:\n {2}src\/left\.ts\n {2}touched\.txt\n/);
+  assert.doesNotMatch(r.out, /mine\.txt/);
+});
+
 // check-docs compares the README timeline with origin/main's, so its repo needs a commit and that ref.
 function asMain(root) {
   for (const args of [['add', '-A'], ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'docs'], ['update-ref', 'refs/remotes/origin/main', 'HEAD']]) execFileSync('git', ['-C', root, ...args]);
