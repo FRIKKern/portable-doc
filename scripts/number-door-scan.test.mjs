@@ -460,6 +460,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i style="width:${pk(s, cfg)}%">`', STYLE],
       ['`<i style="color:${pkv(s, lab)}">`', null],
       ['`<i style="color:${pkv(s, ob)}">`', [STYLE, REFUSE]],
+      ['`<i style="width:${pr(s)}%">`', STYLE],
       // Listed limits (the header's "What it cannot see"): each is a number in a style that the
       // scan does not name. Concatenation; a join built outside the template; an object's method;
       // a class's method; a value passed around; a writer given only arguments with no number,
@@ -495,6 +496,10 @@ test('the scan finds each route it names, in React by type and in text by syntax
       "const pe = (x: string) => x + numberText(cfg['w'])",
       'const pk = (x: string, o: { w: number }) => x + numberText(o.w)',
       'const pkv = (x: string, o: { w: unknown }) => x + stringOf(o.w)',
+      // Two writers with one refused form: pu, which no style value reaches, is silent; pr, called
+      // once from a style value, is named there and refused on its own line.
+      'const pu = (x: string) => x + numberText(cfg.b.c)',
+      'const pr = (x: string) => x + numberText(cfg.b.c)',
       "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
       "  if (typeof b.count !== 'number') return []",
       '  const n = b.count',
@@ -515,6 +520,7 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['const wpc', REFUSE],
       ['const pw', REFUSE],
       ['const pe', REFUSE],
+      ['const pr', REFUSE],
     ];
     const found = reactRoutes([plant]).map((r) => {
       const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/);
