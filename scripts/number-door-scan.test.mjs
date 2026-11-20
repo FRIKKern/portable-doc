@@ -11,11 +11,34 @@
 //   - a template span, or an operand of + or += beside a string, that may hold a number;
 //   - concat on a string given a value that may hold a number;
 //   - join on an array or tuple that may hold a number;
-//   - in a style value (inside an open style="…" or style='…' in the template, or after a CSS
-//     `name:` in a fragment with no markup, the name a word or a span), a template span that
-//     calls a number writer with an argument that may hold a number. Writers are known by symbol:
-//     numberText, stringOf, a const naming a writer, or a function in React's source whose body
-//     calls one so. styleOf takes no function: it writes its number by a named format;
+//   - in a style value, a call of a number writer with an argument that may hold a number, with
+//     no argument at all, or of a writer that captures, whatever it is given. A style value is
+//     the text inside an open style="…" or style='…' in a template, the text after a CSS `name:`
+//     in a fragment with no markup (the name a word or a span), and styleOf's write argument: an
+//     inline callback, or a writer passed by reference, which is named when it captures. In a
+//     write callback a call is trusted only when each such argument is the callback's own
+//     parameter, never assigned in it: the finite number styleOf hands it; styleOf leaves a
+//     property whose number is not finite out whole. Writers are known by symbol: numberText,
+//     stringOf, a const naming a writer, or a function in React's source whose body calls one so;
+//   - a styleOf write argument, parentheses unwrapped, that is neither an inline function nor a
+//     bare name of the door's writer or of a React function declared as a function or a const
+//     (through const aliases): a ternary, bind, a cast, a call, a property, a parameter, a let;
+//     and a spread among styleOf's arguments, which hides the write argument;
+//   - any use of styleOf or styleAttr but a direct call or its import: an alias, or a value;
+//   - inside a writer, a value it hands a number writer in any form but the 2 it follows
+//     (FOLLOWED; a test pins the count, which may only shrink): a literal, and a plain
+//     own-parameter name (declared with no default, not rest, not destructured, and never
+//     assigned in the function: =, op=, ++ or --, a destructuring or for target). Every other form
+//     is refused and makes the writer capture: a captured name, a local, a ternary, any property
+//     path or element access, a call, an item or index a callback is handed, `!`, a cast, `?.`,
+//     arithmetic, a destructured parameter, a default. A refusal is named with file:line in each
+//     writer a style value reaches; elsewhere it only counts as capturing. So a writer that
+//     assigns a parameter (escapeHtml, escapeAttr) is named in a style value whatever it is
+//     given, a string too: a false red, on the safe side. A test checks that
+//     the writers a style value reaches on the real source are not none, and that the functions
+//     named in styleOf's write arguments match a plain search of the source (a comment or a string
+//     holding `styleOf(`, or a write argument calling a React function that writes no number,
+//     fails that check: a false red, on the safe side);
 //   - styleOf written straight into style="…" (not inside styleAttr), which writes style="" when
 //     its number is not finite.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
@@ -37,10 +60,10 @@
 // - A number used as a computed key (`{ [n]: 1 }`) whose keys are then shown.
 // - In a style: a value built without a template (string concatenation, or a join built outside
 //   it); a number writer reached through an object's or a class's method, or as a value passed
-//   around (its text made before the template); a writer whose number is not an argument
-//   (`() => numberText(n)`); a property named by a span and written with a space (`${k}: …`, read
-//   as a label). Each has a plant row that the scan must not name. packages/text writes no HTML
-//   style, so the style rules read React only; a style written there would go unseen.
+//   around (its text made outside any writer, before the template); a property named by a span
+//   and written with a space (`${k}: …`, read as a label). Each has a plant row that the scan
+//   must not name. packages/text writes no HTML style, so the style rules read React only; a
+//   style written there would go unseen.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
 // - packages/editor (written only by the sync from Barkpark's paper editor), React's dist (built
@@ -60,6 +83,10 @@ const ESCAPES = new Set(['escapeHtml', 'escapeAttr']);
 // An encoder writes an array through String, so a number array's NaN reaches it as "NaN".
 const ENCODES = new Set(['encodeURIComponent', 'encodeURI']);
 const DOOR = 'packages/text/number-text.js';
+// The forms of a value handed to a number writer inside a writer that the scan follows. The test
+// pins their count, which may only shrink.
+const FOLLOWED = ['a literal', 'a plain own-parameter name'];
+const FOLLOWED_MAX = 2;
 /** Where the template text before a span leaves it: 'attr' inside an open style="…" or style='…',
  * 'decl' after a CSS declaration's `name:` in a fragment with no markup (`width:`, `--i:`, or a
  * name from a span directly before the number, `${p}:`; not `${k}: ` with a space, which is a
@@ -98,7 +125,12 @@ function reactRoutes(only) {
   };
   // Number writers are found by symbol, never by name. The door's are numberText and stringOf
   // (number-text.js). A function in React's source is one when its body calls a writer with an
-  // argument that may hold a number; a const that names a writer is one.
+  // argument that may hold a number, unless the call is trusted; a const that names a writer is one.
+  // A call is trusted inside styleOf's write callback when each argument of it that may hold a
+  // number is the callback's own parameter: the finite number styleOf hands it. A writer called
+  // with no argument writes a number of its own, so it is never trusted. So does a writer that
+  // captures: its body hands a number writer a value in a form the scan does not follow
+  // (FOLLOWED); it is named in a style value whatever it is given.
   const symOf = (node) => {
     let sym = checker.getSymbolAtLocation(node);
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
@@ -107,8 +139,37 @@ function reactRoutes(only) {
   const fromDoor = (sym, names) => !!sym && names.includes(sym.getName()) && (sym.declarations ?? []).some((d) => /number-text\.(?:d\.ts|js)$/.test(d.getSourceFile().fileName));
   const isCallOf = (n, name) => ts.isCallExpression(n) && fromDoor(symOf(n.expression), [name]);
   const writers = new Set();
+  const captures = new Set();
   const isWriter = (sym) => fromDoor(sym, ['numberText', 'stringOf']) || writers.has(sym);
-  const writerCall = (n) => ts.isCallExpression(n) && isWriter(symOf(n.expression)) && n.arguments.some((a) => mayHold(typeOf(a)));
+  // fn assigns the name anywhere in it: =, op=, ++ or --, a destructuring or for-in/of target.
+  const PATTERN = (p, c) => ts.isParenthesizedExpression(p) || ts.isArrayLiteralExpression(p) || ts.isObjectLiteralExpression(p) || ts.isSpreadElement(p) || ts.isSpreadAssignment(p) || ts.isShorthandPropertyAssignment(p) || (ts.isPropertyAssignment(p) && p.initializer === c) || ts.isAsExpression(p) || ts.isNonNullExpression(p) || ts.isSatisfiesExpression(p);
+  const target = (id) => {
+    let c = id;
+    while (PATTERN(c.parent, c)) c = c.parent;
+    const p = c.parent;
+    const K = ts.SyntaxKind;
+    return (ts.isBinaryExpression(p) && p.left === c && p.operatorToken.kind >= K.FirstAssignment && p.operatorToken.kind <= K.LastAssignment) || ((ts.isPrefixUnaryExpression(p) || ts.isPostfixUnaryExpression(p)) && (p.operator === K.PlusPlusToken || p.operator === K.MinusMinusToken)) || ((ts.isForOfStatement(p) || ts.isForInStatement(p)) && p.initializer === c);
+  };
+  const refOf = (id) => (ts.isShorthandPropertyAssignment(id.parent) && id.parent.name === id ? checker.getShorthandAssignmentValueSymbol(id.parent) : symOf(id));
+  const assigns = (fn, sym) => has(fn, (n) => ts.isIdentifier(n) && refOf(n) === sym && target(n));
+  const trusted = (call) => {
+    let fn = call.parent;
+    while (fn && !ts.isFunctionLike(fn)) fn = fn.parent;
+    if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || !isCallOf(fn.parent, 'styleOf') || fn.parent.arguments[2] !== fn) return false;
+    const param = fn.parameters[0] && symOf(fn.parameters[0].name);
+    return call.arguments.every((a) => !mayHold(typeOf(a)) || (!!param && ts.isIdentifier(a) && symOf(a) === param && !assigns(fn, param)));
+  };
+  const writerCall = (n) =>
+    ts.isCallExpression(n) &&
+    isWriter(symOf(n.expression)) &&
+    (n.arguments.length === 0 || captures.has(symOf(n.expression)) || (n.arguments.some((a) => mayHold(typeOf(a))) && !trusted(n)));
+  // styleOf's write argument (an inline callback, or a writer passed by reference) writes a style
+  // value too. Parentheses are unwrapped.
+  const writeArg = (n) => {
+    let w = isCallOf(n, 'styleOf') ? n.arguments[2] : undefined;
+    while (w && ts.isParenthesizedExpression(w)) w = w.expression;
+    return w;
+  };
   const has = (node, hit) => {
     let found = false;
     const look = (n) => {
@@ -126,6 +187,30 @@ function reactRoutes(only) {
     for (let p = n.parent; p; p = p.parent) if (isCallOf(p, 'styleAttr')) return false;
     return true;
   };
+  // What a writer fn hands a number writer is followed only in the FOLLOWED forms, tried in
+  // turn; any other form is refused.
+  const outside = (fn, d) => d.getSourceFile() !== fn.getSourceFile() || d.pos < fn.pos || d.end > fn.end;
+  const LITERAL = new Set([ts.SyntaxKind.NumericLiteral, ts.SyntaxKind.BigIntLiteral, ts.SyntaxKind.StringLiteral, ts.SyntaxKind.NoSubstitutionTemplateLiteral, ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword]);
+  const forms = {
+    'a literal': (fn, e) =>
+      LITERAL.has(e.kind) || (ts.isPrefixUnaryExpression(e) && ts.isNumericLiteral(e.operand) && (e.operator === ts.SyntaxKind.MinusToken || e.operator === ts.SyntaxKind.PlusToken)),
+    // fn's own parameter, declared as a plain name with no default and not rest.
+    'a plain own-parameter name': (fn, e) => {
+      if (!ts.isIdentifier(e)) return false;
+      const d = (symOf(e)?.declarations ?? []).find((x) => !outside(fn, x));
+      return !!d && ts.isParameter(d) && d.parent === fn && ts.isIdentifier(d.name) && !d.initializer && !d.dotDotDotToken && !assigns(fn, symOf(e));
+    },
+  };
+  assert.deepEqual(Object.keys(forms), FOLLOWED, 'each followed form is listed in FOLLOWED');
+  const followed = (fn, e) => {
+    while (ts.isParenthesizedExpression(e)) e = e.expression;
+    return FOLLOWED.some((form) => forms[form](fn, e));
+  };
+  // A writer captures when its body hands a number writer (in a call that is not trusted) a value
+  // that may hold a number in a form it does not follow, or calls a writer that captures.
+  const refusedArgs = (fn, n) =>
+    ts.isCallExpression(n) && isWriter(symOf(n.expression)) && !trusted(n) ? n.arguments.filter((a) => mayHold(typeOf(a)) && !followed(fn, a)) : [];
+  const capturing = (fn) => (n) => refusedArgs(fn, n).length > 0 || (ts.isCallExpression(n) && captures.has(symOf(n.expression)));
   const bodies = [];
   const aliases = [];
   for (const sf of program.getSourceFiles().filter((f) => f.fileName.startsWith(path.join(react, 'src') + path.sep))) {
@@ -141,8 +226,71 @@ function reactRoutes(only) {
   }
   for (let grew = true; grew; ) {
     grew = false;
-    for (const [sym, body] of bodies) if (sym && !writers.has(sym) && has(body, writerCall)) grew = !!writers.add(sym);
-    for (const [sym, init] of aliases) if (sym && !writers.has(sym) && isWriter(symOf(init))) grew = !!writers.add(sym);
+    for (const [sym, body] of bodies) {
+      if (sym && !writers.has(sym) && has(body, writerCall)) grew = !!writers.add(sym);
+      if (sym && !captures.has(sym) && has(body, capturing(body.parent))) grew = !!captures.add(sym);
+    }
+    for (const [sym, init] of aliases) {
+      if (sym && !writers.has(sym) && isWriter(symOf(init))) grew = !!writers.add(sym);
+      if (sym && !captures.has(sym) && captures.has(symOf(init))) grew = !!captures.add(sym);
+    }
+  }
+  // The refusal is named only where it decides a style: in the body of each writer a style value
+  // calls (in a template's style value or in styleOf's write argument, or passed by reference as
+  // write), and of each writer those call, in turn. Elsewhere it still counts as capturing.
+  const bodyOf = new Map(bodies);
+  const aliasOf = new Map(aliases.map(([sym, init]) => [sym, symOf(init)]));
+  const reached = new Set();
+  const reach = (sym) => {
+    while (aliasOf.has(sym) && !reached.has(sym)) {
+      reached.add(sym);
+      sym = aliasOf.get(sym);
+    }
+    if (!sym || reached.has(sym) || !writers.has(sym)) return;
+    reached.add(sym);
+    const body = bodyOf.get(sym);
+    if (body) ts.forEachChild(body.parent, function look(n) {
+      if (ts.isCallExpression(n)) reach(symOf(n.expression));
+      ts.forEachChild(n, look);
+    });
+  };
+  const reachIn = (node) => has(node, (c) => (ts.isCallExpression(c) && reach(symOf(c.expression)), false));
+  // The React functions named in styleOf's write arguments, by name: the test checks them against
+  // a plain search of the source.
+  const writeNames = new Set();
+  const isReactFn = (sym) => bodyOf.has(sym) || aliasOf.has(sym);
+  for (const sf of program.getSourceFiles().filter((f) => f.fileName.startsWith(path.join(react, 'src') + path.sep)))
+    ts.forEachChild(sf, function look(n) {
+      const w = writeArg(n);
+      const named = (id) => isReactFn(symOf(id)) && writeNames.add(`${path.relative(root, sf.fileName)}:${sf.getLineAndCharacterOfPosition(id.getStart(sf)).line + 1} ${id.text}`);
+      if (w && ts.isIdentifier(w)) {
+        named(w);
+        reach(symOf(w));
+      } else if (w) {
+        has(w, (c) => (ts.isCallExpression(c) && ts.isIdentifier(c.expression) && named(c.expression), false));
+        reachIn(w);
+      }
+      if (ts.isTemplateExpression(n)) {
+        let text = n.head.text;
+        for (const span of n.templateSpans) {
+          if (styleContext(text)) reachIn(span.expression);
+          text += '\u0000' + span.literal.text;
+        }
+      }
+      ts.forEachChild(n, look);
+    });
+  // A write argument named bare is read only when it is the door's writer or a React function
+  // declared as a function or a const, through const aliases; any other name (a parameter, a let)
+  // is refused, as is any write argument but a name or an inline function.
+  const fixed = (sym) => (sym.declarations ?? []).every((d) => ts.isFunctionDeclaration(d) || (ts.isVariableDeclaration(d) && ts.getCombinedNodeFlags(d) & ts.NodeFlags.Const));
+  const readable = (sym) => {
+    for (const seen = new Set(); sym && aliasOf.has(sym) && !seen.has(sym); seen.add(sym), sym = aliasOf.get(sym)) if (!fixed(sym)) return false;
+    return !!sym && (fromDoor(sym, ['numberText', 'stringOf']) || (bodyOf.has(sym) && fixed(sym)));
+  };
+  const refused = new Set();
+  for (const sym of reached) {
+    const body = bodyOf.get(sym);
+    if (body) has(body.parent, (n) => (refusedArgs(body.parent, n).forEach((a) => refused.add(a)), false));
   }
   const found = [];
   for (const sf of program.getSourceFiles().filter((s) => files.includes(s.fileName))) {
@@ -168,6 +316,18 @@ function reactRoutes(only) {
           if (callee.name.text === 'concat' && isString(recv) && node.arguments.some((a) => mayHold(typeOf(a)))) at(node, 'concat of a number');
         }
         for (const a of node.arguments) if (ts.isIdentifier(a) && a.text === 'String') at(a, 'String passed as a function');
+        for (const a of node.arguments) if (refused.has(a)) at(a, 'a number writer argument the scan cannot follow');
+        const w = writeArg(node);
+        if (w && ts.isIdentifier(w)) {
+          if (!readable(symOf(w))) at(w, 'a styleOf write argument the scan cannot follow');
+          else if (captures.has(symOf(w))) at(w, 'a number in a style value outside styleOf');
+        } else if (w && (ts.isArrowFunction(w) || ts.isFunctionExpression(w))) has(w, (c) => (writerCall(c) && at(c, 'a number in a style value outside styleOf'), false));
+        else if (w) at(w, 'a styleOf write argument the scan cannot follow');
+        if (isCallOf(node, 'styleOf')) for (const a of node.arguments) if (ts.isSpreadElement(a)) at(a, 'a styleOf write argument the scan cannot follow');
+      } else if (ts.isIdentifier(node) && fromDoor(symOf(node), ['styleOf', 'styleAttr']) && !ts.isImportSpecifier(node.parent)) {
+        // styleOf and styleAttr are read only where called by name: an alias or a value is refused.
+        const use = ts.isPropertyAccessExpression(node.parent) && node.parent.name === node ? node.parent : node;
+        if (!(ts.isCallExpression(use.parent) && use.parent.expression === use)) at(node, 'a use of styleOf or styleAttr the scan cannot follow');
       } else if (ts.isTemplateExpression(node)) {
         let text = node.head.text;
         for (const span of node.templateSpans) {
@@ -187,7 +347,67 @@ function reactRoutes(only) {
     };
     visit(sf);
   }
+  found.reached = [...reached].filter((sym) => bodyOf.has(sym)).map((sym) => sym.getName()).sort();
+  found.writeNames = [...writeNames].sort();
   return found;
+}
+
+/**
+ * The React functions named in styleOf's write arguments, as "file:line name", found by a plain
+ * search of the source text with no parser: the third argument of each `styleOf(` call, split at
+ * its own commas, is a bare name or holds calls; each name a React source file declares as a
+ * function (or a const naming one) counts.
+ */
+function writeNamesBySearch() {
+  const files = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(dir, e.name));
+      else if (/\.tsx?$/.test(e.name) && !/\.d\.ts$/.test(e.name)) files.push(path.join(dir, e.name));
+    }
+  };
+  walk(path.join(react, 'src'));
+  const texts = files.map((f) => [path.relative(root, f), fs.readFileSync(f, 'utf8')]);
+  const NAME = '[A-Za-z_$][\\w$]*';
+  const declared = new Set(
+    texts.flatMap(([, t]) =>
+      [...t.matchAll(new RegExp(`function\\s+(${NAME})|const\\s+(${NAME})\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|${NAME})\\s*(?::[^=;]*)?=>|const\\s+(${NAME})\\s*=\\s*(${NAME})\\s*(?:;|\\n)`, 'g'))].map((m) => m[1] ?? m[2] ?? m[3]),
+    ),
+  );
+  const out = [];
+  for (const [rel, t] of texts) {
+    const lineAt = (i) => t.slice(0, i).split('\n').length;
+    for (const m of t.matchAll(/(?<![\w$.])styleOf\(/g)) {
+      const args = [''];
+      const argAt = [m.index + m[0].length];
+      let depth = 1;
+      let quote = null;
+      for (let i = m.index + m[0].length; i < t.length && depth > 0; i++) {
+        const c = t[i];
+        if (quote) {
+          if (c === '\\') i++;
+          else if (c === quote) quote = null;
+        } else if (c === "'" || c === '"') quote = c;
+        else if ('([{'.includes(c)) depth++;
+        else if (')]}'.includes(c)) depth--;
+        else if (c === ',' && depth === 1) {
+          args.push('');
+          argAt.push(i + 1);
+          continue;
+        }
+        if (depth > 0) args[args.length - 1] += c;
+      }
+      const write = args[2];
+      if (write === undefined) continue;
+      const bare = write.match(new RegExp(`^[\\s(]*(${NAME})[\\s)]*$`));
+      if (bare) {
+        if (declared.has(bare[1])) out.push(`${rel}:${lineAt(argAt[2] + bare[0].indexOf(bare[1]))} ${bare[1]}`);
+        continue;
+      }
+      for (const c of write.matchAll(new RegExp(`(?<![\\w$.])(${NAME})\\s*\\(`, 'g'))) if (declared.has(c[1])) out.push(`${rel}:${lineAt(argAt[2] + c.index)} ${c[1]}`);
+    }
+  }
+  return [...new Set(out)].sort();
 }
 
 /** Each route in a text writer's source, by syntax, as "file:line: why: code". */
@@ -211,11 +431,15 @@ const textFiles = () =>
   fs.readdirSync(path.join(root, 'packages/text')).filter((f) => f.endsWith('.js')).map((f) => `packages/text/${f}`).filter((f) => f !== DOOR).sort();
 
 test('the scan finds each route it names, in React by type and in text by syntax', () => {
+  assert.ok(FOLLOWED.length <= FOLLOWED_MAX, `the followed forms may only shrink: ${FOLLOWED.length} > ${FOLLOWED_MAX}`);
   const dir = fs.mkdtempSync(path.join(react, 'src', '.scan-'));
   try {
     const plant = path.join(dir, 'plant.ts');
     // One route per line; each line names the reason the scan must give for it.
     const STYLE = 'a number in a style value outside styleOf';
+    const REFUSE = 'a number writer argument the scan cannot follow';
+    const WRITE_ARG = 'a styleOf write argument the scan cannot follow';
+    const USE = 'a use of styleOf or styleAttr the scan cannot follow';
     const rows = [
       ['`${b.count}`', 'a template span that may hold a number'],
       ['String(n)', 'String of a non-string'],
@@ -255,27 +479,70 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ['`<i style="color:${eh(n)}">`', ['escapeHtml of a number', STYLE]],
       ['`<i style="${[\'width:\', numberText(n), \'%\'].join(\'\')}">`', STYLE],
       ['`<i style="width:${String(numberText(n))}%">`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${numberText(x)}%;height:${numberText(n)}px`)])}>`', STYLE],
       ['`<i style="${styleOf(\'width\', n)}">`', 'styleOf in a style attribute without styleAttr'],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${fmt(x)}%`)])}>`', null],
       ['`<i style="color:${s}">`', null],
-      ['`<i style="color:${eh(s)}">`', null],
-      ['`<i style="color:${ea(s)}">`', null],
+      ['`<i style="color:${eh(s)}">`', STYLE],
+      ['`<i style="color:${ea(s)}">`', STYLE],
       ['`${s}:${s}`', null],
       ['`<b>${numberText(n)}</b>`', null],
+      ['`<i style="width:${wn()}%">`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${numberText(x)}%;height:${wn()}px`)])}>`', STYLE],
+      ['`<i style="color:${nw()}">`', null],
+      ['`<i style="width:${ws(s)}%">`', STYLE],
+      ['`<i style="color:${wp(s)}">`', STYLE],
+      ['`<i style="width:${wpc(s)}%">`', STYLE],
+      ['`<i style="width:${pw(s)}px">`', STYLE],
+      ['`<i style="width:${pe(s)}%">`', STYLE],
+      ['`<i style="width:${pk(s, cfg)}%">`', STYLE],
+      ['`<i style="color:${pkv(s, lab)}">`', STYLE],
+      ['`<i style="color:${pkv(s, ob)}">`', STYLE],
+      ['`<i style="width:${pr(s)}%">`', STYLE],
+      ['`<i style="width:${f2(s)}%">`', STYLE],
+      ['`<i style="width:${f3(s)}%">`', STYLE],
+      ['`<i style="width:${f4(s, cfgs)}%">`', STYLE],
+      ['`<i style="width:${f5(cfg)}%">`', STYLE],
+      ['`<i style="width:${f6(s)}%">`', STYLE],
+      ['`<i style="color:${f7(s, [s])}">`', STYLE],
+      ['`<i style="width:${wl(s)}%">`', STYLE],
+      ['`<i style="width:${g1(s)}%">`', STYLE],
+      ['`<i style="width:${g2(s)}%">`', STYLE],
+      ['`<i style="width:${g3(s)}%">`', STYLE],
+      // styleOf's write argument writes a style value: an inline callback, and a writer by reference.
+      ['`<i${styleAttr([styleOf(\'width\', n, () => `${numberText(hn)}%`)])}>`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => `${ws(s)}%`)])}>`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, (x) => fmt(hn))])}>`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, wr)])}>`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, fmt)])}>`', null],
+      // An assigned parameter is not followed (by reference, inline, from a template); a write
+      // argument other than a bare name or an inline function, parentheses unwrapped, is refused.
+      ['`<i${styleAttr([styleOf(\'width\', n, wk)])}>`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, (v) => { v = hn; return numberText(v) })])}>`', STYLE],
+      ['`<i style="width:${wu(\'a\')}%">`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, wd)])}>`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, s ? wr : fmt)])}>`', WRITE_ARG],
+      ['`<i${styleAttr([styleOf(\'width\', n, wr.bind(null))])}>`', WRITE_ARG],
+      ['`<i${styleAttr([styleOf(\'width\', n, (wr))])}>`', STYLE],
+      ['`<i${styleAttr([styleOf(\'width\', n, wr as (v: number) => string)])}>`', WRITE_ARG],
+      ['`<i${styleAttr([styleOf(\'width\', n, lw)])}>`', WRITE_ARG],
+      ['`<i${styleAttr([styleOf(...sargs)])}>`', WRITE_ARG],
+      ['`<i${styleAttr([styleOf(\'width\', ...srest)])}>`', WRITE_ARG],
+      ['`<i${styleAttr([so(\'width\', n, (v) => numberText(hn))])}>`', null],
       // Listed limits (the header's "What it cannot see"): each is a number in a style that the
       // scan does not name. Concatenation; a join built outside the template; an object's method;
-      // a class's method; a value passed around; a writer whose number is not an argument; a
-      // property named by a span and written with a space.
+      // a class's method; a value passed around; a property named by a span and written with a
+      // space.
       ['\'<i style="width:\' + numberText(n) + \'%">\'', null],
       ['`<i style="${css}">`', null],
       ['`<i style="width:${W.w(n)}%">`', null],
       ['`<i style="width:${k.w(n)}%">`', null],
       ['`<i style="width:${t}%">`', null],
-      ['`<i style="width:${wn()}%">`', null],
       ['`${s}: ${numberText(n)}px`', null],
     ];
     const head = [
       "import { escapeHtml as eh, escapeAttr as ea } from '../inline'",
-      "import { numberText, styleOf } from '../../../text/number-text.js'",
+      "import { numberText, stringOf, styleAttr, styleOf } from '../../../text/number-text.js'",
       'const fmt = (x: number) => numberText(x, 1)',
       'declare const hn: number',
       'const W = { w: (x: number) => numberText(x) }',
@@ -284,6 +551,48 @@ test('the scan finds each route it names, in React by type and in text by syntax
       'const t = numberText(hn)',
       "const css = ['width:' + numberText(hn) + '%'].join(';')",
       'const wn = () => numberText(hn)',
+      "const nw = () => 'red'",
+      'const ws = (x: string) => x + numberText(hn)',
+      'const wp = (x: string | number) => numberText(typeof x === "number" ? x : 0)',
+      'const wl = (x: string) => { const m = hn; return x + numberText(m) }',
+      'declare const cfg: { w: number; b: { c: number } }',
+      'declare const lab: { w: string }',
+      'const wpc = (x: string) => x + numberText(cfg.w)',
+      'const pw = (x: string) => x + numberText(Math.PI)',
+      "const pe = (x: string) => x + numberText(cfg['w'])",
+      'const pk = (x: string, o: { w: number }) => x + numberText(o.w)',
+      'const pkv = (x: string, o: { w: unknown }) => x + stringOf(o.w)',
+      // Two writers with one refused form: pu, which no style value reaches, is silent; pr, called
+      // once from a style value, is named there and refused on its own line.
+      'const pu = (x: string) => x + numberText(cfg.b.c)',
+      'const pr = (x: string) => x + numberText(cfg.b.c)',
+      // Only a literal and a plain own-parameter name are followed: a captured name (wn, ws), a
+      // ternary (wp), a local (wl), any path (wpc, pk, pkv), a call's item or index (f2-f4, f7,
+      // g1-g3: a Map's or Set's forEach, an object's own map), a destructured parameter (f5) and a
+      // default (f6) are refused.
+      'declare const xs2: number[]',
+      'declare const cfgs: { w: number }[]',
+      "const f2 = (x: string) => x + xs2.map((v) => numberText(v)).join('')",
+      "const f3 = (x: string) => x + cfgs.map((o) => numberText(o.w)).join('')",
+      "const f4 = (x: string, os: { w: number }[]) => x + os.map((o) => numberText(o.w)).join('')",
+      'const f5 = ({ w }: { w: number }) => numberText(w)',
+      'const f6 = (x: string, k = cfg.w) => x + numberText(k)',
+      "const f7 = (x: string, os: string[]) => x + os.map((o, i) => o + numberText(i)).join('')",
+      'declare const mk: Map<number, string>',
+      'declare const sk: Set<number>',
+      'declare const om: { map: (f: (a: string, b: number) => string) => string }',
+      'const g1 = (x: string) => { let o = x; mk.forEach((v, k) => { o += numberText(k) }); return o }',
+      'const g2 = (x: string) => { let o = x; sk.forEach((a, b) => { o += numberText(b) }); return o }',
+      'const g3 = (x: string) => x + om.map((a, b) => numberText(b))',
+      'const wr = (x: number) => numberText(x) + numberText(hn)',
+      "const wk = (v: number) => { v = hn; return numberText(v) + 'px' }",
+      'const wu = (x: string | number) => { x = hn; return numberText(x) }',
+      'const wd = (v: number) => { ({ v } = { v: hn }); return numberText(v) }',
+      'let lw = fmt',
+      "const sargs = ['width', hn, wr] as const",
+      'const srest = [hn, wr] as const',
+      'const wa = (w: (v: number) => string) => styleOf(\'width\', hn, w)',
+      'const so = styleOf',
       "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
       "  if (typeof b.count !== 'number') return []",
       '  const n = b.count',
@@ -299,8 +608,18 @@ test('the scan finds each route it names, in React by type and in text by syntax
         '',
       ].join('\n'),
     );
-    const found = reactRoutes([plant]).map((r) => { const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/); return `${rows[line - head.length - 1][0]} -> ${why}`; });
-    assert.deepEqual(found.sort(), rows.flatMap(([code, why]) => [why ?? []].flat().map((w) => `${code} -> ${w}`)).sort());
+    // A refused form inside a writer is named on the writer's own line, in the head.
+    const headRoutes = [
+      ...'wn ws wp wl pk pkv f2 f4 f7 g1 g2 g3 wr wpc pw pe pr f3 f5 f6 wk wu wd'.split(' ').map((w) => [`const ${w}`, REFUSE]),
+      ['const wa', WRITE_ARG],
+      ['const so', USE],
+    ];
+    const found = reactRoutes([plant]).map((r) => {
+      const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/);
+      return line <= head.length ? `${head[line - 1].split(' =')[0]} -> ${why}` : `${rows[line - head.length - 1][0]} -> ${why}`;
+    });
+    const expected = [...headRoutes, ...rows].flatMap(([code, why]) => [why ?? []].flat().map((w) => `${code} -> ${w}`));
+    assert.deepEqual(found.sort(), expected.sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -313,6 +632,13 @@ test('the scan finds each route it names, in React by type and in text by syntax
 });
 
 test('no number reaches React\'s HTML or the text writers\' output outside numberText', () => {
-  const found = [...reactRoutes(), ...textFiles().flatMap((f) => textRoutes(f, fs.readFileSync(path.join(root, f), 'utf8')))];
+  const routes = reactRoutes();
+  // The style rules read real writers: the React functions named in styleOf's write arguments
+  // match a plain search of the source, none is missing from the writers a style value reaches,
+  // and that set is not empty.
+  assert.deepEqual(routes.writeNames, writeNamesBySearch(), "styleOf's write arguments, as the scan reads them and as a plain search finds them");
+  assert.ok(routes.reached.length > 0, 'a style value reaches no real writer');
+  assert.deepEqual(routes.writeNames.map((w) => w.split(' ')[1]).filter((n) => !routes.reached.includes(n)), [], 'each writer named in a write argument is reached');
+  const found = [...routes, ...textFiles().flatMap((f) => textRoutes(f, fs.readFileSync(path.join(root, f), 'utf8')))];
   assert.deepEqual(found, []);
 });
