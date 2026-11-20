@@ -73,6 +73,19 @@ for (const [shape, doc] of Object.entries(flat)) {
       }
     });
   }
+  // The round-trip writer keeps a block in its own Markdown when that reads back as the same
+  // blocks, compared through the import's old-name fold, which reads old code children as their
+  // flat text. So such a doc is written as a code span, and every word reads back.
+  if (shape.includes('old children')) {
+    for (const k of [51, DEEPEST_EM]) {
+      test(`the round-trip writer writes ${shape} over ${k} nested em as a code span, and every word reads back`, () => {
+        const roundTrip = OURS.find((w) => w.name === 'round-trip Markdown');
+        const { output, lost, readBack } = roundTrip.write(doc(k));
+        const back = readBack[0].content[0];
+        assert.deepEqual([output.startsWith('`'), output.includes('```portabledoc'), lost, readBack.length, back.type, wordsOf(back.value).size], [true, false, [], 1, 'code', k]);
+      });
+    }
+  }
   test(`past MAX_VALUE_DEPTH, a doc validate refuses, the text writers keep every word of ${shape} above it and write the too-deep notice once`, () => {
     // The em holding word i has its children at level 2i of the flat text's count: the cap stops the
     // em holding word MAX_VALUE_DEPTH / 2. That em holds two text leaves, one level below its
