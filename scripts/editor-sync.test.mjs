@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { BARKPARK_EDITOR, EDITOR_DIR, editorHashes } from './lib/editor.mjs';
 import { BARKPARK_PACK, BARKPARK_REPO, hashes } from './lib/pack.mjs';
 import { editor, pack, write } from './lib/synthetic.mjs';
+import { TREE_CHECK_LIMITS } from './test-files.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.dirname(scripts);
@@ -229,6 +230,22 @@ test('a test run that leaves a file in the tree, or changes one, fails naming it
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /test-files: the run left the tree changed:\n {2}src\/left\.ts\n {2}touched\.txt\n/);
   assert.doesNotMatch(r.out, /mine\.txt/);
+});
+
+test('each listed limit of the tree check is real: its plant runs and the run still passes', () => {
+  assert.deepEqual(TREE_CHECK_LIMITS.map((l) => l.limit), ['a file made and removed inside the run', 'a path git ignores outside a walked source root', 'an empty new folder']);
+  const { NODE_TEST_CONTEXT, ...env } = process.env;
+  for (const { limit, plant, stays } of TREE_CHECK_LIMITS) {
+    const root = path.join(tmp, `limit-${n++}`);
+    write(path.join(root, 'scripts', 'test-files.mjs'), fs.readFileSync(path.join(scripts, 'test-files.mjs'), 'utf8'));
+    write(path.join(root, '.gitignore'), fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8'));
+    write(path.join(root, 'scripts', 'plant.test.mjs'), `import fs from 'node:fs';\nimport { test } from 'node:test';\ntest('plant', () => { ${plant} });\n`);
+    execFileSync('git', ['init', '-q', root]);
+    const r = node(path.join(root, 'scripts', 'test-files.mjs'), ['--run'], env);
+    assert.equal(r.code, 0, `${limit}: the check saw it, so this row leaves the list\n${r.out}`);
+    assert.match(r.out, /^# pass 1$/m, `${limit}: the plant did not run\n${r.out}`);
+    for (const p of stays) assert.ok(fs.existsSync(path.join(root, p)), `${limit}: the plant left no ${p}`);
+  }
 });
 
 // check-docs compares the README timeline with origin/main's, so its repo needs a commit and that ref.
