@@ -5,13 +5,15 @@
 // value its fence imports as are the same pick.
 //
 // The fold rewrites only what the readers read as blocks: a block, the places the schema puts
-// blocks and inline nodes in it (fence-blocks.js), and the item paths the alias table names. Data
-// under any other key (`meta` and the like) is kept exactly as written: nothing reads it as a block.
+// blocks and inline nodes in it (fence-blocks.js), the item paths the alias table names, and a
+// table's cells where its reader takes them (blocks-data.js). Data under any other key (`meta` and
+// the like) is kept exactly as written: nothing reads it as a block.
 
 import { blockSchema } from '@portable-doc/validate';
+import { mapCellInline, mapTableCells } from './blocks-data.js';
 import { ANY, EACH, slotPaths } from './fence-blocks.js';
 import { inlineText } from './inline.js';
-import { aliasTable, convertOf, currentName, namesOf, readItem } from './read-aliases.js';
+import { aliasTable, convertOf, currentName, holds, namesOf, readItem } from './read-aliases.js';
 import { isMap } from './util.js';
 
 // The inline node types, a mark written as a node among them (`{ type: 'strong', children }`).
@@ -59,9 +61,9 @@ function converted(owner, field, name, value) {
   return value;
 }
 
-// A value that holds nothing: null, a blank string, an empty array, or inline content with no
-// text. Dropping it loses nothing, so it is never a notice.
-const holdsNothing = (x) => x == null || (typeof x === 'string' && x.trim() === '') || (Array.isArray(x) && (x.length === 0 || (isInline(x) && inlineText(x).trim() === '')));
+// A value that holds no text by the readers' own measure (holds, read-aliases.js): null, a blank
+// or empty string, an empty array or object. Dropping it loses nothing, so it is never a notice.
+const holdsNothing = (x) => x == null || holds(x) < 2;
 
 /**
  * The fold of object `v` of `owner`, in the table's field order: for each field of `owner` that
@@ -134,7 +136,10 @@ export function currentNames(v, onDrop = () => {}, at = '') {
 function block(v, onDrop, at) {
   if (!isMap(v)) return v;
   const type = typeof v.type === 'string' ? v.type : '';
-  return foldObject(v, type, ownType(type), treeOf(type), onDrop, at);
+  const out = foldObject(v, type, ownType(type), treeOf(type), onDrop, at);
+  if (type !== 'table') return out;
+  // A table's cells hold inline nodes where its reader takes them.
+  return mapTableCells(out, (cell, p) => mapCellInline(cell, (n, q) => inlineNode(n, onDrop, `${at}${p}${q}`)));
 }
 
 function inlineNode(v, onDrop, at) {

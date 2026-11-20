@@ -116,11 +116,13 @@ into its `slots.body`. Two fences do more:
   in `spec/read-aliases.json`) come in under their current names, picked and
   converted by the rule every reader uses, so the current name wins when it
   holds a value. Only what the readers read is folded: the blocks, the places
-  the schema puts blocks and inline nodes in them, and the item paths the alias
-  table names; data under any other key (`meta` and the like) stays as written.
+  the schema puts blocks and inline nodes in them, a table's cells where its
+  reader takes them, and the item paths the alias table names; data under any
+  other key (`meta` and the like) stays as written.
   A table's `cols` and `header: true` stay as they are too. Each value that
   loses adds an `old_name_dropped` notice (`OLD_NAME_DROPPED`) with its fix,
-  `write <current>`; a blank or empty value holds nothing, so it adds none.
+  `write <current>`; a value that holds no text (a blank string, an empty
+  array) adds none.
 
 It never throws. The result always passes `@portable-doc/validate`; if the
 parser or the walk ever fails, the whole input comes back as one code block.

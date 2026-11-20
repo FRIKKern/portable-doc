@@ -89,8 +89,9 @@ test('a portabledoc fence imports its old names under their current names, by th
   const code = (v) => ({ type: 'code', value: v });
   // [stored, imported, the names dropped as { path, name, current }]. The current name wins when it
   // holds a value; of two old names, the table's first. A table's `cols` and `header: true` stay.
-  // A blank or empty value holds nothing, so dropping it is no notice. Data under a key no reader
-  // reads as blocks (`meta`) is kept as written.
+  // A value that holds no text by the readers' own measure (`holds`, read-aliases.js: a blank
+  // string, an empty array) is passed over, so dropping it is no notice. A table's cells fold
+  // where its reader takes them. Data under a key no reader reads as blocks (`meta`) is kept.
   const cases = [
     [{ type: 'code', code: 'a' }, code('a'), []],
     [{ type: 'code', code: 'a', value: 'b' }, code('b'), [['/blocks/0/code', 'code', 'value']]],
@@ -105,6 +106,7 @@ test('a portabledoc fence imports its old names under their current names, by th
     [{ type: 'paragraph', content: [{ type: 'text', text: 'leaf' }, { type: 'code', children: [t('x')] }] }, { type: 'paragraph', content: [t('leaf'), code('x')] }, []],
     [{ type: 'list', ordered: false, items: [{ text: 'one' }] }, { type: 'list', ordered: false, items: [{ content: [t('one')] }] }, []],
     [{ type: 'table', header: ['A'], rows: [['1']] }, { type: 'table', head: ['A'], rows: [['1']] }, []],
+    [{ type: 'table', rows: [[[{ type: 'text', text: 'x' }]]] }, { type: 'table', rows: [[[t('x')]]] }, []],
     [{ type: 'table', header: true, rows: [['A'], ['1']] }, { type: 'table', header: true, rows: [['A'], ['1']] }, []],
     [{ type: 'table', cols: [{ key: 'a', type: 'delta' }], columns: [{ key: 'a', label: 'A' }], rows: [{ a: 1 }] }, { type: 'table', cols: [{ key: 'a', type: 'delta' }], columns: [{ key: 'a', text: 'A' }], rows: [{ a: 1 }] }, []],
     [
