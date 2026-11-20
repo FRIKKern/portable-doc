@@ -1,5 +1,5 @@
 {
-  "about": "React's own output for six blocks no golden holds yet (a section and five heatmaps), recorded from the renderer before the change that named style formats. These rows are not parity truth: they hold React to what it wrote then. Each row goes when the goldens carry its case.",
+  "about": "React's own output for blocks no golden holds yet (a section, five heatmaps, a sheet's cell styles and two colour fields), each recorded from the renderer before the change that moved its style into the door (named style formats; colours and a style's end). These rows are not parity truth: they hold React to what it wrote then. Each row goes when the goldens carry its case.",
   "rows": [
     {
       "case": "a section cell with an order",
@@ -139,6 +139,71 @@
         ]
       },
       "html": "<div class=\"bp-heat bp-heat--mtx\"><div class=\"bp-heat__grid\" style=\"grid-template-columns:auto repeat(2,minmax(28px,auto))\"><span class=\"bp-heat__rl\">Mon</span><i class=\"bp-heat__c bp-heat__c--b0 bp-heat__c--v\" title=\"1\">1</i><i class=\"bp-heat__c bp-heat__c--b1 bp-heat__c--v\" title=\"2\">2</i><span class=\"bp-heat__rl\">Tue</span><i class=\"bp-heat__c bp-heat__c--b2 bp-heat__c--v\" title=\"3\">3</i><i class=\"bp-heat__c bp-heat__c--b3 bp-heat__c--v\" title=\"4\">4</i></div><div class=\"bp-heat__legend\">less <i class=\"bp-heat__c bp-heat__c--b0\"></i><i class=\"bp-heat__c bp-heat__c--b1\"></i><i class=\"bp-heat__c bp-heat__c--b2\"></i><i class=\"bp-heat__c bp-heat__c--b3\"></i> more</div></div>"
+    },
+    {
+      "case": "a sheet's cell styles and an error cell",
+      "block": {
+        "type": "sheet",
+        "snapshot": {
+          "col_widths": [
+            12
+          ],
+          "head": [
+            "Item",
+            "Cost",
+            "Note"
+          ],
+          "rows": [
+            [
+              "Hosting",
+              "#DIV/0!",
+              "a"
+            ],
+            [
+              "Domains",
+              "18",
+              "b"
+            ]
+          ],
+          "styles": {
+            "0,0": {
+              "b": true,
+              "bg": "#ABCDEF",
+              "al": "center"
+            },
+            "0,1": {
+              "i": true
+            },
+            "0,2": {
+              "bg": "#abc",
+              "al": "middle"
+            },
+            "1,1": {
+              "bg": "#12345g",
+              "al": "right"
+            }
+          }
+        }
+      },
+      "html": "<table role=\"presentation\" class=\"bp-table\"><thead><tr><th class=\"bp-sheet__th\" style=\"width:12px;\">Item</th><th class=\"bp-sheet__th\">Cost</th><th class=\"bp-sheet__th\">Note</th></tr></thead><tbody><tr><td class=\"bp-sheet__td\" style=\"width:12px;font-weight:bold;background:#ABCDEF;text-align:center;\">Hosting</td><td class=\"bp-sheet__td\" style=\"font-style:italic;color:#dc2626;font-weight:bold\">#DIV/0!</td><td class=\"bp-sheet__td\">a</td></tr><tr><td class=\"bp-sheet__td\" style=\"width:12px;\">Domains</td><td class=\"bp-sheet__td\" style=\"text-align:right;\">18</td><td class=\"bp-sheet__td\">b</td></tr></tbody></table>"
+    },
+    {
+      "case": "a colour field with a three-digit hex",
+      "block": {
+        "type": "field-color",
+        "label": "Accent",
+        "value": "#AbC"
+      },
+      "html": "<div class=\"bp-field\"><span class=\"bp-field__l\">Accent</span><div class=\"bp-field__v\"><i class=\"bp-field__swatch\" style=\"background:#AbC\"></i><span class=\"bp-field__mono\">#AbC</span></div></div>"
+    },
+    {
+      "case": "a colour field whose value is not a hex",
+      "block": {
+        "type": "field-color",
+        "label": "Accent",
+        "value": "red"
+      },
+      "html": "<div class=\"bp-field\"><span class=\"bp-field__l\">Accent</span><div class=\"bp-field__v\"><i class=\"bp-field__swatch\" style=\"background:transparent\"></i><span class=\"bp-field__mono\">red</span></div></div>"
     }
   ]
 }

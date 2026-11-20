@@ -1,7 +1,9 @@
 // Every number that reaches React's HTML, or the text writers' output, goes through numberText
 // (packages/text/number-text.js), the one door from a number to shown text. That door answers a
-// number that is not finite with nothing; any other route could write "NaN" or "Infinity".
-// The scan refuses every other route, with no allow-list:
+// number that is not finite with nothing; any other route could write "NaN" or "Infinity". A value
+// goes into a style only through the door's style functions: styleAttr writes the attribute from a
+// written-out list, styleOf a number by a listed format, styleColor a colour by a listed shape.
+// The scan refuses every other route: for numbers with no allow-list, for styles by one.
 //
 // - packages/react/src, read with the TypeScript type checker. A route is any of:
 //   - String() of a value not typed string, or String passed as a function;
@@ -11,35 +13,32 @@
 //   - a template span, or an operand of + or += beside a string, that may hold a number;
 //   - concat on a string given a value that may hold a number;
 //   - join on an array or tuple that may hold a number;
-//   - in a style value, a call of a number writer with an argument that may hold a number, with
-//     no argument at all, or of a writer that captures, whatever it is given. A style value is
-//     the text inside an open style="…" or style='…' in a template, and the text after a CSS
-//     `name:` in a fragment with no markup (the name a word or a span). styleOf takes no function:
-//     it writes its number by a format named in a closed list (style-formats.test.mjs holds every
-//     call to the lists). Writers are known by symbol: numberText, stringOf, a const naming a
-//     writer, or a function in React's source whose body calls one so;
-//   - any use of styleOf or styleAttr but a direct call or its import: an alias, or a value;
-//   - inside a writer, a value it hands a number writer in any form but the 2 it follows
-//     (FOLLOWED; a test pins the count, which may only shrink): a literal, and a plain
-//     own-parameter name (declared with no default, not rest, not destructured, and never
-//     assigned in the function: =, op=, ++ or --, a destructuring or for target). Every other form
-//     is refused and makes the writer capture: a captured name, a local, a ternary, any property
-//     path or element access, a call, an item or index a callback is handed, `!`, a cast, `?.`,
-//     arithmetic, a destructured parameter, a default. A refusal is named with file:line in each
-//     writer a style value reaches; elsewhere it only counts as capturing. So a writer that
-//     assigns a parameter (escapeHtml, escapeAttr) is named in a style value whatever it is
-//     given, a string too: a false red, on the safe side. On the real source no style value
-//     reaches a writer, and a test holds that, after checking the scan read exactly the styleOf
-//     calls and the lines with a style value that a plain search of the text finds (`style="…${`,
-//     `name:${` and `name:var(--v, ${`);
-//   - styleOf written straight into style="…" (not inside styleAttr), which writes style="" when
-//     its number is not finite.
+//   - a hole in a style that is not fixed text. A template, a string, or a + chain of them is read
+//     as one text, holes and all. A style is the value of an attribute named style (any case,
+//     spaces around =, quoted or not), the text of a <style> element, or, in a fragment with no
+//     markup, a CSS declaration's value after `name:` (a word, -webkit- and -- names too, or a
+//     hole directly before the colon). Fixed text is a value whose type is a string literal or a
+//     union of them, or a ternary, ||, ??, template or + chain of fixed texts. A hole between a
+//     tag's attributes (`<i${styleAttr([…])}>`) writes attributes, not a style, and is not one;
+//     a word and a colon before a hole in a fragment with no markup is read as a declaration, so a
+//     label like `commit:${id}` is named too: a false red, on the safe side;
+//   - a styleAttr call whose list is not written out (a value, or a spread in it), and an item in
+//     the list that is neither a styleOf or styleColor call nor fixed text;
+//   - a styleOf or styleColor call whose property name is not fixed text;
+//   - a style left open at the end of its text (`'<i style="'`), which some other text finishes;
+//   - an attribute named by a hole whose type may name style: only fixed text, or a template type
+//     whose fixed head cannot begin "style" (`data-${string}`), passes;
+//   - a JSX style attribute or <style> element, where React writes a number as it likes;
+//   - any use of styleOf, styleAttr or styleColor but a direct call or its import.
 //   "May be a number" counts number, bigint, any, unknown and every union holding one of them.
 //   "May hold a number" adds `object`, `{}`, an array or tuple (at any depth) of a value that may be
 //   a number, and a type parameter whose constraint may hold one or that has no real constraint
 //   (none, unknown or {}).
 // - packages/text/*.js but the door, read by syntax only: any String() call or String passed as a
 //   function, and any call of those five methods.
+// A test on the real source holds that none is found, after checking that the scan read exactly the
+// door's call sites and the lines opening a style that a plain search of the text finds. Another
+// holds that a style colour's check has one copy, STYLE_COLORS in the door.
 //
 // What it cannot see:
 // - In packages/text there are no types, so a template span or + of a number, and a join of an
@@ -51,12 +50,11 @@
 //   a method held in a variable, called with call or apply, or called by element access
 //   (`n['toFixed'](1)`).
 // - A number used as a computed key (`{ [n]: 1 }`) whose keys are then shown.
-// - In a style: a value built without a template (string concatenation, or a join built outside
-//   it); a number writer reached through an object's or a class's method, or as a value passed
-//   around (its text made outside any writer, before the template); a property named by a span
-//   and written with a space (`${k}: …`, read as a label). Each has a plant row that the scan
-//   must not name. packages/text writes no HTML style, so the style rules read React only; a
-//   style written there would go unseen.
+// - In a style: a property named by a hole and written with a space (`${k}: ${v}`, read as a
+//   label; a template or + chain that puts its text in a style is refused there); a style opener
+//   split across pieces joined without + or a template (`['<i ', 'style', '="…'].join('')`). Each
+//   has a plant row that the scan must not name. packages/text writes no HTML style, so the style
+//   rules read React only; a style written there would go unseen.
 // - Other converters: JSON.stringify, Intl number formats, and an object whose own toString writes
 //   a number.
 // - packages/editor (written only by the sync from Barkpark's paper editor), React's dist (built
@@ -68,6 +66,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { STYLE_COLORS } from '../packages/text/number-text.js';
 import { REACT_SRC, reactSources } from './lib/react-sources.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -78,27 +77,98 @@ const ESCAPES = new Set(['escapeHtml', 'escapeAttr']);
 // An encoder writes an array through String, so a number array's NaN reaches it as "NaN".
 const ENCODES = new Set(['encodeURIComponent', 'encodeURI']);
 const DOOR = 'packages/text/number-text.js';
-// The forms of a value handed to a number writer inside a writer that the scan follows. The test
-// pins their count, which may only shrink.
-const FOLLOWED = ['a literal', 'a plain own-parameter name'];
-const FOLLOWED_MAX = 2;
-/** Where the template text before a span leaves it: 'attr' inside an open style="…" or style='…',
- * 'decl' after a CSS declaration's `name:` in a fragment with no markup (`width:`, `--i:`, or a
- * name from a span directly before the number, `${p}:`; not `${k}: ` with a space, which is a
- * label), else null. A span stands in the text as \u0000. */
-const styleContext = (text) => {
-  const opens = [...text.matchAll(/style=(["'])/g)];
-  const last = opens.at(-1);
-  if (last && !text.includes(last[1], last.index + last[0].length)) return 'attr';
-  return !text.includes('<') && /(?:^|;)\s*(?:(?:--)?[a-z][a-z-]*:[^;"']*|\u0000:)$/.test(text) ? 'decl' : null;
+const STYLE_DOOR = ['styleOf', 'styleAttr', 'styleColor'];
+const WHY = {
+  hole: 'a hole in a style that is not fixed text',
+  list: 'a styleAttr list that is not written out',
+  item: 'a styleAttr item that is not styleOf, styleColor or fixed text',
+  prop: 'a style property name that is not fixed text',
+  open: 'a style left open at the end of its text',
+  name: 'an attribute named by a hole that may name style',
+  jsx: 'a JSX style',
+  use: 'a use of styleOf, styleAttr or styleColor the scan cannot follow',
 };
+// A CSS declaration's value runs on after `name:` in a fragment with no markup: the name a word
+// (-webkit- and -- names too) or a hole directly before the colon; not `${k}: ` with a space, which
+// is a label. A hole stands in the text as \u0000.
+const DECL = /(?:^|[;{\u0000])\s*(?:-{0,2}[a-z][a-z0-9-]*\s*:[^;"'{}]*|\u0000:)$/i;
+
+/**
+ * Read one text, as pieces of text and holes, the way HTML would: for each hole, whether it sits in
+ * a style, names an attribute, or neither; and whether the text ends with a style left open, and
+ * where it opens one. The text may start inside a tag (` style="…"`). safeName(i) tells whether hole i,
+ * naming an attribute, cannot name style.
+ * @returns {{ holes: { at: number, where: 'style' | 'name' | null }[], open: boolean, opens: [number, number][] }}
+ */
+function readStyle(pieces, safeName) {
+  const holes = [];
+  const opens = [];
+  let mode = 'tag';
+  let tag = '';
+  let name = '';
+  let gap = false;
+  let quote = '';
+  let styled = false;
+  let seen = '';
+  const markup = pieces.some((p) => p.text?.includes('<'));
+  const endTag = () => (mode = tag === 'style' ? 'element' : 'text');
+  pieces.forEach((p, i) => {
+    if (p.text === undefined) {
+      let where = null;
+      if ((mode === 'value' && styled) || mode === 'element') where = 'style';
+      else if (mode === 'tag' && /^\s*=/.test(pieces[i + 1]?.text ?? '')) {
+        where = 'name';
+        name = safeName(i) ? '' : '\u0000';
+        gap = false;
+      } else if (!markup && DECL.test(seen)) where = 'style';
+      holes.push({ at: i, where });
+      seen += '\u0000';
+      return;
+    }
+    const t = p.text;
+    for (let j = 0; j < t.length; j++) {
+      const c = t[j];
+      const opening = mode === 'text' || mode === 'tag' ? /^<([a-z][a-z0-9-]*)/i.exec(t.slice(j)) : null;
+      if (mode === 'element') {
+        if (t.slice(j, j + 7).toLowerCase() === '</style') mode = 'text';
+      } else if (mode === 'value') {
+        if (quote ? c === quote : /\s/.test(c)) {
+          mode = 'tag';
+          name = '';
+        }
+        else if (!quote && c === '>') endTag();
+      } else if (opening) {
+        mode = 'tag';
+        tag = opening[1].toLowerCase();
+        name = '';
+        gap = false;
+        if (tag === 'style') opens.push([i, j]);
+        j += opening[0].length - 1;
+      } else if (mode === 'text') continue;
+      else if (c === '>') endTag();
+      else if (c === '=') {
+        const v = /^\s*(["']?)/.exec(t.slice(j + 1));
+        quote = v[1];
+        styled = name.toLowerCase() === 'style' || name === '\u0000';
+        if (styled) opens.push([i, j]);
+        mode = 'value';
+        j += v[0].length;
+      } else if (/\s/.test(c)) gap = true;
+      else if (/[/"'<]/.test(c)) name = '';
+      else {
+        name = gap ? c : name + c;
+        gap = false;
+      }
+    }
+    seen += t;
+  });
+  return { holes, open: (mode === 'value' && styled) || mode === 'element', opens };
+}
 
 /** Each route in React's source files (or only the given ones, which may sit outside them), as "file:line: why: code". */
 function reactRoutes(only) {
   const config = ts.getParsedCommandLineOfConfigFile(path.join(react, 'tsconfig.json'), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} });
   const files = only ?? reactSources().files;
-  // The source the scan reads writers from: React's files and the given ones.
-  const ours = new Set([...reactSources().files, ...files]);
   const program = ts.createProgram(files, config.options);
   const checker = program.getTypeChecker();
   const F = ts.TypeFlags;
@@ -120,151 +190,69 @@ function reactRoutes(only) {
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
     return sym?.getName();
   };
-  // Number writers are found by symbol, never by name. The door's are numberText and stringOf
-  // (number-text.js). A function in React's source is one when its body calls a writer with an
-  // argument that may hold a number; a const that names a writer is one. A writer called with no
-  // argument writes a number of its own. So does a writer that captures: its body hands a number
-  // writer a value in a form the scan does not follow (FOLLOWED); it is named in a style value
-  // whatever it is given.
   const symOf = (node) => {
     let sym = checker.getSymbolAtLocation(node);
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
     return sym;
   };
   const fromDoor = (sym, names) => !!sym && names.includes(sym.getName()) && (sym.declarations ?? []).some((d) => /number-text\.(?:d\.ts|js)$/.test(d.getSourceFile().fileName));
-  const isCallOf = (n, name) => ts.isCallExpression(n) && fromDoor(symOf(n.expression), [name]);
-  const writers = new Set();
-  const captures = new Set();
-  const isWriter = (sym) => fromDoor(sym, ['numberText', 'stringOf']) || writers.has(sym);
-  // fn assigns the name anywhere in it: =, op=, ++ or --, a destructuring or for-in/of target.
-  const PATTERN = (p, c) => ts.isParenthesizedExpression(p) || ts.isArrayLiteralExpression(p) || ts.isObjectLiteralExpression(p) || ts.isSpreadElement(p) || ts.isSpreadAssignment(p) || ts.isShorthandPropertyAssignment(p) || (ts.isPropertyAssignment(p) && p.initializer === c) || ts.isAsExpression(p) || ts.isNonNullExpression(p) || ts.isSatisfiesExpression(p);
-  const target = (id) => {
-    let c = id;
-    while (PATTERN(c.parent, c)) c = c.parent;
-    const p = c.parent;
-    const K = ts.SyntaxKind;
-    return (ts.isBinaryExpression(p) && p.left === c && p.operatorToken.kind >= K.FirstAssignment && p.operatorToken.kind <= K.LastAssignment) || ((ts.isPrefixUnaryExpression(p) || ts.isPostfixUnaryExpression(p)) && (p.operator === K.PlusPlusToken || p.operator === K.MinusMinusToken)) || ((ts.isForOfStatement(p) || ts.isForInStatement(p)) && p.initializer === c);
+  const isCallOf = (n, ...names) => ts.isCallExpression(n) && fromDoor(symOf(n.expression), names);
+  const unwrap = (e) => {
+    while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isSatisfiesExpression(e) || ts.isNonNullExpression(e)) e = e.expression;
+    return e;
   };
-  const refOf = (id) => (ts.isShorthandPropertyAssignment(id.parent) && id.parent.name === id ? checker.getShorthandAssignmentValueSymbol(id.parent) : symOf(id));
-  const assigns = (fn, sym) => has(fn, (n) => ts.isIdentifier(n) && refOf(n) === sym && target(n));
-  const writerCall = (n) =>
-    ts.isCallExpression(n) &&
-    isWriter(symOf(n.expression)) &&
-    (n.arguments.length === 0 || captures.has(symOf(n.expression)) || n.arguments.some((a) => mayHold(typeOf(a))));
-  const has = (node, hit) => {
-    let found = false;
-    const look = (n) => {
-      if (found) return;
-      if (hit(n)) found = true;
-      else ts.forEachChild(n, look);
-    };
-    look(node);
-    return found;
+  const isPlus = (n) => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken;
+  const isText = (n) => ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n);
+  /** A text as pieces: { text } for its fixed parts and { hole } for each value written into it. */
+  const piecesOf = (n) => {
+    if (isPlus(n)) return [...piecesOf(unwrap(n.left)), ...piecesOf(unwrap(n.right))];
+    if (isText(n)) return [{ text: n.text, node: n }];
+    if (ts.isTemplateExpression(n)) return [{ text: n.head.text, node: n }, ...n.templateSpans.flatMap((s) => [{ hole: s.expression }, { text: s.literal.text, node: s.literal }])];
+    return [{ hole: n }];
   };
-  // A styleOf call not inside a styleAttr call: written straight into style="…", it leaves
-  // style="" when its number is not finite.
-  const bareStyleOf = (n) => {
-    if (!isCallOf(n, 'styleOf')) return false;
-    for (let p = n.parent; p; p = p.parent) if (isCallOf(p, 'styleAttr')) return false;
-    return true;
+  // A root is a text no bigger text holds: a template or a string, or a + chain with one in it.
+  const isRoot = (n) => (isText(n) || ts.isTemplateExpression(n) || (isPlus(n) && piecesOf(n).some((p) => p.text !== undefined))) && !isPlus(unwrapUp(n)) && !(ts.isLiteralTypeNode(n.parent) || ts.isImportDeclaration(n.parent) || ts.isExportDeclaration(n.parent) || ts.isExternalModuleReference(n.parent));
+  const unwrapUp = (n) => {
+    let p = n.parent;
+    while (p && ts.isParenthesizedExpression(p)) p = p.parent;
+    return p;
   };
-  // What a writer fn hands a number writer is followed only in the FOLLOWED forms, tried in
-  // turn; any other form is refused.
-  const outside = (fn, d) => d.getSourceFile() !== fn.getSourceFile() || d.pos < fn.pos || d.end > fn.end;
-  const LITERAL = new Set([ts.SyntaxKind.NumericLiteral, ts.SyntaxKind.BigIntLiteral, ts.SyntaxKind.StringLiteral, ts.SyntaxKind.NoSubstitutionTemplateLiteral, ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword]);
-  const forms = {
-    'a literal': (fn, e) =>
-      LITERAL.has(e.kind) || (ts.isPrefixUnaryExpression(e) && ts.isNumericLiteral(e.operand) && (e.operator === ts.SyntaxKind.MinusToken || e.operator === ts.SyntaxKind.PlusToken)),
-    // fn's own parameter, declared as a plain name with no default and not rest.
-    'a plain own-parameter name': (fn, e) => {
-      if (!ts.isIdentifier(e)) return false;
-      const d = (symOf(e)?.declarations ?? []).find((x) => !outside(fn, x));
-      return !!d && ts.isParameter(d) && d.parent === fn && ts.isIdentifier(d.name) && !d.initializer && !d.dotDotDotToken && !assigns(fn, symOf(e));
-    },
+  const fixedType = (t) => parts(t).every((u) => u.isStringLiteral());
+  const fixed = (e) => {
+    e = unwrap(e);
+    if (ts.isConditionalExpression(e)) return fixed(e.whenTrue) && fixed(e.whenFalse);
+    if (ts.isBinaryExpression(e) && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(e.operatorToken.kind)) return fixed(e.left) && fixed(e.right);
+    if (ts.isTemplateExpression(e) || isPlus(e)) return piecesOf(e).every((p) => p.text !== undefined || fixed(p.hole));
+    return fixedType(typeOf(e));
   };
-  assert.deepEqual(Object.keys(forms), FOLLOWED, 'each followed form is listed in FOLLOWED');
-  const followed = (fn, e) => {
-    while (ts.isParenthesizedExpression(e)) e = e.expression;
-    return FOLLOWED.some((form) => forms[form](fn, e));
+  const item = (e) => {
+    e = unwrap(e);
+    if (ts.isConditionalExpression(e)) return item(e.whenTrue) && item(e.whenFalse);
+    if (ts.isBinaryExpression(e) && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(e.operatorToken.kind)) return item(e.left) && item(e.right);
+    return isCallOf(e, 'styleOf', 'styleColor') || fixed(e);
   };
-  // A writer captures when its body hands a number writer a value that may hold a number in a form
-  // it does not follow, or calls a writer that captures.
-  const refusedArgs = (fn, n) =>
-    ts.isCallExpression(n) && isWriter(symOf(n.expression)) ? n.arguments.filter((a) => mayHold(typeOf(a)) && !followed(fn, a)) : [];
-  const capturing = (fn) => (n) => refusedArgs(fn, n).length > 0 || (ts.isCallExpression(n) && captures.has(symOf(n.expression)));
-  const bodies = [];
-  const aliases = [];
-  for (const sf of program.getSourceFiles().filter((f) => ours.has(f.fileName))) {
-    const collect = (n) => {
-      if (ts.isFunctionDeclaration(n) && n.name && n.body) bodies.push([symOf(n.name), n.body]);
-      else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
-        if (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer)) bodies.push([symOf(n.name), n.initializer.body]);
-        else if (ts.isIdentifier(n.initializer)) aliases.push([symOf(n.name), n.initializer]);
-      }
-      ts.forEachChild(n, collect);
-    };
-    collect(sf);
-  }
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const [sym, body] of bodies) {
-      if (sym && !writers.has(sym) && has(body, writerCall)) grew = !!writers.add(sym);
-      if (sym && !captures.has(sym) && has(body, capturing(body.parent))) grew = !!captures.add(sym);
-    }
-    for (const [sym, init] of aliases) {
-      if (sym && !writers.has(sym) && isWriter(symOf(init))) grew = !!writers.add(sym);
-      if (sym && !captures.has(sym) && captures.has(symOf(init))) grew = !!captures.add(sym);
-    }
-  }
-  // The refusal is named only where it decides a style: in the body of each writer a template's
-  // style value calls, and of each writer those call, in turn. Elsewhere it still counts as
-  // capturing.
-  const bodyOf = new Map(bodies);
-  const aliasOf = new Map(aliases.map(([sym, init]) => [sym, symOf(init)]));
-  const reached = new Set();
-  const reach = (sym) => {
-    while (aliasOf.has(sym) && !reached.has(sym)) {
-      reached.add(sym);
-      sym = aliasOf.get(sym);
-    }
-    if (!sym || reached.has(sym) || !writers.has(sym)) return;
-    reached.add(sym);
-    const body = bodyOf.get(sym);
-    if (body) ts.forEachChild(body.parent, function look(n) {
-      if (ts.isCallExpression(n)) reach(symOf(n.expression));
-      ts.forEachChild(n, look);
+  // An attribute name from a hole passes when its type cannot spell style.
+  const safeName = (t) =>
+    parts(t).every((u) => {
+      if (u.isStringLiteral()) return u.value.toLowerCase() !== 'style';
+      const head = u.flags & F.TemplateLiteral ? u.texts[0].toLowerCase() : '';
+      return head !== '' && !head.startsWith('style') && !'style'.startsWith(head);
     });
-  };
-  const reachIn = (node) => has(node, (c) => (ts.isCallExpression(c) && reach(symOf(c.expression)), false));
-  for (const sf of program.getSourceFiles().filter((f) => ours.has(f.fileName)))
-    ts.forEachChild(sf, function look(n) {
-      if (ts.isTemplateExpression(n)) {
-        let text = n.head.text;
-        for (const span of n.templateSpans) {
-          if (styleContext(text)) reachIn(span.expression);
-          text += '\u0000' + span.literal.text;
-        }
-      }
-      ts.forEachChild(n, look);
-    });
-  const refused = new Set();
-  for (const sym of reached) {
-    const body = bodyOf.get(sym);
-    if (body) has(body.parent, (n) => (refusedArgs(body.parent, n).forEach((a) => refused.add(a)), false));
-  }
   const found = [];
-  // What the scan read, so a test can show it saw the door's calls and the style values.
+  // What the scan read, so a test can show it saw the door's calls and the styles it opens.
   const doorCalls = [];
-  const styleSpans = [];
+  const opens = [];
   for (const sf of program.getSourceFiles().filter((s) => files.includes(s.fileName))) {
     const rel = path.relative(root, sf.fileName);
-    const lineOf = (node) => `${rel}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`;
+    const lineOf = (node, offset = 0) => `${rel}:${sf.getLineAndCharacterOfPosition(node.getStart(sf) + offset).line + 1}`;
     const seen = new Set();
     const at = (node, why) => {
-      const where = `${rel}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}: ${why}`;
+      const where = `${lineOf(node)}: ${why}`;
       if (!seen.has(where)) found.push(`${where}: ${node.getText(sf).replace(/\s+/g, ' ').slice(0, 80)}`);
       seen.add(where);
     };
+    // A styleAttr item is read as an item, not again as a text.
+    const items = new Set();
     const visit = (node) => {
       if (ts.isCallExpression(node)) {
         const callee = node.expression;
@@ -280,21 +268,36 @@ function reactRoutes(only) {
           if (callee.name.text === 'concat' && isString(recv) && node.arguments.some((a) => mayHold(typeOf(a)))) at(node, 'concat of a number');
         }
         for (const a of node.arguments) if (ts.isIdentifier(a) && a.text === 'String') at(a, 'String passed as a function');
-        for (const a of node.arguments) if (refused.has(a)) at(a, 'a number writer argument the scan cannot follow');
-        if (isCallOf(node, 'styleOf')) doorCalls.push(lineOf(node));
-      } else if (ts.isIdentifier(node) && fromDoor(symOf(node), ['styleOf', 'styleAttr']) && !ts.isImportSpecifier(node.parent)) {
-        // styleOf and styleAttr are read only where called by name: an alias or a value is refused.
-        const use = ts.isPropertyAccessExpression(node.parent) && node.parent.name === node ? node.parent : node;
-        if (!(ts.isCallExpression(use.parent) && use.parent.expression === use)) at(node, 'a use of styleOf or styleAttr the scan cannot follow');
-      } else if (ts.isTemplateExpression(node)) {
-        let text = node.head.text;
-        for (const span of node.templateSpans) {
-          const where = styleContext(text);
-          if (where) styleSpans.push(`${lineOf(span.expression)} ${where}`);
-          if (where && has(span.expression, writerCall)) at(span.expression, 'a number in a style value outside styleOf');
-          if (where === 'attr' && has(span.expression, bareStyleOf)) at(span.expression, 'styleOf in a style attribute without styleAttr');
-          text += '\u0000' + span.literal.text;
+        if (isCallOf(node, ...STYLE_DOOR)) doorCalls.push(lineOf(node));
+        if (isCallOf(node, 'styleOf', 'styleColor') && !(arg && fixed(arg))) at(node, WHY.prop);
+        if (isCallOf(node, 'styleAttr')) {
+          const list = arg && unwrap(arg);
+          if (!list || !ts.isArrayLiteralExpression(list)) at(node, WHY.list);
+          else
+            for (const e of list.elements) {
+              items.add(unwrap(e));
+              if (ts.isSpreadElement(e)) at(e, WHY.list);
+              else if (!item(e)) at(e, WHY.item);
+            }
         }
+      } else if (ts.isIdentifier(node) && fromDoor(symOf(node), STYLE_DOOR) && !ts.isImportSpecifier(node.parent)) {
+        // The door's style functions are read only where called by name: an alias or a value is refused.
+        const use = ts.isPropertyAccessExpression(node.parent) && node.parent.name === node ? node.parent : node;
+        if (!(ts.isCallExpression(use.parent) && use.parent.expression === use)) at(node, WHY.use);
+      } else if ((ts.isJsxAttribute(node) && node.name.getText(sf).toLowerCase() === 'style') || ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(sf).toLowerCase() === 'style')) {
+        opens.push(lineOf(node));
+        at(node, WHY.jsx);
+      }
+      if (isRoot(node) && !items.has(node)) {
+        const pieces = piecesOf(node);
+        const read = readStyle(pieces, (i) => safeName(typeOf(pieces[i].hole)));
+        for (const [i, j] of read.opens) opens.push(`${rel}:${sf.getLineAndCharacterOfPosition(pieces[i].node.getStart(sf)).line + 1 + (pieces[i].text.slice(0, j).match(/\n/g) ?? []).length}`);
+        for (const { at: i, where } of read.holes) {
+          const hole = pieces[i].hole;
+          if (where === 'style' && !fixed(hole)) at(hole, WHY.hole);
+          if (where === 'name' && !safeName(typeOf(hole))) at(hole, WHY.name);
+        }
+        if (read.open) at(node, WHY.open);
       }
       if (ts.isTemplateSpan(node) && mayHold(typeOf(node.expression))) {
         at(node.expression, 'a template span that may hold a number');
@@ -307,28 +310,27 @@ function reactRoutes(only) {
     visit(sf);
   }
   found.doorCalls = doorCalls;
-  found.styleSpans = styleSpans;
-  found.reached = [...reached].filter((sym) => bodyOf.has(sym)).map((sym) => sym.getName()).sort();
+  found.opens = [...new Set(opens)].sort();
   return found;
 }
 
 /**
- * A plain search of React's source text, no parser: each `styleOf(`, and each line with a template
- * span right after `style="…` or `style='…`, right after a CSS `name:` (as `name:${`), or as the
- * fallback of a CSS variable (`name:var(--v, ${`), as file:line.
+ * A plain search of React's source text, no parser: each call of the door's style functions
+ * (`styleOf(`, `styleAttr(`, `styleColor(`), and each line that opens a style (`style=`, any case,
+ * or `<style`), comment lines left out, as file:line.
  */
 function plainSearch(srcRoot = REACT_SRC) {
   const { files } = reactSources(srcRoot);
-  let styleOf = 0;
-  const styleValues = [];
+  const doorCalls = [];
+  const opens = [];
   for (const f of files) {
-    const t = fs.readFileSync(f, 'utf8');
-    styleOf += (t.match(/\bstyleOf\(/g) ?? []).length;
-    t.split('\n').forEach((line, i) => {
-      if (/style=["'][^"'`]*\$\{|`(?:--)?[a-z][a-z-]*:\$\{|;(?:--)?[a-z][a-z-]*:\$\{|\}:\$\{|[a-z]:var\(--[\w-]+,\s*\$\{/.test(line)) styleValues.push(`${path.relative(root, f)}:${i + 1}`);
+    fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      const at = `${path.relative(root, f)}:${i + 1}`;
+      for (const _ of line.matchAll(/\b(?:styleOf|styleAttr|styleColor)\(/g)) doorCalls.push(at);
+      if (!/^\s*(?:\/\/|\/?\*)/.test(line) && /(?<![\w$])style\s*=|<style[\s>/]/i.test(line)) opens.push(at);
     });
   }
-  return { styleOf, styleValues };
+  return { doorCalls, opens };
 }
 
 /** Each route in a text writer's source, by syntax, as "file:line: why: code". */
@@ -352,15 +354,13 @@ const textFiles = () =>
   fs.readdirSync(path.join(root, 'packages/text')).filter((f) => f.endsWith('.js')).map((f) => `packages/text/${f}`).filter((f) => f !== DOOR).sort();
 
 test('the scan finds each route it names, in React by type and in text by syntax', () => {
-  assert.ok(FOLLOWED.length <= FOLLOWED_MAX, `the followed forms may only shrink: ${FOLLOWED.length} > ${FOLLOWED_MAX}`);
-  // The plant lives outside the tree, so no walk of the source can see it; it imports React's source by absolute path.
+  // The plants live outside the tree, so no walk of the source can see them; they import React's source by absolute path.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-scan-'));
   try {
     const plant = path.join(dir, 'plant.ts');
+    const jsx = path.join(dir, 'plant.tsx');
+    const { hole, list, item, prop, open, name, use } = WHY;
     // One route per line; each line names the reason the scan must give for it.
-    const STYLE = 'a number in a style value outside styleOf';
-    const REFUSE = 'a number writer argument the scan cannot follow';
-    const USE = 'a use of styleOf or styleAttr the scan cannot follow';
     const rows = [
       ['`${b.count}`', 'a template span that may hold a number'],
       ['String(n)', 'String of a non-string'],
@@ -391,58 +391,63 @@ test('the scan finds each route it names, in React by type and in text by syntax
       ["'a'.concat(String(s))", null],
       ['String(s)', null],
       ['`${s}`', null],
-      ['`<i style="width:${numberText(n)}%">`', STYLE],
-      ['`<i style="--i:${fmt(n)}">`', STYLE],
-      ['`padding-left:${fmt(n)}px`', STYLE],
-      ['`a;order:${numberText(n)}`', STYLE],
-      ["`<i style='width:${numberText(n)}%'>`", STYLE],
-      ['`${s}:${numberText(n)}px`', STYLE],
-      ['`<i style="color:${eh(n)}">`', ['escapeHtml of a number', STYLE]],
-      ['`<i style="${[\'width:\', numberText(n), \'%\'].join(\'\')}">`', STYLE],
-      ['`<i style="width:${String(numberText(n))}%">`', STYLE],
-      ['`<i style="${styleOf(\'width\', n)}">`', 'styleOf in a style attribute without styleAttr'],
-      ['`<i style="color:${s}">`', null],
-      ['`<i style="color:${eh(s)}">`', STYLE],
-      ['`<i style="color:${ea(s)}">`', STYLE],
-      ['`${s}:${s}`', null],
       ['`<b>${numberText(n)}</b>`', null],
-      ['`<i style="width:${wn()}%">`', STYLE],
-      ['`<i style="color:${nw()}">`', null],
-      ['`<i style="width:${ws(s)}%">`', STYLE],
-      ['`<i style="color:${wp(s)}">`', STYLE],
-      ['`<i style="width:${wpc(s)}%">`', STYLE],
-      ['`<i style="width:${pw(s)}px">`', STYLE],
-      ['`<i style="width:${pe(s)}%">`', STYLE],
-      ['`<i style="width:${pk(s, cfg)}%">`', STYLE],
-      ['`<i style="color:${pkv(s, lab)}">`', STYLE],
-      ['`<i style="color:${pkv(s, ob)}">`', STYLE],
-      ['`<i style="width:${pr(s)}%">`', STYLE],
-      ['`<i style="width:${f2(s)}%">`', STYLE],
-      ['`<i style="width:${f3(s)}%">`', STYLE],
-      ['`<i style="width:${f4(s, cfgs)}%">`', STYLE],
-      ['`<i style="width:${f5(cfg)}%">`', STYLE],
-      ['`<i style="width:${f6(s)}%">`', STYLE],
-      ['`<i style="color:${f7(s, [s])}">`', STYLE],
-      ['`<i style="width:${wl(s)}%">`', STYLE],
-      ['`<i style="width:${g1(s)}%">`', STYLE],
-      ['`<i style="width:${g2(s)}%">`', STYLE],
-      ['`<i style="width:${g3(s)}%">`', STYLE],
-      // An assigned parameter is not followed.
-      ['`<i style="width:${wu(\'a\')}%">`', STYLE],
+      // A hole in a style holds fixed text only: a number writer's text, a string, a function
+      // returning one, an object's or a class's method, a value passed around, styleOf written
+      // straight in, each is named.
+      ['`<i style="width:${numberText(n)}%">`', hole],
+      ['`<i style="--i:${fmt(n)}">`', hole],
+      ['`padding-left:${fmt(n)}px`', hole],
+      ['`a;order:${numberText(n)}`', hole],
+      ["`<i style='width:${numberText(n)}%'>`", hole],
+      ['`${s}:${numberText(n)}px`', hole],
+      ['`${s}:${s}`', hole],
+      ['`<i style="color:${eh(n)}">`', ['escapeHtml of a number', hole]],
+      ['`<i style="color:${eh(s)}">`', hole],
+      ['`<i style="color:${s}">`', hole],
+      ['`<i style="color:${nw()}">`', hole],
+      ['`<i style="${[\'width:\', numberText(n), \'%\'].join(\'\')}">`', hole],
+      ['`<i style="${styleOf(\'width\', n)}">`', hole],
+      ['`<i style="width:${W.w(n)}%">`', hole],
+      ['`<i style="width:${k.w(n)}%">`', hole],
+      ['`<i style="width:${t}%">`', hole],
+      ['`<i style="${css}">`', hole],
+      // However it is spelled: concatenation, spaces, case, no quotes, a <style> element, a
+      // vendor name, a style opened in another text, left open, or named by a hole.
+      ['\'<i style="width:\' + numberText(n) + \'%">\'', hole],
+      ['`<i style = "width:${numberText(n)}%">`', hole],
+      ['`<i STYLE="width:${numberText(n)}%">`', hole],
+      ['`<i style=width:${numberText(n)}%>`', hole],
+      ['`<style>.x{width:${numberText(n)}px}</style>`', hole],
+      ['`-webkit-transform:scale(${numberText(n)})`', hole],
+      ['`${opener}width:${numberText(n)}%">`', hole],
+      ['`<i style="width:${numberText(n)}`', [hole, open]],
+      ['\'<i style="width:\'.concat(numberText(n), \'%">\')', open],
+      ['`<i ${attr}="width:${numberText(n)}%">`', [name, hole]],
+      // Fixed texts pass: a literal, a const, a function whose returns are literals, a ternary,
+      // and a hole between attributes; an attribute named by a data- template type.
+      ['`<i style="color:${\'red\'}">`', null],
+      ['`<i style="font-family:var(--m, ${MONO})">`', null],
+      ['`<i style="color:${nk()}">`', null],
+      ['`<i style="color:${s ? \'red\' : \'blue\'};${`order:${\'1\'}`}">`', null],
+      ['`<i ${dn}="${s}" class="${s}"${styleAttr([styleOf(\'width\', n, { after: \'%\' })])}>`', null],
+      // styleAttr's list is written out, each item styleOf, styleColor or fixed text, and each
+      // property name fixed text.
+      ['`<i${styleAttr([styleColor(\'background\', s, { shape: \'hex\' }) || \'background:transparent\', `--g:${MONO}`])}>`', null],
+      ['`<i${styleAttr([s])}>`', item],
+      ['`<i${styleAttr([fmt(n), `--g:${s}`])}>`', item],
+      ['`<i${styleAttr(list)}>`', list],
+      ['`<i${styleAttr([...list])}>`', list],
+      ['`<i${styleAttr([styleOf(s, n)])}>`', prop],
       // Listed limits (the header's "What it cannot see"): each is a number in a style that the
-      // scan does not name. Concatenation; a join built outside the template; an object's method;
-      // a class's method; a value passed around; a property named by a span and written with a
-      // space.
-      ['\'<i style="width:\' + numberText(n) + \'%">\'', null],
-      ['`<i style="${css}">`', null],
-      ['`<i style="width:${W.w(n)}%">`', null],
-      ['`<i style="width:${k.w(n)}%">`', null],
-      ['`<i style="width:${t}%">`', null],
+      // scan does not name. A property named by a hole and written with a space; an opener split
+      // across pieces joined without + or a template.
       ['`${s}: ${numberText(n)}px`', null],
+      ['[\'<i \', \'style\', \'="width:\', numberText(n), \'%">\'].join(\'\')', null],
     ];
     const head = [
-      `import { escapeHtml as eh, escapeAttr as ea } from ${JSON.stringify(path.join(REACT_SRC, 'inline'))}`,
-      `import { numberText, stringOf, styleOf } from ${JSON.stringify(path.join(root, 'packages/text/number-text.js'))}`,
+      `import { escapeHtml as eh } from ${JSON.stringify(path.join(REACT_SRC, 'inline'))}`,
+      `import { numberText, styleAttr, styleColor, styleOf } from ${JSON.stringify(path.join(root, DOOR))}`,
       'const fmt = (x: number) => numberText(x, 1)',
       'declare const hn: number',
       'const W = { w: (x: number) => numberText(x) }',
@@ -450,67 +455,41 @@ test('the scan finds each route it names, in React by type and in text by syntax
       'const k = new K()',
       'const t = numberText(hn)',
       "const css = ['width:' + numberText(hn) + '%'].join(';')",
-      'const wn = () => numberText(hn)',
       "const nw = () => 'red'",
-      'const ws = (x: string) => x + numberText(hn)',
-      'const wp = (x: string | number) => numberText(typeof x === "number" ? x : 0)',
-      'const wl = (x: string) => { const m = hn; return x + numberText(m) }',
-      'declare const cfg: { w: number; b: { c: number } }',
-      'declare const lab: { w: string }',
-      'const wpc = (x: string) => x + numberText(cfg.w)',
-      'const pw = (x: string) => x + numberText(Math.PI)',
-      "const pe = (x: string) => x + numberText(cfg['w'])",
-      'const pk = (x: string, o: { w: number }) => x + numberText(o.w)',
-      'const pkv = (x: string, o: { w: unknown }) => x + stringOf(o.w)',
-      // Two writers with one refused form: pu, which no style value reaches, is silent; pr, called
-      // once from a style value, is named there and refused on its own line.
-      'const pu = (x: string) => x + numberText(cfg.b.c)',
-      'const pr = (x: string) => x + numberText(cfg.b.c)',
-      // Only a literal and a plain own-parameter name are followed: a captured name (wn, ws), a
-      // ternary (wp), a local (wl), any path (wpc, pk, pkv), a call's item or index (f2-f4, f7,
-      // g1-g3: a Map's or Set's forEach, an object's own map), a destructured parameter (f5) and a
-      // default (f6) are refused.
-      'declare const xs2: number[]',
-      'declare const cfgs: { w: number }[]',
-      "const f2 = (x: string) => x + xs2.map((v) => numberText(v)).join('')",
-      "const f3 = (x: string) => x + cfgs.map((o) => numberText(o.w)).join('')",
-      "const f4 = (x: string, os: { w: number }[]) => x + os.map((o) => numberText(o.w)).join('')",
-      'const f5 = ({ w }: { w: number }) => numberText(w)',
-      'const f6 = (x: string, k = cfg.w) => x + numberText(k)',
-      "const f7 = (x: string, os: string[]) => x + os.map((o, i) => o + numberText(i)).join('')",
-      'declare const mk: Map<number, string>',
-      'declare const sk: Set<number>',
-      'declare const om: { map: (f: (a: string, b: number) => string) => string }',
-      'const g1 = (x: string) => { let o = x; mk.forEach((v, k) => { o += numberText(k) }); return o }',
-      'const g2 = (x: string) => { let o = x; sk.forEach((a, b) => { o += numberText(b) }); return o }',
-      'const g3 = (x: string) => x + om.map((a, b) => numberText(b))',
-      'const wu = (x: string | number) => { x = hn; return numberText(x) }',
+      "const nk = () => 'red' as const",
+      "const MONO = 'mono'",
+      'const opener = \'<i style="\'',
+      'declare const attr: string',
+      'declare const dn: `data-${string}`',
+      'declare const list: string[]',
       'const so = styleOf',
       "export const f = <T, S extends string, K extends 'a' | 'b', N extends number>(b: Record<string, unknown>, s: string, xs: number[], tup: [number, number], ro: readonly number[], v: T, o: {}, ob: object, sv: S, kv: K, nv: N) => {",
       "  if (typeof b.count !== 'number') return []",
       '  const n = b.count',
       '  return [',
     ];
-    fs.writeFileSync(
-      plant,
-      [
-        ...head,
-        ...rows.map(([code]) => `    ${code},`),
-        '  ]',
-        '}',
-        '',
-      ].join('\n'),
-    );
-    // A refused form inside a writer is named on the writer's own line, in the head.
-    const headRoutes = [
-      ...'wn ws wp wl pk pkv f2 f4 f7 g1 g2 g3 wpc pw pe pr f3 f5 f6 wu'.split(' ').map((w) => [`const ${w}`, REFUSE]),
-      ['const so', USE],
+    fs.writeFileSync(plant, [...head, ...rows.map(([code]) => `    ${code},`), '  ]', '}', ''].join('\n'));
+    // JSX writes a style object as React likes, a number too.
+    const jsxRows = [
+      ['<i style={{ width: hn }} />', WHY.jsx],
+      ['<i style={{ width: `${numberText(hn)}%` }} />', WHY.jsx],
+      ['<style>{s}</style>', WHY.jsx],
+      ['<i className={s} />', null],
     ];
-    const found = reactRoutes([plant]).map((r) => {
-      const [, line, why] = r.match(/^[^:]*:(\d+): ([^:]*):/);
-      return line <= head.length ? `${head[line - 1].split(' =')[0]} -> ${why}` : `${rows[line - head.length - 1][0]} -> ${why}`;
+    const jsxHead = [`import { numberText } from ${JSON.stringify(path.join(root, DOOR))}`, 'declare const hn: number', 'declare const s: string', 'export const J = ['];
+    fs.writeFileSync(jsx, [...jsxHead, ...jsxRows.map(([code]) => `  ${code},`), ']', ''].join('\n'));
+    // A refused form on a line of a plant's head is named on that line.
+    const headRoutes = [
+      ['const css', hole],
+      ['const opener', open],
+      ['const so', use],
+    ];
+    const found = reactRoutes([plant, jsx]).map((r) => {
+      const [, file, line, why] = r.match(/^([^:]*):(\d+): ([^:]*):/);
+      const [h, rs] = file.endsWith('.tsx') ? [jsxHead, jsxRows] : [head, rows];
+      return line <= h.length ? `${h[line - 1].split(' =')[0]} -> ${why}` : `${rs[line - h.length - 1][0]} -> ${why}`;
     });
-    const expected = [...headRoutes, ...rows].flatMap(([code, why]) => [why ?? []].flat().map((w) => `${code} -> ${w}`));
+    const expected = [...headRoutes, ...rows, ...jsxRows].flatMap(([code, why]) => [why ?? []].flat().map((w) => `${code} -> ${w}`));
     assert.deepEqual(found.sort(), expected.sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -523,19 +502,32 @@ test('the scan finds each route it names, in React by type and in text by syntax
   ]);
 });
 
-test('no number reaches React\'s HTML or the text writers\' output outside numberText', () => {
+test('no number reaches React\'s HTML or the text writers\' output outside numberText, and no value a style outside the door', () => {
   const routes = reactRoutes();
-  // The scan saw the real styles: it read the styleOf calls and the style values a plain search
-  // finds, the same ones exactly. Blind to either, or reading one the search does not, it is red.
+  // The scan saw the real styles: it read the door's call sites and the lines that open a style
+  // that a plain search finds, the same ones exactly. Blind to either, or reading one the search
+  // does not, it is red and names the site.
   assert.deepEqual(reactSources().refused, [], 'dot-named folders or source files under React\'s source, which the type checker would not read');
   const search = plainSearch();
-  assert.ok(search.styleOf > 0, 'the plain search finds no styleOf call');
-  assert.equal(routes.doorCalls.length, search.styleOf, 'styleOf calls the scan read, and the plain search');
-  assert.ok(search.styleValues.length > 0, 'the plain search finds no style value');
-  assert.deepEqual([...new Set(routes.styleSpans.map((s) => s.split(' ')[0]))].sort(), [...search.styleValues].sort(), 'lines with a style value, as the scan read them and as the plain search finds them');
-  // Every number in a real style goes through styleOf, so no style value it read reaches a writer;
-  // the plant test shows the style rules finding one.
-  assert.deepEqual(routes.reached, [], 'writers a template style value reaches');
+  assert.ok(search.doorCalls.length > 0, 'the plain search finds no call of the door\'s style functions');
+  assert.deepEqual([...routes.doorCalls].sort(), [...search.doorCalls].sort(), 'the door\'s call sites, as the scan read them and as the plain search finds them');
+  assert.ok(search.opens.length > 0, 'the plain search finds no style');
+  assert.deepEqual(routes.opens, [...new Set(search.opens)].sort(), 'lines opening a style, as the scan read them and as the plain search finds them');
+  const styles = Object.values(WHY);
+  assert.deepEqual(routes.filter((r) => styles.some((why) => r.includes(`: ${why}: `))), [], 'styles with a value outside the door');
   const found = [...routes, ...textFiles().flatMap((f) => textRoutes(f, fs.readFileSync(path.join(root, f), 'utf8')))];
   assert.deepEqual(found, []);
+});
+
+test('a style colour has one check, the door\'s', () => {
+  // The one copy is STYLE_COLORS in the door. A colour pattern (# and a hex digit class) anywhere
+  // else in React's source or in the door is a second copy.
+  const COLOUR = /#[^\n]*\[(?:0-9a-f|a-f0-9|\\da-f)/i;
+  const hits = [...reactSources().files, path.join(root, DOOR)].flatMap((f) =>
+    fs.readFileSync(f, 'utf8').split('\n').flatMap((line, i) => (COLOUR.test(line) ? [`${path.relative(root, f)}:${i + 1}`] : [])),
+  );
+  const door = fs.readFileSync(path.join(root, DOOR), 'utf8').split('\n');
+  const own = Object.values(STYLE_COLORS).map((re) => `${DOOR}:${door.findIndex((l) => l.includes(re.source)) + 1}`);
+  assert.deepEqual(Object.keys(STYLE_COLORS), ['hex', 'hex6']);
+  assert.deepEqual(hits, own, 'colour checks outside STYLE_COLORS');
 });
