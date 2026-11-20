@@ -61,6 +61,55 @@ test('every function a package exports is a writer in the registry, or named wit
   assert.deepEqual([...writers].filter((k) => k in NOT_A_WRITER), [], 'both a writer and not one');
 });
 
+// NOT_A_WRITER, pinned: each name with its reason, in the list's order. A line added to the list
+// in scripts/lib/writers.mjs, such as a function that writes a document named there as not a
+// writer, is red here by name until it is pinned with its reason in the same change, where a
+// review reads it. A changed reason or a name taken out is red the same way.
+const NOT_A_WRITER_PINNED = [
+  ['@portable-doc/cli main', 'runs the CLI; its render and preview call the writers above'],
+  ['@portable-doc/cli mainUsage', "writes the CLI's usage text"],
+  ['@portable-doc/code escapeHtml', 'escapes a string for HTML, not a document'],
+  ['@portable-doc/code highlightHtml', "writes one code block's source as highlighted HTML, not a document"],
+  ['@portable-doc/code highlightPre', 'paints highlighting into a page element in place'],
+  ['@portable-doc/code languages', 'lists the highlighted languages'],
+  ['@portable-doc/code resolveLang', "resolves a code block's language name"],
+  ['@portable-doc/code tokenSignature', "compares two highlightings' tokens"],
+  ['@portable-doc/code wireAllTabs', "wires a page's tab strips"],
+  ['@portable-doc/code wireTabs', 'wires one tab strip'],
+  ['@portable-doc/editor changedSentinel', "says which block's source-mode sentinel an edit changed, as a block index"],
+  ['@portable-doc/editor configControlHidden', 'says whether an editor control shows'],
+  ['@portable-doc/editor firstLoss', 'names the first place two block lists part, or null'],
+  ['@portable-doc/editor sourceLoss', 'names the first place source mode would lose of a Paper, or null'],
+  ['@portable-doc/editor markdownToBlockSpans', 'reads Markdown into blocks'],
+  ['@portable-doc/editor markdownToBlocks', 'reads Markdown into blocks'],
+  ['@portable-doc/mcp applyOp', 'applies an edit to a document'],
+  ['@portable-doc/mcp applyOps', 'applies edits to a document'],
+  ['@portable-doc/mcp configFromEnv', "reads the server's settings"],
+  ['@portable-doc/mcp createServer', 'starts the MCP server; its render tool calls the writers above'],
+  ['@portable-doc/react PortableDoc', "a React element whose inner HTML is renderPortableDocument's"],
+  ['@portable-doc/react embedBlocks', 'gives the embed block writers that renderPortableDocument takes as an option'],
+  ['@portable-doc/text fromMarkdown', 'reads Markdown into blocks'],
+  ['@portable-doc/text readMarkdown', 'reads Markdown into blocks and notices'],
+  ['@portable-doc/validate compile', 'compiles a schema'],
+  ['@portable-doc/validate validate', 'validates a document'],
+  ['@portable-doc/validate walkDepth', "measures a document's depth"],
+];
+
+test('NOT_A_WRITER holds exactly the pinned names, each with its pinned reason', () => {
+  const pinned = new Map(NOT_A_WRITER_PINNED);
+  assert.equal(pinned.size, NOT_A_WRITER_PINNED.length, 'a name pinned twice');
+  const listed = Object.entries(NOT_A_WRITER);
+  assert.deepEqual(
+    [
+      ...listed.filter(([key]) => !pinned.has(key)).map(([key, why]) => `${key}: in NOT_A_WRITER as ${JSON.stringify(why)}, but not pinned here`),
+      ...[...pinned.keys()].filter((key) => !(key in NOT_A_WRITER)).map((key) => `${key}: pinned here, but not in NOT_A_WRITER`),
+      ...listed.filter(([key, why]) => pinned.has(key) && pinned.get(key) !== why).map(([key, why]) => `${key}: NOT_A_WRITER says ${JSON.stringify(why)}, the pin says ${JSON.stringify(pinned.get(key))}`),
+    ],
+    [],
+  );
+  assert.deepEqual(NOT_A_WRITER_PINNED.filter(([, why]) => typeof why !== 'string' || why.trim().split(/\s+/).length < 3).map(([key]) => key), [], 'a pinned name without a reason of at least three words');
+});
+
 test("source mode's checks in the editor answer a place or nothing, never a document", async () => {
   const { changedSentinel, firstLoss, sourceLoss } = await import('../packages/editor/src/markdown.js');
   const paragraph = [{ type: 'paragraph', text: 'Hello' }];
