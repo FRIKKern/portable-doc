@@ -19,6 +19,8 @@ const row = (fields: Record<string, unknown>) => ({ title: 'Row', status: 'done'
 describe('a roadmap row with start and end dates', () => {
   it('a dated row inside the span is placed at its dates', () => {
     expect(lanes(SPAN, [row({ start: '2026-01-03', end: '2026-01-07' })])).toEqual(['left:20%;width:40%'])
+    // Its dates come before its numbers.
+    expect(lanes(SPAN, [row({ start: '2026-01-03', end: '2026-01-07', left: 70, width: 10 })])).toEqual(['left:20%;width:40%'])
   })
 
   it('a row starting before the span starts at 0 and still ends at its true place', () => {
