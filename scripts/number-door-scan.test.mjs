@@ -19,8 +19,8 @@
 //     markup, a CSS declaration's value after `name:` (a word, -webkit- and -- names too, or a
 //     hole directly before the colon). Fixed text is a value whose type is a string literal or a
 //     union of them, or a ternary, ||, ??, template or + chain of fixed texts. A hole between a
-//     tag's attributes (`<i${styleAttr([…])}>`) writes attributes, not a style, and is not one;
-//     a word and a colon before a hole in a fragment with no markup is read as a declaration, so a
+//     tag's attributes (`<i${styleAttr([…])}>`) writes attributes, not a style, and is not one. A
+//     word and a colon before a hole in a fragment with no markup is read as a declaration, so a
 //     label like `commit:${id}` is named too: a false red, on the safe side;
 //   - a styleAttr call whose list is not written out (a value, or a spread in it), and an item in
 //     the list that is neither a styleOf or styleColor call nor fixed text;
@@ -39,8 +39,8 @@
 // A test on the real source holds that none is found, after checking that the scan read exactly the
 // door's call sites and the lines opening a style that a plain search of the text finds (a code
 // line assigning a name `style`, `const style = …`, is found by the search and opens none: a false
-// red, on the safe side). Another
-// holds that a style colour's check has one copy, STYLE_COLORS in the door.
+// red, on the safe side). Another holds that a style colour's check has one copy, STYLE_COLORS in
+// the door.
 //
 // What it cannot see:
 // - In packages/text there are no types, so a template span or + of a number, and a join of an
