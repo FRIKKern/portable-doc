@@ -1,6 +1,5 @@
 // A roadmap's date span, and where a date falls in it: Barkpark's components.ex roadmap_span/1,
-// roadmap_date/1 and roadmap_date_pct/2. The today line reads it now; dated lanes can read the
-// same span later.
+// roadmap_date/1 and roadmap_date_pct/2. The today line and the dated lanes read it.
 
 const DAY_MS = 86_400_000
 

@@ -28,7 +28,7 @@ import {
 } from '../inline'
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
-import { roadmapDate, roadmapDatePct, roadmapSpan } from '../roadmap-span'
+import { type RoadmapSpan, roadmapDate, roadmapDatePct, roadmapSpan } from '../roadmap-span'
 import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.js'
 import { numberText, stringOf, styleAttr, styleOf } from '../../../text/number-text.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
@@ -1473,25 +1473,41 @@ const markStyle = (left: number | null, width?: number | null) => styleAttr([sty
 export const ROADMAP_UNPLACED_COPY = 'No schedule to place these items on.'
 export const ROADMAP_LANE_UNPLACED_COPY = 'not scheduled'
 
-// Is a row's position READ from the author, or invented by the clamp? Author
-// pct only: a NUMBER in left or width (components.ex roadmap_placeable?/2's pct
-// arm; this reader has no date rails). A live-query row has neither, and the
-// clamp would paint it as the same full-width bar as every other such lane.
-const placeable = (m: Record<string, unknown>) =>
-  typeof m.left === 'number' || typeof m.width === 'number'
+// Is a row's position READ from the author, or invented by the clamp? Either it is dated (the block
+// has a span and the row's own start and end are dates) or it has a NUMBER in left or width:
+// components.ex roadmap_placeable?/2. A live-query row has neither, and the clamp would paint it as
+// the same full-width bar as every other such lane.
+const datedRow = (m: Record<string, unknown>, span: RoadmapSpan | null) =>
+  span !== null && roadmapDate(m.start) !== null && roadmapDate(m.end) !== null
+const placeable = (m: Record<string, unknown>, span: RoadmapSpan | null) =>
+  datedRow(m, span) || typeof m.left === 'number' || typeof m.width === 'number'
+
+// A lane's left and width (components.ex roadmap_left_width/2): a dated row's come from its dates'
+// places in the span, else from its left and width numbers. The width subtracts the clamped left,
+// so a row starting before the span still ends at its true place.
+function laneGeometry(m: Record<string, unknown>, span: RoadmapSpan | null): [number | null, number | null] {
+  const start = roadmapDate(m.start)
+  const end = roadmapDate(m.end)
+  if (span !== null && start !== null && end !== null) {
+    const left = clampf(roadmapDatePct(start, span)) ?? 0
+    return [left, clampfWidth(roadmapDatePct(end, span) - left, left)]
+  }
+  const left = clampf(m.left)
+  return [left, clampfWidth(m.width, left ?? 0)]
+}
 
 const roadmap: Emit = (b, ctx) => {
   const rows = asList(b.snapshot)
   if (rows.length === 0) return `<div class="bp-tasks bp-tasks--empty">${ctx.t('No roadmap items.')}</div>`
+  const span = roadmapSpan(b.start, b.end)
   // NOT ONE row has geometry: say so, then list the items (never drop them).
-  if (!rows.some((r) => isMap(r) && placeable(r)))
+  if (!rows.some((r) => isMap(r) && placeable(r, span)))
     return (
       `<div class="bp-tasks bp-tasks--empty">${ctx.t(ROADMAP_UNPLACED_COPY)}</div>` +
       renderBlock({ type: 'tasks', snapshot: rows }, ctx)
     )
   // today is a YYYY-MM-DD date, drawn at its place in the block's start–end span (roadmap-span.ts);
   // with no span, or a today that is not a date, there is no line.
-  const span = roadmapSpan(b.start, b.end)
   const todayDay = roadmapDate(b.today)
   const today =
     span !== null && todayDay !== null
@@ -1507,9 +1523,8 @@ const roadmap: Emit = (b, ctx) => {
       const m = isMap(r) ? r : {}
       const role = roleOf(m.status)
       const title = escapeHtml(str(m.title))
-      const placed = placeable(m)
-      const left = clampf(m.left)
-      const width = clampfWidth(m.width, left ?? 0)
+      const placed = placeable(m, span)
+      const [left, width] = laneGeometry(m, span)
       const cls =
         'bp-rm__lane' +
         (truthy(m.phase_row) ? ' bp-rm__lane--phase' : '') +
