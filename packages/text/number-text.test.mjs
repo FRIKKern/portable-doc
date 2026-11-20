@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
-import { STYLE_AFTER, STYLE_BEFORE, STYLE_FORMATS, numberText, stringOf, styleAttr, styleOf } from './number-text.js';
+import { STYLE_AFTER, STYLE_BEFORE, STYLE_COLORS, STYLE_END, STYLE_FORMATS, numberText, stringOf, styleAttr, styleColor, styleOf } from './number-text.js';
 
 test('a finite number shows its digits; NaN, Infinity and -Infinity show nothing', () => {
   for (const n of [NaN, Infinity, -Infinity]) {
@@ -32,6 +32,18 @@ test('a style format, a text before and a text after are each one of a closed li
     for (const n of [1, NaN]) assert.throws(() => styleOf('width', n, how), TypeError, JSON.stringify(how));
   }
   for (const before of STYLE_BEFORE) for (const after of STYLE_AFTER) assert.equal(styleOf('p', 4, { before, after }), `p:${before}4${after}`);
+  for (const end of [';;', ' ', ';color:red']) assert.throws(() => styleAttr(['a:1'], { end }), TypeError, JSON.stringify(end));
+  assert.deepEqual(STYLE_END.map((end) => [styleAttr(['a:1', 'b:2'], { end }), styleAttr([''], { end })]), [[' style="a:1;b:2"', ''], [' style="a:1;b:2;"', '']]);
+});
+
+test('styleColor writes a colour only in a listed shape; a value the shape refuses writes nothing', () => {
+  assert.deepEqual([styleColor('background', '#AbC', { shape: 'hex' }), styleColor('background', '#1e5347', { shape: 'hex' }), styleColor('background', '#ABCDEF', { shape: 'hex6' })], ['background:#AbC', 'background:#1e5347', 'background:#ABCDEF']);
+  for (const v of ['#abc', '#12345g', 'red', '#abcd', ' #abcdef', '#abcdef;x:1', 1, null, undefined]) assert.equal(styleColor('background', v, { shape: 'hex6' }), '', String(v));
+  for (const v of ['red', '#ab', '#abcd', 'url(x)', '#abc\n', 0xabc]) assert.equal(styleColor('background', v, { shape: 'hex' }), '', String(v));
+  // A value the shape refuses writes nothing, so a caller's listed fallback is written instead.
+  assert.equal(styleAttr([styleColor('background', 'red', { shape: 'hex' }) || 'background:transparent']), ' style="background:transparent"');
+  for (const shape of ['rgb', 'toString', undefined]) assert.throws(() => styleColor('background', '#abc', { shape }), TypeError, String(shape));
+  assert.deepEqual(Object.keys(STYLE_COLORS), ['hex', 'hex6']);
 });
 
 test('the types list the same formats and texts as the code', () => {
@@ -39,6 +51,8 @@ test('the types list the same formats and texts as the code', () => {
   const tuple = (name) => JSON.parse(dts.match(new RegExp(`export const ${name}: readonly (\\[[^\\]]*\\]);`))[1].replace(/'/g, '"'));
   assert.deepEqual(tuple('STYLE_BEFORE'), [...STYLE_BEFORE]);
   assert.deepEqual(tuple('STYLE_AFTER'), [...STYLE_AFTER]);
+  assert.deepEqual(tuple('STYLE_END'), [...STYLE_END]);
+  assert.deepEqual(dts.match(/export const STYLE_COLORS: Readonly<\{ (.*) \}>;/)[1].split('; ').map((f) => f.split(':')[0]), Object.keys(STYLE_COLORS));
   const formats = dts.match(/export const STYLE_FORMATS: Readonly<\{ (.*) \}>;/)[1].split('; ').map((f) => f.split(':')[0]);
   assert.deepEqual(formats, Object.keys(STYLE_FORMATS));
 });

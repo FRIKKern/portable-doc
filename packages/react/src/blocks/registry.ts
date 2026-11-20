@@ -27,6 +27,8 @@ function ownRenderer<T>(registry: Record<string, T> | undefined, type: string): 
 }
 
 const HOST_ATTRIBUTE_NAME = /^(?:data|aria)-[a-z][a-z0-9_.:-]*$/
+// A host attribute's name is a data- or aria- one, so it never names a style.
+type HostAttributeName = `data-${string}` | `aria-${string}`
 
 function rootHasAttribute(html: string, name: string): boolean {
   const end = html.indexOf('>')
@@ -47,11 +49,10 @@ function withBlockAttributes(html: string, block: Block, ctx: RenderCtx): string
   if (!attributes || typeof attributes !== 'object') return html
   const suffix = Object.entries(attributes)
     .filter(
-      ([name, value]) =>
-        HOST_ATTRIBUTE_NAME.test(name) &&
-        value !== false &&
-        value != null &&
-        !rootHasAttribute(html, name),
+      (entry): entry is [HostAttributeName, (typeof entry)[1]] => {
+        const [name, value] = entry
+        return HOST_ATTRIBUTE_NAME.test(name) && value !== false && value != null && !rootHasAttribute(html, name)
+      },
     )
     .map(([name, value]) => (value === true ? ` ${name}` : ` ${name}="${typeof value === 'number' ? numberText(value) : escapeAttr(value)}"`))
     .join('')

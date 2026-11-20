@@ -998,16 +998,16 @@ function gridTracks(n: unknown): number {
   return 2
 }
 
-function gapTokenVar(gap: unknown): string {
+function gapTokenVar(gap: unknown) {
   switch (gap) {
     case 'none':
-      return 'var(--bp-space-none,0)'
+      return 'var(--bp-space-none,0)' as const
     case 'sm':
-      return 'var(--bp-space-sm,0.8rem)'
+      return 'var(--bp-space-sm,0.8rem)' as const
     case 'lg':
-      return 'var(--bp-space-lg,2.4rem)'
+      return 'var(--bp-space-lg,2.4rem)' as const
     default:
-      return 'var(--bp-space-md,1.6rem)'
+      return 'var(--bp-space-md,1.6rem)' as const
   }
 }
 
@@ -1464,7 +1464,8 @@ function clampfWidth(n: unknown, left: number): number | null {
   if (nonFinite(n)) return null
   return typeof n === 'number' ? Math.min(Math.max(n, 1), 100 - left) : Math.max(1, 100 - left)
 }
-const pct = (prop: string, v: number | null) => styleOf(prop, v, { after: '%' })
+// A roadmap mark's style: its left, and a bar's width, each a percent of the track.
+const markStyle = (left: number | null, width?: number | null) => styleAttr([styleOf('left', left, { after: '%' }), styleOf('width', width, { after: '%' })])
 
 // The two cannot-place strings: components.ex roadmap_unplaced_copy/0 and
 // roadmap_lane_unplaced_copy/0. An Elixir test reads these literals (and the Go
@@ -1494,7 +1495,7 @@ const roadmap: Emit = (b, ctx) => {
   const todayDay = roadmapDate(b.today)
   const today =
     span !== null && todayDay !== null
-      ? `<span class="bp-rm__today"${styleAttr([pct('left', clampf(roadmapDatePct(todayDay, span)))])}></span>`
+      ? `<span class="bp-rm__today"${markStyle(clampf(roadmapDatePct(todayDay, span)))}></span>`
       : ''
   const scaleCells = asList(b.scale)
   const scale =
@@ -1514,7 +1515,7 @@ const roadmap: Emit = (b, ctx) => {
         (truthy(m.phase_row) ? ' bp-rm__lane--phase' : '') +
         (placed ? '' : ' bp-rm__lane--unplaced')
       const body = placed
-        ? `<span class="bp-rm__bar bp-rm__bar--${role}"${styleAttr([pct('left', left), pct('width', width)])}></span>`
+        ? `<span class="bp-rm__bar bp-rm__bar--${role}"${markStyle(left, width)}></span>`
         : `<span class="bp-rm__unplaced">${ctx.t(ROADMAP_LANE_UNPLACED_COPY)}</span>`
       return `<div class="${cls}"><span class="bp-rm__lbl">${draftHtml(m, ctx)}${title}</span><div class="bp-rm__track">${body}${today}</div></div>`
     })

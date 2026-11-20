@@ -131,16 +131,16 @@ function chatDiffLineMaps(input: unknown): DiffLine[] {
 
 export const CHAT_DIFF_BUDGET = 20
 
-export function rowStyle(op: string): string {
+export function rowStyle(op: string) {
   switch (op) {
     case '+':
-      return 'color: var(--ok); background: var(--ok-soft); white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px;'
+      return 'color: var(--ok); background: var(--ok-soft); white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px;' as const
     case '-':
-      return 'color: var(--danger); background: var(--danger-soft); white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px;'
+      return 'color: var(--danger); background: var(--danger-soft); white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px;' as const
     case 'gap':
-      return 'border-top: 1px solid var(--border-muted); margin: 4px 0; height: 0;'
+      return 'border-top: 1px solid var(--border-muted); margin: 4px 0; height: 0;' as const
     default:
-      return 'color: var(--fg-dim); white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px;'
+      return 'color: var(--fg-dim); white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px;' as const
   }
 }
 
@@ -227,16 +227,16 @@ function todoGlyph(status: string): string {
   return '☐'
 }
 
-function glyphStyle(status: string): string {
-  if (status === 'completed') return 'flex: none; color: var(--ok);'
-  if (status === 'in_progress') return 'flex: none; color: var(--primary);'
-  return 'flex: none; opacity: 0.6;'
+function glyphStyle(status: string) {
+  if (status === 'completed') return 'flex: none; color: var(--ok);' as const
+  if (status === 'in_progress') return 'flex: none; color: var(--primary);' as const
+  return 'flex: none; opacity: 0.6;' as const
 }
 
-function textStyle(status: string): string {
-  if (status === 'completed') return 'overflow-wrap: anywhere; opacity: 0.6; text-decoration: line-through;'
-  if (status === 'in_progress') return 'overflow-wrap: anywhere; color: var(--primary); font-weight: 600;'
-  return 'overflow-wrap: anywhere;'
+function textStyle(status: string) {
+  if (status === 'completed') return 'overflow-wrap: anywhere; opacity: 0.6; text-decoration: line-through;' as const
+  if (status === 'in_progress') return 'overflow-wrap: anywhere; color: var(--primary); font-weight: 600;' as const
+  return 'overflow-wrap: anywhere;' as const
 }
 
 function todoProgress(todos: unknown[]): string {
