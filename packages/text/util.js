@@ -4,7 +4,8 @@
 
 import { numberText } from './number-text.js';
 
-export const MAX_DEPTH = 100;
+// The writers stop at the format's own block depth, validate's.
+export { MAX_DEPTH } from '@portable-doc/validate';
 export const TOO_DEEP = 'Nested too deep to show';
 
 export const isMap = (v) => !!v && typeof v === 'object' && !Array.isArray(v);

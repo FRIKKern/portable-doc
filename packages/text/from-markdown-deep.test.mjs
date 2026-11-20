@@ -5,7 +5,7 @@ import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
 import { parsedWork, readPlan } from './from-markdown.js';
 import { CASES, callouts, calloutsOverQuotes } from './import-work-cases.mjs';
 import { planText } from './import-work.js';
-import { IMPORT_WORK, fromMarkdown, readMarkdown } from './index.js';
+import { IMPORT_WORK, NESTING_KEPT_AS_TEXT, fromMarkdown, readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
 const words = (n, prefix = 'w') => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
@@ -32,20 +32,24 @@ function keepsEveryWord(md, label) {
   return blocks;
 }
 
-test('a list nested 60 levels deep keeps every word: lists to depth 50, then the deepest item holds the rest as text, one space apart', () => {
-  const nested = (marker, indent) => words(60).map((w, i) => `${' '.repeat(indent * i)}${marker} ${w}`).join('\n');
+test('a list nested 110 levels deep keeps every word: lists to depth 99, then the deepest item holds the rest as text, one space apart, and says so', () => {
+  const nested = (marker, indent) => words(110).map((w, i) => `${' '.repeat(indent * i)}${marker} ${w}`).join('\n');
+  const rest = (sep) => Array.from({ length: 11 }, (_, i) => `w${99 + i}`).join(sep);
   for (const [label, md] of [['bullets', nested('-', 2)], ['ordered', nested('1.', 3)], ['checklist', nested('- [ ]', 2)]]) {
     const { depth, content } = deepest(keepsEveryWord(md, label)[0]);
-    assert.equal(depth, 50, label);
-    assert.deepEqual(content, [t(label === 'checklist' ? 'w50 [ ] w51 [ ] w52 [ ] w53 [ ] w54 [ ] w55 [ ] w56 [ ] w57 [ ] w58 [ ] w59' : words(10).map((_, i) => `w${50 + i}`).join(' '))], label);
+    assert.equal(depth, 99, label);
+    assert.deepEqual(content, [t(rest(label === 'checklist' ? ' [ ] ' : ' '))], label);
+    // The list 99 deep holds the text; its notice names it, and its lines, 100 to the end.
+    const path = `/blocks/0${'/items/0/children/0'.repeat(99)}`;
+    assert.deepEqual(readMarkdown(md).notices, [{ code: NESTING_KEPT_AS_TEXT, path, line: 100, lines: 11 }], label);
   }
   // The deepest item keeps its own marks; what is flattened into it is plain text.
-  const marked = words(60).map((w, i) => `${'  '.repeat(i)}- **${w}** and *more*`).join('\n');
+  const marked = words(110).map((w, i) => `${'  '.repeat(i)}- **${w}** and *more*`).join('\n');
   const { content } = deepest(keepsEveryWord(marked, 'marked')[0]);
-  assert.deepEqual(content.slice(0, 2), [{ type: 'strong', children: [t('w50')] }, t(' and ')]);
-  assert.equal(content.at(-1).value, ' w51 and more w52 and more w53 and more w54 and more w55 and more w56 and more w57 and more w58 and more w59 and more');
+  assert.deepEqual(content.slice(0, 2), [{ type: 'strong', children: [t('w99')] }, t(' and ')]);
+  assert.equal(content.at(-1).value, ` ${Array.from({ length: 10 }, (_, i) => `w${100 + i} and more`).join(' ')}`);
   // `- - - x` nests a list per marker on one line.
-  assert.deepEqual(deepest(keepsEveryWord(`${'- '.repeat(60)}end0`, 'one line')[0]), { depth: 50, content: [t('end0')] });
+  assert.deepEqual(deepest(keepsEveryWord(`${'- '.repeat(110)}end0`, 'one line')[0]), { depth: 99, content: [t('end0')] });
 });
 
 test('quotes nested deep, lists inside quotes and quotes inside lists keep every word, and the doc validates', () => {
@@ -134,17 +138,19 @@ function calloutChain(block) {
   return { depth: depth + 1, deepest: at };
 }
 
-test('callouts nested past MAX_NEST in a document: the blocks around them stay, callouts go 50 deep, the deepest keeps the rest as its text', () => {
-  for (const D of [51, 101]) {
+test('callouts nested past MAX_DEPTH in a document: the blocks around them stay, callouts go 100 deep, the deepest keeps the rest as its text, and says so', () => {
+  for (const D of [101, 151]) {
     const md = `# Title0\n\nIntro0.\n\n${callouts(D)}\n\nOutro0.`;
     const blocks = keepsEveryWord(md, `${D} deep`);
     assert.deepEqual(blocks.map((b) => b.type), ['heading', 'paragraph', 'callout', 'paragraph'], `${D} deep`);
-    assert.deepEqual(readMarkdown(md).notices, [], `${D} deep`);
+    // The 100th callout's lines: two of its own, and two for each callout under it.
+    const path = `/blocks/2${'/slots/body/0'.repeat(99)}`;
+    assert.deepEqual(readMarkdown(md).notices, [{ code: NESTING_KEPT_AS_TEXT, path, line: 5 + 2 * 99, lines: 2 * (D - 99) }], `${D} deep`);
     const { depth, deepest: last } = calloutChain(blocks[2]);
-    assert.equal(depth, 51, `${D} deep: 50 callouts read their body as blocks, the 51st keeps its body as text`);
+    assert.equal(depth, 100, `${D} deep: 99 callouts read their body as blocks, the 100th keeps its body as text`);
     assert.equal(last.slots, undefined);
     // The deeper markers stay as the literal text they are, as in any quote kept as text.
-    assert.deepEqual(last.content, [t(Array.from({ length: D - 50 }, (_, i) => `h${50 + i}`).join(' [!info] '))], `${D} deep`);
+    assert.deepEqual(last.content, [t(Array.from({ length: D - 99 }, (_, i) => `h${99 + i}`).join(' [!info] '))], `${D} deep`);
   }
 });
 
@@ -156,14 +162,17 @@ test('callouts 1000 deep cost what plain quotes as deep cost, in the text\'s cou
   for (const count of [(md) => planText(md, NO_LIMIT).work, parsedWork]) {
     assert.ok(count(marked) <= 1.05 * count(plain), `callouts ${count(marked)}, plain quotes ${count(plain)}`);
   }
-  // The text before the cut reads as one callout, 50 deep; the rest is the plain paragraph
-  // after it, and the notice names that paragraph.
+  // The text before the cut reads as one callout, 100 deep, the deepest saying it keeps the
+  // rest before the cut as text; the rest is the plain paragraph after it, and the notice
+  // names that paragraph.
+  const deepest = `/blocks/0${'/slots/body/0'.repeat(99)}`;
   for (const md of [marked, plain]) {
     const { blocks, notices } = readMarkdown(md);
     assert.deepEqual(blocks.map((b) => b.type), [md === marked ? 'callout' : 'blockquote', 'paragraph']);
-    assert.deepEqual(notices.map((n) => [n.code, n.rule, n.path]), [[IMPORT_WORK.notice, 'budget', '/blocks/1']]);
+    const kept = md === marked ? [[NESTING_KEPT_AS_TEXT, undefined, deepest]] : [];
+    assert.deepEqual(notices.map((n) => [n.code, n.rule, n.path]), [[IMPORT_WORK.notice, 'budget', '/blocks/1'], ...kept]);
   }
-  assert.equal(calloutChain(readMarkdown(marked).blocks[0]).depth, 51);
+  assert.equal(calloutChain(readMarkdown(marked).blocks[0]).depth, 100);
 });
 
 test('a callout\'s parts are each read once: the nodes the read visits stay within the tokens markdown-it made, for callouts 1000 and 150 deep and over plain quotes', () => {
@@ -177,7 +186,7 @@ test('a callout\'s parts are each read once: the nodes the read visits stay with
   }
 });
 
-test('callouts over plain quotes, and callouts 150 deep, keep their structure with no notice', () => {
+test('callouts over plain quotes keep their structure with no notice; callouts 150 deep keep theirs to 100 deep, and say so', () => {
   for (const [C, P, W] of [[10, 40, 5], [30, 30, 3], [3, 90, 2]]) {
     const md = calloutsOverQuotes(C, P, W);
     const blocks = keepsEveryWord(md, `${C} over ${P}`);
@@ -187,6 +196,6 @@ test('callouts over plain quotes, and callouts 150 deep, keep their structure wi
     assert.deepEqual(last.slots.body.map((b) => b.type), ['blockquote'], `${C} over ${P}: the plain quotes are one quote of text`);
   }
   const md = CASES['callouts 150 deep, a paragraph in each'];
-  assert.deepEqual(readMarkdown(md).notices, []);
-  assert.equal(calloutChain(keepsEveryWord(md, '150 deep')[0]).depth, 51);
+  assert.deepEqual(readMarkdown(md).notices.map((n) => [n.code, n.path]), [[NESTING_KEPT_AS_TEXT, `/blocks/0${'/slots/body/1'.repeat(99)}`]]); // each body: its paragraph, then the next callout
+  assert.equal(calloutChain(keepsEveryWord(md, '150 deep')[0]).depth, 100);
 });

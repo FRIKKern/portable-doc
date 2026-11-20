@@ -5,22 +5,28 @@
 // `children`, code carries `value`.
 
 import MarkdownIt from 'markdown-it';
+import { MAX_DEPTH } from '@portable-doc/validate';
 import { asList, isMap, safeUrl, str } from './util.js';
 
+// Blocks nest in the import as deep as validate allows them, MAX_DEPTH
+// (packages/validate/index.js:31): one Markdown level is one format level. A list, a list
+// in a list item and a callout's body are each one level down, as checkBlock counts them
+// (packages/validate/index.js:224). Past it, the deeper levels are kept as text, with a
+// NESTING_KEPT_AS_TEXT notice (from-markdown.js).
+
 /**
- * Lists inside lists, and inline marks inside marks, deeper than this are kept as
- * their plain text. A list past it becomes the text of the deepest item kept: its
- * items and their blocks one space apart, after the item's own text.
+ * Inline marks inside marks deeper than this are kept as their plain text. A limit of its
+ * own: marks count against MAX_VALUE_DEPTH, two JSON levels each, not against MAX_DEPTH.
  */
-export const MAX_NEST = 50;
+export const MAX_MARK_NEST = 50;
 
 // markdown-it builds tokens to `maxNesting` levels (each list, list item and quote
 // is one) and skips the lines deeper than that. The limit is set just past what
-// MAX_NEST lists inside lists need, and the skipped lines are kept as one
+// MAX_DEPTH lists inside lists need, and the skipped lines are kept as one
 // `deep_source` token: their source, with the outer quote and list markers already
 // taken off, which flattenText parses when it reaches it. So no words are lost, and
 // depth costs no stack: each parse goes PARSE_LEVELS deep at most.
-const PARSE_LEVELS = 2 * (MAX_NEST + 2);
+const PARSE_LEVELS = 2 * (MAX_DEPTH + 2);
 /** GFM: tables, strikethrough, bare-URL links; raw HTML read so its text can be kept. */
 export const parser = new MarkdownIt('default', { html: true, linkify: true, typographer: false, maxNesting: PARSE_LEVELS });
 // Every link is parsed, and its URL kept as written; util.js safeUrl decides which become links.
@@ -242,9 +248,13 @@ function link(href, children) {
   return [{ type: 'link', href: url, children: children.length ? children : [text(url)] }];
 }
 
-function inlineNode(node, depth) {
-  if (depth >= MAX_NEST) return [text(flattenText([node]))];
-  const inner = () => inline(node.children, depth + 1);
+function inlineNode(node, depth, past) {
+  if (depth >= MAX_MARK_NEST) {
+    // Only a mark, link, image or code span loses its shape here; plain text is the same text.
+    if (past && (node.children.length || node.type === 'code_inline')) past.past = true;
+    return [text(flattenText([node]))];
+  }
+  const inner = () => inline(node.children, depth + 1, past);
   const wrap = (type) => {
     const children = inner();
     return children.length ? [{ type, children }] : [];
@@ -272,8 +282,11 @@ function inlineNode(node, depth) {
   }
 }
 
-/** Inline nodes (the children of markdown-it `inline` nodes) as PortableDoc inline content. */
-export function inline(nodes, depth = 0) {
+/**
+ * Inline nodes (the children of markdown-it `inline` nodes) as PortableDoc inline content.
+ * Marks past MAX_MARK_NEST set `past.past`, when `past` is given.
+ */
+export function inline(nodes, depth = 0, past = undefined) {
   const out = [];
   let skipping = null;
   for (const n of asList(nodes)) {
@@ -282,7 +295,7 @@ export function inline(nodes, depth = 0) {
       continue;
     }
     if (skipping) continue;
-    for (const node of n.type === 'inline' ? inline(n.children, depth) : inlineNode(n, depth)) out.push(node);
+    for (const node of n.type === 'inline' ? inline(n.children, depth, past) : inlineNode(n, depth, past)) out.push(node);
   }
   return merge(out);
 }

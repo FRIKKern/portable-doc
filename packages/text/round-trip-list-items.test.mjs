@@ -66,7 +66,9 @@ test('in every fixture case, a list whose items hold blocks is written in its ow
   }
   assert.deepEqual(wrong.slice(0, 5), [], `${wrong.length} lists`);
   // Exact, so a list cannot change route unseen; a new shared case moves these on purpose.
-  assert.deepEqual({ ...routes, fromText }, { native: 25, fenced: 61, lost: 0, fromText: 24 });
+  // text-work "tabs between markers" reads as a list 99 deep since import nests to MAX_DEPTH; at 50
+  // deep it was the same list as "a lazy line that looks like a fence", so it counted once.
+  assert.deepEqual({ ...routes, fromText }, { native: 26, fenced: 61, lost: 0, fromText: 25 });
 });
 
 test('a list whose item holds a block import cannot bring back is reported in lost, never written as kept', () => {

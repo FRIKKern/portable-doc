@@ -44,4 +44,4 @@ Either choice can still be reversed. Reversing it is cheap until the reader chan
 
 ## Considered
 
-- **A depth limit of the body's own.** Rejected. One limit, the validator's `MAX_DEPTH`, holds for every block wherever it sits. The Markdown import reads callout bodies as blocks to 50 deep (`MAX_NEST`), which is a limit of reading Markdown, not of the document.
+- **A depth limit of the body's own.** Rejected. One limit, the validator's `MAX_DEPTH`, holds for every block wherever it sits. The Markdown import reads callout bodies as blocks to that same limit, one Markdown level to one format level.

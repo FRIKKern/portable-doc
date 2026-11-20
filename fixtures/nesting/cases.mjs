@@ -14,6 +14,7 @@ export const CASES = {
   'callout-portabledoc-fence-ids-shared': '> [!info] A\n>\n> ```portabledoc\n> [{"type":"divider","id":"d"}]\n> ```\n\n```portabledoc\n[{"type":"divider","id":"d"}]\n```',
   'callout-mermaid-caption': '> [!info] A\n>\n> ```mermaid\n> graph TD; A-->B\n> ```\n>\n> *The flow*',
   'plain-quote-stays-inline': '> a\n>\n> - b\n> - c',
-  // 50 callouts read their body as blocks; the 51st keeps the 52nd as text in its content.
-  'callout-52-deep-past-cap': callouts(52),
+  // 99 callouts read their body as blocks; the 100th, as deep as validate allows, keeps the
+  // 101st as text in its content, and says so.
+  'callout-101-deep-past-cap': callouts(101),
 };

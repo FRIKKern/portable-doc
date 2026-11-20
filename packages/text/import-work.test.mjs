@@ -166,7 +166,7 @@ test('a long line inside an open code fence ends the code before it, and the cod
   assert.deepEqual(read(`> \`\`\`\n> code\nplain\n${X(41)}\nmore`), [quote('code'), p('plain'), p(X(41)), p('more')]);
 });
 
-test('past the budget, open containers close at the cut line, and the rest of the text is one plain top-level paragraph with one notice', () => {
+test('past the budget, open containers close at the cut line, and the rest of the text is one plain top-level paragraph with one budget notice', () => {
   // A list too deep to read is cut at its own line: the whole text is one paragraph.
   const huge = `${X(100_000, '- ')}a0\n\nb0\n\n${X(300, '> ')}c0`;
   const { blocks, notices } = readMarkdown(huge);
@@ -176,6 +176,8 @@ test('past the budget, open containers close at the cut line, and the rest of th
   const deepItems = Array.from({ length: 120 }, (_, i) => `${X(300, '- ')}a${i}`).join('\n');
   const mid = readMarkdown(`${deepItems}\n\nb0\n\n${X(300, '> ')}c0`);
   assert.deepEqual(mid.blocks.map((b) => b.type), ['list', 'paragraph']);
-  assert.deepEqual(mid.notices, [{ code: 'import_work_spent', rule: 'budget', path: '/blocks/1', line: 59, lines: 66 }]);
+  // Each of the 58 items read is 300 lists deep: the list 99 deep under it keeps the rest as text, and says so.
+  const kept = Array.from({ length: 58 }, (_, i) => ({ code: 'nesting_kept_as_text', path: `/blocks/0/items/${i}/children/0${'/items/0/children/0'.repeat(98)}`, line: i + 1, lines: 1 }));
+  assert.deepEqual(mid.notices, [{ code: 'import_work_spent', rule: 'budget', path: '/blocks/1', line: 59, lines: 66 }, ...kept]);
   assert.match(mid.blocks[1].content[0].value, /^- - .* a58 .* a119 b0 > > .* c0$/);
 });

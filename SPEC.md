@@ -12,6 +12,8 @@ PortableDoc is a JSON document: an ordered list of blocks, each with a type from
 
 A callout's content is its own first paragraph, its slots.body is the blocks after that paragraph, and neither field is a copy of the other. A callout's body holds any block a document may hold. The one depth limit every document has applies to it too. A callout with empty `content` and a body is allowed: an empty first line is not a missing one. Readers show the content, then every block of the body, in that order ([0014](docs/decisions/0014-callout-content-and-body.md)).
 
+An importer nests blocks as deep as that one depth limit, one source level to one block level, and keeps every word nested deeper as text in the deepest block it keeps, with a notice that names that block.
+
 What lands here, and when:
 
 | Path | What | From |
