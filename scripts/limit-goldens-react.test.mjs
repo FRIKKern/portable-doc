@@ -2,28 +2,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { renderPortableDocument } from '@portable-doc/react';
+import { NOT_YET, NOT_YET_MOST, limitGoldens } from './lib/limit-goldens.mjs';
 
 // The limit goldens are the reader's output for blocks at and past a limit: a depth, a range, a
 // cap, a padding past the stored cells. They are synced from Barkpark's pack. React must write
 // each one byte for byte, as the block goldens' test in packages/mcp/local.test.mjs asks of those.
-// A golden React does not yet write is named here with why, and its test fails once React writes
-// it, so the name comes out in the same change.
+// A golden React does not yet write is named in scripts/lib/limit-goldens.mjs with why, and this
+// test fails once React writes it, so the name comes out in the same change.
 
-const DIR = new URL('../goldens/limits/', import.meta.url);
-const GOLDENS = fs
-  .readdirSync(DIR)
-  .filter((f) => f.endsWith('.golden.json'))
-  .sort()
-  .map((f) => [f.replace(/\.golden\.json$/, ''), JSON.parse(fs.readFileSync(new URL(f, DIR), 'utf8'))]);
+const GOLDENS = limitGoldens();
 
 // The pack's own list of its limit goldens, so a golden missing on disk is seen.
 const IN_PACK = Object.keys(JSON.parse(fs.readFileSync(new URL('../SOURCE.json', import.meta.url), 'utf8')).files).filter((f) => f.startsWith('goldens/limits/'));
-
-// This list only shrinks: its length is held at or under NOT_YET_MOST.
-const NOT_YET = {
-  'list-at-the-depth-limit': 'at the deepest level the reader writes the empty item; React writes "Nested too deep to show" there',
-};
-const NOT_YET_MOST = 1;
 
 test('React writes every limit golden byte for byte, except the ones named with why', () => {
   assert.ok(GOLDENS.length > 0, 'no limit goldens');
