@@ -61,6 +61,17 @@ test('every function a package exports is a writer in the registry, or named wit
   assert.deepEqual([...writers].filter((k) => k in NOT_A_WRITER), [], 'both a writer and not one');
 });
 
+test("source mode's checks in the editor answer a place or nothing, never a document", async () => {
+  const { changedSentinel, firstLoss, sourceLoss } = await import('../packages/editor/src/markdown.js');
+  const paragraph = [{ type: 'paragraph', text: 'Hello' }];
+  const calloutWithBody = [{ type: 'callout', content: [{ type: 'text', value: 'Lead' }], slots: { body: [{ type: 'paragraph', text: 'Body' }] } }];
+  assert.equal(changedSentinel('Hello', 'Hello'), -1);
+  assert.equal(firstLoss(paragraph, paragraph), null);
+  assert.deepEqual(firstLoss(paragraph, []), { index: 0, type: 'paragraph', path: '', part: 'content' });
+  assert.equal(sourceLoss(paragraph), null);
+  assert.deepEqual(sourceLoss(calloutWithBody), { index: 0, type: 'callout', path: 'slots.body', part: 'body' });
+});
+
 test('the registry holds these seven writers, each writing a string of its kind', () => {
   assert.deepEqual(WRITERS.map((w) => w.name), [
     'readable Markdown',

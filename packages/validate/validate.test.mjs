@@ -23,6 +23,16 @@ function gaps(codes, fixtures) {
   ];
 }
 
+test("Barkpark's value-depth cases give exactly their errors, at the same limit", () => {
+  const { maxValueDepth, cases } = read('goldens/limits/value-too-deep.json');
+  assert.equal(maxValueDepth, MAX_VALUE_DEPTH);
+  assert.ok(cases.length >= 2 && cases.some((c) => c.expect.length === 0) && cases.some((c) => c.expect.length > 0), 'a case at the limit and one past it');
+  for (const { name, doc, expect } of cases) {
+    const result = validate(doc);
+    assert.deepEqual(result.ok ? [] : result.errors.map(({ code, path }) => ({ code, path })), expect, name);
+  }
+});
+
 for (const { file, expect, doc } of broken) {
   test(`${file} is refused with exactly its expected codes and paths`, () => {
     const result = validate(doc);
