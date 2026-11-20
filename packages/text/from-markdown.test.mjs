@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { MAX_VALUE_DEPTH, blockSchema, validate } from '@portable-doc/validate';
+import { MAX_DEPTH, MAX_VALUE_DEPTH, blockSchema, validate, walkDepth } from '@portable-doc/validate';
 import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
 import { currentNames } from './current-names.js';
 import { MAX_NEST } from './from-markdown-inline.js';
@@ -87,16 +87,18 @@ test('a heading keeps its marks and links as inline content, the way a paragraph
 
 test('a portabledoc fence imports its old names under their current names, by the rule every reader uses; each value it loses is a notice', () => {
   const code = (v) => ({ type: 'code', value: v });
-  // Why a case skips the canon compare: canon reads a list that holds only code blocks as inline
-  // content, comparing the code's text alone, so it sees no text under a code block's old name.
-  const CODE_BLOCKS_READ_AS_INLINE = 'canon reads a list of only code blocks as inline content';
   // [stored, imported, the names dropped as { path, name, current }]. The current name wins when it
   // holds a value; of two old names, the table's first. A table's `cols` and `header: true` stay.
+  // A blank or empty value holds nothing, so dropping it is no notice. Data under a key no reader
+  // reads as blocks (`meta`) is kept as written.
   const cases = [
     [{ type: 'code', code: 'a' }, code('a'), []],
     [{ type: 'code', code: 'a', value: 'b' }, code('b'), [['/blocks/0/code', 'code', 'value']]],
     [{ type: 'code', code: 'a', text: 'b' }, code('a'), [['/blocks/0/text', 'text', 'value']]],
-    [{ type: 'code', value: ' ', code: 'a' }, code('a'), [['/blocks/0/value', 'value', 'value']]],
+    [{ type: 'code', value: ' ', code: 'a' }, code('a'), []],
+    [{ type: 'heading', level: 2, text: 'H', content: [] }, { type: 'heading', level: 2, content: [t('H')] }, []],
+    [{ type: 'paragraph', content: [t('p')], meta: { type: 'heading', text: 'k' } }, { type: 'paragraph', content: [t('p')], meta: { type: 'heading', text: 'k' } }, []],
+    [{ type: 'paragraph', content: [t('p')], meta: [{ type: 'code', code: 'a', value: 'b' }] }, { type: 'paragraph', content: [t('p')], meta: [{ type: 'code', code: 'a', value: 'b' }] }, []],
     [{ type: 'code', code: 'a', value: 'a', lang: 'js' }, { ...code('a'), lang: 'js' }, []],
     [{ type: 'paragraph', text: 'hi' }, { type: 'paragraph', content: [t('hi')] }, []],
     [{ id: 'h1', type: 'heading', level: 2, text: 'H', content: [t('C')] }, { id: 'h1', type: 'heading', level: 2, content: [t('C')] }, [['/blocks/0/text', 'text', 'content']]],
@@ -114,17 +116,16 @@ test('a portabledoc fence imports its old names under their current names, by th
       { type: 'callout', tone: 'info', content: [t('c')], slots: { body: [{ type: 'code', code: 'a', lang: 'js' }] } },
       { type: 'callout', tone: 'info', content: [t('c')], slots: { body: [{ type: 'code', value: 'a', lang: 'js' }] } },
       [],
-      CODE_BLOCKS_READ_AS_INLINE,
     ],
   ];
-  for (const [stored, imported, dropped, skipCanon] of cases) {
+  for (const [stored, imported, dropped] of cases) {
     const label = JSON.stringify(stored);
     valid([stored]);
     const read = readMarkdown(`\`\`\`portabledoc\n${JSON.stringify([stored])}\n\`\`\``);
     assert.deepEqual(read.blocks, [imported], label);
     valid(read.blocks);
-    // Block by block, as the top list of blocks may itself hold only code blocks.
-    if (skipCanon !== CODE_BLOCKS_READ_AS_INLINE) assert.deepEqual(canon(read.blocks[0]), canon(stored), `${label}: the same doc as canon reads it`);
+    // Block by block: canon reads a list of only code blocks as inline content, by their text alone.
+    assert.deepEqual(canon(read.blocks[0]), canon(stored), `${label}: the same doc as canon reads it`);
     assert.equal(toPlainText(read.blocks), toPlainText([stored]), `${label}: the same text`);
     const want = dropped.map(([path, name, current]) => ({ code: OLD_NAME_DROPPED, path, line: 1, lines: 3, name, current, fix: `write ${current}` }));
     assert.deepEqual(read.notices, want, label);
@@ -132,6 +133,26 @@ test('a portabledoc fence imports its old names under their current names, by th
   // The notice's path is the block's place in the doc, and its lines the fence's.
   const later = readMarkdown(`Intro\n\n\`\`\`portabledoc\n[{"type":"divider"},\n${JSON.stringify({ type: 'code', code: 'a', value: 'b' })}]\n\`\`\``);
   assert.deepEqual(later.notices, [{ code: OLD_NAME_DROPPED, path: '/blocks/2/code', line: 3, lines: 4, name: 'code', current: 'value', fix: 'write value' }]);
+});
+
+test('a fence folds old names only where readers read blocks: other data is kept as written, however deep, and an old name is folded as deep as blocks nest', () => {
+  const fenced = (blocks) => readMarkdown(`Intro\n\n\`\`\`portabledoc\n${JSON.stringify(blocks)}\n\`\`\``);
+  // Block-shaped data under `meta`, one level short of the depth limit; its fold would pass it.
+  let deep = { type: 'paragraph', text: 'x' };
+  for (let i = 0; i < 995; i++) deep = [deep];
+  const meta = [{ type: 'paragraph', content: [t('p')], meta: deep }];
+  assert.equal(walkDepth({ blocks: meta }), MAX_VALUE_DEPTH - 1);
+  const kept = fenced(meta);
+  assert.deepEqual([kept.blocks, kept.notices], [[{ type: 'paragraph', content: [t('Intro')] }, ...meta], []]);
+  // A paragraph under its old name in the deepest list a fence may hold (blocks nest at most
+  // MAX_DEPTH deep): far above MAX_VALUE_DEPTH, so it folds, and nothing else changes.
+  let stored = { type: 'paragraph', text: 'x' };
+  let folded = { type: 'paragraph', content: [t('x')] };
+  for (let i = 1; i < MAX_DEPTH; i++) [stored, folded] = [stored, folded].map((b) => ({ type: 'list', items: [{ children: [b] }] }));
+  valid([stored]);
+  assert.ok(!validate([{ type: 'list', items: [{ children: [stored] }] }]).ok, 'one list more is too deep');
+  const read = fenced([stored]);
+  assert.deepEqual([read.blocks, read.notices], [[{ type: 'paragraph', content: [t('Intro')] }, folded], []]);
 });
 
 test('fromMarkdown follows Barkpark FromMarkdown on its own examples', () => {

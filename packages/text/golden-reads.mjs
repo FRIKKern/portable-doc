@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import { blockSchema, validate } from '@portable-doc/validate';
-import { MARK, foldFields, foldsKey, innerPath, isInline, ownType } from './current-names.js';
+import { MARK, currentNames, isInline } from './current-names.js';
 import { aliasTable, itemOf, readItem } from './read-aliases.js';
 
 const GOLDENS = new URL('../../goldens/blocks/', import.meta.url);
@@ -296,23 +296,17 @@ function codeText(n) {
   const { name, value } = readItem(n, 'inline:code', 'value');
   return name === 'value' ? value : runs(Array.isArray(value) ? value : []).map((r) => r.text).join('');
 }
-/** `v` as compared. */
-export const canon = (v) => canonAt(v, undefined);
+/**
+ * `v` as compared: its old names under their current names, by the fold a fence imports by
+ * (currentNames), then ids dropped and inline content read as its runs.
+ */
+export const canon = (v) => compared(currentNames(v));
 
-/** `v` as compared, `owner` being the item path an object in it sits at, if any ("steps.steps[]"). */
-function canonAt(v, owner) {
+function compared(v) {
   if (isInline(v)) return runs(v);
-  if (Array.isArray(v)) return v.map((x) => canonAt(x, owner));
+  if (Array.isArray(v)) return v.map(compared);
   if (!v || typeof v !== 'object') return v;
-  const type = typeof v.type === 'string' ? v.type : '';
-  const own = owner ?? type;
-  const path = owner ?? ownType(type);
   const out = {};
-  // A field with old names, and the old names folded into it, are read by the shared fold
-  // (current-names.js), the way the renderers read them and a fence imports them.
-  for (const [k, x] of Object.entries(v)) if (k !== 'id' && !foldsKey(own, k)) out[k] = canonAt(x, innerPath(path, k, x));
-  // No name remains (each is null or of the wrong type): the renderers show nothing, and the fold
-  // keeps a stored current name as it is, so two different stored values never compare equal.
-  for (const { field, value } of foldFields(v, own)) out[field] = canonAt(value, innerPath(path, field, value));
+  for (const [k, x] of Object.entries(v)) if (k !== 'id') out[k] = compared(x);
   return out;
 }

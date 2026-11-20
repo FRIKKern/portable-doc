@@ -216,8 +216,8 @@ function scan(value) {
 // 1 to 50 blocks, every block in it of the allowed types, nested no deeper than MAX_VALUE_DEPTH, that
 // validate, hold only safe addresses (href, src, poster, url) and reuse no id from an earlier fence.
 // Anything else is a plain code block. A spliced block's old names (alias-table.js) are folded into
-// their current names by the rule every reader uses (current-names.js), and each value that fold
-// loses adds an OLD_NAME_DROPPED notice.
+// their current names by the rule every reader uses (current-names.js), where the readers read
+// blocks, and each value that fold loses adds an OLD_NAME_DROPPED notice.
 
 /**
  * Whether a fence's parsed value is spliced, given the ids earlier fences used: { ids } (the
@@ -231,6 +231,10 @@ export function checkFence(blocks, usedIds) {
   const ids = scan(blocks);
   if (ids === null) return { reason: 'address' };
   if (!validate(blocks).ok) return { reason: 'invalid' };
+  // Counted again with old names under their current names, as the fence imports: a string read
+  // as inline content is two levels deeper. A valid fence's blocks nest at most MAX_DEPTH deep,
+  // so today no fold reaches MAX_VALUE_DEPTH; this holds the rule if those limits move.
+  if (tooDeep(currentNames(blocks))) return { reason: 'depth' };
   if (ids.some((id) => usedIds.has(id))) return { reason: 'id' };
   return { ids };
 }
