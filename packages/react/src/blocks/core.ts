@@ -29,7 +29,7 @@ import {
 import { renderBlock, renderBlocks } from './registry'
 import { listChildren } from '../list-children'
 import { type RoadmapSpan, roadmapDate, roadmapDatePct, roadmapSpan } from '../roadmap-span'
-import { roadmapMarks } from '../roadmap-marks'
+import { markStyle, roadmapMarks } from '../roadmap-marks'
 import { fieldOf, itemOf, namesOf, readItem } from '../../../text/read-aliases.js'
 import { numberText, stringOf, styleAttr, styleOf } from '../../../text/number-text.js'
 import { CHAT_DIFF_BUDGET, diffRowsHtml, splitLines, type DiffLine } from './chat'
@@ -1465,8 +1465,6 @@ function clampfWidth(n: unknown, left: number): number | null {
   if (nonFinite(n)) return null
   return typeof n === 'number' ? Math.min(Math.max(n, 1), 100 - left) : Math.max(1, 100 - left)
 }
-// A roadmap mark's style: its left, and a bar's width, each a percent of the track.
-const markStyle = (left: number | null, width?: number | null) => styleAttr([styleOf('left', left, { after: '%' }), styleOf('width', width, { after: '%' })])
 
 // The two cannot-place strings: components.ex roadmap_unplaced_copy/0 and
 // roadmap_lane_unplaced_copy/0. An Elixir test reads these literals (and the Go
