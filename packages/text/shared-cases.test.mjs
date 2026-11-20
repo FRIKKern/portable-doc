@@ -121,7 +121,7 @@ const READ = {
 };
 
 test('every folder under fixtures/ is one a test in this repository reads', () => {
-  const known = ['aliases', 'headings', 'list-split', 'nesting', 'round-trip', 'text-work', ...Object.keys(READ)].sort();
+  const known = ['aliases', 'form-scale', 'headings', 'list-split', 'nesting', 'round-trip', 'text-work', ...Object.keys(READ)].sort();
   const folders = fs.readdirSync(FIXTURES, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
   assert.deepEqual(folders, known, 'a folder no test reads, or a known one gone');
   for (const [folder, read] of Object.entries(READ)) {

@@ -11,17 +11,9 @@
 import { type Block, escapeHtml, escapeAttr, str, asList, isMap } from '../inline'
 import type { RenderCtx } from './chrome'
 import { numberText } from '../../../text/number-text.js'
+import { scaleOptions } from '../../../text/form-scale.js'
 
 type Emit = (block: Block, ctx: RenderCtx) => string
-
-function scaleBound(v: unknown, def: number): number {
-  if (typeof v === 'number' && Number.isInteger(v)) return v
-  if (typeof v === 'string') {
-    const n = Number.parseInt(v, 10)
-    return Number.isNaN(n) ? def : n
-  }
-  return def
-}
 
 // An option is its own value, or a [value, label] pair when the shown label is
 // translated chrome and the submitted value must not move (task-8e96278fc4ee7097).
@@ -49,16 +41,9 @@ function controlHtml(type: string, id: string, q: Record<string, unknown>, ctx: 
       return radioGroup(id, asList(q.options).map((o) => str(o)))
     case 'multi':
       return choiceGroup(id, asList(q.options).map((o) => str(o)), 'checkbox')
-    case 'scale': {
-      const scale = isMap(q.scale) ? q.scale : {}
-      const min = scaleBound(scale.min, 1)
-      let max = scaleBound(scale.max, 5)
-      // Cap the ladder span at 101 rungs (render-time DoS guard, forms.ex).
-      max = Math.min(max, min + 100)
-      const labels: string[] = []
-      if (max >= min) for (let i = min; i <= max; i++) labels.push(numberText(i))
-      return radioGroup(id, labels)
-    }
+    case 'scale':
+      // At most SCALE_MAX_OPTIONS options, whatever bounds the document gives (form-scale.js).
+      return radioGroup(id, scaleOptions(q.scale).map((v) => numberText(v)))
     default:
       // text + unknown → a textarea (never crash).
       return `<textarea name="${escapeAttr(id)}" rows="3"></textarea>`

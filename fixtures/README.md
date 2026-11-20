@@ -15,6 +15,7 @@ commit it copied; a hand-edited copy is not a copy.
 | `aliases/` | `{ block, reads }`: each field, item field or inline node field read on `block` gives its value, `null` for none |
 | `text-work/` | inputs and rules only; see its README |
 | `round-trip/` | nothing kept; see its README |
+| `form-scale/` | `bounds.json`: rows of a form scale's `min` and `max` as written, and the options every writer shows (`options`, `first`, `last`) |
 | `writers/` | `{ blocks, markdown, text, html }`: each writer's output, pinned byte for byte; see its README |
 
 The case files in `nesting/`, `headings/`, `list-split/`, `text-work/` and `round-trip/` are generated:
