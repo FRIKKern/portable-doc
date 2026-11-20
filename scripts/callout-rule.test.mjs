@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { validate } from '@portable-doc/validate';
 import { fixtureCases } from './lib/fixture-cases.mjs';
 import { WRITERS } from './lib/writers.mjs';
+import { KEEP_BYTES } from './write-shared-cases.mjs';
 
 /**
  * The callout rule, word for word: SPEC.md opens its callout paragraph with it, and the schema's
@@ -45,6 +46,14 @@ function calloutsWithABody(blocks) {
   visit(blocks, []);
   return out;
 }
+
+/** `blocks` with the value at `path` replaced. */
+const replaced = (x, [head, ...rest], value) => {
+  if (head === undefined) return value;
+  const copy = Array.isArray(x) ? [...x] : { ...x };
+  copy[head] = replaced(x[head], rest, value);
+  return copy;
+};
 
 /** How many callouts deep the callouts in `x` go. */
 const calloutDepth = (x) => {
@@ -95,29 +104,37 @@ const inOrder = (list, want) => {
   return i === want.length;
 };
 
-// The one limit: round-trip Markdown reads each write back as blocks, and reading back a callout
-// with more than 10 callouts in its body takes seconds (the deep nesting stress cases hold them:
-// on 2026-11-20 every callout took 9 s on that writer alone). It judges the callouts with at most 10 in their body;
-// every other writer judges all of them.
+// Each callout is judged twice: in place, in its whole case's output, where a writer meets it under
+// a list item or in another callout's body; and alone, as the one block written. The limits:
+// - Round-trip Markdown reads each write back as blocks, and reading back a callout with more than
+//   10 callouts in its body takes seconds (on 2026-11-20 every callout alone took 9 s on that writer).
+//   Alone, it judges the callouts with at most 10 in their body; in place, only the cases that hold
+//   none deeper, since each write there reads the whole case back.
+// - In place, a case over KEEP_BYTES is left out: "callouts 1000 deep" (2 MB) written once for each
+//   of its 50 callouts takes about a minute. Alone, its callouts are judged.
 const ROUND_TRIP_DEPTH = 10;
-const judgedBy = (writer) => (writer.name === 'round-trip Markdown' ? cases.filter(({ callout }) => calloutDepth(bodyOf(callout)) <= ROUND_TRIP_DEPTH) : cases);
+const isRoundTrip = (writer) => writer.name === 'round-trip Markdown';
+const deepCase = new Set(cases.filter(({ callout }) => calloutDepth(bodyOf(callout)) > ROUND_TRIP_DEPTH).map(({ name }) => name));
+const small = new Set(cases.filter(({ blocks }) => JSON.stringify(blocks).length <= KEEP_BYTES).map(({ name }) => name));
+const alone = (writer) => (isRoundTrip(writer) ? cases.filter(({ callout }) => calloutDepth(bodyOf(callout)) <= ROUND_TRIP_DEPTH) : cases);
+const inPlace = (writer) => cases.filter(({ name }) => small.has(name) && !(isRoundTrip(writer) && deepCase.has(name)));
 
 test('React and the text writers show a callout\'s content, then every block of its body, each once', (t) => {
   assert.deepEqual(READERS.map((w) => w.name), ['readable Markdown', 'plain text', 'round-trip Markdown', 'HTML', 'HTML with field and embed blocks']);
-  t.diagnostic(READERS.map((w) => `${w.name}: ${judgedBy(w).length} of ${cases.length}`).join('; '));
+  t.diagnostic(READERS.map((w) => `${w.name}: in place ${inPlace(w).length} of ${cases.length}, alone ${alone(w).length} of ${cases.length}`).join('; '));
   const wrong = [];
+  const judge = (writer, { name, path, callout }, where, at) => {
+    const own = new Set(words(callout));
+    const [whole, content, body, neither] = [callout, withoutBody(callout), { ...callout, content: [] }, withoutBody({ ...callout, content: [] })].map((b) => counts(wordsIn(textOf(writer, at(b)))));
+    const off = [...own].filter((w) => (whole.get(w) ?? 0) !== (content.get(w) ?? 0) + (body.get(w) ?? 0) - (neither.get(w) ?? 0));
+    if (off.length) wrong.push(`${writer.name}, ${where}: ${name} at /${path.join('/')}: ${off.join(', ')} shown other than once`);
+    // Order: the content's words, then each body block's words as the writer writes that block alone.
+    const mine = (text) => wordsIn(text).filter((w) => own.has(w));
+    if (!inOrder(mine(textOf(writer, at(callout))), [...words(callout.content), ...bodyOf(callout).flatMap((b) => mine(textOf(writer, [b])))])) wrong.push(`${writer.name}, ${where}: ${name} at /${path.join('/')}: not content, then the body in order`);
+  };
   for (const writer of READERS) {
-    for (const { name, path, callout } of judgedBy(writer)) {
-      // The callout is written alone: its words are the same wherever it sits.
-      const at = (b) => [b];
-      const own = new Set(words(callout));
-      const [whole, content, body, neither] = [callout, withoutBody(callout), { ...callout, content: [] }, withoutBody({ ...callout, content: [] })].map((b) => counts(wordsIn(textOf(writer, at(b)))));
-      const off = [...own].filter((w) => (whole.get(w) ?? 0) !== (content.get(w) ?? 0) + (body.get(w) ?? 0) - (neither.get(w) ?? 0));
-      if (off.length) wrong.push(`${writer.name}: ${name} at /${path.join('/')}: ${off.join(', ')} shown other than once`);
-      // Order: the content's words, then each body block's words as the writer writes that block alone.
-      const mine = (text) => wordsIn(text).filter((w) => own.has(w));
-      if (!inOrder(mine(textOf(writer, [callout])), [...words(callout.content), ...bodyOf(callout).flatMap((b) => mine(textOf(writer, [b])))])) wrong.push(`${writer.name}: ${name} at /${path.join('/')}: not content, then the body in order`);
-    }
+    for (const c of inPlace(writer)) judge(writer, c, 'in place', (b) => replaced(c.blocks, c.path, b));
+    for (const c of alone(writer)) judge(writer, c, 'alone', (b) => [b]);
   }
   assert.deepEqual(wrong, []);
 });
