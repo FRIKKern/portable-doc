@@ -46,7 +46,7 @@ describe("a placed roadmap row's notes and milestones", () => {
   it('true, "true" and 1 draw a mark; any other value does not', () => {
     for (const on of [true, 'true', 1])
       expect(marks({}, [row({ ...BAR, note: on, milestone: on })]), String(on)).toEqual([['note style="left:10%"', 'ms style="left:40%"']])
-    for (const off of [false, 'yes', '1', 0, 2, 'Ship it', null, {}])
+    for (const off of [false, 'yes', '1', 'TRUE', 0, 2, 'Ship it', null, {}])
       expect(marks({}, [row({ ...BAR, note: off, milestone: off })]), String(off)).toEqual([[]])
   })
 
@@ -75,6 +75,13 @@ describe("a placed roadmap row's notes and milestones", () => {
         '<span class="bp-rm__note" style="left:10%"></span><span class="bp-rm__ms" style="left:40%"></span>' +
         '<span class="bp-rm__today" style="left:50%"></span>',
     )
+  })
+
+  it("a milestone on a bar at the track's end stays at 100", () => {
+    // A left of 100 or more with no width gives a bar 1 wide at 100, so the bar's end is past the
+    // track; the milestone is held to it.
+    for (const left of [100, 150])
+      expect(marks({}, [row({ left, note: true, milestone: true })]), String(left)).toEqual([['note style="left:100%"', 'ms style="left:100%"']])
   })
 
   it('a bar whose left or width is not finite has no marks', () => {
