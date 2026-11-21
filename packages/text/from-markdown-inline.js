@@ -166,6 +166,8 @@ export function merge(nodes) {
 
 const BLOCK = new Set(['paragraph', 'heading', 'list_item', 'blockquote', 'th', 'td', 'fence', 'code_block', 'html_block']);
 const SEP = Symbol('separator');
+// Where a container's children end in flattenText (a link's is its LinkEnd).
+const LEAVE = Symbol('leave');
 
 /** A fence's language: the first word of its info string ('' for any other node). */
 export const langOf = (node) => (node.type === 'fence' ? str(node.tok.info).trim().split(/\s+/)[0] : '');
@@ -216,12 +218,12 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
   const stack = [...asList(nodes)].reverse();
   while (stack.length) {
     const node = stack.pop();
-    if (node instanceof LinkEnd) {
-      // A raw tag opened in the label skips to the label's end only, as in the kept shape, which
-      // reads a label on its own (inline). A link whose label gave no text shows its address, as
-      // its kept shape does (link).
+    if (node === LEAVE || node instanceof LinkEnd) {
+      // A raw tag opened in a container (a mark, a link's label) skips to its end only, as in the
+      // kept shape, which reads each container's children on their own (inline).
       skipping = null;
-      if (out.length === node.at) address(safeUrl(attr(node.link, 'href')) ?? '');
+      // A link whose label gave no text shows its address, as its kept shape does (link).
+      if (node !== LEAVE && out.length === node.at) address(safeUrl(attr(node.link, 'href')) ?? '');
       continue;
     }
     if (node instanceof DeepEnd) {
@@ -263,11 +265,11 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
       const alt = imageAlt(node, count);
       if (alt) out += alt;
       else address(imageSrc(node));
-    } else if (node.type === 'link') {
-      // In raw text that is skipped, a link is skipped whole, label and address, as in its kept
-      // shape: a closing tag in its label does not end the skip.
+    } else if (node.type === 'link' || (node.children.length && !BLOCK.has(node.type))) {
+      // In raw text that is skipped, a container is skipped whole (a link's label and address too),
+      // as in its kept shape: a closing tag in it does not end the skip. A block ends any skip (SEP).
       if (skipping) continue;
-      stack.push(new LinkEnd(node, out.length));
+      stack.push(node.type === 'link' ? new LinkEnd(node, out.length) : LEAVE);
       for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     } else if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     else if (node.type === 'html_inline') skipping = rawTag(node, skipping);
