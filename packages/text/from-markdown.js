@@ -7,7 +7,7 @@
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
 import { IMPORT_WORK, planText } from './import-work.js';
-import { attr, flattenText, inline, merge, parser, text, tree, visibleText, WORDS_ONLY } from './from-markdown-inline.js';
+import { attr, flattenText, inline, langOf, merge, parser, text, tree, visibleText, WORDS_ONLY } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { currentNames } from './current-names.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
@@ -32,9 +32,9 @@ const blank = (content) => renderInline(content, true) === '';
 const paragraph = (content) => (blank(content) ? [] : [{ type: 'paragraph', content }]);
 // `level` is the value level of the list the text goes into (inline); `count`, when given, gets the
 // nodes read on `visits` (a paragraph or heading is one); `past` gets `past: true` when marks past
-// MAX_VALUE_DEPTH are kept as text (inline).
-function textOf(node, level, count = undefined, past = undefined) {
-  if (node.type !== 'paragraph' && node.type !== 'heading') return [text(flattenText([node], count).trim())];
+// MAX_VALUE_DEPTH are kept as text (inline); `fences` gets each portabledoc fence read as text.
+function textOf(node, level, count = undefined, past = undefined, fences = undefined) {
+  if (node.type !== 'paragraph' && node.type !== 'heading') return [text(flattenText([node], count, { fences }).trim())];
   if (count) count.visits++;
   return inline(node.children, level, past);
 }
@@ -74,22 +74,41 @@ const lineOf = (tok, i, base) => (tok.map ? base + tok.map[i] : undefined);
  * `base` is the line the parse starts at; `level` is the list block's value level. An item's text
  * is counted at the level it has in an item that holds nested lists, { content, children }: one
  * deeper than an item that is its content alone, so it fits either way.
+ * A portabledoc fence is read as a block-level one is, where its blocks would sit (placeFence):
+ * spliced into the children, as a nested list is, else inline code with one FENCE_KEPT_AS_CODE
+ * notice for the item. A fence in a child read as text adds one too: `place`, or `depth` in a
+ * nested list kept as text. `ids` holds the block ids fences used.
  */
-function listItem(item, depth, base, level) {
+function listItem(item, depth, base, level, ids) {
   const parts = [];
   let part = { out: [], children: [], notes: [], past: false };
   let after; // the line after the last kept nested list, while the part has one
   const close = () => parts.push({ content: merge(part.out), children: part.children, notes: part.notes, moved: part.moved, past: part.past });
   for (const child of item.children) {
+    let refused; // the notice of a portabledoc fence kept as inline code in the item
+    if (langOf(child) === 'portabledoc') {
+      const at = part.children.length;
+      const placed = placeFence(fenceSource(child), ids, depth + 1, level + 4, (j) => `/children/${at + j}`);
+      if (placed.blocks) {
+        const { line, lines } = fenceLines(child.tok, base);
+        for (const { path, name, field } of placed.drops) part.notes.push({ code: OLD_NAME_DROPPED, path, line, lines, name, current: field, fix: `write ${field}` });
+        for (const block of placed.blocks) part.children.push(block);
+        after = lineOf(child.tok, 1, base) ?? after;
+        continue;
+      }
+      refused = fenceNotice(placed.reason, child.tok, base, '');
+    }
     if (LISTS.has(child.type)) {
       if (depth + 1 < MAX_DEPTH) {
         const notes = [];
-        const kept = list(child, depth + 1, notes, base, level + 4);
+        const kept = list(child, depth + 1, notes, base, level + 4, ids);
         for (const n of notes) part.notes.push({ ...n, path: `/children/${part.children.length}${n.path}` });
         for (const block of kept) part.children.push(block);
         if (kept.length) after = lineOf(child.tok, 1, base) ?? after;
       } else {
-        const flat = flattenText([child]).trim();
+        const fences = [];
+        const flat = flattenText([child], undefined, { fences }).trim();
+        for (const n of flatFences(fences, base, '', 'depth')) part.notes.push(n);
         if (flat) {
           if (part.out.length) part.out.push(text(' '));
           part.out.push(text(flat));
@@ -106,8 +125,13 @@ function listItem(item, depth, base, level) {
     }
     if (part.moved) part.moved[1] = lineOf(child.tok, 1, base) ?? lineOf(item.tok, 1, base) ?? part.moved[1];
     if (part.out.length) part.out.push(text(' '));
-    if (child.type === 'fence' || child.type === 'code_block') part.out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
-    else for (const node of textOf(child, level + 3, undefined, part)) part.out.push(node);
+    if (child.type === 'fence' || child.type === 'code_block') part.out.push({ type: 'code', value: fenceSource(child) });
+    else {
+      const fences = [];
+      for (const node of textOf(child, level + 3, undefined, part, fences)) part.out.push(node);
+      for (const n of flatFences(fences, base, '', 'place')) part.notes.push(n);
+    }
+    if (refused) part.notes.push(refused);
   }
   close();
   return parts;
@@ -130,14 +154,15 @@ const withChildren = (item, children) => (children.length ? { ...item, children 
  * a list with an item that keeps deeper levels as text (`past`) adds one NESTING_KEPT_AS_TEXT
  * notice for itself, before its items' notices.
  */
-function list(node, depth, notes, base, level) {
+function list(node, depth, notes, base, level, ids) {
   const ordered = node.type === 'ordered_list';
   const items = node.children
     .filter((c) => c.type === 'list_item')
-    .flatMap((li) => listItem(li, depth, base, level))
+    .flatMap((li) => listItem(li, depth, base, level, ids))
     // `[ ]` opens a task only at the head of an item in the source, never of a split-off one
     .map((it) => ({ ...it, task: ordered || it.moved ? null : taskItem(it.content) }))
-    .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
+    // An item a notice names (a fence kept in it as code or text) is kept, empty or not, so the notice's path is there.
+    .filter((it) => it.children.length || !blank(it.task?.content ?? it.content) || it.notes.some((n) => n.path === ''));
   if (!items.length) return [];
   if (items.some((it) => it.past)) notes.push(keptAsText('', node.tok, base));
   items.forEach((it, i) => {
@@ -211,7 +236,23 @@ function citeOf(node) {
  */
 function quote(node, state) {
   const children = node.children;
-  const first = children.length ? textOf(children[0], state.level + 1, state.count, state.past) : [];
+  // A child as the quote's text. A quote holds no blocks: a portabledoc fence in it is inline code,
+  // and it or a fence in a child read as text adds one notice, `reason` (`place`, or `depth` in a
+  // callout as deep as validate allows, whose body is its text).
+  let noted = false; // a fence notice names the quote: it is kept, empty or not, so the path is there
+  const read = (child, reason) => {
+    if (langOf(child) === 'portabledoc') {
+      noted = true;
+      state.splits.push(fenceNotice(reason, child.tok, state.base, state.at));
+      return [{ type: 'code', value: fenceSource(child) }];
+    }
+    const fences = [];
+    const out = textOf(child, state.level + 1, state.count, state.past, fences);
+    for (const n of flatFences(fences, state.base, state.at, reason)) state.splits.push(n);
+    if (fences.length) noted = true;
+    return out;
+  };
+  const first = children.length ? read(children[0], 'place') : [];
   const marker = calloutMarker(first);
   if (marker && state.depth + 1 < MAX_DEPTH) {
     const { at, blocks } = state;
@@ -225,7 +266,7 @@ function quote(node, state) {
     const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
     return [body.length ? { ...callout, slots: { body } } : callout];
   }
-  const parts = [first, ...children.slice(1).map((child) => textOf(child, state.level + 1, state.count, state.past))];
+  const parts = [first, ...children.slice(1).map((child) => read(child, marker ? 'depth' : 'place'))];
   const content = joined(parts);
   if (marker) {
     if (children.length > 1) state.past.past = true;
@@ -235,7 +276,7 @@ function quote(node, state) {
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? citeOf(last) : null;
   if (cite) return [{ type: 'blockquote', content: joined(parts.slice(0, -1)), cite }];
-  return blank(content) ? [] : [{ type: 'blockquote', content }];
+  return blank(content) && !noted ? [] : [{ type: 'blockquote', content }];
 }
 
 // ── code fences ─────────────────────────────────────────────────────────
@@ -290,46 +331,84 @@ export function checkFence(blocks, usedIds) {
 }
 
 /**
- * The code of the notice for each reason a ```portabledoc fence stays a code block, by checkFence's
- * reason ('json' when the fence is not JSON), and the fix the notice gives.
+ * The code of the notice for each reason a ```portabledoc fence stays code or text, by checkFence's
+ * reason ('json' when the fence is not JSON, 'depth' too when its blocks do not fit where they
+ * would sit, 'place' where no blocks go), and the fix the notice gives.
  */
 export const FENCE_KEPT_AS_CODE = Object.freeze({
   json: Object.freeze({ code: 'fence_not_json', fix: 'write the fence as a JSON array of blocks' }),
   count: Object.freeze({ code: 'fence_block_count', fix: `write a JSON array of 1 to ${MAX_FENCE_BLOCKS} blocks in the fence` }),
-  depth: Object.freeze({ code: 'fence_too_deep', fix: `nest the blocks at most ${MAX_VALUE_DEPTH} JSON levels deep, counted with old names under their current names` }),
+  depth: Object.freeze({ code: 'fence_too_deep', fix: `nest the blocks within validate's limits where the fence sits: under ${MAX_DEPTH} blocks and ${MAX_VALUE_DEPTH} JSON levels, counted with old names under their current names` }),
   type: Object.freeze({ code: 'fence_block_type', fix: `use only these block types in a fence: ${[...FENCE_TYPES].join(', ')}` }),
   address: Object.freeze({ code: 'fence_unsafe_address', fix: 'use an http, https, mailto or tel address, or a link inside the document, in href, src, poster and url' }),
   invalid: Object.freeze({ code: 'fence_invalid', fix: 'fix the blocks until validate accepts them' }),
   id: Object.freeze({ code: 'fence_id_used', fix: 'give each block an id no earlier fence uses' }),
+  place: Object.freeze({ code: 'fence_place', fix: "put the fence at the top level, in a list item or in a callout's body: a quote, and text read as text, hold no blocks" }),
 });
 
-function fence(source, node, state) {
-  // The fence's lines, its opening and closing ones too; its blocks start at the import's place.
-  const first = lineOf(node.tok, 0, state.base) ?? state.base;
-  const lines = (lineOf(node.tok, 1, state.base) ?? first + 1) - first;
-  // A fence the import does not splice stays a code block, with one notice: why, and the fix.
-  const kept = (reason) => {
-    const { code, fix } = FENCE_KEPT_AS_CODE[reason];
-    state.splits.push({ code, path: state.at, line: first + 1, lines, fix });
-    return [codeBlock(source)];
-  };
+const fenceSource = (node) => str(node.tok.content).replace(/\n+$/, '');
+// A fence's lines, its opening and closing ones too: the first from 1, and how many.
+function fenceLines(tok, base) {
+  const first = lineOf(tok, 0, base) ?? base;
+  return { line: first + 1, lines: (lineOf(tok, 1, base) ?? first + 1) - first };
+}
+// The notice of a portabledoc fence kept as code or text at `path`: why (FENCE_KEPT_AS_CODE), its lines and the fix.
+function fenceNotice(reason, tok, base, path) {
+  const { code, fix } = FENCE_KEPT_AS_CODE[reason];
+  const { line, lines } = fenceLines(tok, base);
+  return { code, path, line, lines, fix };
+}
+// The notices of the fences flattenText read as text (its `fences`), at `path`, for `reason`.
+const flatFences = (fences, base, path, reason) => fences.map(({ tok, at }) => fenceNotice(reason, tok, at ?? base, path));
+
+// Whether a fence's blocks fit where they would sit: `depth` blocks deep (validate counts blocks from
+// 0 at the top and refuses MAX_DEPTH), each at value level `level`, counted with old names under
+// their current names (`folded`). A block level is at least three value levels (a callout's body),
+// so the blocks under `depth` callouts sit no deeper in value levels than here, and validate counts
+// their block depth there exactly; at the top, checkFence has counted both.
+function fits(blocks, folded, depth, level) {
+  if (walkDepth({ blocks: folded }) - 3 + level > MAX_VALUE_DEPTH) return false;
+  if (depth === 0) return true;
+  let wrapped = blocks;
+  for (let i = 0; i < depth; i++) wrapped = [{ type: 'callout', tone: 'info', content: [], slots: { body: wrapped } }];
+  return validate(wrapped).ok;
+}
+
+/**
+ * A ```portabledoc fence's blocks where they would sit, or why not: { blocks, drops } or
+ * { reason }. `depth` and `level` are the block depth and value level of its place (fits), `ids`
+ * the block ids earlier fences used (it adds its own), and `pathOf(j)` its j-th block's path, for
+ * each value an old name's fold drops ({ path, name, field }).
+ */
+function placeFence(source, ids, depth, level, pathOf) {
   let blocks;
   try {
     blocks = JSON.parse(source);
   } catch {
-    return kept('json');
+    return { reason: 'json' };
   }
-  const check = checkFence(blocks, state.ids);
-  if (check.reason) return kept(check.reason);
-  for (const id of check.ids) state.ids.add(id);
-  const dir = state.at.slice(0, state.at.lastIndexOf('/'));
-  const start = Number(state.at.slice(state.at.lastIndexOf('/') + 1));
-  const drop = ({ path, name, field }) => state.splits.push({ code: OLD_NAME_DROPPED, path, line: first + 1, lines, name, current: field, fix: `write ${field}` });
-  return blocks.map((b, j) => currentNames(b, drop, `${dir}/${start + j}`));
+  const check = checkFence(blocks, ids);
+  if (check.reason) return check;
+  const drops = [];
+  const folded = blocks.map((b, j) => currentNames(b, (d) => drops.push(d), pathOf(j)));
+  if (!fits(blocks, folded, depth, level)) return { reason: 'depth' };
+  for (const id of check.ids) ids.add(id);
+  return { blocks: folded, drops };
 }
 
-// A fence's language: the first word of its info string.
-const langOf = (node) => (node.type === 'fence' ? str(node.tok.info).trim().split(/\s+/)[0] : '');
+// A fence at block level: its blocks where it sits, else a code block of its source with one notice.
+function fence(source, node, state) {
+  const dir = state.at.slice(0, state.at.lastIndexOf('/'));
+  const start = Number(state.at.slice(state.at.lastIndexOf('/') + 1));
+  const placed = placeFence(source, state.ids, state.depth, state.level, (j) => `${dir}/${start + j}`);
+  if (placed.reason) {
+    state.splits.push(fenceNotice(placed.reason, node.tok, state.base, state.at));
+    return [codeBlock(source)];
+  }
+  const { line, lines } = fenceLines(node.tok, state.base);
+  for (const { path, name, field } of placed.drops) state.splits.push({ code: OLD_NAME_DROPPED, path, line, lines, name, current: field, fix: `write ${field}` });
+  return placed.blocks;
+}
 
 function code(node, state) {
   const source = str(node.tok.content).replace(/\n+$/, '');
@@ -363,7 +442,7 @@ function block(node, state) {
     case 'paragraph': return paragraph(inline(node.children, state.level + 1, state.past));
     case 'bullet_list': case 'ordered_list': {
       const notes = [];
-      const out = list(node, state.depth, notes, state.base, state.level);
+      const out = list(node, state.depth, notes, state.base, state.level, state.ids);
       for (const n of notes) state.splits.push({ ...n, path: `${state.at}${n.path}` });
       return out;
     }
@@ -441,10 +520,10 @@ export { IMPORT_WORK };
  * the dropped key's path, the fence's source lines, the name dropped, the current name, and the
  * fix, `write <current>`. Each block that keeps, as text, levels nested past the limits (blocks
  * past validate's MAX_DEPTH, marks past MAX_VALUE_DEPTH) adds one { code: NESTING_KEPT_AS_TEXT,
- * path, line, lines }: the block, and its source lines. Each ```portabledoc fence at block level
- * kept as a code block adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code
- * naming why, the code block, the fence's source lines and the fix. A fence inside a list item is
- * read as inline code in the item and adds no notice yet. The notices come by kind: 'budget' and
+ * path, line, lines }: the block, and its source lines. Each ```portabledoc fence kept as code or
+ * text adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code naming why, the
+ * block that keeps it (the code block at block level, the list item or quote where it is inline
+ * code, the block whose text holds it), the fence's source lines and the fix. The notices come by kind: 'budget' and
  * 'line', then the splits, dropped names, fences kept as code and nesting kept as text in source
  * order, then 'net'. Should the read throw or give blocks that do not validate, the
  * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
