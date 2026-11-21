@@ -234,8 +234,12 @@ Where it differs from Barkpark, on purpose:
   where its blocks would sit), `fence_block_type`, `fence_unsafe_address`,
   `fence_invalid` (validate refuses it), `fence_id_used` (an earlier fence uses
   a block id) or `fence_place` (in a quote, or in text read flat, which hold no
-  blocks). No portabledoc fence is kept as code or text without one. These come
-  in source order, after any `budget` or `line` notice and before a `net` one.
+  blocks). These come in source order, after any `budget` or `line` notice and
+  before a `net` one. No portabledoc fence is kept as code or text without a
+  notice: one of these, or, where the import keeps text whole past its limits
+  or on a fall-back, the `import_work_spent` or `import_fell_back` notice that
+  says why. Past `lineBytes` that notice is on the first line cut and counts
+  the rest, so a fence cut after an earlier line is counted, not named.
   Every notice's path names a value in the blocks, but `old_name_dropped`'s:
   the key it names was dropped, so it is not there, and the value that held it
   is.

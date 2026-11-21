@@ -3,7 +3,8 @@
 // code in the item with one FENCE_KEPT_AS_CODE notice. A plain quote holds no blocks, so a fence in
 // it is inline code with a `place` notice. A fence in text the import keeps flat (a quote in a list
 // item, a list in a quote, lists past MAX_DEPTH) is read as that text, with one notice saying why.
-// No portabledoc fence becomes text or code without a notice.
+// No portabledoc fence becomes text or code without a notice: a fence notice, or the import's own
+// where it keeps text whole past its limits or on a fall-back.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
