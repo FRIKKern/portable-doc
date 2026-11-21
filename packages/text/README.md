@@ -236,6 +236,9 @@ Where it differs from Barkpark, on purpose:
   a block id) or `fence_place` (in a quote, or in text read flat, which hold no
   blocks). No portabledoc fence is kept as code or text without one. These come
   in source order, after any `budget` or `line` notice and before a `net` one.
+  Every notice's path names a value in the blocks, but `old_name_dropped`'s:
+  the key it names was dropped, so it is not there, and the value that held it
+  is.
 
 ## Round trip
 

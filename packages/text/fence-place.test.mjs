@@ -11,7 +11,7 @@ import { CASES as HEADINGS } from '../../fixtures/headings/cases.mjs';
 import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
 import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
 import { parser } from './from-markdown-inline.js';
-import { FENCE_KEPT_AS_CODE, readMarkdown } from './index.js';
+import { FENCE_KEPT_AS_CODE, IMPORT_FELL_BACK, IMPORT_WORK, LIST_ITEM_SPLIT, NESTING_KEPT_AS_TEXT, OLD_NAME_DROPPED, readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
 const P = [{ type: 'paragraph', content: [t('in fence')] }];
@@ -34,8 +34,12 @@ const read = (md) => {
   return doc;
 };
 const SOURCES = []; // every Markdown this file reads, for the sweep
-// Whether a notice's path names a value in the doc's { blocks }.
-const resolves = (doc, path) => path.split('/').slice(1).reduce((v, k) => (v === null || typeof v !== 'object' ? undefined : v[k]), { blocks: doc.blocks }) !== undefined;
+// The value a path names in the doc's { blocks }, or undefined.
+const valueAt = (doc, path) => path.split('/').slice(1).reduce((v, k) => (v === null || typeof v !== 'object' ? undefined : v[k]), { blocks: doc.blocks });
+// Whether a notice names a value in the blocks. old_name_dropped names the key it dropped, which by
+// design is not there: its parent is.
+const named = (doc, { code, path }) =>
+  code === OLD_NAME_DROPPED ? valueAt(doc, path.slice(0, path.lastIndexOf('/'))) !== undefined && valueAt(doc, path) === undefined : valueAt(doc, path) !== undefined;
 const readAll = (md) => (SOURCES.push(md), read(md));
 
 test('a fence in a list item that the import splices goes into its children, as a nested list does', () => {
@@ -148,7 +152,7 @@ test('an empty or blank fence that is the whole of a list item, or of a quote, k
   ]) {
     const doc = readAll(md);
     assert.equal(doc.notices.filter((n) => n.code.startsWith('fence_')).length, fencesIn(md).length, md);
-    for (const n of doc.notices) assert.ok(resolves(doc, n.path), `${md}: ${n.code} at ${n.path}`);
+    for (const n of doc.notices) assert.ok(named(doc, n), `${md}: ${n.code} at ${n.path}`);
   }
 });
 
@@ -172,16 +176,28 @@ function fencesIn(md) {
   return out;
 }
 
-test('every portabledoc fence in the shared cases and in this file either reads into blocks or has a notice on its line, and every notice names a value in the blocks', () => {
+test('every portabledoc fence in the shared cases and in this file either reads into blocks or has a notice on its line, and every notice names a value in the blocks, but old_name_dropped, which names the key it dropped in one', () => {
   const squeeze = (s) => s.replace(/\s+/g, '');
-  const sources = [...Object.values(HEADINGS), ...Object.values(LIST_SPLIT), ...Object.values(NESTING), ...SOURCES];
+  const OLD = JSON.stringify([{ type: 'code', code: 'a', value: 'b' }]);
+  const planted = { ...IMPORT_WORK, get budget() { throw new Error('a planted throw'); } };
+  const cut = `# T\n\npara one\n\n${fence('[{"type":"divider"}]')}\n\nlast`;
+  // [Markdown, limits]: the shared cases and this file's reads; old names at the top and in an item;
+  // a read that falls back, with text and blank; the budget cut at a fence's first line and inside it.
+  const sources = [...Object.values(HEADINGS), ...Object.values(LIST_SPLIT), ...Object.values(NESTING), ...SOURCES, fence(OLD), `- item\n\n${fence(OLD, '  ')}`]
+    .map((md) => [md, IMPORT_WORK])
+    .concat([[`# T\n\n${fence(PJ)}`, planted], ['  \n', planted], [cut, { ...IMPORT_WORK, budget: 20 }], [cut, { ...IMPORT_WORK, budget: 40 }]]);
   let fences = 0;
-  for (const md of sources) {
-    const doc = readMarkdown(md);
+  const codes = new Set();
+  for (const [md, limits] of sources) {
+    const doc = readMarkdown(md, limits);
     const strings = [];
     JSON.stringify(doc.blocks, (k, v) => (typeof v === 'string' && strings.push(squeeze(v)), v));
-    for (const n of doc.notices) assert.ok(resolves(doc, n.path), `${n.code} at ${n.path}, not in the blocks: ${md.slice(0, 80)}`);
-    const lines = new Set(doc.notices.filter((n) => n.code.startsWith('fence_')).map((n) => n.line));
+    for (const n of doc.notices) assert.ok(named(doc, n), `${n.code} at ${n.path}, not in the blocks: ${md.slice(0, 80)}`);
+    for (const n of doc.notices) codes.add(n.code);
+    // A fence has a notice on its line: a fence notice there, or the import's own over the lines it kept whole.
+    const fenceLines = new Set(doc.notices.filter((n) => n.code.startsWith('fence_')).map((n) => n.line));
+    const whole = doc.notices.filter((n) => n.code === IMPORT_FELL_BACK || n.code === IMPORT_WORK.notice);
+    const lines = { has: (l) => fenceLines.has(l) || whole.some((n) => n.line <= l && l < n.line + n.lines) };
     // A fence read into blocks leaves no copy of its JSON; one kept as text or code does. Fences
     // with the same JSON are counted together: no more copies than fences with a notice.
     const byJson = new Map();
@@ -201,4 +217,5 @@ test('every portabledoc fence in the shared cases and in this file either reads 
     }
   }
   assert.ok(fences >= 20, `the sweep saw ${fences} fences`);
+  for (const code of [OLD_NAME_DROPPED, IMPORT_FELL_BACK, IMPORT_WORK.notice, LIST_ITEM_SPLIT, NESTING_KEPT_AS_TEXT, 'fence_not_json', 'fence_place', 'fence_too_deep']) assert.ok(codes.has(code), `the sweep saw no ${code}`);
 });
