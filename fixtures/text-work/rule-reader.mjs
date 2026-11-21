@@ -89,7 +89,7 @@ export function plan(markdown, { budget, lineBytes }) {
   let afterBlank = true;
   let fence = null;
   let spent = false;
-  const notes = {};
+  const notes = [];
   lines.forEach((line, n) => {
     const isBlank = blank(line);
     const long = lineBytes !== null && !isBlank && Buffer.byteLength(line) > lineBytes;
@@ -116,13 +116,15 @@ export function plan(markdown, { budget, lineBytes }) {
     }
     if (!spent && work + cost > budget) {
       spent = true;
-      notes.budget = { rule: 'budget', line: n + 1, lines: lines.length - n };
+      notes.push({ rule: 'budget', line: n + 1, lines: lines.length - n });
     }
     work += cost;
     if (spent || !long) return;
-    if (notes.line) notes.line.lines++;
-    else notes.line = { rule: 'line', line: n + 1, lines: 1 };
+    // "One notice per run": a cut line right after the last cut line goes on its run.
+    const last = notes.at(-1);
+    if (last?.rule === 'line' && last.line + last.lines === n + 1) last.lines++;
+    else notes.push({ rule: 'line', line: n + 1, lines: 1 });
     if (fence) work += (prefix(fence.line).D + 1) * (2 + Buffer.byteLength(fence.line));
   });
-  return { work, notices: Object.values(notes) };
+  return { work, notices: notes };
 }

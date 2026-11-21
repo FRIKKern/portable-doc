@@ -82,7 +82,9 @@ export const IMPORT_FELL_BACK: 'import_fell_back';
  * `line` on; 'line': each line past lineBytes; 'net': markdown-it's own count passed the
  * budget where the text's count said it would not, so the deep text from `line` on was kept,
  * a sign the text's count is wrong and a bug to report), the first such paragraph at `path`.
- * At most one per rule. `line` counts from 1; `lines` is how many lines were kept as text.
+ * At most one each for 'budget' and 'net'; one 'line' notice per run of cut lines (consecutive
+ * line numbers; any line not cut ends a run), at its first line's paragraph. `line` counts from 1;
+ * `lines` is how many lines were kept as text, from `line` on.
  */
 export interface ImportWorkNotice {
   code: 'import_work_spent';

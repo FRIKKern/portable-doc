@@ -509,8 +509,9 @@ export { IMPORT_WORK };
  * GFM Markdown as { blocks, notices, work }. `blocks` pass @portable-doc/validate. `work` is the
  * import's work counted from the text (import-work.js). A line longer than limits.lineBytes, and
  * every line from where the work passes limits.budget, is kept as a top-level paragraph of plain
- * text, every word; `notices` then hold one { code, rule, path, line, lines } per rule ('line' or
- * 'budget'): the first such paragraph, the first line cut (from 1) and how many. Should
+ * text, every word; `notices` then hold one { code, rule, path, line, lines } for 'budget' and one
+ * per run of cut lines (consecutive line numbers) for 'line': the paragraph of its first line, that
+ * line (from 1) and how many. Should
  * markdown-it's own count still pass the budget (the net), the rest of the deep text is kept as
  * plain text, with a notice of the same shape and rule 'net': `line` the first source line
  * kept so, `lines` how many. Each list item split off at text after its nested list adds one
@@ -523,8 +524,7 @@ export { IMPORT_WORK };
  * path, line, lines }: the block, and its source lines. Each ```portabledoc fence kept as code or
  * text adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code naming why, the
  * block that keeps it (the code block at block level, the list item or quote where it is inline
- * code, the block whose text holds it), the fence's source lines and the fix. The notices come by kind: 'budget' and
- * 'line', then the splits, dropped names, fences kept as code and nesting kept as text in source
+ * code, the block whose text holds it), the fence's source lines and the fix. The notices come by kind: 'budget' and 'line' by first line, then the splits, dropped names, fences kept as code and nesting kept as text in source
  * order, then 'net'. Should the read throw or give blocks that do not validate, the
  * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
  * notice and no other. Never throws.
@@ -560,12 +560,12 @@ export function readPlan(plan, limits) {
     state.base = part.line;
     if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line }), state.count), state, blocks, net);
     else {
-      paths[part.rule] ??= `/blocks/${blocks.length}`;
+      paths[`${part.rule}:${part.line + 1}`] ??= `/blocks/${blocks.length}`;
       blocks.push({ type: 'paragraph', content: [text(part.plain)] });
     }
   }
   if (!validate({ blocks }).ok) return null;
-  const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
+  const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[`${rule}:${line}`], line, lines }));
   for (const split of state.splits) notices.push(split); // a loop: a spread of this many arguments overflows the stack
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
   return { blocks, notices, parsed: net.work, count: state.count };

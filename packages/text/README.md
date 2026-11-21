@@ -206,10 +206,13 @@ Where it differs from Barkpark, on purpose:
   an ordinary 500 kB document uses at most a third of it
   (`ordinary-work.test.mjs`, nine shapes).
 - Two rules keep text as plain text, every word, with Markdown syntax and tags
-  in it shown as literal text, and `readMarkdown` returns one notice per
-  rule, `{ code: 'import_work_spent', rule, path, line, lines }`: the path
-  of the first plain paragraph, the first line kept as text (from 1), and how
-  many:
+  in it shown as literal text, and `readMarkdown` says so with
+  `{ code: 'import_work_spent', rule, path, line, lines }`: the path of the
+  plain paragraph its first line went to, that line (from 1), and how many
+  lines from it were kept as text. The budget gives one such notice; the line
+  rule one per run of cut lines, a run being cut lines with consecutive
+  numbers (any line not cut ends it). The number of line notices is bounded
+  only by the number of runs. They come in source order:
   - From the line where the work passes the budget, the rest of the text is
     one top-level paragraph, whitespace collapsed. Containers open at that
     line close there.
@@ -245,8 +248,7 @@ Where it differs from Barkpark, on purpose:
   before a `net` one. No portabledoc fence is kept as code or text without a
   notice: one of these, or, where the import keeps text whole past its limits
   or on a fall-back, the `import_work_spent` or `import_fell_back` notice that
-  says why. Past `lineBytes` that notice is on the first line cut and counts
-  the rest, so a fence cut after an earlier line is counted, not named.
+  says why.
   Every notice's path names a value in the blocks, but `old_name_dropped`'s:
   the key it names was dropped, so it is not there, and the value that held it
   is.

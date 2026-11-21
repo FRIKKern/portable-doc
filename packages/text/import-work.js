@@ -29,7 +29,9 @@
 //   to, the text after it starts with the fence's opening line again, so the code stays code.
 // - Where the running sum passes IMPORT_WORK.budget, that line and every line after it are
 //   one top-level paragraph, whitespace collapsed.
-// Each rule gives at most one notice per document: its first line and how many lines it cut.
+// The budget gives at most one notice per document: its first line and how many lines it cut.
+// The line rule gives one per run of cut lines (cut lines with consecutive numbers; any line not
+// cut ends a run, and a fence opened again after a cut line does not): its first line and how many.
 
 /**
  * The import's limits and the notice it gives past them. lineBytes is the pack's value; null
@@ -149,18 +151,20 @@ function closes(line, at, fence) {
 /**
  * The text's plan: { work, parts, notices }. `parts` are, in order, { read: text, line } to parse
  * as a document, `line` the source line (from 0) its first line stands for, and
- * { plain: text, rule } to keep as one top-level paragraph. `notices` are
- * { rule, line, lines }, at most one per rule: 'line' (a line past lineBytes) and 'budget'
- * (the lines from where the work passed the budget), `line` counted from 1.
+ * { plain: text, rule, line } to keep as one top-level paragraph, `line` its first source line
+ * (from 0). `notices` are { rule, line, lines } in source order, `line` counted from 1: one 'line'
+ * per run of lines past lineBytes, and at most one 'budget' (the lines from where the work passed
+ * the budget). The number of line notices is bounded only by the number of runs.
  */
 export function planText(markdown, limits = IMPORT_WORK) {
   const lines = normalize(markdown).split('\n');
   const parts = [];
-  const notices = new Map();
+  const notices = [];
+  // One notice per run of cut lines: a line cut right after the last one cut extends its run.
   const note = (rule, n, count) => {
-    const seen = notices.get(rule);
-    if (seen) seen.lines += count;
-    else notices.set(rule, { rule, line: n + 1, lines: count });
+    const last = notices.at(-1);
+    if (rule === 'line' && last?.rule === 'line' && last.line + last.lines === n + 1) last.lines += count;
+    else notices.push({ rule, line: n + 1, lines: count });
   };
   let read = [];
   let start = 0;
@@ -201,14 +205,14 @@ export function planText(markdown, limits = IMPORT_WORK) {
       spent = true;
       flush();
       const rest = lines.slice(n).join('\n').replace(/\s+/g, ' ').trim();
-      if (rest) parts.push({ plain: rest, rule: 'budget' });
+      if (rest) parts.push({ plain: rest, rule: 'budget', line: n });
       note('budget', n, lines.length - n);
     }
     work += cost;
     if (spent) continue;
     if (long) {
       flush();
-      parts.push({ plain: line, rule: 'line' });
+      parts.push({ plain: line, rule: 'line', line: n });
       note('line', n, 1);
       if (fence) {
         // The code goes on after the line: read it as if the fence opened again there.
@@ -225,5 +229,5 @@ export function planText(markdown, limits = IMPORT_WORK) {
     }
   }
   flush();
-  return { work, parts, notices: [...notices.values()] };
+  return { work, parts, notices };
 }
