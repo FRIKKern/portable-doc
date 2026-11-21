@@ -32,9 +32,9 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 14 changes · text: the import nests as deep as a document may hold, from one depth number ([#138](https://github.com/FRIKKern/portable-doc/pull/138))
-- **Yesterday** · 52 changes · react, text: a style property whose number is not finite is left out whole, by one rule at the number door ([#123](https://github.com/FRIKKern/portable-doc/pull/123))
-- **This week** · 14 changes · Markdown import: blocks nested in a portabledoc fence must be allowed types too ([#72](https://github.com/FRIKKern/portable-doc/pull/72))
+- **Today** · 1 change · text: the writers keep every word of inline content a valid document can hold ([#139](https://github.com/FRIKKern/portable-doc/pull/139))
+- **Yesterday** · 14 changes · text: the import nests as deep as a document may hold, from one depth number ([#138](https://github.com/FRIKKern/portable-doc/pull/138))
+- **This week** · 66 changes · react, text: a style property whose number is not finite is left out whole, by one rule at the number door ([#123](https://github.com/FRIKKern/portable-doc/pull/123))
 - **Last week** · 2 milestones closed
 - **This month** · 6 changes, 99 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
