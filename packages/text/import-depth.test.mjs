@@ -1,12 +1,11 @@
 // Markdown written by hand imports as deep as validate allows blocks: one Markdown level is one
 // format level, validate's MAX_DEPTH of them, callouts and lists counted together. Past it every
 // word is kept as text in the deepest block, and readMarkdown says so with a NESTING_KEPT_AS_TEXT
-// notice naming that block. Marks inside marks keep their own limit, MAX_MARK_NEST.
+// notice naming that block. Marks inside marks nest as deep as MAX_VALUE_DEPTH allows them where they sit.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
-import { MAX_MARK_NEST } from './from-markdown-inline.js';
 import { NESTING_KEPT_AS_TEXT, readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
@@ -75,12 +74,20 @@ test('callouts and the lists in their bodies count as one depth: 50 callouts ove
   assert.deepEqual(past.notices.map((n) => [n.code, n.path]), [[NESTING_KEPT_AS_TEXT, `/blocks/0${'/slots/body/0'.repeat(50)}${'/items/0/children/0'.repeat(49)}`]]);
 });
 
-test('marks inside marks keep their own limit, 50: 50 deep stay marks, the 51st is text, and the paragraph says so', () => {
-  assert.equal(MAX_MARK_NEST, 50);
-  const whole = read(marks(MAX_MARK_NEST));
-  assert.deepEqual([markChain(whole.blocks[0].content).depth, whole.notices], [MAX_MARK_NEST, []]);
-  const past = read(marks(MAX_MARK_NEST + 1));
-  assert.deepEqual(markChain(past.blocks[0].content), { depth: MAX_MARK_NEST, text: 'm50 m51 x m51 m50' });
+// Marks are counted as validate counts a doc object ({ blocks }): doc, blocks, the paragraph, its
+// content, the innermost em's text leaves at the bottom, and two levels for each em. The levels come
+// in twos, so the deepest valid chain is one level short of MAX_VALUE_DEPTH, and one em more is past it.
+const DEEPEST_MARKS = Math.floor((MAX_VALUE_DEPTH - 5) / 2);
+
+test('marks inside marks nest as deep as MAX_VALUE_DEPTH allows: the deepest valid chain stays marks, one more is text, and the paragraph says so', () => {
+  assert.deepEqual([markChain(read(marks(51)).blocks[0].content).depth, read(marks(51)).notices], [51, []]);
+  const whole = read(marks(DEEPEST_MARKS));
+  assert.deepEqual([markChain(whole.blocks[0].content).depth, whole.notices], [DEEPEST_MARKS, []]);
+  const deeper = { blocks: [{ type: 'paragraph', content: [{ type: 'em', children: whole.blocks[0].content }] }] };
+  assert.deepEqual([walkDepth({ blocks: whole.blocks }), validate(deeper).ok], [MAX_VALUE_DEPTH - 1, false]);
+  const past = read(marks(DEEPEST_MARKS + 1));
+  const [d, e] = [DEEPEST_MARKS, DEEPEST_MARKS + 1];
+  assert.deepEqual(markChain(past.blocks[0].content), { depth: DEEPEST_MARKS, text: `m${d} m${e} x m${e} m${d}` });
   assert.deepEqual(past.notices, [{ code: NESTING_KEPT_AS_TEXT, path: '/blocks/0', line: 1, lines: 1 }]);
 });
 
