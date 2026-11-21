@@ -242,12 +242,13 @@ function link(href, children) {
   return [{ type: 'link', href: url, children: children.length ? children : [text(url)] }];
 }
 
-// A mark, link or image is a node over a list of children: its own level, the list's and its
-// children's, as validate counts a value's levels. It keeps its shape while its children stay within
+// A mark, link or image is written as a node over a list of children: its own level, the list's and
+// its children's, as validate counts a value's levels. A link or image writes a child even with none
+// in the source (its address, or its label). It keeps its shape while its children stay within
 // MAX_VALUE_DEPTH; past that it is its plain text, and every word is kept. `level` is the level of
 // the list the node goes into.
 function inlineNode(node, level, past) {
-  if (node.children.length && level + 3 > MAX_VALUE_DEPTH) {
+  if ((node.children.length || node.type === 'link' || node.type === 'image') && level + 3 > MAX_VALUE_DEPTH) {
     if (past) past.past = true;
     return [text(flattenText([node]))];
   }

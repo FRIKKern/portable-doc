@@ -14,7 +14,7 @@ const quotes = (n) => Array.from({ length: n }, (_, i) => `${'> '.repeat(i + 1)}
 // A list indented n deep, one item a level, no fence.
 const list = (n) => Array.from({ length: n }, (_, i) => `${'  '.repeat(i)}- l${i + 1}`).join('\n');
 // em inside em, n deep.
-const marks = (n) => Array.from({ length: n }).reduce((s, _, i) => `*m${n - i} ${s} m${n - i}*`, 'x');
+const marks = (n, inner = 'x') => Array.from({ length: n }).reduce((s, _, i) => `*m${n - i} ${s} m${n - i}*`, inner);
 
 // Blocks down the first block's callout body or first item's nested list: how many, and the deepest.
 function chain(blocks) {
@@ -89,6 +89,39 @@ test('marks inside marks nest as deep as MAX_VALUE_DEPTH allows: the deepest val
   const [d, e] = [DEEPEST_MARKS, DEEPEST_MARKS + 1];
   assert.deepEqual(markChain(past.blocks[0].content), { depth: DEEPEST_MARKS, text: `m${d} m${e} x m${e} m${d}` });
   assert.deepEqual(past.notices, [{ code: NESTING_KEPT_AS_TEXT, path: '/blocks/0', line: 1, lines: 1 }]);
+});
+
+// Each place inline content sits, by the value level of its list in the doc object: a top-level
+// block at 3, its content one down, a callout's body blocks three down (slots, body, block), a
+// nested list four down (children, list), a list item's text three down (items, item, content),
+// a table's head cells two down (head, cell) and its rows' three (rows, row, cell). The deepest
+// chain kept there leaves its text leaves within MAX_VALUE_DEPTH. One mark more is text: the doc
+// still validates, says so, and keeps its structure (no fallback to one code block).
+const PLACES = {
+  'a top-level paragraph': [(m) => m, 4, (b) => b[0].content],
+  'a list item': [(m) => `- ${m}`, 6, (b) => b[0].items[0]],
+  'an item of a nested list': [(m) => `- a\n  - ${m}`, 10, (b) => b[0].items[0].children[0].items[0]],
+  "a callout's body": [(m) => `> [!note] c\n>\n> ${m}`, 7, (b) => b[0].slots.body[0].content],
+  "a callout in a callout's body": [(m) => `> [!note] c\n>\n> > [!note] d\n> >\n> > ${m}`, 10, (b) => b[0].slots.body[0].slots.body[0].content],
+  "a table's head cell": [(m) => `| ${m} |\n| --- |\n| b |`, 5, (b) => b[0].head[0]],
+  "a table's row cell": [(m) => `| a |\n| --- |\n| ${m} |`, 6, (b) => b[0].rows[0][0]],
+};
+for (const [place, [md, level, content]] of Object.entries(PLACES)) {
+  const deepest = Math.floor((MAX_VALUE_DEPTH - level - 1) / 2);
+  test(`in ${place}, ${deepest} marks stay marks and one more is text, in a doc that validates and says so`, () => {
+    const past = read(md(marks(deepest + 1)));
+    assert.equal(markChain(content(past.blocks)).depth, deepest);
+    assert.deepEqual(past.notices.map((n) => n.code), [NESTING_KEPT_AS_TEXT]);
+  });
+}
+
+// A link or an image writes a child even when it has none in the source: its address, or its label.
+// So it is counted as a mark with children, and at the deepest place it is kept as its text too.
+test('an empty link or an image with no alt innermost of the deepest marks is text, and the doc around it keeps its blocks', () => {
+  for (const inner of ['[](https://a.example)', '![](https://a.example/i.png)']) {
+    const out = read(`before\n\n${marks(DEEPEST_MARKS, inner)}\n\nafter`);
+    assert.deepEqual([out.blocks.map((b) => b.type), out.notices.map((n) => [n.code, n.path])], [['paragraph', 'paragraph', 'paragraph'], [[NESTING_KEPT_AS_TEXT, '/blocks/1']]], inner);
+  }
 });
 
 // A portabledoc fence holds its blocks as JSON, and the import reads old names under their current
