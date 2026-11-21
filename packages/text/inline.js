@@ -5,7 +5,7 @@
 // neighbouring leaves that share a mark share one `**…**` or one link.
 
 import { MAX_VALUE_DEPTH } from '@portable-doc/validate';
-import { MAX_DEPTH, TOO_DEEP, asList, codeSpan, escInline, escLineStart, isMap, mdUrl, safeUrl, str } from './util.js';
+import { TOO_DEEP, asList, codeSpan, escInline, escLineStart, isMap, mdUrl, safeUrl, str } from './util.js';
 import { itemOf, readItem } from './read-aliases.js';
 
 const STRONG = { key: 'strong' };
@@ -84,8 +84,13 @@ function leafMarks(node, inherited) {
 /** Replace a block wrapper inside an inline run (a node with a non-empty `content` list) by its content. */
 const unwrap = (nodes) => nodes.flatMap((n) => (isMap(n) && Array.isArray(n.content) && n.content.length ? n.content : [n]));
 
+/**
+ * Inline content as leaves, each with the marks over it. It counts levels as inlineText does, one
+ * for each list and each node against validate's MAX_VALUE_DEPTH, so no valid doc reaches the cap.
+ * Past it, the words above are kept and the too-deep notice is written once, in place of the rest.
+ */
 function flatten(nodes, marks, out, depth) {
-  if (depth >= MAX_DEPTH) return void out.push({ text: TOO_DEEP, marks, code: false });
+  if (depth >= MAX_VALUE_DEPTH) return void out.push({ text: TOO_DEEP, marks, code: false });
   if (typeof nodes === 'string' || typeof nodes === 'number') return void out.push({ text: str(nodes), marks, code: false });
   if (Array.isArray(nodes)) {
     for (const n of unwrap(nodes)) flatten(n, marks, out, depth + 1);

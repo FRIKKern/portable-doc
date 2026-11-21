@@ -1,12 +1,11 @@
 // Markdown written by hand imports as deep as validate allows blocks: one Markdown level is one
 // format level, validate's MAX_DEPTH of them, callouts and lists counted together. Past it every
 // word is kept as text in the deepest block, and readMarkdown says so with a NESTING_KEPT_AS_TEXT
-// notice naming that block. Marks inside marks keep their own limit, MAX_MARK_NEST.
+// notice naming that block. Marks inside marks nest as deep as MAX_VALUE_DEPTH allows them where they sit.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { underBudget } from '../../scripts/lib/cpu-budget.mjs';
-import { MAX_MARK_NEST } from './from-markdown-inline.js';
 import { NESTING_KEPT_AS_TEXT, readMarkdown } from './index.js';
 
 const t = (value) => ({ type: 'text', value });
@@ -15,7 +14,7 @@ const quotes = (n) => Array.from({ length: n }, (_, i) => `${'> '.repeat(i + 1)}
 // A list indented n deep, one item a level, no fence.
 const list = (n) => Array.from({ length: n }, (_, i) => `${'  '.repeat(i)}- l${i + 1}`).join('\n');
 // em inside em, n deep.
-const marks = (n) => Array.from({ length: n }).reduce((s, _, i) => `*m${n - i} ${s} m${n - i}*`, 'x');
+const marks = (n, inner = 'x') => Array.from({ length: n }).reduce((s, _, i) => `*m${n - i} ${s} m${n - i}*`, inner);
 
 // Blocks down the first block's callout body or first item's nested list: how many, and the deepest.
 function chain(blocks) {
@@ -75,13 +74,54 @@ test('callouts and the lists in their bodies count as one depth: 50 callouts ove
   assert.deepEqual(past.notices.map((n) => [n.code, n.path]), [[NESTING_KEPT_AS_TEXT, `/blocks/0${'/slots/body/0'.repeat(50)}${'/items/0/children/0'.repeat(49)}`]]);
 });
 
-test('marks inside marks keep their own limit, 50: 50 deep stay marks, the 51st is text, and the paragraph says so', () => {
-  assert.equal(MAX_MARK_NEST, 50);
-  const whole = read(marks(MAX_MARK_NEST));
-  assert.deepEqual([markChain(whole.blocks[0].content).depth, whole.notices], [MAX_MARK_NEST, []]);
-  const past = read(marks(MAX_MARK_NEST + 1));
-  assert.deepEqual(markChain(past.blocks[0].content), { depth: MAX_MARK_NEST, text: 'm50 m51 x m51 m50' });
+// Marks are counted as validate counts a doc object ({ blocks }): doc, blocks, the paragraph, its
+// content, the innermost em's text leaves at the bottom, and two levels for each em. The levels come
+// in twos, so the deepest valid chain is one level short of MAX_VALUE_DEPTH, and one em more is past it.
+const DEEPEST_MARKS = Math.floor((MAX_VALUE_DEPTH - 5) / 2);
+
+test('marks inside marks nest as deep as MAX_VALUE_DEPTH allows: the deepest valid chain stays marks, one more is text, and the paragraph says so', () => {
+  assert.deepEqual([markChain(read(marks(51)).blocks[0].content).depth, read(marks(51)).notices], [51, []]);
+  const whole = read(marks(DEEPEST_MARKS));
+  assert.deepEqual([markChain(whole.blocks[0].content).depth, whole.notices], [DEEPEST_MARKS, []]);
+  const deeper = { blocks: [{ type: 'paragraph', content: [{ type: 'em', children: whole.blocks[0].content }] }] };
+  assert.deepEqual([walkDepth({ blocks: whole.blocks }), validate(deeper).ok], [MAX_VALUE_DEPTH - 1, false]);
+  const past = read(marks(DEEPEST_MARKS + 1));
+  const [d, e] = [DEEPEST_MARKS, DEEPEST_MARKS + 1];
+  assert.deepEqual(markChain(past.blocks[0].content), { depth: DEEPEST_MARKS, text: `m${d} m${e} x m${e} m${d}` });
   assert.deepEqual(past.notices, [{ code: NESTING_KEPT_AS_TEXT, path: '/blocks/0', line: 1, lines: 1 }]);
+});
+
+// Each place inline content sits, by the value level of its list in the doc object: a top-level
+// block at 3, its content one down, a callout's body blocks three down (slots, body, block), a
+// nested list four down (children, list), a list item's text three down (items, item, content),
+// a table's head cells two down (head, cell) and its rows' three (rows, row, cell). The deepest
+// chain kept there leaves its text leaves within MAX_VALUE_DEPTH. One mark more is text: the doc
+// still validates, says so, and keeps its structure (no fallback to one code block).
+const PLACES = {
+  'a top-level paragraph': [(m) => m, 4, (b) => b[0].content],
+  'a list item': [(m) => `- ${m}`, 6, (b) => b[0].items[0]],
+  'an item of a nested list': [(m) => `- a\n  - ${m}`, 10, (b) => b[0].items[0].children[0].items[0]],
+  "a callout's body": [(m) => `> [!note] c\n>\n> ${m}`, 7, (b) => b[0].slots.body[0].content],
+  "a callout in a callout's body": [(m) => `> [!note] c\n>\n> > [!note] d\n> >\n> > ${m}`, 10, (b) => b[0].slots.body[0].slots.body[0].content],
+  "a table's head cell": [(m) => `| ${m} |\n| --- |\n| b |`, 5, (b) => b[0].head[0]],
+  "a table's row cell": [(m) => `| a |\n| --- |\n| ${m} |`, 6, (b) => b[0].rows[0][0]],
+};
+for (const [place, [md, level, content]] of Object.entries(PLACES)) {
+  const deepest = Math.floor((MAX_VALUE_DEPTH - level - 1) / 2);
+  test(`in ${place}, ${deepest} marks stay marks and one more is text, in a doc that validates and says so`, () => {
+    const past = read(md(marks(deepest + 1)));
+    assert.equal(markChain(content(past.blocks)).depth, deepest);
+    assert.deepEqual(past.notices.map((n) => n.code), [NESTING_KEPT_AS_TEXT]);
+  });
+}
+
+// A link or an image writes a child even when it has none in the source: its address, or its label.
+// So it is counted as a mark with children, and at the deepest place it is kept as its text too.
+test('an empty link or an image with no alt innermost of the deepest marks is text, and the doc around it keeps its blocks', () => {
+  for (const inner of ['[](https://a.example)', '![](https://a.example/i.png)']) {
+    const out = read(`before\n\n${marks(DEEPEST_MARKS, inner)}\n\nafter`);
+    assert.deepEqual([out.blocks.map((b) => b.type), out.notices.map((n) => [n.code, n.path])], [['paragraph', 'paragraph', 'paragraph'], [[NESTING_KEPT_AS_TEXT, '/blocks/1']]], inner);
+  }
 });
 
 // A portabledoc fence holds its blocks as JSON, and the import reads old names under their current

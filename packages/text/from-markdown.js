@@ -30,12 +30,13 @@ const codeBlock = (value, lang) => (lang ? { type: 'code', value, lang } : { typ
 // heading, paragraph, list item or quote is dropped, never kept empty.
 const blank = (content) => renderInline(content, true) === '';
 const paragraph = (content) => (blank(content) ? [] : [{ type: 'paragraph', content }]);
-// `count`, when given, gets the nodes read on `visits` (a paragraph or heading is one); `past`
-// gets `past: true` when marks past MAX_MARK_NEST are kept as text (inline).
-function textOf(node, count = undefined, past = undefined) {
+// `level` is the value level of the list the text goes into (inline); `count`, when given, gets the
+// nodes read on `visits` (a paragraph or heading is one); `past` gets `past: true` when marks past
+// MAX_VALUE_DEPTH are kept as text (inline).
+function textOf(node, level, count = undefined, past = undefined) {
   if (node.type !== 'paragraph' && node.type !== 'heading') return [text(flattenText([node], count).trim())];
   if (count) count.visits++;
-  return inline(node.children, 0, past);
+  return inline(node.children, level, past);
 }
 
 // ── lists ───────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ export const IMPORT_FELL_BACK = 'import_fell_back';
 export const OLD_NAME_DROPPED = 'old_name_dropped';
 /**
  * The code of the notice that a block holds, as text, levels nested past the import's limits:
- * blocks past MAX_DEPTH, or marks past MAX_MARK_NEST. Every word is kept.
+ * blocks past MAX_DEPTH, or marks past MAX_VALUE_DEPTH. Every word is kept.
  */
 export const NESTING_KEPT_AS_TEXT = 'nesting_kept_as_text';
 // The notice for the block at `path`, from its token: its source lines, the first from 1.
@@ -69,10 +70,12 @@ const lineOf = (tok, i, base) => (tok.map ? base + tok.map[i] : undefined);
  * In a list MAX_DEPTH - 1 deep (the deepest validate allows), a nested list is kept as its text
  * instead: its items and their blocks one space apart, joined to the item's own text by one
  * space, in place; a list with no text adds nothing. A part that keeps such text, or marks
- * past MAX_MARK_NEST, has `past`. `depth` is the list's own, from 0 at the top of the doc;
- * `base` is the line the parse starts at.
+ * past MAX_VALUE_DEPTH, has `past`. `depth` is the list's own, from 0 at the top of the doc;
+ * `base` is the line the parse starts at; `level` is the list block's value level. An item's text
+ * is counted at the level it has in an item that holds nested lists, { content, children }: one
+ * deeper than an item that is its content alone, so it fits either way.
  */
-function listItem(item, depth, base) {
+function listItem(item, depth, base, level) {
   const parts = [];
   let part = { out: [], children: [], notes: [], past: false };
   let after; // the line after the last kept nested list, while the part has one
@@ -81,7 +84,7 @@ function listItem(item, depth, base) {
     if (LISTS.has(child.type)) {
       if (depth + 1 < MAX_DEPTH) {
         const notes = [];
-        const kept = list(child, depth + 1, notes, base);
+        const kept = list(child, depth + 1, notes, base, level + 4);
         for (const n of notes) part.notes.push({ ...n, path: `/children/${part.children.length}${n.path}` });
         for (const block of kept) part.children.push(block);
         if (kept.length) after = lineOf(child.tok, 1, base) ?? after;
@@ -104,7 +107,7 @@ function listItem(item, depth, base) {
     if (part.moved) part.moved[1] = lineOf(child.tok, 1, base) ?? lineOf(item.tok, 1, base) ?? part.moved[1];
     if (part.out.length) part.out.push(text(' '));
     if (child.type === 'fence' || child.type === 'code_block') part.out.push({ type: 'code', value: str(child.tok.content).replace(/\n+$/, '') });
-    else for (const node of textOf(child, undefined, part)) part.out.push(node);
+    else for (const node of textOf(child, level + 3, undefined, part)) part.out.push(node);
   }
   close();
   return parts;
@@ -127,11 +130,11 @@ const withChildren = (item, children) => (children.length ? { ...item, children 
  * a list with an item that keeps deeper levels as text (`past`) adds one NESTING_KEPT_AS_TEXT
  * notice for itself, before its items' notices.
  */
-function list(node, depth = 0, notes = [], base = 0) {
+function list(node, depth, notes, base, level) {
   const ordered = node.type === 'ordered_list';
   const items = node.children
     .filter((c) => c.type === 'list_item')
-    .flatMap((li) => listItem(li, depth, base))
+    .flatMap((li) => listItem(li, depth, base, level))
     // `[ ]` opens a task only at the head of an item in the source, never of a split-off one
     .map((it) => ({ ...it, task: ordered || it.moved ? null : taskItem(it.content) }))
     .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
@@ -185,19 +188,21 @@ function calloutMarker(content) {
  */
 function quote(node, state) {
   const children = node.children;
-  const first = children.length ? textOf(children[0], state.count, state.past) : [];
+  const first = children.length ? textOf(children[0], state.level + 1, state.count, state.past) : [];
   const marker = calloutMarker(first);
   if (marker && state.depth + 1 < MAX_DEPTH) {
     const { at, blocks } = state;
     state.depth++;
+    state.level += 3; // the callout's slots, its body, and the body's blocks
     state.blocks = `${at}/slots/body`;
     const body = convert(children.slice(1), state);
     state.blocks = blocks;
+    state.level -= 3;
     state.depth--;
     const callout = { type: 'callout', tone: marker.tone, content: marker.rest };
     return [body.length ? { ...callout, slots: { body } } : callout];
   }
-  const parts = [first, ...children.slice(1).map((child) => textOf(child, state.count, state.past))];
+  const parts = [first, ...children.slice(1).map((child) => textOf(child, state.level + 1, state.count, state.past))];
   const content = joined(parts);
   if (marker) {
     if (children.length > 1) state.past.past = true;
@@ -313,33 +318,35 @@ function code(node, state) {
 
 // ── blocks ──────────────────────────────────────────────────────────────
 
-function table(node, past) {
-  const rows = (section) =>
+// A table at value level `level`: its head's cells are two levels down (head, cell), its rows' three
+// (rows, row, cell).
+function table(node, past, level) {
+  const rows = (section, cell) =>
     node.children
       .filter((c) => c.type === section)
       .flatMap((s) => s.children.filter((r) => r.type === 'tr'))
-      .map((r) => r.children.filter((c) => c.type === 'th' || c.type === 'td').map((c) => inline(c.children, 0, past)));
-  const head = rows('thead')[0];
-  return head ? { type: 'table', head, rows: rows('tbody') } : { type: 'table', rows: rows('tbody') };
+      .map((r) => r.children.filter((c) => c.type === 'th' || c.type === 'td').map((c) => inline(c.children, cell, past)));
+  const head = rows('thead', level + 2)[0];
+  return head ? { type: 'table', head, rows: rows('tbody', level + 3) } : { type: 'table', rows: rows('tbody', level + 3) };
 }
 
 function block(node, state) {
   switch (node.type) {
     case 'heading': {
       // Inline content under the canonical name, marks and links kept, as a paragraph's.
-      const content = inline(node.children, 0, state.past);
+      const content = inline(node.children, state.level + 1, state.past);
       return blank(content) ? [] : [{ type: 'heading', level: Math.min(6, Math.max(1, Number(node.tok.tag.slice(1)) || 1)), content }];
     }
-    case 'paragraph': return paragraph(inline(node.children, 0, state.past));
+    case 'paragraph': return paragraph(inline(node.children, state.level + 1, state.past));
     case 'bullet_list': case 'ordered_list': {
       const notes = [];
-      const out = list(node, state.depth, notes, state.base);
+      const out = list(node, state.depth, notes, state.base, state.level);
       for (const n of notes) state.splits.push({ ...n, path: `${state.at}${n.path}` });
       return out;
     }
     case 'fence': case 'code_block': return code(node, state);
     case 'blockquote': return quote(node, state);
-    case 'table': return [table(node, state.past)];
+    case 'table': return [table(node, state.past, state.level)];
     case 'hr': return [{ type: 'divider' }];
     case 'html_block': {
       const visible = visibleText(node.tok.content).trim();
@@ -365,9 +372,11 @@ function caption(node) {
  * `splits` holds a LIST_ITEM_SPLIT notice per list item split off, an OLD_NAME_DROPPED one per
  * value a fence's fold lost, one per fence kept as a code block (FENCE_KEPT_AS_CODE) and a
  * NESTING_KEPT_AS_TEXT one per block that keeps deeper levels as text, in source order; `blocks` is the path of the blocks being read, `at` the block's, `past`
- * the block's mark that it keeps such text (convert), and `base` the line the parse starts at.
+ * the block's mark that it keeps such text (convert), `base` the line the parse starts at, and
+ * `level` the value level of the blocks being read, counted as validate counts a doc object
+ * ({ blocks }): the doc, its blocks, and a top-level block at 3.
  */
-const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 }, splits: [], blocks: '/blocks', at: '/blocks', base: 0 });
+const readState = () => ({ ids: new Set(), depth: 0, level: 3, count: { tokens: 0, visits: 0 }, splits: [], blocks: '/blocks', at: '/blocks', base: 0 });
 
 // Each block of `nodes` onto `out`, sharing `state`: the ids fences used, and how many callouts
 // deep they are. Where the net first fires, its path is the block's place. A block that keeps
@@ -406,7 +415,7 @@ export { IMPORT_WORK };
  * their current names adds one { code: OLD_NAME_DROPPED, path, line, lines, name, current, fix }:
  * the dropped key's path, the fence's source lines, the name dropped, the current name, and the
  * fix, `write <current>`. Each block that keeps, as text, levels nested past the limits (blocks
- * past validate's MAX_DEPTH, marks past MAX_MARK_NEST) adds one { code: NESTING_KEPT_AS_TEXT,
+ * past validate's MAX_DEPTH, marks past MAX_VALUE_DEPTH) adds one { code: NESTING_KEPT_AS_TEXT,
  * path, line, lines }: the block, and its source lines. Each ```portabledoc fence at block level
  * kept as a code block adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code
  * naming why, the code block, the fence's source lines and the fix. A fence inside a list item is

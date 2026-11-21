@@ -43,8 +43,8 @@ test('each text writer and React write a doc MAX_DEPTH deep whole, and one level
 // value's levels, against MAX_VALUE_DEPTH. The deepest valid doc of nested em under a wikilink,
 // or under an inline code node's old children, is MAX_VALUE_DEPTH levels deep by walkDepth: each
 // writer keeps every word of it. A doc deeper than validate allows keeps every word above the cap
-// and the too-deep notice once. The marks path (flatten, inline.js) and React's reader are not
-// held here: they count against MAX_DEPTH, with the notice past it.
+// and the too-deep notice once. The marks path (flatten, inline.js), below, counts the same way.
+// React's reader is not held here: it counts against MAX_DEPTH, with the notice past it.
 const ems = (k) => [{ type: 'em', children: Array.from({ length: k - 1 }).reduce((kids, _, i) => [{ type: 'text', value: `w${k - 1 - i} ` }, { type: 'em', children: kids }], [{ type: 'text', value: `w${k}` }, { type: 'text', value: ' end' }]) }];
 const flat = {
   'a wikilink': (k) => [{ type: 'paragraph', content: [{ type: 'wikilink', target: 'page', children: ems(k) }] }],
@@ -97,3 +97,33 @@ for (const [shape, doc] of Object.entries(flat)) {
     }
   });
 }
+
+// The marks path: a paragraph's own inline content, read by flatten (inline.js), counts one level
+// for each list and each node against MAX_VALUE_DEPTH too. The deepest valid doc of nested em in a
+// paragraph is MAX_VALUE_DEPTH levels deep by walkDepth: doc, paragraph, content and the deepest
+// em's text leaves at the bottom, two more for each em.
+const inParagraph = (k) => [{ type: 'paragraph', content: ems(k) }];
+const DEEPEST_EM_IN_PARAGRAPH = (MAX_VALUE_DEPTH - 4) / 2;
+
+test('the deepest valid doc of nested em in a paragraph is MAX_VALUE_DEPTH deep, and one em more is refused', () => {
+  assert.equal(walkDepth(inParagraph(DEEPEST_EM_IN_PARAGRAPH)), MAX_VALUE_DEPTH);
+  assert.deepEqual([validate(inParagraph(DEEPEST_EM_IN_PARAGRAPH)).ok, validate(inParagraph(DEEPEST_EM_IN_PARAGRAPH + 1)).errors.map((e) => e.code)], [true, ['too_deep']]);
+});
+
+for (const k of [60, DEEPEST_EM_IN_PARAGRAPH]) {
+  test(`the text writers keep every word of a paragraph over ${k} nested em${k === DEEPEST_EM_IN_PARAGRAPH ? ', the deepest a valid doc has' : ''}`, () => {
+    for (const writer of textWriters) {
+      const out = writer.write(inParagraph(k)).output;
+      assert.deepEqual([wordsOf(out).size, out.includes(`w${k}`), count(out, TOO_DEEP)], [k, true, 0], writer.name);
+    }
+  });
+}
+
+test('past MAX_VALUE_DEPTH, a doc validate refuses, the text writers keep every word of a paragraph above it and write the too-deep notice once', () => {
+  // As above: the cap stops the em holding word MAX_VALUE_DEPTH / 2, whose children sit at that level.
+  const k = MAX_VALUE_DEPTH / 2;
+  for (const writer of textWriters) {
+    const out = writer.write(inParagraph(k)).output;
+    assert.deepEqual([wordsOf(out).size, out.includes(`w${k}`), count(out, TOO_DEEP)], [k - 1, false, 1], writer.name);
+  }
+});

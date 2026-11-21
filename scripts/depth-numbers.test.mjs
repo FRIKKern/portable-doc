@@ -25,7 +25,6 @@ const FORMAT = new Set(['MAX_DEPTH', 'MAX_VALUE_DEPTH']);
 
 /** `file NAME` → why it is a number of its own; `formula`: its right side exactly; `pinned`: its value. */
 export const OWN = {
-  'packages/text/from-markdown-inline.js MAX_MARK_NEST': { why: 'marks inside marks: a limit of their own, counted against MAX_VALUE_DEPTH, two levels a mark' },
   'packages/text/from-markdown-inline.js PARSE_LEVELS': { why: "markdown-it's levels for MAX_DEPTH lists: two a list (the list and its item), and two to spare", formula: '2 * (MAX_DEPTH + 2)' },
   'packages/react/src/inline.tsx MAX_DEPTH': { why: "a copy pinned equal to validate's MAX_DEPTH: the React package does not depend on validate", pinned: MAX_DEPTH },
   'packages/mcp/catalog.js MAX_NEST': { why: "not the format's depth: how many levels of schema object properties the tool catalog spells out" },

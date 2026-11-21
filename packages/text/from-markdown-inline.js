@@ -5,7 +5,7 @@
 // `children`, code carries `value`.
 
 import MarkdownIt from 'markdown-it';
-import { MAX_DEPTH } from '@portable-doc/validate';
+import { MAX_DEPTH, MAX_VALUE_DEPTH } from '@portable-doc/validate';
 import { asList, isMap, safeUrl, str } from './util.js';
 
 // Blocks nest in the import as deep as validate allows them, MAX_DEPTH
@@ -13,12 +13,6 @@ import { asList, isMap, safeUrl, str } from './util.js';
 // item, and a block in a callout's body, are each one level down, counted together, as
 // checkBlock counts them (packages/validate/index.js:224). Past it, the deeper levels are kept as text, with a
 // NESTING_KEPT_AS_TEXT notice (from-markdown.js).
-
-/**
- * Inline marks inside marks deeper than this are kept as their plain text. A limit of its
- * own: marks count against MAX_VALUE_DEPTH, two JSON levels each, not against MAX_DEPTH.
- */
-export const MAX_MARK_NEST = 50;
 
 // markdown-it builds tokens to `maxNesting` levels (each list, list item and quote
 // is one) and skips the lines deeper than that. The limit is set just past what
@@ -248,13 +242,17 @@ function link(href, children) {
   return [{ type: 'link', href: url, children: children.length ? children : [text(url)] }];
 }
 
-function inlineNode(node, depth, past) {
-  if (depth >= MAX_MARK_NEST) {
-    // Only a mark, link, image or code span loses its shape here; plain text is the same text.
-    if (past && (node.children.length || node.type === 'code_inline')) past.past = true;
+// A mark, link or image is written as a node over a list of children: its own level, the list's and
+// its children's, as validate counts a value's levels. A link or image writes a child even with none
+// in the source (its address, or its label). It keeps its shape while its children stay within
+// MAX_VALUE_DEPTH; past that it is its plain text, and every word is kept. `level` is the level of
+// the list the node goes into.
+function inlineNode(node, level, past) {
+  if ((node.children.length || node.type === 'link' || node.type === 'image') && level + 3 > MAX_VALUE_DEPTH) {
+    if (past) past.past = true;
     return [text(flattenText([node]))];
   }
-  const inner = () => inline(node.children, depth + 1, past);
+  const inner = () => inline(node.children, level + 2, past);
   const wrap = (type) => {
     const children = inner();
     return children.length ? [{ type, children }] : [];
@@ -283,10 +281,11 @@ function inlineNode(node, depth, past) {
 }
 
 /**
- * Inline nodes (the children of markdown-it `inline` nodes) as PortableDoc inline content.
- * Marks past MAX_MARK_NEST set `past.past`, when `past` is given.
+ * Inline nodes (the children of markdown-it `inline` nodes) as PortableDoc inline content, for a
+ * list at value level `level` of the doc object ({ blocks }). Marks kept as text past
+ * MAX_VALUE_DEPTH set `past.past`, when `past` is given.
  */
-export function inline(nodes, depth = 0, past = undefined) {
+export function inline(nodes, level, past = undefined) {
   const out = [];
   let skipping = null;
   for (const n of asList(nodes)) {
@@ -295,7 +294,7 @@ export function inline(nodes, depth = 0, past = undefined) {
       continue;
     }
     if (skipping) continue;
-    for (const node of n.type === 'inline' ? inline(n.children, depth, past) : inlineNode(n, depth, past)) out.push(node);
+    for (const node of n.type === 'inline' ? inline(n.children, level, past) : inlineNode(n, level, past)) out.push(node);
   }
   return merge(out);
 }
