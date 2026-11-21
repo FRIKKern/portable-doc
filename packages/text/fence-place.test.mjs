@@ -182,10 +182,13 @@ test('every portabledoc fence in the shared cases and in this file either reads 
   const planted = { ...IMPORT_WORK, get budget() { throw new Error('a planted throw'); } };
   const cut = `# T\n\npara one\n\n${fence('[{"type":"divider"}]')}\n\nlast`;
   // [Markdown, limits]: the shared cases and this file's reads; old names at the top and in an item;
-  // a read that falls back, with text and blank; the budget cut at a fence's first line and inside it.
+  // a read that falls back, with text and blank; the budget cut at a fence's first line and inside it;
+  // lines past lineBytes before and after a fence, apart and next to it.
+  const long = 'x'.repeat(60);
+  const lineBytes = { ...IMPORT_WORK, lineBytes: 40 };
   const sources = [...Object.values(HEADINGS), ...Object.values(LIST_SPLIT), ...Object.values(NESTING), ...SOURCES, fence(OLD), `- item\n\n${fence(OLD, '  ')}`]
     .map((md) => [md, IMPORT_WORK])
-    .concat([[`# T\n\n${fence(PJ)}`, planted], ['  \n', planted], [cut, { ...IMPORT_WORK, budget: 20 }], [cut, { ...IMPORT_WORK, budget: 40 }]]);
+    .concat([[`# T\n\n${fence(PJ)}`, planted], ['  \n', planted], [cut, { ...IMPORT_WORK, budget: 20 }], [cut, { ...IMPORT_WORK, budget: 40 }], [`${long}\n\n${fence(PJ)}\n\n${long}`, lineBytes], [`${long}\n${fence(PJ)}\n${long}`, lineBytes]]);
   let fences = 0;
   const codes = new Set();
   for (const [md, limits] of sources) {
@@ -193,11 +196,14 @@ test('every portabledoc fence in the shared cases and in this file either reads 
     const strings = [];
     JSON.stringify(doc.blocks, (k, v) => (typeof v === 'string' && strings.push(squeeze(v)), v));
     for (const n of doc.notices) assert.ok(named(doc, n), `${n.code} at ${n.path}, not in the blocks: ${md.slice(0, 80)}`);
-    for (const n of doc.notices) codes.add(n.code);
-    // A fence has a notice on its line: a fence notice there, or the import's own over the lines it kept whole.
+    for (const n of doc.notices) codes.add(n.rule ? `${n.code}/${n.rule}` : n.code);
+    // A fence has a notice on its line: a fence notice there, or the import's own over the text it kept.
+    // A fall-back and the budget keep from their line to the end; the line rule's `lines` counts the
+    // lines it cut, wherever they are, so it names only its first.
     const fenceLines = new Set(doc.notices.filter((n) => n.code.startsWith('fence_')).map((n) => n.line));
-    const whole = doc.notices.filter((n) => n.code === IMPORT_FELL_BACK || n.code === IMPORT_WORK.notice);
-    const lines = { has: (l) => fenceLines.has(l) || whole.some((n) => n.line <= l && l < n.line + n.lines) };
+    const whole = doc.notices.filter((n) => n.code === IMPORT_FELL_BACK || (n.code === IMPORT_WORK.notice && n.rule !== 'line'));
+    const cutLines = doc.notices.filter((n) => n.code === IMPORT_WORK.notice && n.rule === 'line').map((n) => n.line);
+    const lines = { has: (l) => fenceLines.has(l) || cutLines.includes(l) || whole.some((n) => n.line <= l && l < n.line + n.lines) };
     // A fence read into blocks leaves no copy of its JSON; one kept as text or code does. Fences
     // with the same JSON are counted together: no more copies than fences with a notice.
     const byJson = new Map();
@@ -217,5 +223,5 @@ test('every portabledoc fence in the shared cases and in this file either reads 
     }
   }
   assert.ok(fences >= 20, `the sweep saw ${fences} fences`);
-  for (const code of [OLD_NAME_DROPPED, IMPORT_FELL_BACK, IMPORT_WORK.notice, LIST_ITEM_SPLIT, NESTING_KEPT_AS_TEXT, 'fence_not_json', 'fence_place', 'fence_too_deep']) assert.ok(codes.has(code), `the sweep saw no ${code}`);
+  for (const code of [OLD_NAME_DROPPED, IMPORT_FELL_BACK, `${IMPORT_WORK.notice}/budget`, `${IMPORT_WORK.notice}/line`, LIST_ITEM_SPLIT, NESTING_KEPT_AS_TEXT, 'fence_not_json', 'fence_place', 'fence_too_deep']) assert.ok(codes.has(code), `the sweep saw no ${code}`);
 });
