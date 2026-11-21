@@ -110,10 +110,17 @@ into its `slots.body`. Two fences do more:
 - ` ```mermaid ` is a `diagram` block.
 - ` ```portabledoc ` holds a JSON array of up to 50 blocks, spliced in when
   every block in it is of a fence type (`FENCE_TYPES`, listed under
-  [Round trip](#round-trip)): at the top, and nested wherever the schema puts
-  blocks (a list item's `children`, a callout's `slots.body`, …). Otherwise the
-  fence stays a code block. A spliced block's old names (the alias table, as
-  in `spec/read-aliases.json`) come in under their current names, picked and
+  [Round trip](#round-trip)) and its blocks fit where they would sit (under
+  `MAX_DEPTH` blocks and `MAX_VALUE_DEPTH` JSON levels, counted in the doc):
+  at the top, in a callout's `slots.body`, and in a list item's `children`,
+  as a nested list is (text after it starts a new item). Otherwise the fence
+  stays code: a code block at block level, inline code in a list item. A quote
+  holds no blocks, so a fence in one is inline code; a fence in text the
+  import reads flat (a quote in a list item, a list in a quote, lists past
+  `MAX_DEPTH`) is part of that text. Each fence kept so adds one notice
+  (`FENCE_KEPT_AS_CODE`, under `readMarkdown`). A spliced block's old names
+  (the alias table, as in `spec/read-aliases.json`) come in under their
+  current names, picked and
   converted by the rule every reader uses, so the current name wins when it
   holds a value. Only what the readers read is folded: the blocks, the places
   the schema puts blocks and inline nodes in them, a table's cells where its
@@ -133,8 +140,9 @@ Where it differs from Barkpark, on purpose:
   its text, and an image with no alt text leaves none. A portabledoc fence
   must also validate, hold only allowed URLs in every address field (`href`,
   `src`, `poster`, `url`, at any depth), reuse no `id` from an earlier fence,
-  and may nest no deeper than `MAX_VALUE_DEPTH` from `@portable-doc/validate`
-  (1000 JSON levels, counted in the doc), or it stays a code block.
+  and fit where its blocks would sit, within `MAX_DEPTH` and `MAX_VALUE_DEPTH`
+  from `@portable-doc/validate` (100 blocks, 1000 JSON levels, counted in the
+  doc), or it stays code.
 - A heading, paragraph, list item or quote that import leaves with no text
   (say, an unsafe image, a script or a blank code span) is dropped, never kept
   empty. "No text" is `toMarkdown`'s measure: it would write nothing for it. A
@@ -216,16 +224,17 @@ Where it differs from Barkpark, on purpose:
   fence's block loses as its old names fold adds
   `{ code: 'old_name_dropped', path, line, lines, name, current, fix }`: the
   dropped key's path, the fence's lines, the name dropped, the current name and
-  `write <current>`. A ```` ```portabledoc ```` fence at block level that the
-  import does not splice stays a code block of its source and adds
-  `{ code, path, line, lines, fix }` (`FENCE_KEPT_AS_CODE`): the code block's
-  path, the fence's lines and the fix. Its code names the reason:
-  `fence_not_json`, `fence_block_count` (not 1 to 50 blocks), `fence_too_deep`,
-  `fence_block_type`, `fence_unsafe_address`, `fence_invalid` (validate refuses
-  it) or `fence_id_used` (an earlier fence uses a block id). These come in
-  source order, after any `budget` or `line` notice and before a `net` one. A
-  fence inside a list item is read as inline code in the item, whatever it
-  holds, and adds no notice yet.
+  `write <current>`. A ```` ```portabledoc ```` fence the import does not
+  splice adds `{ code, path, line, lines, fix }` (`FENCE_KEPT_AS_CODE`): the
+  path of the block that keeps it (the code block at block level; the list
+  item or quote where it is inline code; the block whose text holds it), the
+  fence's lines and the fix. Its code names the reason: `fence_not_json`,
+  `fence_block_count` (not 1 to 50 blocks), `fence_too_deep` (as written, or
+  where its blocks would sit), `fence_block_type`, `fence_unsafe_address`,
+  `fence_invalid` (validate refuses it), `fence_id_used` (an earlier fence uses
+  a block id) or `fence_place` (in a quote, or in text read flat, which hold no
+  blocks). No portabledoc fence is kept as code or text without one. These come
+  in source order, after any `budget` or `line` notice and before a `net` one.
 
 ## Round trip
 
@@ -253,8 +262,9 @@ back and compares, never by a list of types.
   own path (`/blocks/0/slots/body/1`); a callout that line cannot hold (a
   title, a tone import does not know) is fenced whole.
 - A list is written as indented items with their blocks inside exactly when
-  that reads back as the list; import keeps only nested lists as an item's
-  blocks, so a list whose item holds any other block is fenced whole, or listed
+  that reads back as the list. An item's blocks are written in their own
+  Markdown, and of those import keeps only nested lists as an item's blocks,
+  so a list whose item holds any other block is fenced whole, or listed
   in `lost` as a whole when a fence cannot hold it (an image, an unsafe link).
 
 <!-- round-trip-types:start -->
