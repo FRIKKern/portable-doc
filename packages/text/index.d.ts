@@ -71,6 +71,15 @@ export interface ImportLimits {
 }
 export const IMPORT_WORK: ImportLimits;
 
+/**
+ * The most 'line' run notices a text gets (import-work.js gives the value and its reason). Past
+ * them, one LineNoticesCappedNotice stands for every later run.
+ */
+export const MAX_LINE_NOTICES: number;
+
+/** The code of the notice that stands for every run of cut lines past MAX_LINE_NOTICES. */
+export const LINE_NOTICES_CAPPED: 'import_line_notices_capped';
+
 /** The code of the notice for a list item split at text after its nested list. */
 export const LIST_ITEM_SPLIT: 'list_item_split';
 
@@ -82,7 +91,10 @@ export const IMPORT_FELL_BACK: 'import_fell_back';
  * `line` on; 'line': each line past lineBytes; 'net': markdown-it's own count passed the
  * budget where the text's count said it would not, so the deep text from `line` on was kept,
  * a sign the text's count is wrong and a bug to report), the first such paragraph at `path`.
- * At most one per rule. `line` counts from 1; `lines` is how many lines were kept as text.
+ * At most one each for 'budget' and 'net'; one 'line' notice per run of cut lines (consecutive
+ * line numbers; any line not cut ends a run), at its first line's paragraph, for the first
+ * MAX_LINE_NOTICES runs; then one LineNoticesCappedNotice. `line` counts from 1; `lines` is how
+ * many lines were kept as text, from `line` on.
  */
 export interface ImportWorkNotice {
   code: 'import_work_spent';
@@ -90,6 +102,24 @@ export interface ImportWorkNotice {
   path: string;
   line: number;
   lines: number;
+}
+
+/**
+ * The last line notice, past MAX_LINE_NOTICES runs: it stands for every later run of cut lines.
+ * `path` is the paragraph of its first cut line, `line` that line (from 1), and `lines` the length
+ * of its range up to the last cut line it stands for: as in every notice, `line` to
+ * `line + lines - 1` is what it covers. `runs` and `cut` are the runs and cut lines inside. So the
+ * line notices are at most MAX_LINE_NOTICES + 1, and the run notices' `lines` plus its `cut` add
+ * up to every cut line.
+ */
+export interface LineNoticesCappedNotice {
+  code: 'import_line_notices_capped';
+  rule: 'line';
+  path: string;
+  line: number;
+  lines: number;
+  runs: number;
+  cut: number;
 }
 
 /**
@@ -183,12 +213,12 @@ export interface FenceKeptAsCodeNotice {
   fix: string;
 }
 
-export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice | OldNameDroppedNotice | NestingKeptAsTextNotice | FenceKeptAsCodeNotice;
+export type ImportNotice = ImportWorkNotice | LineNoticesCappedNotice | ListItemSplitNotice | ImportFallbackNotice | OldNameDroppedNotice | NestingKeptAsTextNotice | FenceKeptAsCodeNotice;
 
 /**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
  * from the text. `notices` says what a limit cut and each list item split off, by kind: the
- * `budget` and `line` notices, then the splits, a fence's dropped old names
+ * `budget` and `line` notices (LineNoticesCappedNotice among them), then the splits, a fence's dropped old names
  * (`old_name_dropped`) and each fence kept as code or text (FENCE_KEPT_AS_CODE) in source order,
  * then a `net` one; it is empty
  * when none happened. When the import falls back to one code block, its one notice is

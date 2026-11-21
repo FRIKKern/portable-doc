@@ -58,7 +58,7 @@ export const CUT = {
   'line: a table row': [`| a | b |\n| - | - |\n| 1 | 2 |\n| ${X(41)} |\n| 3 | 4 |`, LINE],
   'line: under a paragraph, as a setext underline': [`Title\n${X(41, '=')}`, LINE],
   'line: a link reference definition': [`[ref]: https://example.com/${X(30)}\n\nsee [ref]`, LINE],
-  'line: three long lines, one notice': [`${X(41)}\n${X(41, 'y')}\nok\n${X(41, 'z')}`, LINE],
+  'line: three long lines in two runs, a notice per run': [`${X(41)}\n${X(41, 'y')}\nok\n${X(41, 'z')}`, LINE],
   'line: inside a fence': [`\`\`\`js\nconst a = 1;\n${X(41, 'y')}\nconst b = 2;\n\`\`\`\nafter`, LINE],
   'line: a long fence opener opens nothing': [`\`\`\`${X(41)}\n**a**\nafter`, LINE],
   'line: inside a quoted fence': [`> \`\`\`js\n> one\n> ${X(41)}\n> two\n> \`\`\`\nafter`, LINE],

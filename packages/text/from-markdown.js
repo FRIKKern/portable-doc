@@ -6,7 +6,7 @@
 
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
-import { IMPORT_WORK, planText } from './import-work.js';
+import { IMPORT_WORK, LINE_NOTICES_CAPPED, MAX_LINE_NOTICES, planText } from './import-work.js';
 import { attr, flattenText, inline, langOf, merge, parser, text, tree, visibleText, WORDS_ONLY } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { currentNames } from './current-names.js';
@@ -503,14 +503,20 @@ function convert(nodes, state, out = [], net = undefined) {
   return out;
 }
 
-export { IMPORT_WORK };
+export { IMPORT_WORK, LINE_NOTICES_CAPPED, MAX_LINE_NOTICES };
 
 /**
  * GFM Markdown as { blocks, notices, work }. `blocks` pass @portable-doc/validate. `work` is the
  * import's work counted from the text (import-work.js). A line longer than limits.lineBytes, and
  * every line from where the work passes limits.budget, is kept as a top-level paragraph of plain
- * text, every word; `notices` then hold one { code, rule, path, line, lines } per rule ('line' or
- * 'budget'): the first such paragraph, the first line cut (from 1) and how many. Should
+ * text, every word; `notices` then hold one { code, rule, path, line, lines } for 'budget' and one
+ * per run of cut lines (consecutive line numbers) for 'line': the paragraph of its first line, that
+ * line (from 1) and how many. Past MAX_LINE_NOTICES runs, one { code: LINE_NOTICES_CAPPED, rule:
+ * 'line', path, line, lines, runs, cut } stands for every later run: the paragraph of its first cut
+ * line, that line, `lines` the length of its range up to the last cut line it stands for, and the
+ * `runs` and `cut` lines inside. In every notice `line` to `line + lines - 1` is what it covers. So
+ * the line notices are at most MAX_LINE_NOTICES + 1, and the run notices' `lines` plus its `cut`
+ * add up to every cut line. Should
  * markdown-it's own count still pass the budget (the net), the rest of the deep text is kept as
  * plain text, with a notice of the same shape and rule 'net': `line` the first source line
  * kept so, `lines` how many. Each list item split off at text after its nested list adds one
@@ -523,8 +529,7 @@ export { IMPORT_WORK };
  * path, line, lines }: the block, and its source lines. Each ```portabledoc fence kept as code or
  * text adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code naming why, the
  * block that keeps it (the code block at block level, the list item or quote where it is inline
- * code, the block whose text holds it), the fence's source lines and the fix. The notices come by kind: 'budget' and
- * 'line', then the splits, dropped names, fences kept as code and nesting kept as text in source
+ * code, the block whose text holds it), the fence's source lines and the fix. The notices come by kind: 'budget' and 'line' by first line, then the splits, dropped names, fences kept as code and nesting kept as text in source
  * order, then 'net'. Should the read throw or give blocks that do not validate, the
  * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
  * notice and no other. Never throws.
@@ -549,26 +554,32 @@ export function readMarkdown(markdown, limits = IMPORT_WORK) {
  * A plan from planText as { blocks, notices }, or null when the blocks do not validate. Each
  * part read is a fresh document for markdown-it; the net's count runs across them all. The
  * import-work test also reads a plan made with a wrong count here, to see the net catch it;
- * `parsed` is markdown-it's own count and `count` the read's (readState), for the tests.
+ * `parsed` is markdown-it's own count, `count` the read's (readState) and `pathKeys` how many
+ * paragraph paths it kept for notices, for the tests.
  */
 export function readPlan(plan, limits) {
   const state = readState();
   const net = { work: 0, budget: limits.budget };
   const blocks = [];
+  // The paths of the paragraphs notices start at, and only those: a text can cut a great many lines.
   const paths = {};
+  const lineStarts = new Set(plan.notices.filter((n) => n.rule === 'line').map((n) => n.line));
   for (const part of plan.parts) {
     state.base = part.line;
     if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line }), state.count), state, blocks, net);
     else {
-      paths[part.rule] ??= `/blocks/${blocks.length}`;
+      if (part.rule !== 'line' || lineStarts.has(part.line + 1)) paths[`${part.rule}:${part.line + 1}`] ??= `/blocks/${blocks.length}`;
       blocks.push({ type: 'paragraph', content: [text(part.plain)] });
     }
   }
   if (!validate({ blocks }).ok) return null;
-  const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[rule], line, lines }));
+  const notices = plan.notices.map(({ rule, line, lines, runs, cut }) => {
+    const notice = { code: runs === undefined ? limits.notice : LINE_NOTICES_CAPPED, rule, path: paths[`${rule}:${line}`], line, lines };
+    return runs === undefined ? notice : { ...notice, runs, cut };
+  });
   for (const split of state.splits) notices.push(split); // a loop: a spread of this many arguments overflows the stack
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
-  return { blocks, notices, parsed: net.work, count: state.count };
+  return { blocks, notices, parsed: net.work, count: state.count, pathKeys: Object.keys(paths).length };
 }
 
 /** GFM Markdown as PortableDoc blocks that pass @portable-doc/validate: readMarkdown's blocks. Never throws. */

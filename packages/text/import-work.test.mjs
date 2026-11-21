@@ -147,8 +147,8 @@ test('a line past the line bound is one plain top-level paragraph, as typed, bet
   // A setext underline makes no heading; a link reference definition defines nothing.
   assert.deepEqual(read(`Title\n${X(41, '=')}`).blocks, [p('Title'), p(X(41, '='))]);
   assert.deepEqual(read(`[ref]: https://example.com/${X(30)}\n\nsee [ref]`).blocks, [p(`[ref]: https://example.com/${X(30)}`), p('see [ref]')]);
-  // One notice per rule: the first line it cut, and how many.
-  assert.deepEqual(read(`${X(41)}\n${X(41, 'y')}\nok\n${X(41, 'z')}`).notices, [lineNotice('/blocks/0', 1, 3)]);
+  // One notice per run of cut lines: its first line, and how many (line-notice-runs.test.mjs).
+  assert.deepEqual(read(`${X(41)}\n${X(41, 'y')}\nok\n${X(41, 'z')}`).notices, [lineNotice('/blocks/0', 1, 2), lineNotice('/blocks/3', 4)]);
 });
 
 test('a long line inside an open code fence ends the code before it, and the code after it stays code; a long fence marker opens nothing', () => {

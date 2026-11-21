@@ -2,6 +2,7 @@
 // The text-work rules (rules.mjs) done from their words alone, apart from import-work.js:
 // each line's depth, and a text's work and notices. The shared-cases test compares this with
 // planText, so the words and the code cannot drift apart.
+import { MAX_LINE_NOTICES } from '../../packages/text/index.js';
 
 const SP = (c) => c === ' ' || c === '\t';
 const blank = (line) => /^[ \t]*$/.test(line);
@@ -89,7 +90,8 @@ export function plan(markdown, { budget, lineBytes }) {
   let afterBlank = true;
   let fence = null;
   let spent = false;
-  const notes = {};
+  const notes = [];
+  let cutBefore = -2;
   lines.forEach((line, n) => {
     const isBlank = blank(line);
     const long = lineBytes !== null && !isBlank && Buffer.byteLength(line) > lineBytes;
@@ -116,13 +118,23 @@ export function plan(markdown, { budget, lineBytes }) {
     }
     if (!spent && work + cost > budget) {
       spent = true;
-      notes.budget = { rule: 'budget', line: n + 1, lines: lines.length - n };
+      notes.push({ rule: 'budget', line: n + 1, lines: lines.length - n });
     }
     work += cost;
     if (spent || !long) return;
-    if (notes.line) notes.line.lines++;
-    else notes.line = { rule: 'line', line: n + 1, lines: 1 };
+    // "One notice per run": a cut line right after the last cut line goes on its run; past
+    // MAX_LINE_NOTICES runs, "one notice stands for every later run".
+    const last = notes.at(-1);
+    const goesOn = cutBefore === n - 1;
+    cutBefore = n;
+    if (last?.runs !== undefined) {
+      last.lines = n + 1 - last.line + 1;
+      last.cut++;
+      if (!goesOn) last.runs++;
+    } else if (goesOn) last.lines++;
+    else if (notes.filter((note) => note.rule === 'line').length < MAX_LINE_NOTICES) notes.push({ rule: 'line', line: n + 1, lines: 1 });
+    else notes.push({ rule: 'line', line: n + 1, lines: 1, runs: 1, cut: 1 });
     if (fence) work += (prefix(fence.line).D + 1) * (2 + Buffer.byteLength(fence.line));
   });
-  return { work, notices: Object.values(notes) };
+  return { work, notices: notes };
 }

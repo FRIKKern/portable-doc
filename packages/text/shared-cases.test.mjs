@@ -9,7 +9,7 @@ import { CASES as LIST_SPLIT } from '../../fixtures/list-split/cases.mjs';
 import { CASES as NESTING } from '../../fixtures/nesting/cases.mjs';
 import { CUT, CUT_GENERATED, FIRST, WORK, WORK_GENERATED } from '../../fixtures/text-work/cases.mjs';
 import { plan } from '../../fixtures/text-work/rule-reader.mjs';
-import { planText } from './import-work.js';
+import { MAX_LINE_NOTICES, planText } from './import-work.js';
 import { CASES as HOSTILE, seeded } from './import-work-cases.mjs';
 import { readMarkdown } from './index.js';
 import { LIST_TYPES } from './blocks-prose.js';
@@ -75,7 +75,11 @@ test('the text-work rules, done from their words alone, give planText\'s work an
     const lines = Array.from({ length: 2 + rnd(12) }, () => Array.from({ length: rnd(4) }, () => pick(PREFIX)).join('') + pick(TAIL));
     docs.push([lines.join(pick(['\n', '\r\n', '\r'])), { budget: 50 + rnd(3000), lineBytes: pick([null, 40, 10]) }]);
   }
-  const key = (notices) => JSON.stringify(notices.map(({ rule, line, lines }) => ({ rule, line, lines })).sort((a, b) => a.rule.localeCompare(b.rule)));
+  // Around MAX_LINE_NOTICES runs, where one notice comes to stand for the later runs.
+  for (const runs of [MAX_LINE_NOTICES - 1, MAX_LINE_NOTICES, MAX_LINE_NOTICES + 1, MAX_LINE_NOTICES + 2]) {
+    docs.push([Array.from({ length: runs }, (_, i) => `${'x'.repeat(11)}\n${i % 3 ? '' : `${'y'.repeat(11)}\n`}ok`).join('\n'), { budget: 16_000_000, lineBytes: 10 }]);
+  }
+  const key = (notices) => JSON.stringify(notices.map(({ rule, line, lines, runs, cut }) => ({ rule, line, lines, runs, cut })).sort((a, b) => a.rule.localeCompare(b.rule)));
   const differ = docs.filter(([markdown, limits]) => {
     const words = plan(markdown, limits);
     const code = planText(markdown, { ...limits, notice: 'import_work_spent' });
