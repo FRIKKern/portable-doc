@@ -31,7 +31,8 @@
 //   one top-level paragraph, whitespace collapsed.
 // The budget gives at most one notice per document: its first line and how many lines it cut.
 // The line rule gives one per run of cut lines (cut lines with consecutive numbers; any line not
-// cut ends a run, and a fence opened again after a cut line does not): its first line and how many.
+// cut ends a run, and a fence opened again after a cut line does not): its first line and how many,
+// up to MAX_LINE_NOTICES runs. One more notice stands for every run after those.
 
 /**
  * The import's limits and the notice it gives past them. lineBytes is the pack's value; null
@@ -39,6 +40,17 @@
  * (ordinary-work.test.mjs).
  */
 export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, lineBytes: null, notice: 'import_work_spent' });
+
+/**
+ * The most run notices a text gets from the line rule. Runs can be as many as lines: at
+ * lineBytes 1 the budget holds 4,000,000 of them, and a notice each came to more bytes than the
+ * text and more time than reading it. Past this many, one LINE_NOTICES_CAPPED notice stands for
+ * every later run, so the line notices are at most MAX_LINE_NOTICES + 1, a few hundred kB at most.
+ */
+export const MAX_LINE_NOTICES = 1000;
+
+/** The code of that last line notice: the first line it covers, how many runs and how many lines. */
+export const LINE_NOTICES_CAPPED = 'import_line_notices_capped';
 
 const SP = (ch) => ch === 32 || ch === 9;
 const isBlank = (line) => {
@@ -153,18 +165,33 @@ function closes(line, at, fence) {
  * as a document, `line` the source line (from 0) its first line stands for, and
  * { plain: text, rule, line } to keep as one top-level paragraph, `line` its first source line
  * (from 0). `notices` are { rule, line, lines } in source order, `line` counted from 1: one 'line'
- * per run of lines past lineBytes, and at most one 'budget' (the lines from where the work passed
- * the budget). The number of line notices is bounded only by the number of runs.
+ * per run of lines past lineBytes for the first MAX_LINE_NOTICES runs, then one { rule: 'line',
+ * line, lines, runs } for every later run: its first line, and how many lines and runs, the lines
+ * not consecutive. So the line notices are at most MAX_LINE_NOTICES + 1, and their `lines` add up
+ * to every cut line. At most one 'budget' (the lines from where the work passed the budget).
  */
 export function planText(markdown, limits = IMPORT_WORK) {
   const lines = normalize(markdown).split('\n');
   const parts = [];
   const notices = [];
   // One notice per run of cut lines: a line cut right after the last one cut extends its run.
-  const note = (rule, n, count) => {
-    const last = notices.at(-1);
-    if (rule === 'line' && last?.rule === 'line' && last.line + last.lines === n + 1) last.lines += count;
-    else notices.push({ rule, line: n + 1, lines: count });
+  // Past MAX_LINE_NOTICES runs, `rest` takes every later cut line. Only the budget's notice can
+  // follow a line notice, and no line is cut after it, so a run goes on in notices.at(-1).
+  let runs = 0;
+  let lastCut = -2;
+  let rest = null;
+  const cut = (n) => {
+    const goesOn = n === lastCut + 1;
+    lastCut = n;
+    if (rest) {
+      rest.lines++;
+      if (!goesOn) rest.runs++;
+    } else if (goesOn) notices.at(-1).lines++;
+    else if (runs >= MAX_LINE_NOTICES) notices.push((rest = { rule: 'line', line: n + 1, lines: 1, runs: 1 }));
+    else {
+      runs++;
+      notices.push({ rule: 'line', line: n + 1, lines: 1 });
+    }
   };
   let read = [];
   let start = 0;
@@ -206,14 +233,14 @@ export function planText(markdown, limits = IMPORT_WORK) {
       flush();
       const rest = lines.slice(n).join('\n').replace(/\s+/g, ' ').trim();
       if (rest) parts.push({ plain: rest, rule: 'budget', line: n });
-      note('budget', n, lines.length - n);
+      notices.push({ rule: 'budget', line: n + 1, lines: lines.length - n });
     }
     work += cost;
     if (spent) continue;
     if (long) {
       flush();
       parts.push({ plain: line, rule: 'line', line: n });
-      note('line', n, 1);
+      cut(n);
       if (fence) {
         // The code goes on after the line: read it as if the fence opened again there.
         // Its opening line is read twice, and charged twice, at its own depth. It stands at

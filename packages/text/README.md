@@ -211,8 +211,13 @@ Where it differs from Barkpark, on purpose:
   plain paragraph its first line went to, that line (from 1), and how many
   lines from it were kept as text. The budget gives one such notice; the line
   rule one per run of cut lines, a run being cut lines with consecutive
-  numbers (any line not cut ends it). The number of line notices is bounded
-  only by the number of runs. They come in source order:
+  numbers (any line not cut ends it), for the first `MAX_LINE_NOTICES` runs.
+  Past those, one notice
+  `{ code: 'import_line_notices_capped', rule: 'line', path, line, lines, runs }`
+  (`LINE_NOTICES_CAPPED`) stands for every later run: the paragraph of the
+  first line it covers, that line, and how many runs and lines. So the line
+  notices are at most `MAX_LINE_NOTICES` + 1, and their `lines` add up to
+  every cut line. They come in source order:
   - From the line where the work passes the budget, the rest of the text is
     one top-level paragraph, whitespace collapsed. Containers open at that
     line close there.

@@ -6,7 +6,7 @@
 
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
-import { IMPORT_WORK, planText } from './import-work.js';
+import { IMPORT_WORK, LINE_NOTICES_CAPPED, MAX_LINE_NOTICES, planText } from './import-work.js';
 import { attr, flattenText, inline, langOf, merge, parser, text, tree, visibleText, WORDS_ONLY } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { currentNames } from './current-names.js';
@@ -503,7 +503,7 @@ function convert(nodes, state, out = [], net = undefined) {
   return out;
 }
 
-export { IMPORT_WORK };
+export { IMPORT_WORK, LINE_NOTICES_CAPPED, MAX_LINE_NOTICES };
 
 /**
  * GFM Markdown as { blocks, notices, work }. `blocks` pass @portable-doc/validate. `work` is the
@@ -511,7 +511,10 @@ export { IMPORT_WORK };
  * every line from where the work passes limits.budget, is kept as a top-level paragraph of plain
  * text, every word; `notices` then hold one { code, rule, path, line, lines } for 'budget' and one
  * per run of cut lines (consecutive line numbers) for 'line': the paragraph of its first line, that
- * line (from 1) and how many. Should
+ * line (from 1) and how many. Past MAX_LINE_NOTICES runs, one { code: LINE_NOTICES_CAPPED, rule:
+ * 'line', path, line, lines, runs } stands for every later run: the paragraph of the first line it
+ * covers, that line, and how many lines and runs. So the line notices are at most
+ * MAX_LINE_NOTICES + 1, and their `lines` add up to every cut line. Should
  * markdown-it's own count still pass the budget (the net), the rest of the deep text is kept as
  * plain text, with a notice of the same shape and rule 'net': `line` the first source line
  * kept so, `lines` how many. Each list item split off at text after its nested list adds one
@@ -565,7 +568,10 @@ export function readPlan(plan, limits) {
     }
   }
   if (!validate({ blocks }).ok) return null;
-  const notices = plan.notices.map(({ rule, line, lines }) => ({ code: limits.notice, rule, path: paths[`${rule}:${line}`], line, lines }));
+  const notices = plan.notices.map(({ rule, line, lines, runs }) => {
+    const notice = { code: runs === undefined ? limits.notice : LINE_NOTICES_CAPPED, rule, path: paths[`${rule}:${line}`], line, lines };
+    return runs === undefined ? notice : { ...notice, runs };
+  });
   for (const split of state.splits) notices.push(split); // a loop: a spread of this many arguments overflows the stack
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });
   return { blocks, notices, parsed: net.work, count: state.count };

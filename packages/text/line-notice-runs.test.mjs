@@ -3,11 +3,12 @@
 // with consecutive line numbers; any line not cut (blank or short) ends it, and a fence opened again
 // after a cut line does not. So `lines` is a range, as in every other notice, and a portabledoc
 // fence whose opening line is cut has a notice on its own line. The notices keep their order:
-// 'budget' and 'line' by first line, then the rest of the import's, then 'net'.
+// 'budget' and 'line' by first line, then the rest of the import's, then 'net'. Past
+// MAX_LINE_NOTICES runs, one LINE_NOTICES_CAPPED notice stands for every later run.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { IMPORT_WORK, planText } from './import-work.js';
-import { readMarkdown } from './index.js';
+import { LINE_NOTICES_CAPPED, MAX_LINE_NOTICES, readMarkdown } from './index.js';
 
 const X = (n, c = 'x') => c.repeat(n);
 const LINE = { ...IMPORT_WORK, lineBytes: 40 };
@@ -20,9 +21,11 @@ const long = (line) => line.trim() !== '' && Buffer.byteLength(line) > LINE.line
 function ownRuns(md, doc) {
   const lines = md.split('\n');
   for (const n of doc.notices.filter((n) => n.rule === 'line')) {
-    for (let i = n.line; i < n.line + n.lines; i++) assert.ok(long(lines[i - 1]), `line ${i} in a run is cut`);
+    // The capped notice's lines need not be consecutive; its first line starts a run.
+    const span = n.code === LINE_NOTICES_CAPPED ? 1 : n.lines;
+    for (let i = n.line; i < n.line + span; i++) assert.ok(long(lines[i - 1]), `line ${i} in a run is cut`);
     assert.ok(!long(lines[n.line - 2] ?? ''), `the line before the run at ${n.line} is not cut`);
-    assert.ok(!long(lines[n.line + n.lines - 1] ?? ''), `the line after the run at ${n.line} is not cut`);
+    if (n.code !== LINE_NOTICES_CAPPED) assert.ok(!long(lines[n.line + n.lines - 1] ?? ''), `the line after the run at ${n.line} is not cut`);
     assert.deepEqual(at(doc, n.path), { type: 'paragraph', content: [{ type: 'text', value: lines[n.line - 1] }] }, `${n.path} is line ${n.line}`);
   }
 }
@@ -65,13 +68,25 @@ test('line notices come in source order by first line, with the budget notice wh
   ownRuns(md, doc);
 });
 
-test('line notices have no cap: one per run, so never more than the paragraphs the cut lines make, at most half the lines before the budget cut', () => {
-  const runs = 2000;
-  const md = Array.from({ length: runs }, (_, i) => `${X(41)}\nok ${i}`).join('\n');
-  const doc = readMarkdown(md, LINE);
-  const notices = doc.notices.filter((n) => n.rule === 'line');
-  assert.equal(notices.length, runs);
-  assert.ok(notices.length <= Math.ceil(md.split('\n').length / 2));
-  assert.ok(notices.length <= doc.blocks.filter((b) => b.type === 'paragraph' && b.content[0].value === X(41)).length);
-  ownRuns(md, doc);
+test('past MAX_LINE_NOTICES runs, one capped notice stands for the rest: run notices and the line sum at one below, at, and one and two past the bound', () => {
+  for (const runs of [MAX_LINE_NOTICES - 1, MAX_LINE_NOTICES, MAX_LINE_NOTICES + 1, MAX_LINE_NOTICES + 2]) {
+    // Runs of one and two cut lines in turn, each ended by a short line.
+    const md = Array.from({ length: runs }, (_, i) => `${X(41)}\n${i % 2 ? `${X(41, 'y')}\n` : ''}ok ${i}`).join('\n');
+    const cut = md.split('\n').filter(long).length;
+    const doc = readMarkdown(md, LINE);
+    const notices = doc.notices.filter((n) => n.rule === 'line');
+    const runNotices = notices.filter((n) => n.code === 'import_work_spent');
+    const capped = notices.filter((n) => n.code === LINE_NOTICES_CAPPED);
+    const row = { runs, runNotices: runNotices.length, capped: capped.map((n) => n.runs), sum: notices.reduce((a, n) => a + n.lines, 0) };
+    assert.deepEqual(row, { runs, runNotices: Math.min(runs, MAX_LINE_NOTICES), capped: runs > MAX_LINE_NOTICES ? [runs - MAX_LINE_NOTICES] : [], sum: cut });
+    assert.equal(notices.length, runNotices.length + capped.length, 'every line notice is a run notice or the capped one');
+    if (capped.length) {
+      // The capped notice is last, at the first line of the first run past the bound.
+      const all = md.split('\n');
+      const starts = all.flatMap((line, i) => (long(line) && !long(all[i - 1] ?? '') ? [i + 1] : []));
+      assert.equal(notices.at(-1), capped[0]);
+      assert.equal(capped[0].line, starts[MAX_LINE_NOTICES]);
+    }
+    ownRuns(md, doc);
+  }
 });
