@@ -137,7 +137,10 @@ parser or the walk ever fails, the whole input comes back as one code block.
 Where it differs from Barkpark, on purpose:
 
 - Only URLs the renderer allows become links; any other link or image keeps
-  its text, and an image with no alt text leaves none. A portabledoc fence
+  its text, and an image with no alt text leaves none. An image's alt is its
+  label's words only and never shows its Markdown source: a label with no
+  words gives no alt. An address the import refuses is shown nowhere, as a
+  link or as text. A portabledoc fence
   must also validate, hold only allowed URLs in every address field (`href`,
   `src`, `poster`, `url`, at any depth), reuse no `id` from an earlier fence,
   and fit where its blocks would sit, within `MAX_DEPTH` and `MAX_VALUE_DEPTH`
