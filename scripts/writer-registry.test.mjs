@@ -114,11 +114,15 @@ test("source mode's checks in the editor answer a place or nothing, never a docu
   const { changedSentinel, firstLoss, sourceLoss } = await import('../packages/editor/src/markdown.js');
   const paragraph = [{ type: 'paragraph', text: 'Hello' }];
   const calloutWithBody = [{ type: 'callout', content: [{ type: 'text', value: 'Lead' }], slots: { body: [{ type: 'paragraph', text: 'Body' }] } }];
+  // A block source mode still cannot hold: a list nested in a list item.
+  const nestedList = [{ type: 'list', items: [{ content: [{ type: 'text', value: 'a' }], children: [{ type: 'list', items: [{ content: [{ type: 'text', value: 'b' }] }] }] }] }];
   assert.equal(changedSentinel('Hello', 'Hello'), -1);
   assert.equal(firstLoss(paragraph, paragraph), null);
   assert.deepEqual(firstLoss(paragraph, []), { index: 0, type: 'paragraph', path: '', part: 'content' });
   assert.equal(sourceLoss(paragraph), null);
-  assert.deepEqual(sourceLoss(calloutWithBody), { index: 0, type: 'callout', path: 'slots.body', part: 'body' });
+  // Source mode holds a callout's body now: nothing to answer.
+  assert.equal(sourceLoss(calloutWithBody), null);
+  assert.deepEqual(sourceLoss(nestedList), { index: 0, type: 'list', path: 'items[0]', part: 'items' });
 });
 
 test('the registry holds these seven writers, each writing a string of its kind', () => {

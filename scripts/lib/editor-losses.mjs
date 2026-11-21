@@ -18,7 +18,7 @@ export const EDITOR_LOSSES = [
   ['editor export', 'a stat denominator', 2, EXPORT_FIELDS],
   ['editor export', 'an old-named field', 10, EXPORT_FIELDS],
   ['editor export', 'a chart label', 36, 'the export writes every chart label'],
-  ['editor source', 'a callout body', 76, CALLOUT_BODY],
+  ['editor source', 'a callout body', 4, CALLOUT_BODY],
   ['editor source', 'a list nested in a list item', 2073, SOURCE_ROUND_TRIP],
   ['editor source', 'another block in a list item', 102, SOURCE_ROUND_TRIP],
   ['editor source', 'a link address', 5, SOURCE_ROUND_TRIP],
