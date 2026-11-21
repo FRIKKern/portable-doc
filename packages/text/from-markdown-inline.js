@@ -194,9 +194,11 @@ function leafText(node) {
 /**
  * The plain text of some nodes, block siblings joined by a space. Iterative, so depth costs no
  * stack; a deep_source is parsed here and its nodes read in its place. `count`, when given,
- * gets each node read on `visits` and each token parsed here on `tokens`.
+ * gets each node read on `visits` and each token parsed here on `tokens`. An empty link or an
+ * image with no alt shows the address its kept shape shows (inlineNode), when that is safe;
+ * with `words` (WORDS_ONLY), for a test of shape or an image's alt, it adds nothing.
  */
-export function flattenText(nodes, count = undefined) {
+export function flattenText(nodes, count = undefined, { words = false } = {}) {
   let out = '';
   let skipping = null;
   const stack = [...asList(nodes)].reverse();
@@ -229,11 +231,27 @@ export function flattenText(nodes, count = undefined) {
       continue;
     }
     if (BLOCK.has(node.type)) stack.push(SEP);
-    if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+    if (node.type === 'image') {
+      if (!skipping) out += imageText(node, count, words);
+    } else if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     else if (node.type === 'html_inline') skipping = rawTag(node, skipping);
-    else if (!skipping) out += leafText(node);
+    else if (skipping) continue;
+    else if (node.type === 'link') out += words ? '' : safeUrl(attr(node, 'href')) ?? '';
+    else out += leafText(node);
   }
   return out;
+}
+
+/** flattenText's option for words only: no address is a word. */
+export const WORDS_ONLY = Object.freeze({ words: true });
+
+// An image's text: its alt, words only (CommonMark), else its address when that is safe and
+// `words` is not asked for. Its kept shape is a link labelled so (inlineNode).
+function imageText(node, count = undefined, words = false) {
+  const alt = flattenText(node.children, count, WORDS_ONLY) || str(node.tok.content);
+  if (alt || words) return alt;
+  const src = attr(node, 'src');
+  return safeUrl(src) === null ? '' : src;
 }
 
 function link(href, children) {
@@ -269,10 +287,8 @@ function inlineNode(node, level, past) {
     case 'image': {
       // An image is a link to it, labelled by its alt text (Barkpark's chat rule), or by its
       // address when that is safe. An unsafe address never shows, not even as text.
-      const src = attr(node, 'src');
-      const alt = flattenText(node.children) || str(node.tok.content);
-      const label = alt || (safeUrl(src) === null ? '' : src);
-      return link(src, label ? [text(label)] : []);
+      const label = imageText(node);
+      return link(attr(node, 'src'), label ? [text(label)] : []);
     }
     // An inline tag is dropped; the text around it is a token of its own.
     case 'html_inline': return [];
