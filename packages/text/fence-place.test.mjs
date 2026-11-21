@@ -34,6 +34,8 @@ const read = (md) => {
   return doc;
 };
 const SOURCES = []; // every Markdown this file reads, for the sweep
+// Whether a notice's path names a value in the doc's { blocks }.
+const resolves = (doc, path) => path.split('/').slice(1).reduce((v, k) => (v === null || typeof v !== 'object' ? undefined : v[k]), { blocks: doc.blocks }) !== undefined;
 const readAll = (md) => (SOURCES.push(md), read(md));
 
 test('a fence in a list item that the import splices goes into its children, as a nested list does', () => {
@@ -136,6 +138,20 @@ test('a fence in text the import keeps flat is read as that text, with one notic
   }
 });
 
+test('an empty or blank fence that is the whole of a list item, or of a quote, keeps that item or quote, so its one notice names a block that is there', () => {
+  for (const md of [
+    '- ```portabledoc\n  ```',
+    '- ```portabledoc\n  ```\n- ```portabledoc\n  ```',
+    '- ```portabledoc\n     \n  ```',
+    '- > ```portabledoc\n  > ```',
+    '> ```portabledoc\n> ```',
+  ]) {
+    const doc = readAll(md);
+    assert.equal(doc.notices.filter((n) => n.code.startsWith('fence_')).length, fencesIn(md).length, md);
+    for (const n of doc.notices) assert.ok(resolves(doc, n.path), `${md}: ${n.code} at ${n.path}`);
+  }
+});
+
 test('a fence of another language in a list item or a quote reads as before, with no notice', () => {
   const item = readAll('- item\n\n  ```js\n  x()\n  ```');
   assert.deepEqual([item.blocks[0].items, item.notices], [[[t('item '), { type: 'code', value: 'x()' }]], []]);
@@ -156,7 +172,7 @@ function fencesIn(md) {
   return out;
 }
 
-test('every portabledoc fence in the shared cases and in this file either reads into blocks or has a notice on its line', () => {
+test('every portabledoc fence in the shared cases and in this file either reads into blocks or has a notice on its line, and every notice names a value in the blocks', () => {
   const squeeze = (s) => s.replace(/\s+/g, '');
   const sources = [...Object.values(HEADINGS), ...Object.values(LIST_SPLIT), ...Object.values(NESTING), ...SOURCES];
   let fences = 0;
@@ -164,6 +180,7 @@ test('every portabledoc fence in the shared cases and in this file either reads 
     const doc = readMarkdown(md);
     const strings = [];
     JSON.stringify(doc.blocks, (k, v) => (typeof v === 'string' && strings.push(squeeze(v)), v));
+    for (const n of doc.notices) assert.ok(resolves(doc, n.path), `${n.code} at ${n.path}, not in the blocks: ${md.slice(0, 80)}`);
     const lines = new Set(doc.notices.filter((n) => n.code.startsWith('fence_')).map((n) => n.line));
     // A fence read into blocks leaves no copy of its JSON; one kept as text or code does. Fences
     // with the same JSON are counted together: no more copies than fences with a notice.
@@ -174,6 +191,11 @@ test('every portabledoc fence in the shared cases and in this file either reads 
       byJson.set(key, [...(byJson.get(key) ?? []), line]);
     }
     for (const [json, at] of byJson) {
+      // An empty or blank fence is never read into blocks (it is not JSON): each has its notice.
+      if (json === '') {
+        assert.ok(at.every((l) => lines.has(l)), `empty fences on lines ${at} without a notice: ${md.slice(0, 80)}`);
+        continue;
+      }
       const copies = strings.filter((s) => s.includes(json)).length;
       assert.ok(copies <= at.filter((l) => lines.has(l)).length, `fences on lines ${at} kept as text or code without a notice: ${md.slice(0, 80)}`);
     }

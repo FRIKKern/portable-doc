@@ -161,7 +161,8 @@ function list(node, depth, notes, base, level, ids) {
     .flatMap((li) => listItem(li, depth, base, level, ids))
     // `[ ]` opens a task only at the head of an item in the source, never of a split-off one
     .map((it) => ({ ...it, task: ordered || it.moved ? null : taskItem(it.content) }))
-    .filter((it) => it.children.length || !blank(it.task?.content ?? it.content));
+    // An item a notice names (a fence kept in it as code or text) is kept, empty or not, so the notice's path is there.
+    .filter((it) => it.children.length || !blank(it.task?.content ?? it.content) || it.notes.some((n) => n.path === ''));
   if (!items.length) return [];
   if (items.some((it) => it.past)) notes.push(keptAsText('', node.tok, base));
   items.forEach((it, i) => {
@@ -238,14 +239,17 @@ function quote(node, state) {
   // A child as the quote's text. A quote holds no blocks: a portabledoc fence in it is inline code,
   // and it or a fence in a child read as text adds one notice, `reason` (`place`, or `depth` in a
   // callout as deep as validate allows, whose body is its text).
+  let noted = false; // a fence notice names the quote: it is kept, empty or not, so the path is there
   const read = (child, reason) => {
     if (langOf(child) === 'portabledoc') {
+      noted = true;
       state.splits.push(fenceNotice(reason, child.tok, state.base, state.at));
       return [{ type: 'code', value: fenceSource(child) }];
     }
     const fences = [];
     const out = textOf(child, state.level + 1, state.count, state.past, fences);
     for (const n of flatFences(fences, state.base, state.at, reason)) state.splits.push(n);
+    if (fences.length) noted = true;
     return out;
   };
   const first = children.length ? read(children[0], 'place') : [];
@@ -272,7 +276,7 @@ function quote(node, state) {
   const last = children.at(-1);
   const cite = children.length > 1 && last.type === 'paragraph' ? citeOf(last) : null;
   if (cite) return [{ type: 'blockquote', content: joined(parts.slice(0, -1)), cite }];
-  return blank(content) ? [] : [{ type: 'blockquote', content }];
+  return blank(content) && !noted ? [] : [{ type: 'blockquote', content }];
 }
 
 // ── code fences ─────────────────────────────────────────────────────────
