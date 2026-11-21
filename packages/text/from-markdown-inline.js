@@ -217,8 +217,11 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
   while (stack.length) {
     const node = stack.pop();
     if (node instanceof LinkEnd) {
-      // A link whose label gave no text shows its address, as its kept shape does (link).
-      if (!skipping && out.length === node.at) address(safeUrl(attr(node.link, 'href')) ?? '');
+      // A raw tag opened in the label skips to the label's end only, as in the kept shape, which
+      // reads a label on its own (inline). A link whose label gave no text shows its address, as
+      // its kept shape does (link).
+      skipping = null;
+      if (out.length === node.at) address(safeUrl(attr(node.link, 'href')) ?? '');
       continue;
     }
     if (node instanceof DeepEnd) {
@@ -261,6 +264,9 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
       if (alt) out += alt;
       else address(imageSrc(node));
     } else if (node.type === 'link') {
+      // In raw text that is skipped, a link is skipped whole, label and address, as in its kept
+      // shape: a closing tag in its label does not end the skip.
+      if (skipping) continue;
       stack.push(new LinkEnd(node, out.length));
       for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     } else if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
