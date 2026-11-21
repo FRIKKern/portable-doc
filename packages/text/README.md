@@ -215,8 +215,14 @@ Where it differs from Barkpark, on purpose:
   fence's block loses as its old names fold adds
   `{ code: 'old_name_dropped', path, line, lines, name, current, fix }`: the
   dropped key's path, the fence's lines, the name dropped, the current name and
-  `write <current>`. These come in source order, after any `budget` or `line`
-  notice and before a `net` one.
+  `write <current>`. A ```` ```portabledoc ```` fence the import does not splice
+  stays a code block of its source and adds
+  `{ code, path, line, lines, fix }` (`FENCE_KEPT_AS_CODE`): the code block's
+  path, the fence's lines and the fix. Its code names the reason:
+  `fence_not_json`, `fence_block_count` (not 1 to 50 blocks), `fence_too_deep`,
+  `fence_block_type`, `fence_unsafe_address`, `fence_invalid` (validate refuses
+  it) or `fence_id_used` (an earlier fence uses a block id). These come in
+  source order, after any `budget` or `line` notice and before a `net` one.
 
 ## Round trip
 
