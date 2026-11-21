@@ -1,0 +1,13 @@
+{
+  "journey": "F05",
+  "status": "candidate-dry-run",
+  "package": "@portable-doc/react@0.1.0-alpha.1",
+  "package_spec": "portable-doc-react-0.1.0-alpha.1.tgz",
+  "tarball_sha256": "5aa1eed120d95ecc5f09fed68c366a85ca61f3c6f66df10d835b1575c4f855a4",
+  "gif_sha256": "7ba4fa93564f7f61cb24cc32fcbbb2f460440412422642ef8a403eef559aa19e",
+  "react_source_sha": "976855af9085c6c3840359f79016822adf5c300d",
+  "source_lines": 8,
+  "install_commands": 1,
+  "chrome": "Google Chrome for Testing 148.0.7778.167",
+  "ffmpeg": "ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers"
+}
