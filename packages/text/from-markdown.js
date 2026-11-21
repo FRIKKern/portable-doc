@@ -177,8 +177,28 @@ function calloutMarker(content) {
   return { tone, rest: merge([text(m[2]), ...content.slice(1)]) };
 }
 
-// A quote's last paragraph "— Name": its cite.
+// A quote's last paragraph "— Name", as toMarkdown writes a cite: its words decide that it is one
+// and where its dash is, so an address never makes or moves it. The cite is the text after the
+// dash, after the addresses its empty links show before the dash, if any.
 const CITE = /^— (.+)$/s;
+function citeOf(node) {
+  const spans = [];
+  const full = flattenText([node], undefined, { spans });
+  let words = '';
+  const at = []; // each word character's index in full
+  for (let i = 0, s = 0; i < full.length;) {
+    if (s < spans.length && i === spans[s][0]) i = spans[s++][1];
+    else {
+      words += full[i];
+      at.push(i++);
+    }
+  }
+  if (!CITE.test(words.trim())) return null;
+  const dash = words.length - words.trimStart().length;
+  const before = full.slice(0, at[dash]).trim();
+  const name = full.slice(at[dash + 2]).trimEnd();
+  return before ? `${before} ${name}` : name;
+}
 
 /**
  * A quote. With a `[!tone]` marker at the head of its first paragraph it is a callout: that
@@ -211,11 +231,9 @@ function quote(node, state) {
     if (children.length > 1) state.past.past = true;
     return [{ type: 'callout', tone: marker.tone, content: calloutMarker(content).rest }];
   }
-  // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it. Its words decide that;
-  // the cite is its text, with the address an empty link in it shows.
+  // A last paragraph "— Name" is the quote's cite (citeOf).
   const last = children.at(-1);
-  const said = children.length > 1 && last.type === 'paragraph' ? CITE.exec(flattenText([last], undefined, WORDS_ONLY).trim()) : null;
-  const cite = said && (CITE.exec(flattenText([last]).trim()) ?? said)[1];
+  const cite = children.length > 1 && last.type === 'paragraph' ? citeOf(last) : null;
   if (cite) return [{ type: 'blockquote', content: joined(parts.slice(0, -1)), cite }];
   return blank(content) ? [] : [{ type: 'blockquote', content }];
 }

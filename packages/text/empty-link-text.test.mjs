@@ -6,6 +6,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate } from '@portable-doc/validate';
+import { parsedWork, readPlan } from './from-markdown.js';
+import { IMPORT_WORK, planText } from './import-work.js';
 import { NESTING_KEPT_AS_TEXT, readMarkdown } from './index.js';
 
 const U = 'https://a.example';
@@ -38,7 +40,7 @@ test('an empty link or an image with no alt kept as text shows its address, alon
       const doc = readMarkdown(md(inner));
       const label = `${inner} ${place}`;
       assert.ok(json(doc).includes(want), label);
-      assert.equal(validate(doc).valid, true, label);
+      assert.deepEqual(validate({ blocks: doc.blocks }), { ok: true }, label);
       assert.deepEqual(codes(doc), past ? [NESTING_KEPT_AS_TEXT] : [], label);
     }
   }
@@ -52,9 +54,37 @@ test('a list item that is a quote of only an empty link is kept, its text the ad
   }
 });
 
-test('a cite with an empty link in it shows the address after the name', () => {
-  const doc = readMarkdown(`> q\n>\n> — Name ${LINK}`);
-  assert.deepEqual(doc.blocks, [{ type: 'blockquote', content: [{ type: 'text', value: 'q' }], cite: `Name ${U}` }]);
+test('a cite shows the addresses its empty links show, before its dash and after; its words alone place the dash', () => {
+  const cite = (line) => readMarkdown(`> q\n>\n> ${line}`).blocks;
+  const quote = (c) => [{ type: 'blockquote', content: [{ type: 'text', value: 'q' }], cite: c }];
+  const DASHED = 'https://a.example/x—y';
+  const SPACED = 'https://a.example/x— y';
+  for (const [line, want] of [
+    [`— Name ${LINK}`, `Name ${U}`],
+    [`— Name ${IMAGE}`, `Name ${I}`],
+    [`${LINK} — Name`, `${U} Name`],
+    [`${IMAGE} — Name`, `${I} Name`],
+    [`— Name [](${DASHED})`, `Name ${DASHED}`],
+    [`[](${DASHED}) — Name`, `${DASHED} Name`],
+    [`[](<${SPACED}>) — Name`, `${SPACED} Name`],
+    [`— Name [](<${SPACED}>)`, `Name ${SPACED}`],
+    [`${UNSAFE[0]} — Name ${UNSAFE[1]}`, 'Name'],
+  ]) assert.deepEqual(cite(line), quote(want), line);
+});
+
+test('a diagram caption with an empty link among its words shows the address', () => {
+  const doc = readMarkdown('```mermaid\ngraph TD\n```\n\n*Fig ' + LINK + ' ' + IMAGE + '*');
+  assert.deepEqual(doc.blocks.map((b) => [b.type, b.caption]), [['diagram', `Fig ${U} ${I}`]]);
+});
+
+test('text the work net keeps as written keeps an empty link as written, its address in it', () => {
+  // A plan whose count is planted short, read with a budget markdown-it's own count passes: the
+  // top level is kept as written, one paragraph (import-work.test.mjs, the net at the top level).
+  const md = Array.from({ length: 40 }, (_, i) => `w${i} ${LINK}`).join('\n\n');
+  const noLimit = { budget: Infinity, lineBytes: null, notice: IMPORT_WORK.notice };
+  const read = readPlan({ ...planText(md, noLimit), work: 1 }, { ...IMPORT_WORK, budget: parsedWork(md) - 1 });
+  assert.deepEqual(read.notices.map((n) => n.rule), ['net']);
+  assert.deepEqual(read.blocks, [{ type: 'paragraph', content: [{ type: 'text', value: md.replace(/\s+/g, ' ') }] }]);
 });
 
 test('an unsafe address never shows, kept as text or not', () => {
