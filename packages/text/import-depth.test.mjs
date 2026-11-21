@@ -124,6 +124,13 @@ test('an empty link or an image with no alt innermost of the deepest marks is te
   }
 });
 
+test('an empty link or an image with no alt kept as text past the deepest marks shows its address, as it does when it keeps its shape', () => {
+  for (const [inner, address] of [['[](https://a.example)', 'https://a.example'], ['![](https://a.example/i.png)', 'https://a.example/i.png']]) {
+    const shown = (n) => JSON.stringify(read(marks(n, inner)).blocks[0]).includes(address);
+    assert.deepEqual([shown(DEEPEST_MARKS - 1), shown(DEEPEST_MARKS)], [true, true], inner);
+  }
+});
+
 // A portabledoc fence holds its blocks as JSON, and the import reads old names under their current
 // ones: an inline code node's old `children` becomes its `value`, their flat text (inlineText, the
 // text-from-inline convert). The fence is taken when its blocks, counted as a doc object

@@ -247,10 +247,18 @@ function link(href, children) {
 // in the source (its address, or its label). It keeps its shape while its children stay within
 // MAX_VALUE_DEPTH; past that it is its plain text, and every word is kept. `level` is the level of
 // the list the node goes into.
+// What a link or image with no text of its own shows when it keeps its shape (link and the image
+// case below): its address, when that is safe.
+function shownAddress(node) {
+  if (node.type === 'link') return safeUrl(attr(node, 'href')) ?? '';
+  if (node.type === 'image') return safeUrl(attr(node, 'src')) === null ? '' : attr(node, 'src');
+  return '';
+}
+
 function inlineNode(node, level, past) {
   if ((node.children.length || node.type === 'link' || node.type === 'image') && level + 3 > MAX_VALUE_DEPTH) {
     if (past) past.past = true;
-    return [text(flattenText([node]))];
+    return [text(flattenText([node]) || shownAddress(node))];
   }
   const inner = () => inline(node.children, level + 2, past);
   const wrap = (type) => {
