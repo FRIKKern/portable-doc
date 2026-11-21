@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 6 changes · text: a portabledoc fence in a list item, a quote or flat text says what happened ([#145](https://github.com/FRIKKern/portable-doc/pull/145))
+- **Today** · 7 changes · text: a raw tag opened in a link label or a mark ends with it in text kept as text ([#146](https://github.com/FRIKKern/portable-doc/pull/146))
 - **Yesterday** · 14 changes · text: the import nests as deep as a document may hold, from one depth number ([#138](https://github.com/FRIKKern/portable-doc/pull/138))
 - **This week** · 66 changes · react, text: a style property whose number is not finite is left out whole, by one rule at the number door ([#123](https://github.com/FRIKKern/portable-doc/pull/123))
 - **Last week** · 2 milestones closed
