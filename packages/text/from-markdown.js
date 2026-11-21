@@ -558,12 +558,14 @@ export function readPlan(plan, limits) {
   const state = readState();
   const net = { work: 0, budget: limits.budget };
   const blocks = [];
+  // The paths of the paragraphs notices start at, and only those: a text can cut millions of lines.
   const paths = {};
+  const lineStarts = new Set(plan.notices.filter((n) => n.rule === 'line').map((n) => n.line));
   for (const part of plan.parts) {
     state.base = part.line;
     if (part.read !== undefined) convert(tree(parser.parse(part.read, { net, base: part.line }), state.count), state, blocks, net);
     else {
-      paths[`${part.rule}:${part.line + 1}`] ??= `/blocks/${blocks.length}`;
+      if (part.rule !== 'line' || lineStarts.has(part.line + 1)) paths[`${part.rule}:${part.line + 1}`] ??= `/blocks/${blocks.length}`;
       blocks.push({ type: 'paragraph', content: [text(part.plain)] });
     }
   }
