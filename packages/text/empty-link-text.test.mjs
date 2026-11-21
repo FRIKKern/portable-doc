@@ -14,7 +14,9 @@ const U = 'https://a.example';
 const I = 'https://b.example/i.png';
 const LINK = `[](${U})`;
 const IMAGE = `![](${I})`;
-const UNSAFE = ['[](javascript:alert(1))', '![](javascript:alert(1))'];
+// A link whose label gives no text: kept, it shows its address, as an empty link does.
+const NO_TEXT = `[<span></span>](${U})`;
+const UNSAFE = ['[](javascript:alert(1))', '![](javascript:alert(1))', '[<span></span>](javascript:alert(1))'];
 // The deepest marks a top-level paragraph keeps (packages/text/import-depth.test.mjs).
 const DEEPEST_MARKS = Math.floor((MAX_VALUE_DEPTH - 5) / 2);
 const marks = (n, inner) => Array.from({ length: n }).reduce((s, _, i) => `*m${n - i} ${s} m${n - i}*`, inner);
@@ -36,7 +38,7 @@ const PLACES = [
 
 test('an empty link or an image with no alt kept as text shows its address, alone and beside words', () => {
   for (const [place, md, past] of PLACES) {
-    for (const [inner, want] of [[LINK, U], [IMAGE, I], [`w ${LINK} z`, `w ${U} z`], [`w ${IMAGE} z`, `w ${I} z`]]) {
+    for (const [inner, want] of [[LINK, U], [IMAGE, I], [NO_TEXT, U], [`w ${LINK} z`, `w ${U} z`], [`w ${IMAGE} z`, `w ${I} z`], [`w ${NO_TEXT} z`, `w ${U} z`]]) {
       const doc = readMarkdown(md(inner));
       const label = `${inner} ${place}`;
       assert.ok(json(doc).includes(want), label);
@@ -47,7 +49,7 @@ test('an empty link or an image with no alt kept as text shows its address, alon
 });
 
 test('a list item that is a quote of only an empty link is kept, its text the address', () => {
-  for (const [inner, want] of [[LINK, U], [IMAGE, I]]) {
+  for (const [inner, want] of [[LINK, U], [IMAGE, I], [NO_TEXT, U]]) {
     const doc = readMarkdown(`- > ${inner}`);
     assert.deepEqual(doc.blocks.map((b) => b.type), ['list'], inner);
     assert.deepEqual(doc.blocks[0].items, [[{ type: 'text', value: want }]], inner);
@@ -70,6 +72,17 @@ test('a cite shows the addresses its empty links show, before its dash and after
     [`— Name [](<${SPACED}>)`, `Name ${SPACED}`],
     [`${UNSAFE[0]} — Name ${UNSAFE[1]}`, 'Name'],
   ]) assert.deepEqual(cite(line), quote(want), line);
+});
+
+test('a cite keeps an address between its dash and its name, and the text after the dash as written', () => {
+  const cite = (line) => readMarkdown(`> q\n>\n> ${line}`).blocks[0].cite;
+  for (const [line, want] of [
+    [`— ${LINK} Name`, `${U} Name`],
+    [`—${LINK} Name`, `${U} Name`],
+    [`— ${LINK}Name`, `${U}Name`],
+    [`[](${U}/1) — [](${U}/2) Name [](${U}/3)`, `${U}/1 ${U}/2 Name ${U}/3`],
+    ['—  Name', ' Name'],
+  ]) assert.equal(cite(line), want, line);
 });
 
 test('a diagram caption with an empty link among its words shows the address', () => {

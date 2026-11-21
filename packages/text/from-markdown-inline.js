@@ -210,6 +210,11 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
   const stack = [...asList(nodes)].reverse();
   while (stack.length) {
     const node = stack.pop();
+    if (node instanceof LinkEnd) {
+      // A link whose label gave no text shows its address, as its kept shape does (link).
+      if (!skipping && out.length === node.at) address(safeUrl(attr(node.link, 'href')) ?? '');
+      continue;
+    }
     if (node === SEP) {
       skipping = null;
       if (out !== '' && !/\s$/.test(out)) out += ' ';
@@ -242,13 +247,22 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
       const alt = imageAlt(node, count);
       if (alt) out += alt;
       else address(imageSrc(node));
+    } else if (node.type === 'link') {
+      stack.push(new LinkEnd(node, out.length));
+      for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     } else if (node.children.length) for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     else if (node.type === 'html_inline') skipping = rawTag(node, skipping);
-    else if (skipping) continue;
-    else if (node.type === 'link') address(safeUrl(attr(node, 'href')) ?? '');
-    else out += leafText(node);
+    else if (!skipping) out += leafText(node);
   }
   return out;
+}
+
+// Where a link's label ends in flattenText, and how long its text was when the label began.
+class LinkEnd {
+  constructor(link, at) {
+    this.link = link;
+    this.at = at;
+  }
 }
 
 /** flattenText's option for words only: no address is a word. */

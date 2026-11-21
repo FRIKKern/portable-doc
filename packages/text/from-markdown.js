@@ -179,7 +179,7 @@ function calloutMarker(content) {
 
 // A quote's last paragraph "— Name", as toMarkdown writes a cite: its words decide that it is one
 // and where its dash is, so an address never makes or moves it. The cite is the text after the
-// dash, after the addresses its empty links show before the dash, if any.
+// dash and one space, every address in it kept, after the addresses shown before the dash, if any.
 const CITE = /^— (.+)$/s;
 function citeOf(node) {
   const spans = [];
@@ -196,7 +196,7 @@ function citeOf(node) {
   if (!CITE.test(words.trim())) return null;
   const dash = words.length - words.trimStart().length;
   const before = full.slice(0, at[dash]).trim();
-  const name = full.slice(at[dash + 2]).trimEnd();
+  const name = full.slice(at[dash] + 1).replace(/^ /, '').trimEnd();
   return before ? `${before} ${name}` : name;
 }
 
