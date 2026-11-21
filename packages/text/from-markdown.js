@@ -7,7 +7,7 @@
 import { MAX_DEPTH, MAX_VALUE_DEPTH, validate, walkDepth } from '@portable-doc/validate';
 import { everyBlockAllowed } from './fence-blocks.js';
 import { IMPORT_WORK, planText } from './import-work.js';
-import { attr, flattenText, inline, merge, parser, text, tree, visibleText } from './from-markdown-inline.js';
+import { attr, flattenText, inline, merge, parser, text, tree, visibleText, WORDS_ONLY } from './from-markdown-inline.js';
 import { renderInline } from './inline.js';
 import { currentNames } from './current-names.js';
 import { ADDRESS_KEYS, isMap, safeUrl, str } from './util.js';
@@ -177,6 +177,29 @@ function calloutMarker(content) {
   return { tone, rest: merge([text(m[2]), ...content.slice(1)]) };
 }
 
+// A quote's last paragraph "— Name", as toMarkdown writes a cite: its words decide that it is one
+// and where its dash is, so an address never makes or moves it. The cite is the text after the
+// dash and one space, every address in it kept, after the addresses shown before the dash, if any.
+const CITE = /^— (.+)$/s;
+function citeOf(node) {
+  const spans = [];
+  const full = flattenText([node], undefined, { spans });
+  let words = '';
+  const at = []; // each word character's index in full
+  for (let i = 0, s = 0; i < full.length;) {
+    if (s < spans.length && i === spans[s][0]) i = spans[s++][1];
+    else {
+      words += full[i];
+      at.push(i++);
+    }
+  }
+  if (!CITE.test(words.trim())) return null;
+  const dash = words.length - words.trimStart().length;
+  const before = full.slice(0, at[dash]).trim();
+  const name = full.slice(at[dash] + 1).replace(/^ /, '').trimEnd();
+  return before ? `${before} ${name}` : name;
+}
+
 /**
  * A quote. With a `[!tone]` marker at the head of its first paragraph it is a callout: that
  * paragraph is its content, and every block after it is read as blocks into `slots.body`,
@@ -208,10 +231,10 @@ function quote(node, state) {
     if (children.length > 1) state.past.past = true;
     return [{ type: 'callout', tone: marker.tone, content: calloutMarker(content).rest }];
   }
-  // A last paragraph "— Name" is the quote's cite, as toMarkdown writes it.
+  // A last paragraph "— Name" is the quote's cite (citeOf).
   const last = children.at(-1);
-  const cite = children.length > 1 && last.type === 'paragraph' ? /^— (.+)$/s.exec(flattenText([last]).trim()) : null;
-  if (cite) return [{ type: 'blockquote', content: joined(parts.slice(0, -1)), cite: cite[1] }];
+  const cite = children.length > 1 && last.type === 'paragraph' ? citeOf(last) : null;
+  if (cite) return [{ type: 'blockquote', content: joined(parts.slice(0, -1)), cite }];
   return blank(content) ? [] : [{ type: 'blockquote', content }];
 }
 
@@ -359,11 +382,13 @@ function block(node, state) {
   }
 }
 
-// A paragraph that is one emphasised run, right after a diagram, is its caption.
+// A paragraph that is one emphasised run of words, right after a diagram, is its caption: its
+// text, with the address an empty link in it shows.
 function caption(node) {
   if (node?.type !== 'paragraph') return '';
   const runs = node.children.flatMap((c) => c.children).filter((c) => !(c.type === 'text' && c.tok.content === ''));
-  return runs.length === 1 && runs[0].type === 'em' ? flattenText(runs[0].children).trim() : '';
+  if (runs.length !== 1 || runs[0].type !== 'em' || !flattenText(runs[0].children, undefined, WORDS_ONLY).trim()) return '';
+  return flattenText(runs[0].children).trim();
 }
 
 /**
