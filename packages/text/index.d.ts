@@ -152,13 +152,43 @@ export interface NestingKeptAsTextNotice {
   lines: number;
 }
 
-export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice | OldNameDroppedNotice | NestingKeptAsTextNotice;
+/**
+ * The code of the notice for each reason a ```portabledoc fence stays a code block, and its fix:
+ * not JSON, not 1 to 50 blocks, nested too deep, a block type a fence may not hold, an address
+ * import does not allow, blocks validate refuses, or a block id an earlier fence uses.
+ */
+export const FENCE_KEPT_AS_CODE: {
+  readonly json: { readonly code: 'fence_not_json'; readonly fix: string };
+  readonly count: { readonly code: 'fence_block_count'; readonly fix: string };
+  readonly depth: { readonly code: 'fence_too_deep'; readonly fix: string };
+  readonly type: { readonly code: 'fence_block_type'; readonly fix: string };
+  readonly address: { readonly code: 'fence_unsafe_address'; readonly fix: string };
+  readonly invalid: { readonly code: 'fence_invalid'; readonly fix: string };
+  readonly id: { readonly code: 'fence_id_used'; readonly fix: string };
+};
+
+/**
+ * A note from the import: a ```portabledoc fence was not spliced, and stays the code block at
+ * `path`, its source as typed. `code` names why (FENCE_KEPT_AS_CODE) and `fix` what to change.
+ * `line` is the fence's first source line, from 1, and `lines` how many lines the fence spans.
+ */
+export interface FenceKeptAsCodeNotice {
+  code: (typeof FENCE_KEPT_AS_CODE)[keyof typeof FENCE_KEPT_AS_CODE]['code'];
+  path: string;
+  line: number;
+  lines: number;
+  fix: string;
+}
+
+export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallbackNotice | OldNameDroppedNotice | NestingKeptAsTextNotice | FenceKeptAsCodeNotice;
 
 /**
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
  * from the text. `notices` says what a limit cut and each list item split off, by kind: the
- * `budget` and `line` notices, then the splits and a fence's dropped old names
- * (`old_name_dropped`) in source order, then a `net` one; it is empty
+ * `budget` and `line` notices, then the splits, a fence's dropped old names
+ * (`old_name_dropped`) and each block-level fence kept as a code block (FENCE_KEPT_AS_CODE; a
+ * fence in a list item is inline code, with no notice yet) in source order,
+ * then a `net` one; it is empty
  * when none happened. When the import falls back to one code block, its one notice is
  * `import_fell_back`. `limits` defaults to IMPORT_WORK. Never throws.
  */

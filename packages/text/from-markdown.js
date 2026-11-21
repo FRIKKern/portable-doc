@@ -237,7 +237,8 @@ function scan(value) {
 // validate, hold only safe addresses (href, src, poster, url) and reuse no id from an earlier fence.
 // Anything else is a plain code block. A spliced block's old names (alias-table.js) are folded into
 // their current names by the rule every reader uses (current-names.js), where the readers read
-// blocks, and each value that fold loses adds an OLD_NAME_DROPPED notice.
+// blocks, and each value that fold loses adds an OLD_NAME_DROPPED notice. A fence kept as a code
+// block adds one notice naming why (FENCE_KEPT_AS_CODE).
 
 /**
  * Whether a fence's parsed value is spliced, given the ids earlier fences used: { ids } (the
@@ -253,25 +254,46 @@ export function checkFence(blocks, usedIds) {
   if (!validate(blocks).ok) return { reason: 'invalid' };
   // Counted again with old names under their current names, as the fence imports: a string read
   // as inline content is two levels deeper. A valid fence's blocks nest at most MAX_DEPTH deep,
-  // so today no fold reaches MAX_VALUE_DEPTH; this holds the rule if those limits move.
+  // so today no fold reaches MAX_VALUE_DEPTH (fence-notice.test.mjs holds that bound); this holds
+  // the rule if those limits move.
   if (tooDeep(currentNames(blocks))) return { reason: 'depth' };
   if (ids.some((id) => usedIds.has(id))) return { reason: 'id' };
   return { ids };
 }
 
+/**
+ * The code of the notice for each reason a ```portabledoc fence stays a code block, by checkFence's
+ * reason ('json' when the fence is not JSON), and the fix the notice gives.
+ */
+export const FENCE_KEPT_AS_CODE = Object.freeze({
+  json: Object.freeze({ code: 'fence_not_json', fix: 'write the fence as a JSON array of blocks' }),
+  count: Object.freeze({ code: 'fence_block_count', fix: `write a JSON array of 1 to ${MAX_FENCE_BLOCKS} blocks in the fence` }),
+  depth: Object.freeze({ code: 'fence_too_deep', fix: `nest the blocks at most ${MAX_VALUE_DEPTH} JSON levels deep, counted with old names under their current names` }),
+  type: Object.freeze({ code: 'fence_block_type', fix: `use only these block types in a fence: ${[...FENCE_TYPES].join(', ')}` }),
+  address: Object.freeze({ code: 'fence_unsafe_address', fix: 'use an http, https, mailto or tel address, or a link inside the document, in href, src, poster and url' }),
+  invalid: Object.freeze({ code: 'fence_invalid', fix: 'fix the blocks until validate accepts them' }),
+  id: Object.freeze({ code: 'fence_id_used', fix: 'give each block an id no earlier fence uses' }),
+});
+
 function fence(source, node, state) {
+  // The fence's lines, its opening and closing ones too; its blocks start at the import's place.
+  const first = lineOf(node.tok, 0, state.base) ?? state.base;
+  const lines = (lineOf(node.tok, 1, state.base) ?? first + 1) - first;
+  // A fence the import does not splice stays a code block, with one notice: why, and the fix.
+  const kept = (reason) => {
+    const { code, fix } = FENCE_KEPT_AS_CODE[reason];
+    state.splits.push({ code, path: state.at, line: first + 1, lines, fix });
+    return [codeBlock(source)];
+  };
   let blocks;
   try {
     blocks = JSON.parse(source);
   } catch {
-    return [codeBlock(source)];
+    return kept('json');
   }
   const check = checkFence(blocks, state.ids);
-  if (check.reason) return [codeBlock(source)];
+  if (check.reason) return kept(check.reason);
   for (const id of check.ids) state.ids.add(id);
-  // The fence's lines, its opening and closing ones too; its blocks start at the import's place.
-  const first = lineOf(node.tok, 0, state.base) ?? state.base;
-  const lines = (lineOf(node.tok, 1, state.base) ?? first + 1) - first;
   const dir = state.at.slice(0, state.at.lastIndexOf('/'));
   const start = Number(state.at.slice(state.at.lastIndexOf('/') + 1));
   const drop = ({ path, name, field }) => state.splits.push({ code: OLD_NAME_DROPPED, path, line: first + 1, lines, name, current: field, fix: `write ${field}` });
@@ -341,8 +363,8 @@ function caption(node) {
  * A read's state: the ids fences used, how many callouts deep the read is (quote()), and its
  * count: the tokens markdown-it made and the nodes read, so a test sees no part read twice.
  * `splits` holds a LIST_ITEM_SPLIT notice per list item split off, an OLD_NAME_DROPPED one per
- * value a fence's fold lost and a NESTING_KEPT_AS_TEXT one per block that keeps deeper levels as
- * text, in source order; `blocks` is the path of the blocks being read, `at` the block's, `past`
+ * value a fence's fold lost, one per fence kept as a code block (FENCE_KEPT_AS_CODE) and a
+ * NESTING_KEPT_AS_TEXT one per block that keeps deeper levels as text, in source order; `blocks` is the path of the blocks being read, `at` the block's, `past`
  * the block's mark that it keeps such text (convert), and `base` the line the parse starts at.
  */
 const readState = () => ({ ids: new Set(), depth: 0, count: { tokens: 0, visits: 0 }, splits: [], blocks: '/blocks', at: '/blocks', base: 0 });
@@ -385,8 +407,12 @@ export { IMPORT_WORK };
  * the dropped key's path, the fence's source lines, the name dropped, the current name, and the
  * fix, `write <current>`. Each block that keeps, as text, levels nested past the limits (blocks
  * past validate's MAX_DEPTH, marks past MAX_MARK_NEST) adds one { code: NESTING_KEPT_AS_TEXT,
- * path, line, lines }: the block, and its source lines. The notices come by kind: 'budget' and
- * 'line', then the splits, dropped names and nesting kept as text in source order, then 'net'. Should the read throw or give blocks that do not validate, the
+ * path, line, lines }: the block, and its source lines. Each ```portabledoc fence at block level
+ * kept as a code block adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code
+ * naming why, the code block, the fence's source lines and the fix. A fence inside a list item is
+ * read as inline code in the item and adds no notice yet. The notices come by kind: 'budget' and
+ * 'line', then the splits, dropped names, fences kept as code and nesting kept as text in source
+ * order, then 'net'. Should the read throw or give blocks that do not validate, the
  * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }
  * notice and no other. Never throws.
  */
