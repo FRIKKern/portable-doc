@@ -128,11 +128,12 @@ export function plan(markdown, { budget, lineBytes }) {
     const goesOn = cutBefore === n - 1;
     cutBefore = n;
     if (last?.runs !== undefined) {
-      last.lines++;
+      last.lines = n + 1 - last.line + 1;
+      last.cut++;
       if (!goesOn) last.runs++;
     } else if (goesOn) last.lines++;
     else if (notes.filter((note) => note.rule === 'line').length < MAX_LINE_NOTICES) notes.push({ rule: 'line', line: n + 1, lines: 1 });
-    else notes.push({ rule: 'line', line: n + 1, lines: 1, runs: 1 });
+    else notes.push({ rule: 'line', line: n + 1, lines: 1, runs: 1, cut: 1 });
     if (fence) work += (prefix(fence.line).D + 1) * (2 + Buffer.byteLength(fence.line));
   });
   return { work, notices: notes };

@@ -213,11 +213,13 @@ Where it differs from Barkpark, on purpose:
   rule one per run of cut lines, a run being cut lines with consecutive
   numbers (any line not cut ends it), for the first `MAX_LINE_NOTICES` runs.
   Past those, one notice
-  `{ code: 'import_line_notices_capped', rule: 'line', path, line, lines, runs }`
-  (`LINE_NOTICES_CAPPED`) stands for every later run: the paragraph of the
-  first line it covers, that line, and how many runs and lines. So the line
-  notices are at most `MAX_LINE_NOTICES` + 1, and their `lines` add up to
-  every cut line. They come in source order:
+  `{ code: 'import_line_notices_capped', rule: 'line', path, line, lines, runs, cut }`
+  (`LINE_NOTICES_CAPPED`) stands for every later run: the paragraph of its
+  first cut line, that line, `lines` up to the last cut line it stands for,
+  and the `runs` and `cut` lines inside. In every notice, `line` to
+  `line + lines - 1` is what it covers. So the line notices are at most
+  `MAX_LINE_NOTICES` + 1, and the run notices' `lines` plus its `cut` add up
+  to every cut line. They come in source order:
   - From the line where the work passes the budget, the rest of the text is
     one top-level paragraph, whitespace collapsed. Containers open at that
     line close there.
@@ -252,8 +254,10 @@ Where it differs from Barkpark, on purpose:
   blocks). These come in source order, after any `budget` or `line` notice and
   before a `net` one. No portabledoc fence is kept as code or text without a
   notice: one of these, or, where the import keeps text whole past its limits
-  or on a fall-back, the `import_work_spent` or `import_fell_back` notice that
-  says why.
+  or on a fall-back, the `import_work_spent`, `import_line_notices_capped` or
+  `import_fell_back` notice that says why. Within the first
+  `MAX_LINE_NOTICES` runs, a cut fence opening has a notice on its own line;
+  past that, the capped notice covers it.
   Every notice's path names a value in the blocks, but `old_name_dropped`'s:
   the key it names was dropped, so it is not there, and the value that held it
   is.

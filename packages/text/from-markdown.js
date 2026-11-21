@@ -512,9 +512,11 @@ export { IMPORT_WORK, LINE_NOTICES_CAPPED, MAX_LINE_NOTICES };
  * text, every word; `notices` then hold one { code, rule, path, line, lines } for 'budget' and one
  * per run of cut lines (consecutive line numbers) for 'line': the paragraph of its first line, that
  * line (from 1) and how many. Past MAX_LINE_NOTICES runs, one { code: LINE_NOTICES_CAPPED, rule:
- * 'line', path, line, lines, runs } stands for every later run: the paragraph of the first line it
- * covers, that line, and how many lines and runs. So the line notices are at most
- * MAX_LINE_NOTICES + 1, and their `lines` add up to every cut line. Should
+ * 'line', path, line, lines, runs, cut } stands for every later run: the paragraph of its first cut
+ * line, that line, `lines` the length of its range up to the last cut line it stands for, and the
+ * `runs` and `cut` lines inside. In every notice `line` to `line + lines - 1` is what it covers. So
+ * the line notices are at most MAX_LINE_NOTICES + 1, and the run notices' `lines` plus its `cut`
+ * add up to every cut line. Should
  * markdown-it's own count still pass the budget (the net), the rest of the deep text is kept as
  * plain text, with a notice of the same shape and rule 'net': `line` the first source line
  * kept so, `lines` how many. Each list item split off at text after its nested list adds one
@@ -571,9 +573,9 @@ export function readPlan(plan, limits) {
     }
   }
   if (!validate({ blocks }).ok) return null;
-  const notices = plan.notices.map(({ rule, line, lines, runs }) => {
+  const notices = plan.notices.map(({ rule, line, lines, runs, cut }) => {
     const notice = { code: runs === undefined ? limits.notice : LINE_NOTICES_CAPPED, rule, path: paths[`${rule}:${line}`], line, lines };
-    return runs === undefined ? notice : { ...notice, runs };
+    return runs === undefined ? notice : { ...notice, runs, cut };
   });
   for (const split of state.splits) notices.push(split); // a loop: a spread of this many arguments overflows the stack
   if (net.fired) notices.push({ code: limits.notice, rule: 'net', path: net.path ?? `/blocks/${Math.max(0, blocks.length - 1)}`, line: net.line, lines: net.lines });

@@ -79,7 +79,7 @@ test('the text-work rules, done from their words alone, give planText\'s work an
   for (const runs of [MAX_LINE_NOTICES - 1, MAX_LINE_NOTICES, MAX_LINE_NOTICES + 1, MAX_LINE_NOTICES + 2]) {
     docs.push([Array.from({ length: runs }, (_, i) => `${'x'.repeat(11)}\n${i % 3 ? '' : `${'y'.repeat(11)}\n`}ok`).join('\n'), { budget: 16_000_000, lineBytes: 10 }]);
   }
-  const key = (notices) => JSON.stringify(notices.map(({ rule, line, lines, runs }) => ({ rule, line, lines, runs })).sort((a, b) => a.rule.localeCompare(b.rule)));
+  const key = (notices) => JSON.stringify(notices.map(({ rule, line, lines, runs, cut }) => ({ rule, line, lines, runs, cut })).sort((a, b) => a.rule.localeCompare(b.rule)));
   const differ = docs.filter(([markdown, limits]) => {
     const words = plan(markdown, limits);
     const code = planText(markdown, { ...limits, notice: 'import_work_spent' });

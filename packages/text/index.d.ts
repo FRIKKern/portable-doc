@@ -106,9 +106,11 @@ export interface ImportWorkNotice {
 
 /**
  * The last line notice, past MAX_LINE_NOTICES runs: it stands for every later run of cut lines.
- * `path` is the paragraph of the first line it covers, `line` that line (from 1), `runs` how many
- * runs and `lines` how many lines, which need not be consecutive. So the line notices are at most
- * MAX_LINE_NOTICES + 1, and their `lines` add up to every cut line.
+ * `path` is the paragraph of its first cut line, `line` that line (from 1), and `lines` the length
+ * of its range up to the last cut line it stands for: as in every notice, `line` to
+ * `line + lines - 1` is what it covers. `runs` and `cut` are the runs and cut lines inside. So the
+ * line notices are at most MAX_LINE_NOTICES + 1, and the run notices' `lines` plus its `cut` add
+ * up to every cut line.
  */
 export interface LineNoticesCappedNotice {
   code: 'import_line_notices_capped';
@@ -117,6 +119,7 @@ export interface LineNoticesCappedNotice {
   line: number;
   lines: number;
   runs: number;
+  cut: number;
 }
 
 /**

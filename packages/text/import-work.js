@@ -42,10 +42,9 @@
 export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, lineBytes: null, notice: 'import_work_spent' });
 
 /**
- * The most run notices a text gets from the line rule. Runs can be as many as cut lines, and the
- * budget allows a great many; a notice for each would outweigh the text itself, so past this bound
- * one notice counts the rest (LINE_NOTICES_CAPPED). The line notices are at most
- * MAX_LINE_NOTICES + 1.
+ * The most run notices a text gets from the line rule. Runs can be as many as cut lines, and a
+ * notice each outweighed the text itself. Past this bound one LINE_NOTICES_CAPPED notice counts
+ * the rest, so the line notices are at most MAX_LINE_NOTICES + 1.
  */
 export const MAX_LINE_NOTICES = 1000;
 
@@ -166,9 +165,11 @@ function closes(line, at, fence) {
  * { plain: text, rule, line } to keep as one top-level paragraph, `line` its first source line
  * (from 0). `notices` are { rule, line, lines } in source order, `line` counted from 1: one 'line'
  * per run of lines past lineBytes for the first MAX_LINE_NOTICES runs, then one { rule: 'line',
- * line, lines, runs } for every later run: its first line, and how many lines and runs, the lines
- * not consecutive. So the line notices are at most MAX_LINE_NOTICES + 1, and their `lines` add up
- * to every cut line. At most one 'budget' (the lines from where the work passed the budget).
+ * line, lines, runs, cut } for every later run. In every notice `lines` is the length of its range,
+ * `line` to `line + lines - 1`: for that last one, its first cut line to the last, with `runs` runs
+ * and `cut` cut lines inside. So the line notices are at most MAX_LINE_NOTICES + 1, and the run
+ * notices' `lines` plus its `cut` add up to every cut line. At most one 'budget' (the lines from
+ * where the work passed the budget).
  */
 export function planText(markdown, limits = IMPORT_WORK) {
   const lines = normalize(markdown).split('\n');
@@ -184,10 +185,11 @@ export function planText(markdown, limits = IMPORT_WORK) {
     const goesOn = n === lastCut + 1;
     lastCut = n;
     if (rest) {
-      rest.lines++;
+      rest.lines = n + 1 - rest.line + 1;
+      rest.cut++;
       if (!goesOn) rest.runs++;
     } else if (goesOn) notices.at(-1).lines++;
-    else if (runs >= MAX_LINE_NOTICES) notices.push((rest = { rule: 'line', line: n + 1, lines: 1, runs: 1 }));
+    else if (runs >= MAX_LINE_NOTICES) notices.push((rest = { rule: 'line', line: n + 1, lines: 1, runs: 1, cut: 1 }));
     else {
       runs++;
       notices.push({ rule: 'line', line: n + 1, lines: 1 });
