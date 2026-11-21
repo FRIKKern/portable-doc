@@ -407,9 +407,10 @@ export { IMPORT_WORK };
  * the dropped key's path, the fence's source lines, the name dropped, the current name, and the
  * fix, `write <current>`. Each block that keeps, as text, levels nested past the limits (blocks
  * past validate's MAX_DEPTH, marks past MAX_MARK_NEST) adds one { code: NESTING_KEPT_AS_TEXT,
- * path, line, lines }: the block, and its source lines. Each ```portabledoc fence kept as a code
- * block adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code naming why, the
- * code block, the fence's source lines and the fix. The notices come by kind: 'budget' and
+ * path, line, lines }: the block, and its source lines. Each ```portabledoc fence at block level
+ * kept as a code block adds one { code, path, line, lines, fix } (FENCE_KEPT_AS_CODE): the code
+ * naming why, the code block, the fence's source lines and the fix. A fence inside a list item is
+ * read as inline code in the item and adds no notice yet. The notices come by kind: 'budget' and
  * 'line', then the splits, dropped names, fences kept as code and nesting kept as text in source
  * order, then 'net'. Should the read throw or give blocks that do not validate, the
  * whole text is kept as one code block with one { code: IMPORT_FELL_BACK, path, line, lines }

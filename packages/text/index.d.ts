@@ -186,7 +186,8 @@ export type ImportNotice = ImportWorkNotice | ListItemSplitNotice | ImportFallba
  * fromMarkdown, with what it noticed: { blocks, notices, work }. `work` is the import's count
  * from the text. `notices` says what a limit cut and each list item split off, by kind: the
  * `budget` and `line` notices, then the splits, a fence's dropped old names
- * (`old_name_dropped`) and each fence kept as a code block (FENCE_KEPT_AS_CODE) in source order,
+ * (`old_name_dropped`) and each block-level fence kept as a code block (FENCE_KEPT_AS_CODE; a
+ * fence in a list item is inline code, with no notice yet) in source order,
  * then a `net` one; it is empty
  * when none happened. When the import falls back to one code block, its one notice is
  * `import_fell_back`. `limits` defaults to IMPORT_WORK. Never throws.

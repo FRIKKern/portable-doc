@@ -1,7 +1,8 @@
-// A ```portabledoc fence the import does not splice stays a code block of its source, and
-// readMarkdown says why with one notice: `{ code, path, line, lines, fix }`, the code block's path,
-// the fence's first line (from 1) and how many lines it spans, and what to change. One code for
-// each reason checkFence gives, and one for a fence that is not JSON (FENCE_KEPT_AS_CODE).
+// A ```portabledoc fence at block level that the import does not splice stays a code block of its
+// source, and readMarkdown says why with one notice: `{ code, path, line, lines, fix }`, the code
+// block's path, the fence's first line (from 1) and how many lines it spans, and what to change.
+// One code for each reason checkFence gives, and one for a fence that is not JSON
+// (FENCE_KEPT_AS_CODE). A fence inside a list item is inline code in the item, with no notice yet.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_DEPTH, MAX_VALUE_DEPTH, blockSchema, validate, walkDepth } from '@portable-doc/validate';
@@ -33,6 +34,19 @@ test('one code a reason, each with its fix, and no code twice', () => {
   const codes = Object.values(FENCE_KEPT_AS_CODE).map((r) => r.code);
   assert.equal(new Set(codes).size, codes.length);
   for (const [reason, { code, fix }] of Object.entries(FENCE_KEPT_AS_CODE)) assert.ok(/^fence_[a-z_]+$/.test(code) && fix.trim() !== '', reason);
+});
+
+test('each reason has its published code', () => {
+  const codes = Object.fromEntries(Object.entries(FENCE_KEPT_AS_CODE).map(([reason, { code }]) => [reason, code]));
+  assert.deepEqual(codes, {
+    json: 'fence_not_json',
+    count: 'fence_block_count',
+    depth: 'fence_too_deep',
+    type: 'fence_block_type',
+    address: 'fence_unsafe_address',
+    invalid: 'fence_invalid',
+    id: 'fence_id_used',
+  });
 });
 
 for (const [reason, { json, before = '' }] of Object.entries(REFUSED)) {
