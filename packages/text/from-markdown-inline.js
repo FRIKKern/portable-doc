@@ -167,6 +167,9 @@ export function merge(nodes) {
 const BLOCK = new Set(['paragraph', 'heading', 'list_item', 'blockquote', 'th', 'td', 'fence', 'code_block', 'html_block']);
 const SEP = Symbol('separator');
 
+/** A fence's language: the first word of its info string ('' for any other node). */
+export const langOf = (node) => (node.type === 'fence' ? str(node.tok.info).trim().split(/\s+/)[0] : '');
+
 /**
  * The raw-text tag an inline HTML token opens or closes: given the tag being
  * skipped (or null), the one skipped after this token. Text inside an inline
@@ -197,10 +200,13 @@ function leafText(node) {
  * gets each node read on `visits` and each token parsed here on `tokens`. An empty link or an
  * image with no alt shows the address its kept shape shows (inlineNode), when that is safe, and
  * its span of the text goes on `spans`, when given; with `words` (WORDS_ONLY), for a test of
- * shape or an image's alt, it adds nothing.
+ * shape or an image's alt, it adds nothing. Each ```portabledoc fence read as text goes on
+ * `fences`, when given, as { tok, at }: `at` is the line its parse starts at when that is a deep
+ * source's (from 0 in the whole text), else undefined, the caller's own parse.
  */
-export function flattenText(nodes, count = undefined, { words = false, spans = undefined } = {}) {
+export function flattenText(nodes, count = undefined, { words = false, spans = undefined, fences = undefined } = {}) {
   let out = '';
+  let at; // the deep source being read: the line its parse starts at
   const address = (url) => {
     if (words || url === '') return;
     spans?.push([out.length, out.length + url.length]);
@@ -213,6 +219,10 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
     if (node instanceof LinkEnd) {
       // A link whose label gave no text shows its address, as its kept shape does (link).
       if (!skipping && out.length === node.at) address(safeUrl(attr(node.link, 'href')) ?? '');
+      continue;
+    }
+    if (node instanceof DeepEnd) {
+      at = node.at;
       continue;
     }
     if (node === SEP) {
@@ -238,9 +248,12 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
       env.base = node.tok.map[0]; // the deep source's lines count from its first line
       const nodes = tree(parser.parse(content, env), count);
       env.base = base;
+      stack.push(new DeepEnd(at));
+      at = node.tok.map[0];
       for (let i = nodes.length - 1; i >= 0; i--) stack.push(nodes[i]);
       continue;
     }
+    if (fences && langOf(node) === 'portabledoc') fences.push({ tok: node.tok, at });
     if (BLOCK.has(node.type)) stack.push(SEP);
     if (node.type === 'image') {
       if (skipping) continue;
@@ -255,6 +268,13 @@ export function flattenText(nodes, count = undefined, { words = false, spans = u
     else if (!skipping) out += leafText(node);
   }
   return out;
+}
+
+// Where a deep source's nodes end in flattenText, and the deep source read before it, if any.
+class DeepEnd {
+  constructor(at) {
+    this.at = at;
+  }
 }
 
 // Where a link's label ends in flattenText, and how long its text was when the label began.
