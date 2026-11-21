@@ -16,12 +16,12 @@ drawn, every reader:  <a href="/a"> <b><i> <span class="bp-tag" data-tag="x">#x<
                       the word is drawn: no count of marks ever puts a notice in its place
 ```
 
-Code is read at portable-doc main 426dce8 and Barkpark main 158562a. "Run" marks a case that was run by hand on that code. No test in either repo holds it yet. Each such case is to be held by the test named for its reader, in the change that builds that reader's part:
-- text writers here: `packages/text/marks.test.mjs`;
+Code is read at portable-doc main 426dce8 and Barkpark main 158562a. "Run" marks a case that was run by hand on that code. One test already exists: the editor's `api/assets/paper-editor/src/canvas/__opaque_marks_mounted.test.mjs` holds a load with no edit, and edits next to two different unknown marks. It lacks the cases here: loads and edits with repeated or link-like marks, the growth case and the write-once rows. No other test holds a run case yet. Each run case is to be held by the test named for its reader, in the change that builds that reader's part:
+- text writers and the Markdown import here: `packages/text/marks.test.mjs`;
 - React here: `packages/react/tests/marks.test.ts`, and `scripts/limit-goldens-react.test.mjs` for the depth cases;
 - Barkpark React: `js/packages/react/tests/link-group.test.tsx`, and `js/packages/react/tests/limits.test.tsx` for the depth cases;
 - Go and mobile: `internal/pdrender/link_group_test.go` and `apps/mobile/__tests__/link-group.test.tsx`;
-- the editor, mounted and through its save path: `api/assets/paper-editor/src/canvas/__opaque_marks_mounted.test.mjs`.
+- the editor, mounted and through its save path: that same mounted test, with the cases it lacks.
 
 Every other claim is a code read, cited by file and line.
 
@@ -81,18 +81,18 @@ Every HTML reader, Go and mobile count the raw list toward the inline depth: `de
   - The fold: `bold` is `strong`, `italic` is `em`, and `s` and `strikethrough` are `strike`. Every reader folds these today: `inline.js:65-67`, `inline-codec.js:22-28`, `inline.ex:498-503` and `:522`, `inline.go:387-390` and `:393`.
 - **A link-like or opaque mark is identical to another of the same folded type when its data is the same.** A mark's data is its fields other than `type`. Each field is read from `attrs`, and else from the top level. An empty `attrs` is no data, and key order does not matter. A bare string `"strong"` is `{"type": "strong"}`.
   - Barkpark's server reads a link that way (`inline.ex:536`). It reads wikilink, blockref, tag and valueref from `attrs` only (`inline.ex:547-595`; e.g. `:579`), so `{"type": "tag", "name": "x"}` draws `#` today. That read changes.
-- **The editor never drops a mark's data.** Readers draw a style mark once by its folded type. The editor, when it writes a run back, writes one copy only of marks equal in folded type and in data, both as nodes and as an opaque mark's flat list. Two strongs with different data are written back as stored, each with its data. The stored doc then draws as it did.
-  - Row: an editor test writes back `[strong, strong]` as one strong, `[{"type": "strong", "attrs": {"n": 1}}, {"type": "strong", "attrs": {"n": 2}}]` as stored, and `[annotation, link a, link a]` with one link a.
+- **The editor never drops a link-like or opaque mark's data.** Today, on an edited word, the editor's leaf-to-node step writes a style mark by its folded type alone. A style mark carries no data this format names, and this record does not change that step. The write-once rule sits after that step. Style marks become one node per folded type. For link-like and opaque marks, one copy only of marks equal in type and data is written, and two that differ in data are both written, as stored. The stored doc then draws as it did.
+  - Row: an editor test writes back `[strong, strong]` as one strong node and `[annotation, link a, link a]` with one link a. Two annotations with different data are both written back; two strong marks with different data come back as one strong node, as one does today.
   - Order: the growth bug's fix is its own PR and lands first; this write-once rule then builds on it in the same lines (`inline-codec.js:357-379`), in that order, on the Barkpark side, where the editor's code lives.
 - **One list for the kinds and the fold, and every copy of it is generated.** It lives in the schema as `definitions.marks`, beside `definitions.inline`. Each mark gets its kind (`"x-kind": "style" | "link-like"`; a mark the list does not name is opaque), and each other spelling gets `x-alias-of`. The schema already carries `x-alias-of` for block aliases (`definitions.aliases`).
   - No block refers to `definitions.marks`, so neither validator checks anything new.
   - It is written in Barkpark and synced (0003).
   - Only the table is generated: each mark's name, its aliases and its kind. The draw code stays hand-written and switches on the name. Each copy is written by a script the gate runs, the way the pack's goldens are made, and a hand edit goes red. By reader:
-    - Barkpark server: reads the marks at compile time from the spec module the schema's `definitions.marks` is written from. That module has no dependencies, so the read forms no compile cycle.
-    - Barkpark React, mobile and Go: `design/emit.mjs` writes a `.gen` file for each from the schema Barkpark writes, as it writes `status-vocab.gen.ts` for React and mobile and `tokens_gen.go` for Go. `design/check.mjs` reds a hand edit.
-    - The editor: `design/emit.mjs` writes its alias-to-name table the same way, and its alias fold (`inline-codec.js:22-28`) reads it. The step from a name to the editor's own mark stays hand-written, and wikilink, blockref, tag and valueref stay unknown to it, so the editor stores nothing new. The editor's sync carries it into `packages/editor` here.
-    - Text writers and React here: a script writes a small module from `spec/blocks.schema.json`, as `scripts/generate-alias-types.mjs` writes `packages/text/alias-types.js`, and a test regenerates it and compares, as `read-aliases.test.mjs` does. React gets its own copy, so it does not bundle the schema.
-  - Each reader gets an exhaustiveness row, so a mark the table names and the draw code does not handle is red: React (both) and mobile by `satisfies Record<MarkName, …>`, Go and the editor by a test over the generated list. The switch sites today: React here `inline.tsx:302-370`; Barkpark React `inline.tsx:315-368`; mobile `inlines.tsx:102-148` and `:203-243`; Go `inline.go:150-208` and `:387-393`; the editor `inline-codec.js:22-28`.
+    - Barkpark server: will read the marks at compile time from a new spec module, which `Spec` writes `definitions.marks` from. The new module has no dependencies, so the read forms no compile cycle. The Elixir side already reads `design/status-manifest.json` at compile time the same way (`design/emit/source.mjs:31`).
+    - Barkpark React, mobile and Go: `design/emit.mjs` gets a new artifact for each, read from the schema Barkpark writes. It already writes `status-vocab.gen.ts` for React and mobile and `tokens_gen.go` for Go that way, from `design/status-manifest.json` and `design/tokens.json`. `design/check.mjs` then reds a hand edit, as it does for every artifact it emits.
+    - The editor: `design/emit.mjs` will write its alias-to-name table the same way, and its alias fold (`inline-codec.js:22-28`, a hand-written switch today) will read it. The step from a name to the editor's own mark stays hand-written, and wikilink, blockref, tag and valueref stay unknown to it, so the editor stores nothing new. The editor's sync carries it into `packages/editor` here.
+    - Text writers and React here: a new script writes a small module from `spec/blocks.schema.json`, as `scripts/generate-alias-types.mjs` writes `packages/text/alias-types.js`, and a test regenerates it and compares, as `read-aliases.test.mjs` does. React gets its own copy, so it does not bundle the schema.
+  - Each reader gets an exhaustiveness row, so a mark the table names and the draw code does not handle is red: React (both) and mobile by `satisfies Record<MarkName, …>`, and Go, the editor, the Barkpark server and the text writers by a test over the generated list. The switch sites today: React here `inline.tsx:302-375` and its node switch `:529-590`; Barkpark React `inline.tsx:315-380` and its node switch `:533-593`; mobile `inlines.tsx:102-155` and `:203-272`; Go `inline.go:150-219` and `:386-404`; the Barkpark server `inline.ex:498-597`; the text writers `inline.js:64-78`; the editor `inline-codec.js:22-28`.
   - The pack's edges still check what each reader draws. The generation keeps the names, aliases and kinds the same in every reader.
 
 ### (b) A leaf's marks never put a notice in place of its word
@@ -193,4 +193,4 @@ The changes that make it true:
 
 ## Reversible
 
-Every change here is in readers and writers, and no stored document changes, apart from the editor writing one copy of marks equal in folded type and in data on an edit, which drops no data. Each reader change can be undone with its goldens.
+Every change here is in readers and writers. This record removes nothing from a stored document that an edit does not already remove today, and never a link-like or opaque mark's data. Each reader change can be undone with its goldens.
