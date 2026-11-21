@@ -42,10 +42,10 @@
 export const IMPORT_WORK = Object.freeze({ budget: 16_000_000, lineBytes: null, notice: 'import_work_spent' });
 
 /**
- * The most run notices a text gets from the line rule. Runs can be as many as lines: at
- * lineBytes 1 the budget holds 4,000,000 of them, and a notice each came to more bytes than the
- * text and more time than reading it. Past this many, one LINE_NOTICES_CAPPED notice stands for
- * every later run, so the line notices are at most MAX_LINE_NOTICES + 1, a few hundred kB at most.
+ * The most run notices a text gets from the line rule. Runs can be as many as cut lines, and the
+ * budget allows a great many; a notice for each would outweigh the text itself, so past this bound
+ * one notice counts the rest (LINE_NOTICES_CAPPED). The line notices are at most
+ * MAX_LINE_NOTICES + 1.
  */
 export const MAX_LINE_NOTICES = 1000;
 

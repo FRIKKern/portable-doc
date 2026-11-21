@@ -559,7 +559,7 @@ export function readPlan(plan, limits) {
   const state = readState();
   const net = { work: 0, budget: limits.budget };
   const blocks = [];
-  // The paths of the paragraphs notices start at, and only those: a text can cut millions of lines.
+  // The paths of the paragraphs notices start at, and only those: a text can cut a great many lines.
   const paths = {};
   const lineStarts = new Set(plan.notices.filter((n) => n.rule === 'line').map((n) => n.line));
   for (const part of plan.parts) {
