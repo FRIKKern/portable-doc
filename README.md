@@ -32,7 +32,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 4 changes · text: nested inline counts against the value depth ([#143](https://github.com/FRIKKern/portable-doc/pull/143))
+- **Today** · 5 changes · text: an empty link kept as text shows its address ([#144](https://github.com/FRIKKern/portable-doc/pull/144))
 - **Yesterday** · 14 changes · text: the import nests as deep as a document may hold, from one depth number ([#138](https://github.com/FRIKKern/portable-doc/pull/138))
 - **This week** · 66 changes · react, text: a style property whose number is not finite is left out whole, by one rule at the number door ([#123](https://github.com/FRIKKern/portable-doc/pull/123))
 - **Last week** · 2 milestones closed
