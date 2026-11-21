@@ -7,6 +7,7 @@
 // MAX_LINE_NOTICES runs, one LINE_NOTICES_CAPPED notice stands for every later run.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readPlan } from './from-markdown.js';
 import { IMPORT_WORK, planText } from './import-work.js';
 import { LINE_NOTICES_CAPPED, MAX_LINE_NOTICES, readMarkdown } from './index.js';
 
@@ -89,4 +90,15 @@ test('past MAX_LINE_NOTICES runs, one capped notice stands for the rest: run not
     }
     ownRuns(md, doc);
   }
+});
+
+test('readPlan keeps a paragraph path only where a notice starts: its path keys are at most its notices, past the bound too', () => {
+  const runs = MAX_LINE_NOTICES + 2;
+  // Runs of two cut lines: more cut lines than notices, whether a notice stands for one run or many.
+  const md = Array.from({ length: runs }, (_, i) => `${X(41)}\n${X(41, 'y')}\nok ${i}`).join('\n');
+  const plan = planText(md, LINE);
+  const read = readPlan(plan, LINE);
+  const cut = md.split('\n').filter(long).length;
+  assert.deepEqual([read.notices.length, cut], [MAX_LINE_NOTICES + 1, 2 * runs]);
+  assert.ok(read.pathKeys <= read.notices.length, `${read.pathKeys} path keys for ${read.notices.length} notices and ${cut} cut lines`);
 });
