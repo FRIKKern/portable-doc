@@ -296,9 +296,10 @@ class LinkEnd {
 /** flattenText's option for words only: no address is a word. */
 export const WORDS_ONLY = Object.freeze({ words: true });
 
-// An image's alt: its words only (CommonMark), never an address. Its kept shape is a link
-// labelled by its alt, else by its address when that is safe (inlineNode), and so is its text.
-const imageAlt = (node, count = undefined) => flattenText(node.children, count, WORDS_ONLY) || str(node.tok.content);
+// An image's alt: its words only (CommonMark), never an address and never its Markdown source: a
+// label with no words gives none. Its kept shape is a link labelled by its alt, else by its address
+// when that is safe (inlineNode), and so is its text.
+const imageAlt = (node, count = undefined) => flattenText(node.children, count, WORDS_ONLY);
 const imageSrc = (node) => (safeUrl(attr(node, 'src')) === null ? '' : attr(node, 'src'));
 
 function link(href, children) {
