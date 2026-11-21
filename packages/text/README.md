@@ -171,7 +171,11 @@ Where it differs from Barkpark, on purpose:
 - What `toMarkdown` writes reads back: a quote's last paragraph `— Name` is
   its `cite`, and an emphasised paragraph right after a mermaid fence is the
   diagram's `caption`.
-- Raw HTML keeps its visible text; tags, comments, scripts and styles go.
+- Raw HTML keeps its visible text; tags, comments, scripts and styles go. An
+  inline `<script>` or `<style>` opened in a link's label or in a mark
+  (emphasis, strong, strikethrough) and not closed there ends with it; a link
+  or mark inside a script or style goes with it, whole. Text kept as text
+  reads them the same way.
 - The parser is markdown-it, not Earmark. No visible word is ever left out,
   however deep it is nested. Blocks nest as deep as validate's `MAX_DEPTH`
   (100): one Markdown level is one format level, a list, a list in a list
