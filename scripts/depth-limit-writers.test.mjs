@@ -44,7 +44,8 @@ test('each text writer and React write a doc MAX_DEPTH deep whole, and one level
 // or under an inline code node's old children, is MAX_VALUE_DEPTH levels deep by walkDepth: each
 // writer keeps every word of it. A doc deeper than validate allows keeps every word above the cap
 // and the too-deep notice once. The marks path (flatten, inline.js), below, counts the same way.
-// React's reader is not held here: it counts against MAX_DEPTH, with the notice past it.
+// React's reader draws nested inline down to MAX_DEPTH; past it, it keeps the words flat and
+// writes the notice once after them (its rows are below the marks path's).
 const ems = (k) => [{ type: 'em', children: Array.from({ length: k - 1 }).reduce((kids, _, i) => [{ type: 'text', value: `w${k - 1 - i} ` }, { type: 'em', children: kids }], [{ type: 'text', value: `w${k}` }, { type: 'text', value: ' end' }]) }];
 const flat = {
   'a wikilink': (k) => [{ type: 'paragraph', content: [{ type: 'wikilink', target: 'page', children: ems(k) }] }],
@@ -116,6 +117,18 @@ for (const k of [60, DEEPEST_EM_IN_PARAGRAPH]) {
       const out = writer.write(inParagraph(k)).output;
       assert.deepEqual([wordsOf(out).size, out.includes(`w${k}`), count(out, TOO_DEEP)], [k, true, 0], writer.name);
     }
+  });
+}
+
+// React's HTML: down to MAX_DEPTH nested em every em is drawn and there is no notice. Past it, down to
+// the deepest valid doc, every word is kept and the notice is written once, after them.
+const react = OURS.find((w) => w.name === 'HTML');
+for (const k of [60, MAX_DEPTH, DEEPEST_EM_IN_PARAGRAPH]) {
+  test(`React's HTML keeps every word of a paragraph over ${k} nested em${k > MAX_DEPTH ? ', then the too-deep notice once, after them' : ', with no notice'}`, () => {
+    const html = react.write(inParagraph(k)).output;
+    const notices = count(html, TOO_DEEP);
+    assert.deepEqual([wordsOf(html).size, html.includes(`w${k}`), notices], [k, true, k > MAX_DEPTH ? 1 : 0]);
+    if (notices) assert.ok(html.indexOf(TOO_DEEP) > html.indexOf(`w${k} end`), 'the notice comes after the words');
   });
 }
 

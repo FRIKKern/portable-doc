@@ -16,7 +16,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { MAX_DEPTH } from '@portable-doc/validate';
+import { MAX_DEPTH, MAX_VALUE_DEPTH } from '@portable-doc/validate';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const ts = createRequire(path.join(ROOT, 'packages/react/package.json'))('typescript');
@@ -27,6 +27,7 @@ const FORMAT = new Set(['MAX_DEPTH', 'MAX_VALUE_DEPTH']);
 export const OWN = {
   'packages/text/from-markdown-inline.js PARSE_LEVELS': { why: "markdown-it's levels for MAX_DEPTH lists: two a list (the list and its item), and two to spare", formula: '2 * (MAX_DEPTH + 2)' },
   'packages/react/src/inline.tsx MAX_DEPTH': { why: "a copy pinned equal to validate's MAX_DEPTH: the React package does not depend on validate", pinned: MAX_DEPTH },
+  'packages/react/src/inline.tsx MAX_VALUE_DEPTH': { why: "a copy pinned equal to validate's MAX_VALUE_DEPTH, how deep the words under a cut wrapper are read: the React package does not depend on validate", pinned: MAX_VALUE_DEPTH },
   'packages/mcp/catalog.js MAX_NEST': { why: "not the format's depth: how many levels of schema object properties the tool catalog spells out" },
   'packages/mcp/limits.js ARGS_LEVEL': { why: "not the format's depth: the one level the arguments object wraps a doc in" },
 };
