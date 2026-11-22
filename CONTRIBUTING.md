@@ -22,6 +22,18 @@ bp task (one milestone step) ─► branch + PR here or in the app repo ─► c
 npm run check
 ```
 
+## Run it
+
+```sh
+npm run roadmap    # redraw docs/images/roadmap.svg from the board
+npm run heatmap    # redraw docs/images/conformance.svg from conformance/
+npm run sync -- ../barkpark   # copy spec/, goldens/ and conformance/ from a Barkpark checkout
+npm run check      # doc rules, pack stamp, reports and SOURCE.json, tests
+npm run docs:site  # build dist/docs-site; open playground.html to try the format
+```
+
+The editor, the workbench and the host pages arrive with R2 and R5.
+
 ## Decisions
 
 A decision gets its own page in `docs/decisions/NNNN-title.md`. Pages are superseded by a new page, never edited.
