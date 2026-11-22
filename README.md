@@ -37,7 +37,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Today** · 2 changes · Sync from Barkpark 6a7f571667b3: React keeps the word under deep nested inline ([#150](https://github.com/FRIKKern/portable-doc/pull/150))
+- **Today** · 3 changes · docs: the README shows the newest finished days as News ([#151](https://github.com/FRIKKern/portable-doc/pull/151))
 - **Yesterday** · 9 changes · text: a line notice per run of cut lines, at most MAX_LINE_NOTICES and one for the rest ([#148](https://github.com/FRIKKern/portable-doc/pull/148))
 - **This week** · 80 changes · text: the import nests as deep as a document may hold, from one depth number ([#138](https://github.com/FRIKKern/portable-doc/pull/138))
 - **Last week** · 2 milestones closed
