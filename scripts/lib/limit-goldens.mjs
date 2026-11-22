@@ -15,7 +15,5 @@ export const limitGoldens = () =>
     .map((f) => [f.replace(/\.golden\.json$/, ''), JSON.parse(fs.readFileSync(new URL(f, DIR), 'utf8'))]);
 
 /** Limit goldens React does not yet write, each with why. This list only shrinks. */
-export const NOT_YET = {
-  'list-at-the-depth-limit': 'at the deepest level the reader writes the empty item; React writes "Nested too deep to show" there',
-};
-export const NOT_YET_MOST = 1;
+export const NOT_YET = {};
+export const NOT_YET_MOST = 0;
