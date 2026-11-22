@@ -28,6 +28,11 @@ the JS renderers. They move here one reward at a time, with no downtime
 | A new app is one `npm i` | R6 |
 | A public docs site and playground | R7 |
 
+## News
+
+<!-- news:start -->
+<!-- news:end -->
+
 ## What happened
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
@@ -56,21 +61,9 @@ The housekeeping job keeps this list on main; a branch that changes it fails `np
 | A doc as Markdown or plain text, for prompts, email, search and diffs, and Markdown back into a doc | [`packages/text/`](packages/text/README.md) |
 | The `portable-doc` command: validate, explain and render files, in a hook or CI | [`packages/cli/`](packages/cli/README.md) |
 | The quality bar | [`QUALITY.md`](QUALITY.md) |
-| How we work | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
+| How we work, and the commands to run | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) |
 | Decisions | [`docs/decisions/`](docs/decisions/), one page each |
 | What the move touches, in numbers | [`docs/SCOPE.md`](docs/SCOPE.md) |
 | Status, who does what | Barkpark tasks under goal `task-88d88a6e15e5a2eb`, mirrored to [FRIKKern/barkpark#24888](https://github.com/FRIKKern/barkpark/issues/24888) and the [PortableDoc board](https://github.com/users/FRIKKern/projects/3). Never in docs |
 | License (Apache-2.0); ported code | [`LICENSE`](LICENSE); [`THIRD-PARTY.md`](THIRD-PARTY.md) |
 | The old 10-type version | tag [`legacy-v0.4`](https://github.com/FRIKKern/portable-doc/tree/legacy-v0.4) ([0002](docs/decisions/0002-reuse-this-repo.md)) |
-
-## Run it
-
-```sh
-npm run roadmap    # redraw docs/images/roadmap.svg from the board
-npm run heatmap    # redraw docs/images/conformance.svg from conformance/
-npm run sync -- ../barkpark   # copy spec/, goldens/ and conformance/ from a Barkpark checkout
-npm run check      # doc rules, pack stamp, reports and SOURCE.json, tests
-npm run docs:site  # build dist/docs-site; open playground.html to try the format
-```
-
-The editor, the workbench and the host pages arrive with R2 and R5.

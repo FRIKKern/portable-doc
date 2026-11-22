@@ -58,3 +58,22 @@ test('replaceBlock refuses a file without exactly one start marker and one end m
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// docs/news/limits.json holds the news tool's limits for this repo: days shown and groups per day. This
+// row reads them. At its largest the block is, in render's row shape, per day a summary line, a line per
+// group and a blank line, the last blank dropped.
+const NEWS = JSON.parse(fs.readFileSync(new URL('../docs/news/limits.json', import.meta.url), 'utf8'));
+const NEWS_LINES = NEWS.days * (1 + NEWS.groups_per_day + 1) - 1;
+
+test('README fits its 80-line cap with both generated blocks full: the timeline at TIMELINE_LINES and News at its largest', () => {
+  const readme = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8').trimEnd().split('\n');
+  const inside = (name) => {
+    const start = readme.indexOf(`<!-- ${name}:start -->`);
+    const end = readme.indexOf(`<!-- ${name}:end -->`);
+    assert.ok(start >= 0 && end > start, `README has its ${name} block`);
+    return end - start - 1;
+  };
+  const outside = readme.length - inside('timeline') - inside('news');
+  const full = outside + TIMELINE_LINES + NEWS_LINES;
+  assert.ok(full <= 80, `${outside} lines outside the blocks + ${TIMELINE_LINES} timeline + ${NEWS_LINES} news = ${full}, cap is 80`);
+});
