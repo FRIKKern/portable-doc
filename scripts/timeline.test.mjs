@@ -59,10 +59,9 @@ test('replaceBlock refuses a file without exactly one start marker and one end m
   }
 });
 
-// The news tool's limits for this repo live in docs/news/limits.json: the days the README shows and the
-// groups a day may have. The news run checks its own limits against the same file. At its largest the
-// block is, in render's row shape, per day a summary line, a line per group and a blank line, the last
-// blank dropped.
+// docs/news/limits.json holds the news tool's limits for this repo: days shown and groups per day. This
+// row reads them. At its largest the block is, in render's row shape, per day a summary line, a line per
+// group and a blank line, the last blank dropped.
 const NEWS = JSON.parse(fs.readFileSync(new URL('../docs/news/limits.json', import.meta.url), 'utf8'));
 const NEWS_LINES = NEWS.days * (1 + NEWS.groups_per_day + 1) - 1;
 
