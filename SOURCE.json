@@ -1,6 +1,6 @@
 {
   "repo": "FRIKKern/barkpark",
-  "commit": "e5a833cbf15b5d0212556726911e0b93cbfee74c",
+  "commit": "bedf2e7359a231f565196dbc2064821a700c4d74",
   "path": "api/priv/portable_doc",
   "files": {
     "spec/blocks.schema.json": "4a9882f13e1ae8bc198764eb9160ef5951216b9bfccb30d66b6d5971b0542333",
@@ -178,16 +178,16 @@
     "goldens/pages/dark-nb-NO.html": "ad54607993783f618bc523093838fc2eacedd507e51ce7f3965943d9f83d0ec5",
     "goldens/pages/light-en.html": "4d95e3fe19ad911792fbc194db29d0134f981beaf09599561d7819a127742b11",
     "goldens/pages/light-nb-NO.html": "0562742bbef2f69bb4ac17ab8ca2c8333c477d0147aa8fa8a389017f1e3eefe0",
-    "goldens/stamp.json": "433209fedc5241d5986114b204594ce8d6bc71ae550ee0bed54095f61d9d90ad",
+    "goldens/stamp.json": "2c34c9befc3803a5bf0b5d19b20bd8202b063cae253e130eb8b98210b8d230d7",
     "conformance/CONFORMANCE.md": "7b841678dfdf4852cc008e79ceb1198ee85a45a61c002324997f996f77c3a5db",
     "conformance/conformance.d.mts": "329e10732e815fb0b9c68c78f635de0c35ae6d2c34fad8057422d8f0a3490a76",
     "conformance/conformance.mjs": "1367153fe311640800ecff6ef7eeb2f725e56e0ecce54b0dcc83a3b31af4e597",
-    "conformance/editor-canvas.json": "8ebccecb2d7798978924dcbe10e506ac1e5979dda09f1c9efe73e7e7d2bf3383",
-    "conformance/elixir.json": "176980f4426366e3d25b4d415005ae63042c19099f9e5d6ccdeab58f682d8eaf",
-    "conformance/mobile.json": "21105f1d09dd93e65aed8c5294574b1fbfd1c813954c5e0af0919512ab92dc44",
-    "conformance/pdrender-wasm.json": "6f48915d2408d4f61537e9553a69c649dccdb07414802b46cb5f36ce85f89fad",
-    "conformance/pdrender.json": "b1980e5630c562baf53eb5a3d8631daa4c4c639a70eeeed478fbc01a12751ed0",
-    "conformance/react.json": "ffc14f852ac116594de9623fd6c8614e625cac236dae77776558e07a51103857"
+    "conformance/editor-canvas.json": "76c1af146cee497a8d527a0b8b936d23fde5ba06e6568b3279ab11bd86176843",
+    "conformance/elixir.json": "9129ad245d4aa8b025d6bf2a6b5bc426e0692a5f6f655f8f5fca4badf6f7bdca",
+    "conformance/mobile.json": "c24e001f6b1e8cac47298dbcb1ff9e8a69d504e921299241e1ddf933eb73f50f",
+    "conformance/pdrender-wasm.json": "0625f683ea7fdf8abf8c81a0a231255bf73c99d468273b4aab05b5b24f1d3f08",
+    "conformance/pdrender.json": "d5dc7427ef26a4c840b3e4156e9726a684cb82bcd8a6c9903038900d9c706114",
+    "conformance/react.json": "b35074af118b0ced40412590bb3718ef22c4f596ddab9fcd87d404f35b03673f"
   },
   "editor": {
     "path": "api/assets/paper-editor",
