@@ -37,8 +37,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Yesterday** · 4 changes · Sync from Barkpark d6be32e6485f: React writes the list at the depth limit golden ([#153](https://github.com/FRIKKern/portable-doc/pull/153))
-- **Last week** · 89 changes
+- **Last week** · 93 changes
 - **This month** · 6 changes, 101 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
 <!-- timeline:end -->
