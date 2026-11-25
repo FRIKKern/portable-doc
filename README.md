@@ -31,6 +31,9 @@ the JS renderers. They move here one reward at a time, with no downtime
 ## News
 
 <!-- news:start -->
+**Sunday 22 November.** 5 pull requests merged, four of them syncs from Barkpark. The editor's source mode now keeps a callout's body, so the words it loses there fell from 76 to 4. React here keeps the word under deep nested inline and writes the notice after it, as Barkpark's readers now do, and the list at the depth limit golden is written byte for byte, leaving no limit golden React does not yet write. The README gained this News block. [The full day](docs/news/2026-11-22.md)
+- **Synced from Barkpark:** source mode keeps a callout's body: 76 lost words down to 4; React keeps the word under deep nested inline; every limit golden written byte for byte ([#149](https://github.com/FRIKKern/portable-doc/pull/149), [#150](https://github.com/FRIKKern/portable-doc/pull/150), [#153](https://github.com/FRIKKern/portable-doc/pull/153), [#152](https://github.com/FRIKKern/portable-doc/pull/152))
+- **README:** a daily News block, and Run it moved to CONTRIBUTING ([#151](https://github.com/FRIKKern/portable-doc/pull/151))
 <!-- news:end -->
 
 ## What happened
