@@ -40,7 +40,7 @@ the JS renderers. They move here one reward at a time, with no downtime
 
 The housekeeping job keeps this list on main; a branch that changes it fails `npm run check`.
 <!-- timeline:start -->
-- **Yesterday** · 1 change · docs(news): Sunday 22 November ([#156](https://github.com/FRIKKern/portable-doc/pull/156))
+- **This week** · 1 change · docs(news): Sunday 22 November ([#156](https://github.com/FRIKKern/portable-doc/pull/156))
 - **Last week** · 93 changes
 - **This month** · 6 changes, 101 milestones closed
 - **Last month** · 3 changes, 5 milestones closed
